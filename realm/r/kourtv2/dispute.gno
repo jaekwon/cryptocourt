@@ -599,30 +599,6 @@ func provCloseClaim(c *Court, cs *claimState) {
 	cs.verdictAt = heightNow()
 	cs.verdictAtTime = nowTime()
 	cs.route = "closed"
-	// S3 — A CLAIM THAT ENDS UNDECIDED STILL PAYS.
-	//
-	// This used to set tierLowX and latch tierFinal, which contradicted the line
-	// immediately below: the deposit and fee are refunded precisely BECAUSE a
-	// provClose is not a conclusive low. Three failed quorums mean the electorate
-	// never ruled on the claim's worth — nobody was found at fault — so treating it
-	// as junk for the draw while treating it as sound for the deposit was incoherent
-	// in the same function. Measured, it turned a claim that pays 19,584 into one
-	// that pays 0.
-	//
-	// tierFinal MUST NOT be latched here, and this is the subtle part: latching it
-	// before the guard makes the guard SELF-BLOCKING, and the claim then pays 0
-	// forever — the very defect this replaces, reintroduced by the replacement.
-	//
-	// The guard is the same one the other two terminal paths use, so an adjudicated
-	// low is never clobbered. Both clauses are needed: a slash-grade low whose
-	// counter window is still open leaves slotConsumed set while tierFinal is not,
-	// and that is the only state where they differ. (Dropping !tierFinal alone
-	// SURVIVES mutation, because tierFinal implies slotConsumed at every
-	// pre-terminal writer — kept for symmetry with the other terminal paths, and
-	// recorded as unmutatable rather than papered over.)
-	if !cs.tierFinal && !cs.slotConsumed {
-		cs.tier = tierMidX
-	}
 	if cs.answerBond > 0 {
 		c.coin.Transfer(c.escrow, cs.answerer, cs.answerBond)
 		cs.answerBond = 0
@@ -685,16 +661,6 @@ func Finalize(cur realm, courtSlug string, claimID uint64) {
 	// Clip the frozen record's hourly tail to its final week (stakeseries.gno);
 	// no later stake op will ride a trim past this point.
 	trimClaimHistory(c, cs, uint32(cs.frozenAt/epochBlocks)+1)
-	// The default mid tier — UNLESS a conclusive tally already set it. A
-	// slash-grade conclusive-low flag leaves slotConsumed=true but tierFinal=false
-	// for its counter-flag window (quality.gno slashGrade branch), and a failed
-	// dispute round keeps verdictAt=0/decidedRounds=0 so Finalize is reachable
-	// in that window. Without the slotConsumed guard this clobbers LOW→MID and a
-	// junk claim draws full mid emission — the exact twin of the v0.40
-	// SettleUndisputed fix (session.gno), which this mirrors.
-	if !cs.tierFinal && !cs.slotConsumed {
-		cs.tier = tierMidX
-	}
 	if cs.answerBond > 0 {
 		// The answer stood (an overturned bond was burned at its round). But if
 		// the claim is still slash-eligible — no DECIDED round ran, so a

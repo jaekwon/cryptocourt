@@ -108,7 +108,7 @@ func TestSplittingAPositionNeverIncreasesTotalStanding(cur realm, t *testing.T) 
 	// Adjudicated, so the credit is unscaled — the invariant holds at either
 	// rate (both sides scale together), and an unscaled one keeps the arithmetic
 	// in the failure message readable.
-	cs.tier, cs.decidedPID, cs.openBlocks = tierMidX, 7, 1_000
+	cs.decidedPID, cs.openBlocks = 7, 1_000
 	pos := func(raw uint64) *stakePos { return &stakePos{rawLo: raw} }
 	const conv = uint64(4_000_000_000)
 	creditWinConviction(c, cs, whole, pos(conv))
@@ -312,7 +312,7 @@ func TestConvictionStandingIsRatedByWhatTheCourtDecided(cur realm, t *testing.T)
 	// The rate now turns on `adjudicated(cs)` — a dispute round that reached a
 	// verdict — so the fixture sets decidedPID. Every assertion below is the one
 	// it always was.
-	cs.tier, cs.decidedPID = tierMidX, 0
+	cs.decidedPID = 0
 	creditWinConviction(c, cs, alice, p)
 	uassert.Equal(t, half, Standing("sg13", alice))
 
@@ -326,7 +326,7 @@ func TestConvictionStandingIsRatedByWhatTheCourtDecided(cur realm, t *testing.T)
 	// AN ADJUDICATED MID EARNS FULL — same tier value as the first case, double
 	// the credit, which is the whole point of reading the adjudication and not
 	// the tier.
-	cs.tier, cs.decidedPID = tierMidX, 7
+	cs.decidedPID = 7
 	creditWinConviction(c, cs, alice, p)
 	uassert.Equal(t, half+full, Standing("sg13", alice))
 
@@ -347,9 +347,12 @@ func TestConvictionStandingIsRatedByWhatTheCourtDecided(cur realm, t *testing.T)
 	// rather than as one wrong answer.
 	uassert.False(t, adjudicated(&claimState{}))
 	uassert.True(t, adjudicated(&claimState{decidedPID: 1}))
-	// slotConsumed no longer has any say — asserted while the field still
-	// exists, because after it is deleted this can only be asserted by absence.
-	uassert.False(t, adjudicated(&claimState{slotConsumed: true}))
+	// slotConsumed HAS BEEN DELETED, and the line that stood here said so in
+	// advance: "asserted while the field still exists, because after it is deleted
+	// this can only be asserted by absence." This is that absence. The field is
+	// gone from claimState, so `&claimState{slotConsumed: true}` no longer
+	// compiles, and the compiler is now the thing enforcing that the old latch has
+	// no say in whether a claim was adjudicated.
 }
 
 // TestTheFlagHookFiresAtSettlementAndPaysTheOriginationFlagger went with the quality lane: there is no flagger to pay
@@ -553,7 +556,7 @@ func TestCreditRatesInheritUntilACourtOverrides(cur realm, t *testing.T) {
 	// decidedPID, not slotConsumed: the full conviction rate is what an
 	// ADJUDICATED claim earns, and this test is about the rate TABLE rather than
 	// about which field selects the rate.
-	cs.tier, cs.decidedPID, cs.openBlocks = tierMidX, 7, 1_000
+	cs.decidedPID, cs.openBlocks = 7, 1_000
 	p := &stakePos{rawLo: 4_000_000_000}
 	avg := int64(4_000_000)
 

@@ -150,7 +150,6 @@ type claimState struct {
 	yesStakeAtFreeze, noStakeAtFreeze int64
 	// Q1: the quality electorate's epoch — the last SEALED epoch at the
 	// answer, set before any flag can exist; every quality vote reads it.
-	qualityEpoch uint32
 
 	// The answer (answer.gno). answerBond is the LIVE escrowed remainder
 	// (zeroed as disposed, exactly once); answerBond0 is the posted magnitude —
@@ -173,8 +172,6 @@ type claimState struct {
 	tierRef int64
 
 	// Quality (quality.gno finalizes; mid is the undisputed default).
-	tier      int64
-	tierFinal bool
 	// The dispute machine (dispute.gno). provisional is the standing verdict
 	// between a decided round and Finalize (-1 = none); escrowUntil is the
 	// reopen window's end, set once at the first resolution.
@@ -215,11 +212,8 @@ type claimState struct {
 
 	// The quality lane (quality.gno, §10.2 Q2-Q5). One flag slot per claim;
 	// a court-local sealed 3-bucket tally rides flags AND dispute rounds.
-	flagOpen    bool
 	flagger     address
-	flagBond    int64
 	flagVoteEnd int64
-	flagCycles  int64 // inconclusive reopens; bond frozen at 4xb0 after 3
 	// slotConsumed is a one-way latch meaning "a CONCLUSIVE tally landed", written at
 	// exactly two sites (ResolveFlag, resolveQualityRide) and never cleared. It is far
 	// more load-bearing than its name suggests: SEVEN behavioural readers depend on it,
@@ -242,28 +236,15 @@ type claimState struct {
 	// jobs (1), (5) and (7) key slash-eligibility to a tally that may have been decided
 	// at the supply-floorLESS demotionBar, so a sub-bar low disarms the full-bar slash.
 	// Splitting the latch means splitting all seven readers, not editing one predicate.
-	slotConsumed    bool
-	lastFlagEventAt int64 // restamped at vote close/reopen/void — the 24h rule
-	lastFlagAt      int64 // cooldown anchor once the bond is frozen
-	qVoteSeq        uint64
-	qLowW           int64 // the SEALED tally: no read ever exposes these live
-	qMidW           int64
-	qHighW          int64
 	voted          *bptree.BPTree // seq|addr -> true (one vote per tally)
 	// The slash escrow (Q5): reserved from the answer bond at a slash-low,
 	// disposed exactly once at the counter-flag window's close.
-	pendingSlash      int64
-	pendingSlashUntil int64
-	counterUsed       bool
-	counterOpen       bool
-	counterVoteEnd    int64
 	// slashLevied is the one-way EXACTLY-ONCE latch on ORIGINATION (v0.50). The
 	// flag lane is bounded by slotConsumed (one flag per claim); the dispute ride
 	// is not, so without this a reopen chain levies a fresh slashSizeFor out of the
 	// REMAINING bond every round — reachable inside a 3-week escrow (round 1 fails
 	// at 7d, the flag resolves at 14d, its window closes at 21d, a reopen lands at
 	// 21d < escrowUntil 28d). Never cleared.
-	slashLevied bool
 	// slashFlagger is the bounty beneficiary of the CURRENTLY reserved slash: the
 	// flagger whose flag levied it, or "" when a dispute RIDE levied it. settleSlash
 	// must NOT fall back to cs.flagger, which on a ride path is either the zero
@@ -272,7 +253,6 @@ type claimState struct {
 	// advanced, permanently shrinking the reservoir for every later junior draw — or
 	// a STALE flagger from an earlier inconclusive cycle whose bond already came back
 	// whole under T1, who would then mint a bounty for a slash the RIDE levied.
-	slashFlagger address
 	// qualityReasked is the one-way EXACTLY-ONCE latch on the DISPUTE RIDE's tally
 	// wipe — the dual of slashLevied, which bounds ORIGINATION. Once a conclusive
 	// tally has adjudicated quality, a ride resets the tally AT MOST ONCE more; every
@@ -291,12 +271,9 @@ type claimState struct {
 	// ~3x inside a 3-week escrow. Keyed on slotConsumed rather than pendingSlash > 0
 	// because origination implies slotConsumed (both sites latch it first) but not
 	// conversely — the tier prize outlives the reserve. Never cleared.
-	qualityReasked bool
 	// Crystallize marker (Q6-Q8): after it, quality is immutable.
 	crystallized bool
 	// Carrot pull-claim anchors (set at the conclusive tally)
-	conclusiveSeq     uint64
-	conclusiveTurnout int64
 	// The draw (crystallize.gno): D's slices, denominators, one-shot flags.
 	drawWinners   int64
 	drawAuthor    int64

@@ -482,12 +482,6 @@ func renderClaim(slug string, id uint64) string {
 			}
 		}
 		switch {
-		case cs.flagOpen:
-			b.WriteString("- flag vote open — no running total is shown here until it closes\n")
-		case cs.counterOpen:
-			b.WriteString("- counter re-vote open — no running total is shown here until it closes\n")
-		case cs.pendingSlash > 0:
-			b.WriteString("- a slash is escrowed in its counter-flag window\n")
 		// THE CHALLENGE OFFER IS GONE. It invited a bond to "challenge that
 		// rating", and the rating is now the claim's own size — frozen at the
 		// answer, and not something a vote can move. Selling it would be selling

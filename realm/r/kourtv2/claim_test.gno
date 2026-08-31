@@ -183,14 +183,15 @@ func TestCourtDepositLedgerMatchesItsClaims(cur realm, t *testing.T) {
 	// RE-DERIVED (S3). This asserted `tierFinal && tier == tierLowX`, which WAS the
 	// defect: provClose is a close without a decision, so nobody was found at fault
 	// and the same function refunds the deposit AND fee precisely because it is not a
-	// conclusive low — then treated it as junk for the draw. It now lands at the plain
-	// default MID and stays UNFINALIZED, which is load-bearing rather than incidental:
-	// latching tierFinal here would make provCloseClaim's own guard self-blocking and
-	// the claim would pay 0 forever.
-	if acs.tierFinal || acs.tier != tierMidX {
-		t.Fatalf("a provClose must land at the default MID and stay unfinalized: "+
-			"final=%v tier=%d", acs.tierFinal, acs.tier)
-	}
+	// conclusive low — then treated it as junk for the draw.
+	//
+	// The tier assertion that stood here is gone with the field. It checked that a
+	// provClose landed at the default MID and stayed UNFINALIZED, because latching
+	// tierFinal would have made provCloseClaim's own guard self-blocking and the
+	// claim would have paid 0 forever. A provClosed claim's rate is now its SIZE,
+	// which is frozen at the answer and cannot be moved by a terminal path at all —
+	// so the hazard is structural rather than guarded, and there is no flag to
+	// assert the absence of.
 	if !mayAnswerInPriority(c, alice) {
 		t.Fatal("and must give the answerer's priority slot back")
 	}

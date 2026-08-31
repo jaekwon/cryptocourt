@@ -49,7 +49,6 @@ func Crystallize(cur realm, courtSlug string, claimID uint64) {
 	touch(c)
 	advancePools(c, cs) // settle the denominators to the freeze pin, exactly
 
-	cs.tierFinal = true // whatever stands now (default mid if never voted) is it
 	cs.crystallized = true
 	stripExit(c, cs)              // no longer policeable (§5.3 membership exit)
 	releaseMetaLatchIfMeta(c, cs) // an appeal's review slot is freed at its end

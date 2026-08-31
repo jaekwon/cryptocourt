@@ -39,7 +39,7 @@ import (
 // The bystander, and it is the more important of the two: an ordinary MID claim
 // must be paid EXACTLY what it was paid before the cap existed. If this fails,
 // the cap is cutting the rate a staker was promised.
-func TestDrawCapIsInertOnAnOrdinaryMidClaim(cur realm, t *testing.T) {
+func TestDrawCapIsInertEvenAtTheSizeCeiling(cur realm, t *testing.T) {
 	alice := testutils.TestAddress("dc1-alice")
 	bob := testutils.TestAddress("dc1-bob")
 	c := testCourt(cur, "dc1", alice, 50_000_000_000)
@@ -58,8 +58,17 @@ func TestDrawCapIsInertOnAnOrdinaryMidClaim(cur realm, t *testing.T) {
 	Crystallize(cross(cur), "dc1", id)
 
 	cs := mustClaim(mustCourt("dc1"), id)
-	if cs.tier != tierMidX {
-		t.Fatalf("precondition: this fixture is about the MID rate, tier is %d", cs.tier)
+	// THE CEILING, AND THAT IS THE POINT — the strongest place to claim the cap is
+	// inert, because the multiplier is as large as this court will ever make it.
+	//
+	// The precondition here used to read `cs.tier != tierMidX` and it was VACUOUS:
+	// SettleUndisputed wrote tierMidX into that field on every undisputed claim, so
+	// the check passed by construction while the draw was actually being multiplied
+	// by 2. Dropping the dead field is what exposed it. This fixture is a single
+	// large claim in a court whose running average is still at its supply floor, so
+	// size rates it on the ceiling.
+	if bps := tierBpsFor(cs); bps != tierCeilBps {
+		t.Fatalf("precondition: this fixture sits on the size ceiling, multiplier is %d bps", bps)
 	}
 	mg := cs.winPoolConvCC
 	if mg <= 0 {

@@ -156,7 +156,6 @@ import "gno.land/p/nt/bptree/v0"
 const (
 	voteLockDispute  = "d"
 	voteLockElection = "e"
-	voteLockQuality  = "q"
 )
 
 // voteLockKey is addr|kind|id|sub, with both ids fixed-width big-endian so that
@@ -203,38 +202,11 @@ func voteLockOpen(c *Court, who address, key string) bool {
 		}
 		e := c.mod.election
 		return e.seq == id && !e.resolved
-	case voteLockQuality:
-		v := c.claims.Get(beClaimKey(id))
-		if v == nil {
-			return false
-		}
-		cs := v.(*claimState)
-		// Superseded tallies count toward nothing (voted keys on qVoteSeq|addr),
-		// so a vote whose seq has moved on holds no coin.
-		if cs.verdictAt != 0 || cs.closed {
-			return false
-		}
-		if cs.qVoteSeq != sub {
-			return false
-		}
-		// NOTHING IS OPEN, so the only reason left to hold is that these weights
-		// will be voted AGAIN. They will iff the next dispute round re-asks without
-		// opening a fresh tally, which reaskQualityTally does only once
-		// slotConsumed AND qualityReasked are both set; every other route
-		// (openQualityTally from a flag, from a counter, or from a first reask)
-		// zeroes qLowW/qMidW/qHighW, and every path that could still COUNT this
-		// tally — ResolveFlag, resolveQualityRide, ResolveCounter — runs behind one
-		// of those three open flags. Finalize does not read them at all: dispute.gno
-		// never mentions qLowW. So when this returns false the vote can no longer
-		// decide anything, and holding coin against it is deadweight.
-		//
-		// Measured, on the state a failed-quorum round parks the claim in: the old
-		// predicate held a voter's ENTIRE balance there — 20,000,000,000 of
-		// 20,000,000,000, disposable 0 — until Finalize, which is the escrow window
-		// plus a participant-only week, about sixteen days for the voter who is not
-		// a participant. No adversary is needed to reach it: apathy is the ordinary
-		// outcome on an unpopular claim, and that branch's own comment says so.
-		return cs.slotConsumed && cs.qualityReasked
+	// THE QUALITY LANE STOOD HERE. It held a voter's coin while a quality tally
+	// could still count it, keyed on qVoteSeq, and released once the tally could no
+	// longer decide anything. Nothing writes qVoteSeq now, so the case was
+	// unreachable — and an unreachable lock arm is worse than none: it reads as a
+	// live hold and would be the first thing a future reader copied.
 	}
 	return false
 }

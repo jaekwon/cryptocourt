@@ -109,7 +109,7 @@ func TestRenderLifecycleLines(cur realm, t *testing.T) {
 	mustContain("provisional YES", "withdraw 1× now")
 	cs.provisional = int8(sideNO)
 
-	cs.verdictAt, cs.route, cs.tier = 100, "vote", tierMidX
+	cs.verdictAt, cs.route = 100, "vote"
 	// THE SETTLED LINE NAMES THE SIDE, and both values are checked for the same
 	// reason the provisional arm above checks both: it reads provisional through
 	// sideName, and an arm exercised on one value leaves the other free to render
@@ -129,13 +129,9 @@ func TestRenderLifecycleLines(cur realm, t *testing.T) {
 	// The ceiling reads as the ceiling rather than as "high".
 	cs.xBarFrozen = 9_000_000
 	mustContain("ceiling", "pays 2.00×")
-	cs.flagOpen = true
-	// "The tally is sealed" reads as "the count is hidden", which it is not —
-	// every ballot is a public transaction. The rule this pins is unchanged
-	// (an open vote renders NO running count); only the sentence saying so is
-	// honest about whose choice that is.
-	mustContain("flagging", "flag vote open — no running total is shown here")
-	cs.flagOpen = false
+	// THE FLAG ARM IS GONE. It pinned that an open flag vote renders NO running
+	// count. The rule survives for the vote that still exists — the dispute — and
+	// is pinned on that lane; what went is the second lane it was pinned on.
 	cs.crystallized, cs.drawWinners, cs.carrotPool = true, 12345, 77
 	mustContain("crystallized", "accuracy 12345")
 	mustContain("crystallized", "participation remaining 77")
