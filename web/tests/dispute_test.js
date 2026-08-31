@@ -226,6 +226,49 @@ ok("...names the file:// trap, where no extension can ever load",
    src.includes("extensions do not run on") && src.includes("file://"));
 ok("...and keeps both key-holding fallbacks, gnoweb and the command line",
    src.includes("Open in gnoweb") && src.includes("cliBlock(cli)"));
+// ---- no voting weight, answered before the wallet is opened ---------------
+// This used to reach a reader as a raw realm panic relayed through Adena's
+// gas-estimation simulate — "ERROR: kourtv2: ..." — after they had pressed a
+// button and waited for an extension to wake. The page can answer instantly.
+// SCOPED TO THE FUNCTION. fillVoteCommitment reads ClaimVoteWeightOf with a
+// byte-identical expression for the vote-lock figures, so a file-wide
+// `includes` matched THAT one — deleting the read from the eligibility check
+// left every assertion green. The slice is the fix.
+const ELIG = (() => { const a = src.indexOf("async function fillVoteEligibility");
+  return src.slice(a, src.indexOf("\n}", a)); })();
+ok("the weight the court will apply is read up front",
+   ELIG.includes('tup(`ClaimVoteWeightOf(${gstr(slug)},${gstr(CFG.addr)},${id})`)')
+   && ELIG.includes('tup(`VoteWeightWhy(${gstr(slug)},${gstr(CFG.addr)},${id})`)'));
+// A NUMBER, not a balance. Weight is min(snapshot, holding), so a fat balance
+// bought this morning is worth nothing on a round frozen last week — asserting
+// on CoinBalanceOf here would pass while telling the reader the wrong thing.
+ok("...as the capped weight, not as a balance",
+   ELIG.includes("if(w && Number(w[0]) <= 0){") && !ELIG.includes("CoinBalanceOf"));
+// Index 0 is the verdict lane. ClaimVoteWeightOf returns (verdict, quality) and
+// the two weigh at DIFFERENT epochs; w[1] would gate the ballot on the quality
+// question's snapshot and nothing on screen would look wrong.
+ok("...from the verdict lane, not the quality one",
+   ELIG.includes('data-nocoin", (whys && whys[0]) || ""'));
+// The four permanent refusals win: somebody who authored the claim cannot vote
+// whatever they hold, and telling them to buy coin would be a lie.
+ok("the permanent refusals are answered first, and return",
+   /if\(why\)\{[\s\S]{0,400}return;\s*\n\s*\}/.test(src)
+   && src.indexOf('data-voteblocked",') < src.indexOf('data-nocoin",'));
+ok("the click opens help instead of the wallet",
+   src.includes('const nc = ev.target.closest("[data-nocoin]");')
+   && src.includes("noCoinHelp(nc.getAttribute(\"data-nocoin\"), nc);"));
+// TWO CASES AND ONLY ONE IS FIXABLE, which is why VoteWeightWhy is read at all.
+ok("...and it splits the fixable case from the one that is not",
+   src.includes("const tooLate = /at the epoch this question was frozen/.test(why || \"\");"));
+ok("...offering the buy panel only where buying would work",
+   /tooLate\? "See the court" : `Get \$\{sym\}`/.test(src));
+ok("...and saying plainly that a purchase cannot fix this round",
+   src.includes("Buying now would not change this round"));
+// The court's own sentence, not a paraphrase: it is the text the chain would
+// have refused with, so a reader who meets the panic later recognises it.
+ok("...quoting the realm rather than restating it",
+   src.includes('<p class="small muted">${esc(why || "")}</p>'));
+
 // ---- a refused handshake reports, it does not diagnose --------------------
 // "Could not read Adena's network — unlock the wallet and retry" named ONE
 // cause out of several. A remembered CFG.addr outlives the connection that

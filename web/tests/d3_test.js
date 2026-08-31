@@ -74,7 +74,12 @@ ok("and no inline colour survives in a tagrow link",
 // The section was renamed Resolution -> Timeline, and the anchor with it. The
 // allowlist and the links are asserted TOGETHER below: an allowlist naming a
 // section that no longer exists is a deep link that silently lands nowhere.
-ok("AT_OK allowlist", src.includes('const AT_OK = new Set(["timeline"])'));
+// The allowlist gained "join": the no-coin dialog lands a reader on the court's
+// buy panel. It is an allowlist precisely because QP.at is user text — every
+// member has to be a section id that exists, which the next two assertions pin.
+ok("AT_OK allowlist", src.includes('const AT_OK = new Set(["timeline","join"])'));
+ok("...and every name in it is a real anchor",
+   src.includes('id="timeline" tabindex="-1"') && src.includes('id="join" tabindex="-1"'));
 ok("no ?at=timeline link survives the rename", !src.includes("at=resolution"));
 ok("atTarget uses getElementById (no selector injection)", src.includes('AT_OK.has(QP.at))? document.getElementById(QP.at) : null'));
 ok("hashchange prefers the at-target", src.includes('const t = atTarget();\n  if(t){ t.focus({preventScroll:true}); t.scrollIntoView(); return; }'));

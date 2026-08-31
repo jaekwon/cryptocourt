@@ -83,7 +83,12 @@ func TestRentedWeightCannotVoteADispute(cur realm, t *testing.T) {
 			"not the attack this test exists to refuse", pinned, floor)
 	}
 	testing.SetRealm(testing.NewUserRealm(renter))
-	uassert.AbortsContains(t, cur, "no longer hold", func() {
+	// The dispute lane's refusal is worded differently from quality's and
+	// modvote's ON PURPOSE: those two check `snapshot <= 0` first, so by the time
+	// they say "no longer hold" they have established there was a holding. This
+	// one guards the current balance alone, where a seller and a stranger who
+	// never held a unit arrive at the same line.
+	uassert.AbortsContains(t, cur, "you hold none of this court's coin", func() {
 		VoteDispute(cross(cur), "rntw1", id, "yes")
 	})
 	_, _, ok := c.gov.VoteOf(cs.proposalID, renter)

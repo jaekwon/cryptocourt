@@ -2741,6 +2741,53 @@ function cliBlock(cmd){
    THE RETRY IS THE FLOW. Connecting and then having to find the button again is
    the same dead end one step later, so the dialog re-fires the click it
    interrupted. */
+/* NO VOTING WEIGHT — said here, before the wallet is ever opened.
+
+   This case used to reach the reader as a raw realm panic relayed through
+   Adena's gas-estimation simulate: "ERROR: kourtv2: ...". They pressed a button,
+   waited for an extension to wake, and got the court's internal wording for an
+   answer the page could have given instantly and in its own words.
+
+   TWO CASES, AND ONLY ONE IS FIXABLE, which is the whole reason the realm's
+   VoteWeightWhy is read rather than the balance. Weight is min(snapshot,
+   holding):
+
+     no holding NOW        -> buy some. The panel is one link away and the
+                              purchase counts on later questions immediately.
+     no holding THEN       -> nothing to do for this round. Coin bought today
+                              weighs nothing on a round frozen last week, and
+                              telling somebody to buy would be selling them
+                              something that cannot work.
+
+   The court's own sentence is shown rather than paraphrased: it is the same
+   text the chain would have refused with, so a reader who does see the panic
+   later recognises it. */
+function noCoinHelp(why, el){
+  let slug = "";
+  try{ slug = String(JSON.parse(el.dataset.args||"{}").courtSlug || ""); }catch(_){}
+  const sym = "KOURT:" + esc(slug).toUpperCase();
+  // The distinguishing clause is the realm's, from whyWeighed (voteweight.gno):
+  // "you held no coin at the epoch this question was frozen at" is the case no
+  // purchase can fix.
+  const tooLate = /at the epoch this question was frozen/.test(why || "");
+  const dlg = document.createElement("dialog");
+  dlg.className = "helper";
+  dlg.innerHTML = `<div class="hd"><h3>You cannot vote on this round</h3>
+      <button type="button" class="pill void" data-cancel>close</button></div>
+    <div class="bd">
+      <p>${tooLate
+        ? `Your weight in a round is whatever you held of ${sym} at the moment the round was frozen, and you held none then. Buying now would not change this round — but it counts in full on every question opened after the purchase.`
+        : `Voting weight is ${sym}, this court's own coin, and you hold none. It is not tradeable elsewhere and it is not an investment — it is the thing that lets you judge here.`}</p>
+      <p class="small muted">${esc(why || "")}</p>
+      ${slug? `<div class="actions"><a class="btn${tooLate?"":" primary"}" href="#/c/${esc(slug)}?at=join">${tooLate? "See the court" : `Get ${sym}`}</a></div>` : ""}
+    </div>`;
+  document.body.appendChild(dlg);
+  const close = ()=>{ try{ dlg.close(); }catch(_){} dlg.remove(); };
+  dlg.addEventListener("click", ev => { if(ev.target.closest("[data-cancel]") || ev.target.closest("a")) close(); });
+  dlg.addEventListener("close", ()=> dlg.remove());
+  dlg.showModal();
+}
+
 function signHelp(el){
   const func = el.dataset.func || "", cli = el.dataset.cli || "", txurl = el.dataset.tx || "";
   const hasWallet = !!window.adena;
@@ -3061,6 +3108,8 @@ document.addEventListener("click",(ev)=>{
   if(d){ let n=d.parentElement.querySelector(".txnote");
     if(!n){ n=document.createElement("div"); n.className="txnote"; n.setAttribute("role","status"); d.parentElement.appendChild(n); }
     n.textContent="Demo data — actions work on a live node. Switch Source in the left rail."; return; }
+  const nc = ev.target.closest("[data-nocoin]");
+  if(nc){ ev.preventDefault(); noCoinHelp(nc.getAttribute("data-nocoin"), nc); return; }
   const vb = ev.target.closest("[data-voteblocked]");
   if(vb){ ev.preventDefault(); let n=vb.closest(".actions").querySelector(".txnote");
     if(!n){ n=document.createElement("div"); n.className="txnote"; n.setAttribute("role","status"); vb.closest(".actions").appendChild(n); }
@@ -3438,7 +3487,7 @@ function setNav(hash){
             hash.startsWith("/needs")?"needs": hash.startsWith("/about")?"about":"";
   document.querySelectorAll("#nav a").forEach(a=>a.classList.toggle("on", a.dataset.k===k));
 }
-const AT_OK = new Set(["timeline"]); // ?at= allowlist — QP is user text, never a selector
+const AT_OK = new Set(["timeline","join"]); // ?at= allowlist — QP is user text, never a selector
 const atTarget = () => (QP.at && AT_OK.has(QP.at))? document.getElementById(QP.at) : null;
 window.addEventListener("hashchange", async ()=>{
   await render();
@@ -4383,10 +4432,19 @@ async function fillVoteEligibility(slug, id, d){
   const btns = box? box.querySelectorAll(".btn") : [];
   if(!btns.length) return;
   try{
-    const [author,p,com] = await Promise.all([
+    const [author,p,com,w,whys] = await Promise.all([
       one(`ClaimAuthor(${gstr(slug)},${id})`).catch(()=>null),
       positionOf(slug,id,CFG.addr),
-      one(`CommitmentsOf(${gstr(slug)},${gstr(CFG.addr)})`).catch(()=>null)]);
+      one(`CommitmentsOf(${gstr(slug)},${gstr(CFG.addr)})`).catch(()=>null),
+      // THE CAP THE COURT WILL APPLY, read before Adena is ever opened. Without
+      // it the first thing a reader without coin learned was a raw panic
+      // relayed through the wallet's gas simulation — "ERROR: kourtv2: ..." —
+      // after pressing a button and waiting for an extension to wake.
+      // ClaimVoteWeightOf returns the same min(snapshot, held) the realm
+      // charges, and VoteWeightWhy says WHICH of the two is zero, which is the
+      // difference between "buy some" and "you were too late to buy".
+      tup(`ClaimVoteWeightOf(${gstr(slug)},${gstr(CFG.addr)},${id})`).catch(()=>null),
+      tup(`VoteWeightWhy(${gstr(slug)},${gstr(CFG.addr)},${id})`).catch(()=>null)]);
     // ALREADY VOTED, read rather than remembered. A verdict-lane commitment on
     // this claim exists only while the round that made it is open —
     // voteLockOpen (votelock.gno:199) matches on `cs.disputeOpen &&
@@ -4401,11 +4459,24 @@ async function fillVoteEligibility(slug, id, d){
       : author===CFG.addr? "wrote this claim"
       : d.answerer===CFG.addr? "answered it"
       : (p && (p.yes||p.no||p.cy||p.cn))? "staked on it" : null;
-    if(!why) return;
-    // The court decides at signing, not here — so this says what it saw rather
-    // than promising the transaction would fail.
-    btns.forEach(el => el.setAttribute("data-voteblocked",
-      (voted? "You " : "You cannot vote on this claim: you ") + why + "."));
+    if(why){
+      // The court decides at signing, not here — so this says what it saw rather
+      // than promising the transaction would fail.
+      btns.forEach(el => el.setAttribute("data-voteblocked",
+        (voted? "You " : "You cannot vote on this claim: you ") + why + "."));
+      return;
+    }
+    // NO WEIGHT IS A DIFFERENT KIND OF REFUSAL. The four above are permanent
+    // facts about this reader and this claim; this one is a thing they can fix,
+    // and only sometimes. So it opens a dialog that says which case it is,
+    // rather than printing one more sentence under the button.
+    //
+    // Read as a NUMBER, not inferred from a balance: weight is the lesser of the
+    // snapshot and the holding, so a fat balance bought this morning is worth
+    // nothing on a round frozen last week.
+    if(w && Number(w[0]) <= 0){
+      btns.forEach(el => el.setAttribute("data-nocoin", (whys && whys[0]) || ""));
+    }
   }catch(_){}
 }
 /* ---------------- the vote lock's disclosure ----------------
@@ -6073,7 +6144,7 @@ function joinPanel(slug, s){
         <label class="ack small"><input type="checkbox" id="buyack"> I understand ${sym} cannot be sold back to the court.</label>
         <div class="actions" style="margin-top:10px" id="buyactions">${buyActionsHtml(slug,q)}</div>`;
   }
-  return `<div class="panel"><h4>Join this court</h4>
+  return `<div class="panel" id="join" tabindex="-1"><h4>Join this court</h4>
         <p class="small" style="margin:0 0 10px"><b>Buying ${sym} is permanent</b> — the GNOT is burned: spent, held by no one. There is no sell-back, now or ever.</p>
         ${body}
         <p class="small muted" style="margin:10px 0 0">The only way out is a private buyer, and there may not be one. Treat this as GNOT spent for a voice, not GNOT moved.</p>

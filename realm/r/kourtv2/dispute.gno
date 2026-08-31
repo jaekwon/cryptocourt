@@ -194,7 +194,15 @@ func VoteDispute(cur realm, courtSlug string, claimID uint64, choice string) {
 	// was rentable: this is the lane the end-to-end rental was demonstrated on.
 	held := voteCap(c, who)
 	if held <= 0 {
-		panic("kourtv2: you no longer hold the coin you would vote with")
+		// "NO LONGER" WOULD BE A GUESS HERE, and for most people a wrong one.
+		// voteCap is the balance NOW, and this guard has no snapshot check in
+		// front of it — unlike quality.gno and modvote.gno, which refuse on
+		// `snapshot <= 0` first and so have earned that word by the time they
+		// reach it. Here a holder who sold and a stranger who never held a unit
+		// arrive at the same line, and the second is the common case: it is the
+		// message anyone who finds the court and tries to vote will read.
+		panic("kourtv2: you hold none of this court's coin, and voting weight is " +
+			"the lesser of what you held when the round opened and what you hold now")
 	}
 	c.gov.VoteWithCap(who, cs.proposalID, choice, held)
 	// Court-side record of the choice AND THE WEIGHT: the governor's roll is
