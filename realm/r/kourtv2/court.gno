@@ -576,7 +576,12 @@ type Court struct {
 	// remedy is the one that already exists for bad curation — the moderators who
 	// wrote it are elected, and replaceable by the same vote.
 	desc string
-	tier uint8
+	// The court's one picture, on the same terms as its description: curation, on
+	// the moderator's seat, adjudicating nothing. nil on every court that
+	// predates it, which reads as "no image" — the same "zero on pre-upgrade"
+	// shape desc uses, so there is no migration and no version field.
+	image *mediaItem
+	tier  uint8
 	admin address // creator; recorded, unused — no retune path exists
 
 	coin *grc20votes.Ledger // the court coin (CC)
@@ -842,6 +847,98 @@ func SetCourtDesc(cur realm, courtSlug, desc string) {
 	mustCourtDesc(desc)
 	c.desc = desc
 	emitModAct(c.id, 0, "court-desc", who)
+}
+
+// SetCourtImage gives a court its face, on the same seat that writes its
+// description — a court's picture is curation, and curation is the moderators'.
+//
+// The argument is ONE line of the eight-field format a claim's evidence uses —
+// kind|sha256|mime|w|h|bytes|caption|mirrors — so web/media.js builds it with
+// the same code this realm parses with the same parser, and the CSP that already
+// allows the evidence hosts allows this with no second list.
+//
+// An image only, for the reason a folder's is: a video is a link the court
+// cannot vouch for, reasonable as EVIDENCE where the claim page says so, and
+// unreasonable as the face of a venue.
+func SetCourtImage(cur realm, courtSlug, media string) {
+	if !cur.IsCurrent() {
+		panic(errStaleRealm)
+	}
+	who := cur.Previous().Address()
+	c := mustCourt(courtSlug)
+	requireFolderMod(c, who)
+	items := parseMediaArg(media)
+	if len(items) != 1 {
+		panic("kourtv2: a court carries exactly one image")
+	}
+	if items[0].kind != mediaKindImage {
+		panic("kourtv2: a court's image is an image, not a video link")
+	}
+	c.image = &items[0]
+	emitModAct(c.id, 0, "court-image", who)
+}
+
+// ClearCourtImage takes it off again. Separate from SetCourtImage because "no
+// picture" reached by passing an empty string is a state somebody arrives at by
+// accident.
+func ClearCourtImage(cur realm, courtSlug string) {
+	if !cur.IsCurrent() {
+		panic(errStaleRealm)
+	}
+	who := cur.Previous().Address()
+	c := mustCourt(courtSlug)
+	requireFolderMod(c, who)
+	c.image = nil
+	emitModAct(c.id, 0, "court-image-clear", who)
+}
+
+// CourtImage is the one line back, or "[]" for a court with no picture — the
+// same empty shape FolderImage returns, so one client parser serves both.
+func CourtImage(courtSlug string) string {
+	c := mustCourt(courtSlug)
+	if c.image == nil {
+		return "[]"
+	}
+	return encodeMedia([]mediaItem{*c.image})
+}
+
+// CourtImages answers many courts in one query:
+//
+//	"<slug>\t<one media line>\n…"
+//
+// A court with no picture is SKIPPED rather than sent as an empty line, so a
+// directory of twenty courts where two have images is two records, not twenty.
+// slugs is comma-separated; unknown slugs are skipped, and at most
+// seriesPageMax are answered.
+//
+// WHY NOT ONE READ PER COURT. The directory draws every listed court, and a
+// per-court read is the fan-out DocketSeries exists to undo: each qeval reloads
+// this realm, so twenty courts would be twenty realm loads to fill twenty
+// thumbnails. Tab-separated because a media line is itself pipe-delimited and
+// carries a caption, and a caption may contain anything a person can type.
+func CourtImages(slugs string) string {
+	out := strings.Builder{}
+	sent := 0
+	for _, sl := range strings.Split(slugs, ",") {
+		if sent >= seriesPageMax {
+			break
+		}
+		sl = strings.TrimSpace(sl)
+		if sl == "" {
+			continue
+		}
+		v := courts.Get(sl)
+		if v == nil {
+			continue
+		}
+		c := v.(*Court)
+		if c.image == nil {
+			continue
+		}
+		out.WriteString(sl + "\t" + encodeMedia([]mediaItem{*c.image}) + "\n")
+		sent++
+	}
+	return out.String()
 }
 
 func mustCourtDesc(desc string) {
