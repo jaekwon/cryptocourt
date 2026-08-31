@@ -29,6 +29,8 @@ code += slice('function tx(', 'function btn(');
 // asserting on either alone would miss the wiring between them.
 code += "const PKG='gno.land/r/kourt/kourtv2';\n";
 code += slice('const ICN_CHEST =', 'const ICN_COURT =');
+// the gas pair the wallet and the printed command share — sliced, never retyped
+code += slice('const GAS_WANTED', 'const CFG_DEFAULTS');
 code += slice('const shq =', 'function cliCmd(');
 code += slice('function cliCmd(', '/* A copyable command block');
 code += slice('function btn(', '/* SHELL-QUOTED');

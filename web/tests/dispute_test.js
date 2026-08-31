@@ -14,6 +14,8 @@ const NOWm = src.match(/const NOW\s*=\s*([0-9_]+)/); global.NOW = NOWm? Number(N
 const BSm = src.match(/const BLOCK_SECS\s*=\s*([0-9_]+)/); global.BLOCK_SECS = BSm? Number(BSm[1].replace(/_/g,'')) : 5;
 
 let code = '';
+// the gas pair the wallet and the printed command share — sliced, never retyped
+code += slice('const GAS_WANTED', 'const CFG_DEFAULTS');
 code += slice('function esc(', '\n');
 code += slice('function fmtN(', 'function ugnot(');
 code += slice('const sideName', '\n');

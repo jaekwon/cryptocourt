@@ -1562,6 +1562,29 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
 "use strict";
 /* ============================ configuration ============================== */
 const PKG = "gno.land/r/kourt/kourtv2";
+/* GAS: THE CEILING IS NOT THE PRICE, and one number has to serve both the wallet
+   and the printed command.
+
+   Buy sat behind a greyed-out Approve in Adena and said nothing about why. The
+   tx carried no gas fields at all — DoContract was called with `messages` alone
+   — so Adena filled in its own default ceiling, simulated, hit out-of-gas, and
+   disabled the button with no error a reader could act on. Measured against a
+   live node with `gnokey ... -simulate only`, a Buy on a 20-claim court costs
+   27,954,243 gas: nearly three times the 10,000,000 that both Adena's default
+   and the command this page printed were offering. Every lighter call fits
+   inside 10M, which is why staking and voting worked and only buying did not.
+
+   GasWanted is a ceiling on work, not a cost — unused gas is never charged. What
+   it does cost is the floor it sets on the fee: at the genesis price of
+   1ugnot/1000gas the minimum acceptable GasFee is GasWanted/1000, and GasFee is
+   deducted IN FULL whatever the tx burns (gnolang/gno #3805). So the ceiling is
+   set at a bit over twice the heaviest measured write, and the fee at exactly
+   that ceiling's floor and not a ugnot more: 0.06 GNOT.
+
+   A buy also carries a storage deposit — 217,500ugnot for the curve's own
+   bookkeeping — which the chain takes separately and no wallet field controls. */
+const GAS_WANTED = 60000000;
+const GAS_FEE_UGNOT = 60000;   // GAS_WANTED/1000 — the floor at 1ugnot/1000gas
 const CFG_DEFAULTS = {mode:"demo", rpc:"http://127.0.0.1:26657", gnoweb:"https://gno.land", chainid:"dev"};
 /* LOCKED is stamped true by deploy/deploy.sh. A deployed site has one chain and
    the values above are fixed at deploy time, so the source panel — mode, RPC,
@@ -3218,16 +3241,17 @@ function btn(label, func, args, cls, sub, send, gate, edit, blocked, glyph, amt)
 const shq = s => "'" + String(s).replace(/'/g, `'\\''`) + "'";
 
 /* The same action as a gnokey command, for people at a terminal. One --args per
-   argument; --send only where the function takes payment (Buy). The fee shape
-   follows the documented floor: 10M gas at the genesis price costs exactly
-   10000ugnot, and --gas-fee is taken in full, so nothing larger is suggested. */
+   argument; --send only where the function takes payment (Buy). The gas pair is
+   GAS_WANTED/GAS_FEE_UGNOT, the same two numbers the wallet signs with — printed
+   from the constants rather than restated, because the last time they were
+   restated the command carried a 10M ceiling that a Buy cannot fit inside. */
 function cliCmd(func, args, send){
   let c = (CFG.mode==="demo"? "# demo data — these entities exist on no chain; switch Source to a live node first\n" : "")
         + (func==="Buy"? "# one-way: the GNOT is burned; no sell-back\n" : "")
         + "gnokey maketx call \\\n  --pkgpath \"" + PKG + "\" --func \"" + func + "\"";
   for(const k of Object.keys(args||{})) c += " \\\n  --args " + shq(args[k]);
   if(func==="Buy") c += " \\\n  --send " + (send||"AMOUNTugnot");
-  c += " \\\n  --gas-fee 10000ugnot --gas-wanted 10000000 --broadcast" +
+  c += " \\\n  --gas-fee " + GAS_FEE_UGNOT + "ugnot --gas-wanted " + GAS_WANTED + " --broadcast" +
        " \\\n  --chainid \"" + (CFG.chainid||"dev") + "\" --remote \"" + CFG.rpc + "\" YOURKEY";
   return c;
 }
@@ -3670,7 +3694,7 @@ async function adenaSign(func, args, el){
     note("Waiting for Adena…");
     const res = await a.DoContract({messages:[{type:"/vm.m_call", value:{
       caller: CFG.addr, send, pkg_path: PKG, func, args: vals
-    }}]});
+    }}], gasFee: GAS_FEE_UGNOT, gasWanted: GAS_WANTED});
     if(res.code===0){
       note("Sent. tx "+String(res.data&&res.data.hash||"").slice(0,12)+"…", true);
       /* THE DRAFT CLEARS ONLY HERE. A rejected signature, a wallet on the wrong

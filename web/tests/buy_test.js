@@ -19,6 +19,8 @@ const curve = slice('const CURVE_D', 'function courtBody');
 const helpers = slice('function fmtN(', 'function ccSym(')
   + slice('function ccSym(', 'function ugnot(');
 // esc()
+// the gas pair the wallet and the printed command share — sliced, never retyped
+const gasDecls = slice('const GAS_WANTED', 'const CFG_DEFAULTS');
 const escFn = slice('function esc(', '\n');
 // tx/btn/cliCmd
 const btnBlock = slice('function tx(func', 'document.addEventListener("click"');
@@ -29,7 +31,7 @@ global.CFG = { mode:'demo', gnoweb:'https://gno.land', rpc:'http://127.0.0.1:266
 global.PKG = 'gno.land/r/kourt/kourtv2';
 global.isLive = ()=> CFG.mode==='live';
 
-let code = escFn + helpers + btnBlock + curve;
+let code = gasDecls + escFn + helpers + btnBlock + curve;
 code = code.replace('let BUYQ=null, BUYCTX=null;', 'var BUYQ=null, BUYCTX=null;');
 code = code.replace(/document\.addEventListener\("(input|change)"[^\n]*\n/g, '');
 eval(code);
@@ -176,6 +178,33 @@ ok("F3: fallback buy gated until ack", (()=>{
 })());
 ok("F3: BUYCTX noquote set", BUYCTX && BUYCTX.noquote===true);
 CFG.mode='demo';
+
+// ---- round 62: the tx has to carry a ceiling a Buy fits inside ----
+//
+// Adena greyed out Approve and said nothing. DoContract was called with
+// `messages` alone, so the wallet supplied its own gas ceiling, simulated,
+// hit out-of-gas and disabled the button — no error, no reason on screen.
+// Measured on a live node, `Buy` on a 20-claim court costs 27,954,243 gas
+// (`gnokey maketx call -func Buy -args covid -send 100000000ugnot
+//  -simulate only -broadcast`), against the 10,000,000 both Adena's default
+// and this page's printed command were offering. Every other call fits in 10M,
+// which is why staking and voting worked and only buying did not.
+const BUY_GAS_MEASURED = 27954243;
+// the eval'd slice declares these with const, which does not escape its own
+// eval scope — so read the same two lines out of the source directly.
+const GAS_WANTED = Number(src.match(/const GAS_WANTED = (\d+)/)[1]);
+const GAS_FEE_UGNOT = Number(src.match(/const GAS_FEE_UGNOT = (\d+)/)[1]);
+ok("gas: the ceiling clears the measured cost of a Buy, with headroom",
+   GAS_WANTED > BUY_GAS_MEASURED * 1.5);
+ok("gas: the fee is exactly the floor for that ceiling, not a ugnot more",
+   GAS_FEE_UGNOT === GAS_WANTED / 1000);   // genesis price: 1ugnot/1000gas
+ok("gas: the signed tx carries both",
+   /gasFee: GAS_FEE_UGNOT, gasWanted: GAS_WANTED/.test(src));
+{
+  const cmd = cliCmd("Buy", {slug:"orem"}, "100000000ugnot");
+  ok("gas: the printed command offers the same pair the wallet signs",
+     cmd.includes("--gas-wanted " + GAS_WANTED) && cmd.includes("--gas-fee " + GAS_FEE_UGNOT + "ugnot"));
+}
 
 console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");
 process.exit(fail?1:0);

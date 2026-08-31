@@ -26,7 +26,7 @@ eval(slice('function fmtN(', '\n'));
 eval(slice('function cc(n, slug){', '\nfunction ugnot('));
 eval(slice('function ccSym(', '\n'));
 eval(V(slice('const shq =', '\n\n')));
-eval(slice('function cliCmd(', '\n\n'));
+eval(slice('const GAS_WANTED', 'const CFG_DEFAULTS') + slice('function cliCmd(', '\n\n'));
 // MAX_COMMENT_CHARS is read out of the file, never restated: it is pinned to the
 // realm's maxBoardTextLen by check-web-constants, and a copy here would be a
 // third place for it to drift.
