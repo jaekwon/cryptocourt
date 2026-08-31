@@ -66,6 +66,7 @@ img,svg{display:block;max-width:100%}
   --yes:#1c6551; --yes-wash:#d8e7e1; --no:#93362b; --no-wash:#f0dcd8; --contra:#d92d20; --contra-wash:#fbe0dd;
   --escrow:#7d5c0f; --escrow-wash:#f0e6cd; --void:#74848f; --void-wash:#e2e8ec;
   --good:#1c6551; --bad:#a3281c;
+  --gilt:#9a6f12;   /* the mark's highlight; deeper here so it reads on cream */
   --shadow-sm:0 1px 2px rgba(27,27,33,.05);
   --shadow:0 1px 2px rgba(27,27,33,.05), 0 10px 30px -16px rgba(27,27,33,.22);
   /* NEON, OFF. Every glow in this file is a token, so the light theme turns
@@ -97,6 +98,7 @@ img,svg{display:block;max-width:100%}
     --yes:#6fc0a5; --yes-wash:#12302a; --no:#e08b7c; --no-wash:#351a16; --contra:#ff6b5e; --contra-wash:#3a1512;
     --escrow:#d7b264; --escrow-wash:#2e2512; --void:#7a8994; --void-wash:#1a232b;
     --good:#6fc0a5; --bad:#e5847a;
+    --gilt:#e2b552;   /* and brighter on the dark page */
     --shadow-sm:0 1px 2px rgba(0,0,0,.3);
     --shadow:0 1px 2px rgba(0,0,0,.3), 0 12px 34px -18px rgba(0,0,0,.7);
     /* NEON, ON — and kept to the things that carry information: the traces on
@@ -136,6 +138,7 @@ img,svg{display:block;max-width:100%}
   --accent:#2e3a7d; --accent-2:#24306b; --accent-wash:#dfe3f2; --accent-ink:#fff;
   --yes:#1c6551; --yes-wash:#d8e7e1; --no:#93362b; --no-wash:#f0dcd8; --contra:#d92d20; --contra-wash:#fbe0dd;
   --escrow:#7d5c0f; --escrow-wash:#f0e6cd; --void:#74848f; --void-wash:#e2e8ec; --good:#1c6551; --bad:#a3281c;
+  --gilt:#9a6f12;
   --shadow-sm:0 1px 2px rgba(27,27,33,.05); --shadow:0 1px 2px rgba(27,27,33,.05), 0 10px 30px -16px rgba(27,27,33,.22);
   --glow-a:none; --glow-y:none; --glow-n:none; --glow-e:none;
   --trace:none; --edge:transparent;
@@ -149,6 +152,7 @@ img,svg{display:block;max-width:100%}
   --accent:#9aa8ee; --accent-2:#b3bef3; --accent-wash:#1e2545; --accent-ink:#11171c;
   --yes:#6fc0a5; --yes-wash:#12302a; --no:#e08b7c; --no-wash:#351a16; --contra:#ff6b5e; --contra-wash:#3a1512;
   --escrow:#d7b264; --escrow-wash:#2e2512; --void:#7a8994; --void-wash:#1a232b; --good:#6fc0a5; --bad:#e5847a;
+  --gilt:#e2b552;
   --shadow-sm:0 1px 2px rgba(0,0,0,.3); --shadow:0 1px 2px rgba(0,0,0,.3), 0 12px 34px -18px rgba(0,0,0,.7);
   --glow-a:0 0 8px rgba(154,168,238,.55), 0 0 22px rgba(154,168,238,.22);
   --glow-y:0 0 8px rgba(111,192,165,.60), 0 0 22px rgba(111,192,165,.26);
@@ -1414,28 +1418,11 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
    and nothing has to be positioned by hand. */
 /* THE ACCOUNT WIDGET. Fixed top-right; the pop is anchored to it and closes on
    Escape, on an outside click, and on navigation. */
-.acct{position:fixed; top:10px; right:12px; z-index:35}
-.forkme{position:fixed; bottom:0; right:0; z-index:34; width:172px; height:172px;
-  overflow:hidden; pointer-events:none}
-.forkme>*{pointer-events:auto}
-/* THE BAND IS A REAL ELEMENT, not a ::before with the text in `content`. The sir
-   has to ride inside the band, and an absolutely-placed glyph over a rotated
-   pseudo-element lands wherever the rotation origin puts it — it came out
-   clipped past the end of the stripe. One rotated flex row carries both. */
-/* MEASURED, not guessed. At 230px wide sitting 31px up, the mark hung 16px below
-   the viewport and got clipped — the band's ENDS are meant to be cut by the
-   corner, its content is not. 200/48/-34 is the first geometry where the glyph's
-   box is fully on screen at every width the ribbon shows at. */
-.forkme .band{position:absolute; bottom:48px; right:-34px; width:200px; padding:7px 0;
-  transform:rotate(-45deg); pointer-events:auto;
-  display:flex; align-items:center; justify-content:center; gap:8px;
-  background:var(--accent); color:var(--accent-ink);
-  font-family:var(--mono); font-size:11.5px; font-weight:700; letter-spacing:.09em;
-  text-transform:uppercase; box-shadow:0 1px 8px rgba(0,0,0,.28)}
-.forkme .seat{display:flex; flex:none; color:currentColor}
-.forkme:hover .band{background:var(--accent-2)}
-.forkme:focus-visible .band{outline:2px solid var(--ink); outline-offset:2px}
-@media(max-width:900px){ .forkme{display:none} }
+.acct{position:fixed; top:10px; right:12px; z-index:35; display:flex; align-items:center; gap:8px}
+.forkbtn{text-decoration:none; color:var(--muted); background:transparent; box-shadow:none; border-color:var(--line)}
+.forkbtn:hover{color:var(--accent); border-color:var(--accent); background:var(--surface)}
+/* chrome, not content: below 640px the wallet button owns the corner alone. */
+@media(max-width:640px){ .forkbtn{display:none} }
 .acctbtn{display:inline-flex; align-items:center; gap:7px; cursor:pointer;
   padding:6px 10px; border:1px solid var(--line-2); border-radius:8px;
   background:var(--surface); color:var(--ink); font:12px var(--sans);
@@ -1545,6 +1532,14 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
         <rect x="20" y="76" width="10" height="11"/><rect x="70" y="76" width="10" height="11"/>
         <rect x="8" y="87" width="84" height="6"/>
         <rect x="3" y="93" width="94" height="7"/>
+        <g fill="var(--gilt)">
+          <rect x="17" y="0" width="5" height="3.4"/><rect x="24" y="0" width="5" height="3.4"/>
+          <rect x="31" y="0" width="5" height="3.4"/><rect x="64" y="0" width="5" height="3.4"/>
+          <rect x="71" y="0" width="5" height="3.4"/><rect x="78" y="0" width="5" height="3.4"/>
+          <rect x="36" y="8" width="28" height="3.4"/>
+          <rect x="12" y="66" width="76" height="2.6"/>
+          <rect x="8" y="87" width="84" height="2"/><rect x="3" y="93" width="94" height="2.2"/>
+        </g>
       </svg></span>
       <span><h1>Kourt</h1></span>
     </a>
@@ -1596,6 +1591,15 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
      above page content (1), below the fullscreen map (40) and the lightbox (60),
      so a modal still covers it. -->
 <div class="acct" id="acct">
+  <!-- FORK ME, AS A CHIP. This was a diagonal ribbon across the bottom-right
+       corner — a decoration from another era of the web, sitting nowhere near
+       anything else on the page. Top-right is where this page's own chrome
+       already lives, so it joins it: the same .acctbtn shape as the wallet
+       button, one flex row, quieter. rel="noopener" is load-bearing —
+       deploy.sh refuses to ship a page carrying an unmarked external href. -->
+  <a class="acctbtn forkbtn" href="https://github.com/jaekwon/cryptocourt"
+     target="_blank" rel="noopener" title="Fork Kourt on GitHub">
+    <span class="g" aria-hidden="true">&#9670;</span><span>Fork</span></a>
   <button type="button" class="acctbtn" id="acctbtn" aria-haspopup="menu"
           aria-expanded="false" aria-controls="acctpop">
     <span class="g" aria-hidden="true">&#9671;</span>
@@ -7537,6 +7541,14 @@ on(/^\/c\/([a-z0-9-]+)\/map$/, async (slug)=>{
              <rect x="20" y="76" width="10" height="11"/><rect x="70" y="76" width="10" height="11"/>
              <rect x="8" y="87" width="84" height="6"/>
              <rect x="3" y="93" width="94" height="7"/>
+             <g fill="var(--gilt)">
+               <rect x="17" y="0" width="5" height="3.4"/><rect x="24" y="0" width="5" height="3.4"/>
+               <rect x="31" y="0" width="5" height="3.4"/><rect x="64" y="0" width="5" height="3.4"/>
+               <rect x="71" y="0" width="5" height="3.4"/><rect x="78" y="0" width="5" height="3.4"/>
+               <rect x="36" y="8" width="28" height="3.4"/>
+               <rect x="12" y="66" width="76" height="2.6"/>
+               <rect x="8" y="87" width="84" height="2"/><rect x="3" y="93" width="94" height="2.2"/>
+             </g>
            </svg></span><b>Kourt</b>
          </a>
          <a class="btn ghost mapback" href="#/c/${esc(slug)}"><span aria-hidden="true">←</span> ${safeInline(cs.name)}</a>
@@ -10847,24 +10859,5 @@ applyTheme(CFG.theme);
 initControls();
 render().then(()=>{ const t=atTarget(); if(t){ t.focus({preventScroll:true}); t.scrollIntoView(); } });
 </script>
-<!-- FORK ME. Bottom-right, because top-right is taken: .acct is fixed there and
-     a ribbon over it would cover the reader's own address. Below the map's
-     z-index too, so opening a map covers the ribbon rather than the ribbon
-     sitting on the map. Gone under 900px, where a corner band is 20% of the
-     screen. rel="noopener" is not decoration — deploy.sh refuses to ship a page
-     with an unmarked external href, which is how a page stays self-contained. -->
-<a class="forkme" href="https://github.com/jaekwon/cryptocourt" target="_blank" rel="noopener"
-   aria-label="Fork Kourt on GitHub">
-  <span class="band"><span class="seat" aria-hidden="true"><svg viewBox="3 0 94 100" width="15" height="16" fill="currentColor">
-    <rect x="17" y="0" width="5" height="66"/><rect x="24" y="0" width="5" height="66"/>
-    <rect x="31" y="0" width="5" height="66"/><rect x="64" y="0" width="5" height="66"/>
-    <rect x="71" y="0" width="5" height="66"/><rect x="78" y="0" width="5" height="66"/>
-    <rect x="36" y="8" width="28" height="58"/>
-    <rect x="12" y="66" width="76" height="10"/>
-    <rect x="20" y="76" width="10" height="11"/><rect x="70" y="76" width="10" height="11"/>
-    <rect x="8" y="87" width="84" height="6"/>
-    <rect x="3" y="93" width="94" height="7"/>
-  </svg></span>Fork me on GitHub</span>
-</a>
 </body>
 </html>

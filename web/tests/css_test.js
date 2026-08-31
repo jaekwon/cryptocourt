@@ -171,28 +171,51 @@ if (mediaDark && themeLight && themeDark) {
   const iconRaw = /<link rel="icon" href="data:image\/svg\+xml,([^"]+)"/.exec(src);
   ok("the favicon is an svg data URI", !!iconRaw);
   const icon = decodeURIComponent((iconRaw ? iconRaw[1] : "").replace(/%23/g, "#"));
-  // EVERY copy, not a fixed three: the map bar became a fourth when the
-  // full-screen map turned out to cover the rail, and a harness that counts
-  // copies rather than collecting them goes quiet exactly when one is added.
+  // EVERY copy, not a fixed number: the map bar became one when the full-screen
+  // map turned out to cover the rail, and the corner ribbon stopped being one
+  // when it became a chip. A harness that counts copies rather than collecting
+  // them goes quiet exactly when the set changes.
+  //
+  // INK AND GILT ARE TWO LAYERS. The ink silhouette is the drawing and must be
+  // identical everywhere, favicon included. The gilt highlight is a treatment,
+  // and it is deliberately absent where it cannot survive: a 3.4-unit cap is
+  // under a pixel in a 16px tab icon. So gilt is compared only across the copies
+  // that carry it — but it must be the SAME gilt in all of them.
+  const giltOf = svg => {
+    const g = /<g fill="var\(--gilt\)">([\s\S]*?)<\/g>/.exec(svg);
+    return g ? shapes(g[1]) : null;
+  };
   const copies = [];
   for (let i = src.indexOf('<span class="seat"'); i >= 0;
            i = src.indexOf('<span class="seat"', i + 1)) {
-    copies.push(shapes(src.slice(i, src.indexOf("</svg>", i))));
+    const svg = src.slice(i, src.indexOf("</svg>", i));
+    const gilt = giltOf(svg);
+    copies.push({ ink: shapes(svg).slice(0, 12), gilt });
   }
-  const rail = copies[0] || [];
+  const rail = (copies[0] || {}).ink || [];
   const ico  = shapes(icon);
   ok(`the page draws the seat in more than one place — found ${copies.length}`,
-     copies.length >= 3);
+     copies.length >= 2);
   ok("the first is twelve rectangles, no curves", rail.length === 12);
   ok("every in-page copy is the same twelve, in the same order",
-     copies.every(c => c.length === 12 && c.every((d, i) => d === rail[i])));
+     copies.every(c => c.ink.length === 12 && c.ink.every((d, i) => d === rail[i])));
   ok("the favicon draws the same twelve, in the same order",
      ico.length === 12 && ico.every((d, i) => d === rail[i]));
+  const gilded = copies.filter(c => c.gilt);
+  ok(`the highlight is on the copies big enough for it — ${gilded.length} of ${copies.length}`,
+     gilded.length >= 1);
+  ok("and where it is drawn it is the same highlight",
+     gilded.every(c => c.gilt.length === gilded[0].gilt.length
+                    && c.gilt.every((d, i) => d === gilded[0].gilt[i])));
+  ok("the favicon carries no gilt — it is 16px and the caps are sub-pixel there",
+     !icon.includes("gilt") && !/#9a6f12|#e2b552/.test(icon));
+
   // and the drawing is a solid silhouette: no knocked-out holes, which is what
   // lets one copy serve a light page, a dark page and a browser tab.
   ok("nothing in the mark is stroked or knocked out",
-     !/stroke=|fill-rule|fill="var|fill='#(?!111|e6edf2)/.test(
-        between('<span class="seat" aria-hidden="true">', "</svg>")));
+     !/stroke=|fill-rule/.test(between('<span class="seat" aria-hidden="true">', "</svg>")));
+  ok("gold is a token, never a literal, so it can differ by theme",
+     !/fill="#[0-9a-f]{6}"/i.test(between('<span class="seat" aria-hidden="true">', "</svg>")));
   ok("the favicon's markup is percent-encoded, so the page has ONE <style>",
      (src.match(/<style>/g) || []).length === 1);
 }

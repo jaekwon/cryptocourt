@@ -121,36 +121,36 @@ const NOT_FOUND = () => {
   ok(`it reached a claim`, [...seen].some(r => /^#\/c\/[^/]+\/\d+$/.test(r)));
   ok(`no page errors on any route reached`, errs.length === 0, errs.slice(0, 2).join(" | "));
 
-  // THE CORNER RIBBON, measured rather than eyeballed. Its band is a rotated
-  // element whose ENDS are meant to be clipped by the corner; its content is
-  // not, and at the first geometry the sir hung 16px below the viewport and was
-  // sliced off. Nothing in a source-slice harness can see that, and this page is
-  // already open, so the check costs no browser.
+  // THE FORK CHIP, measured rather than eyeballed. It used to be a diagonal
+  // ribbon in the bottom-right corner whose rotated band clipped its own glyph;
+  // it is now a chip in the fixed top-right cluster beside the wallet button,
+  // where the failure mode is different and just as invisible from source — two
+  // fixed things in one corner overlapping each other. This page is already
+  // open, so the check costs no browser.
   const corner = await page.evaluate(() => {
-    const f = document.querySelector('.forkme');
+    const f = document.querySelector('.forkbtn');
     if (!f) return {missing: true};
-    const g = f.querySelector('.seat svg'), band = f.querySelector('.band');
-    if (!g || !band) return {noParts: true};
-    const gr = g.getBoundingClientRect(), br = band.getBoundingClientRect();
-    const mid = document.elementFromPoint(Math.round(br.left + br.width / 2),
-                                         Math.round(br.top + br.height / 2));
-    const acct = document.querySelector('.acct');
-    const ar = acct && acct.getBoundingClientRect();
+    const r = f.getBoundingClientRect();
+    const btn = document.getElementById('acctbtn');
+    const br = btn && btn.getBoundingClientRect();
     const hits = (a, b) => !!a && !!b
       && !(a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top);
+    const mid = document.elementFromPoint(Math.round(r.left + r.width / 2),
+                                          Math.round(r.top + r.height / 2));
     return {
-      glyphOnScreen: gr.width > 0 && gr.left >= 0 && gr.top >= 0
-                     && gr.right <= innerWidth && gr.bottom <= innerHeight,
-      glyph: [Math.round(gr.left), Math.round(gr.top), Math.round(gr.right), Math.round(gr.bottom)],
-      clickable: !!(mid && mid.closest('.forkme')),
-      overAccount: hits(br, ar),
+      onScreen: r.width > 0 && r.left >= 0 && r.top >= 0
+                && r.right <= innerWidth && r.bottom <= innerHeight,
+      topRight: r.top < 60 && innerWidth - r.right < 220,
+      clickable: !!(mid && mid.closest('.forkbtn')),
+      overlapsWallet: hits(r, br),
       href: f.getAttribute('href'), rel: f.getAttribute('rel'),
     };
   });
-  ok(`the fork-me mark is drawn fully inside the viewport`, corner.glyphOnScreen === true,
+  ok(`the fork chip is drawn fully inside the viewport`, corner.onScreen === true,
      JSON.stringify(corner));
-  ok(`the ribbon is clickable at the middle of its band`, corner.clickable === true);
-  ok(`and does not cover the reader's own address chip`, corner.overAccount === false);
+  ok(`it sits in the top-right cluster`, corner.topRight === true);
+  ok(`it is clickable at its own centre`, corner.clickable === true);
+  ok(`and does not overlap the wallet button beside it`, corner.overlapsWallet === false);
   ok(`it points at the repository, marked noopener`,
      corner.href === "https://github.com/jaekwon/cryptocourt" && /noopener/.test(corner.rel || ""));
 

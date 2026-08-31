@@ -39,6 +39,14 @@ const SEAT = `
   <rect x="20" y="76" width="10" height="11"/><rect x="70" y="76" width="10" height="11"/>
   <rect x="8" y="87" width="84" height="6"/>
   <rect x="3" y="93" width="94" height="7"/>
+  <g fill="#9a6f12">
+    <rect x="17" y="0" width="5" height="3.4"/><rect x="24" y="0" width="5" height="3.4"/>
+    <rect x="31" y="0" width="5" height="3.4"/><rect x="64" y="0" width="5" height="3.4"/>
+    <rect x="71" y="0" width="5" height="3.4"/><rect x="78" y="0" width="5" height="3.4"/>
+    <rect x="36" y="8" width="28" height="3.4"/>
+    <rect x="12" y="66" width="76" height="2.6"/>
+    <rect x="8" y="87" width="84" height="2"/><rect x="3" y="93" width="94" height="2.2"/>
+  </g>
 </svg>`;
 
 // No webfont: a card that waits on a font download renders in a fallback and
