@@ -4739,15 +4739,22 @@ function parseGnot(v){
   const x = BigInt(m[1])*1000000n + BigInt((m[2]||"0").padEnd(6,"0"));
   return x > 9223372036854775807n? null : x;
 }
-function buyRowsHtml(q, price, slug){
+/* TWO ROWS ABOVE THE BUTTON, FOUR BELOW IT. All six sat between the amount and
+   the Buy button — you receive, average price, dust returned, price after, voice
+   share — which put the control six rows and a tick down the panel, far enough
+   that a reader arriving at ?at=join had to scroll for the thing they came for.
+   What a buyer needs BEFORE pressing is how much they get. The other four are
+   real disclosures and stay, under the button, where they are a receipt rather
+   than a queue. `after` picks which half. */
+function buyRowsHtml(q, price, slug, after){
   if(!q) return `<div class="line"><span class="l">You receive</span><span class="r">— <small>enter a GNOT amount, like 100 or 2.5</small></span></div>`;
   if(q.units<=0n) return `<div class="line"><span class="l">You receive</span><span class="r">0 <small>too small to mint — the court refuses it and your GNOT never leaves</small></span></div>`;
   const pct = q.share*100;
-  return `<div class="line"><span class="l">You receive</span><span class="r tnum">${cc(Number(q.units),slug)} <small>${fmtN(Number(q.units))} units</small></span></div>`
-    + `<div class="line"><span class="l">Average price you pay</span><span class="r tnum">${q.avg.toFixed(4)} <small>µGNOT/unit</small></span></div>`
-    + (q.refund>0n? `<div class="line"><span class="l">Returned to you</span><span class="r tnum">${q.refund.toLocaleString("en-US")} <small>µGNOT, sent back in the same transaction</small></span></div>`:"")
+  if(after) return `<div class="line"><span class="l">Average price you pay</span><span class="r tnum">${q.avg.toFixed(4)} <small>µGNOT/unit</small></span></div>`
+    + (q.refund>0n? `<div class="line"><span class="l">Returned to you</span><span class="r tnum">${q.refund.toLocaleString("en-US")} <small>µGNOT, sent back in the same transaction</small></span></div>` : "")
     + `<div class="line"><span class="l">Price after your buy</span><span class="r tnum">${fmtN(q.priceAfter)} <small>µGNOT/unit · now ${fmtN(price)}</small></span></div>`
     + `<div class="line"><span class="l">Your voice share</span><span class="r tnum">${pct<0.1? "&lt;0.1%" : pct.toFixed(1)+"%"}</span></div>`;
+  return `<div class="line"><span class="l">You receive</span><span class="r tnum">${cc(Number(q.units),slug)} <small>${fmtN(Number(q.units))} units</small></span></div>`;
 }
 let BUYQ=null, BUYCTX=null;
 function buyActionsHtml(slug, q){
@@ -4758,7 +4765,11 @@ function buyActionsHtml(slug, q){
   // no quote ⇒ buying stays possible (the chain computes the true amount),
   // but the acknowledgement still gates the one-click paths
   const gate = isLive()? (noquote? !acked : (!ok || !acked)) : false;
-  return btn(ok? "Buy "+cc(Number(q.units),slug) : "Buy the coin", "Buy", {slug}, "primary", "GNOT in, one-way", send, gate);
+  /* NO "GNOT in, one-way" UNDER THE VERB. The acknowledgement directly above it
+     already says the coin cannot be sold back, in the reader's own words and
+     with a tick beside it; five more words of shorthand under the button says
+     the same thing worse. */
+  return btn(ok? "Buy "+cc(Number(q.units),slug) : "Buy the coin", "Buy", {slug}, "primary", "", send, gate);
 }
 /* ---------------- the court record (adverse disclosure) ----------------
    Outcomes only the chain can assert, published because they are the only
@@ -6721,14 +6732,21 @@ function joinPanel(slug, s){
               <small id="buyugnot">= ${fmtN(1e8)} µGNOT</small></span></div>
           <div id="buyrows" aria-live="polite">${buyRowsHtml(q, s.price, slug)}</div>
         </div>
-        <p id="buynote" class="small muted" style="margin:8px 0 0">${isLive()
-          ? "Quoted from the chain just now — if someone buys first you'll receive fewer units than shown, never more; the transaction's own result is final."
-          : "Sample data — computed from the demo court, no chain involved."}</p>
         <label class="ack small"><input type="checkbox" id="buyack"> I understand ${sym} cannot be sold back to the court.</label>
-        <div class="actions" style="margin-top:10px" id="buyactions">${buyActionsHtml(slug,q)}</div>`;
+        <div class="actions" style="margin-top:10px" id="buyactions">${buyActionsHtml(slug,q)}</div>
+        <div class="ticket buyrcpt" style="margin-top:10px" id="buyrows2" aria-live="polite">${buyRowsHtml(q, s.price, slug, true)}</div>
+        <p id="buynote" class="small muted" style="margin:10px 0 0">${isLive()
+          ? "Quoted from the chain just now — if someone buys first you'll receive fewer units than shown, never more; the transaction's own result is final."
+          : "Sample data — computed from the demo court, no chain involved."}</p>`;
   }
+  /* THE CONTROL FIRST, THE CAVEATS AFTER. This opened with a paragraph on
+     permanence, then the receipt, then a note on quoting, then the tick, and the
+     Buy button came fourth — far enough down that a reader arriving at ?at=join
+     had to scroll to find the thing they came for. The tick immediately above
+     the button carries the one fact that must be read before pressing; the rest
+     is true and belongs under it. */
   return `<div class="panel" id="join" tabindex="-1"><h4>Join this court</h4>
-        <p class="small" style="margin:0 0 10px"><b>Buying ${sym} is permanent</b> — the GNOT is burned: spent, held by no one. There is no sell-back, now or ever.</p>
+        <p class="small" style="margin:0 0 10px"><b>${sym} cannot be sold back.</b> The GNOT is burned.</p>
         ${body}
         <p class="small muted" style="margin:10px 0 0">The only way out is a private buyer, and there may not be one. Treat this as GNOT spent for a voice, not GNOT moved.</p>
        </div>`;
@@ -6741,6 +6759,10 @@ function recomputeBuy(){
   if(echo) echo.textContent = x==null? "= not a GNOT amount" : "= "+x.toLocaleString("en-US")+" µGNOT";
   const rows=document.getElementById("buyrows");
   if(rows) rows.innerHTML = buyRowsHtml(BUYQ, BUYCTX.price, BUYCTX.slug);
+  // The half below the button retypes with the half above it, or the receipt
+  // starts describing an amount the reader has already changed.
+  const rows2=document.getElementById("buyrows2");
+  if(rows2) rows2.innerHTML = buyRowsHtml(BUYQ, BUYCTX.price, BUYCTX.slug, true);
   refreshBuyActions();
 }
 function refreshBuyActions(){
