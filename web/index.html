@@ -4831,6 +4831,7 @@ on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
   if(QP.sort) applySort(QP.sort); // before applyQ — the search caption reads QCTX.orderTail
   if(QP.q){ const qi=document.getElementById("q"); if(qi){ qi.value=QP.q; applyQ(QP.q); } }
   if(isLive() && s.claims!=null) fillCourtRecord(slug, s.claims, s.minted);
+  if(isLive()) fillJoinHeld(slug);
   if(isLive() && claims.length){
     const s2=gstr(slug);
     const seq0 = renderSeq; // fills die with their render — never write into a newer paint
@@ -7006,10 +7007,38 @@ function joinPanel(slug, s){
      had to scroll to find the thing they came for. The tick immediately above
      the button carries the one fact that must be read before pressing; the rest
      is true and belongs under it. */
+  /* WHAT YOU ALREADY HOLD, ABOVE WHAT YOU COULD BUY.
+     Reported after a real buy on kourt.xyz: "when i actually did buy some,
+     there's no indication ultimately". The panel updated every CHAIN figure --
+     supply, price, the voice share a further buy would get -- and said nothing
+     about the reader's own position, so the one question they had after pressing
+     the button ("did it work, what do I own?") was answered nowhere on the page
+     they bought from. It was in the account menu and on /me, both of which
+     require knowing to look.
+     Filled after the paint, because it needs the chain and the panel must not
+     wait on it. Hidden until it has an answer: a row reading "—" where a balance
+     should be is worse than no row. */
   return `<div class="panel" id="join" tabindex="-1"><h4>Join this court</h4>
+        <div class="kv" id="joinheld" hidden><div class="k">You hold</div><div class="v tnum" id="joinheldv"></div></div>
         ${body}
         <p class="small muted" style="margin:10px 0 0">The only way out is a private buyer, and there may not be one. Treat this as GNOT spent for a voice, not GNOT moved.</p>
        </div>`;
+}
+/* One read, and it says nothing rather than guessing when it fails: a wrong
+   balance here is worse than an absent one, because this is the row somebody
+   checks to find out whether their money arrived. */
+async function fillJoinHeld(slug){
+  const row = document.getElementById("joinheld"), val = document.getElementById("joinheldv");
+  if(!row || !val || !CFG.addr) return;
+  let held = null;
+  try{ held = await balanceOf(slug, CFG.addr); }catch(_){ return; }
+  if(held == null || !isFinite(+held)) return;
+  const n = +held;
+  /* ZERO IS SHOWN TOO, and deliberately. "You hold none of this court's coin" is
+     the answer to the same question as a number, and on a court somebody has just
+     failed to buy into it is the more useful of the two. */
+  val.textContent = n > 0 ? cc(n, slug) : "none yet";
+  row.hidden = false;
 }
 function recomputeBuy(){
   const inp=document.getElementById("buyamt"); if(!inp||!BUYCTX||BUYCTX.noquote) return;
