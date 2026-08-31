@@ -36,6 +36,18 @@
 <meta name="twitter:description" content="A court of record for factual claims. Stake decides which claims get answered; the answer and its route are kept on-chain.">
 <meta name="twitter:image" content="https://kourt.xyz/og.png">
 <meta name="twitter:image:alt" content="An empty stone seat of judgment, over the word Kourt.">
+<!-- THE CHAIN IS A SECOND ORIGIN, and the first read cannot start until DNS, TCP
+     and TLS to it are up. Measured on kourt.xyz: the page is interactive at
+     560ms and the first query leaves at 548ms — the handshake is on the critical
+     path, in series with a parse that had already finished. preconnect starts it
+     while the HTML is still being read.
+     Written with the RPC host rather than ${CFG.rpc} because a <link> in <head>
+     is acted on before any script runs; deploy.sh stamps this file's chain
+     config, and a page pointed elsewhere simply opens a connection it does not
+     use. crossorigin is required — the RPC is fetched with CORS, and a
+     preconnect without it warms a socket the fetch will not reuse. -->
+<link rel="preconnect" href="https://rpc.kourt.xyz" crossorigin>
+<link rel="dns-prefetch" href="https://rpc.kourt.xyz">
 <!-- The tab icon is the same drawing as the rail's mark, and follows the
      browser theme: an SVG favicon carries its own stylesheet, so
      prefers-color-scheme works inside it. Was ⚖️, which every platform

@@ -85,7 +85,13 @@ fi
 # a page reaching for a CDN would break every offline and file:// use of it, and
 # the CSP on a hardened host would break it in production too.
 say "checking the overlay is still self-contained"
-if grep -nE '(src|href)="https?://' web/index.html | grep -v 'rel="noopener"' ; then
+# THE EXCEPTIONS FETCH NOTHING. rel="noopener" marks a link a reader clicks;
+# rel="preconnect" and rel="dns-prefetch" open a socket to the chain RPC early
+# and load no bytes, so neither can make this page depend on a third party the
+# way a <script src> or a webfont would. Everything else that names an external
+# URL is still refused.
+if grep -nE '(src|href)="https?://' web/index.html \
+   | grep -v 'rel="noopener"' | grep -v 'rel="preconnect"' | grep -v 'rel="dns-prefetch"' ; then
 	echo "the overlay references an external URL (above) — it must be self-contained" >&2
 	exit 1
 fi
