@@ -2370,12 +2370,18 @@ async function fillStakeBalance(slug){
   try{ bal = await balanceOf(slug, CFG.addr); }catch(_){ return; }
   if(bal==null || !isFinite(+bal)) return;
   const micro = +bal;
+  /* "of 201.7", NOT "you hold 201.7 KOURT:COVID". The unit is already on the row,
+     two words in, so repeating it spends a line on a name the reader just read;
+     and "you hold none of this court's coin" was eight words for a figure — the
+     shortest true thing is the figure. Reads as one sentence with the field:
+     amount [1] KOURT:COVID of 201.7. */
   out.textContent = "";
-  if(micro<=0){ out.textContent = "you hold none of this court's coin"; return; }
+  const fig = cc(micro, slug).replace(" "+ccSym(slug), "");
+  if(micro<=0){ out.textContent = "of 0"; return; }
   const btn = document.createElement("button");
   btn.type = "button"; btn.className = "helplink";
-  btn.textContent = "you hold " + cc(micro, slug);
-  btn.title = "Put all of it in the amount field";
+  btn.textContent = "of " + fig;
+  btn.title = "Stake all of it";
   btn.addEventListener("click", ()=>{ f.value = String(micro/1e6); f.focus(); });
   out.appendChild(btn);
 }
@@ -3417,9 +3423,14 @@ async function adenaSign(func, args, el){
       const host = u => { try{ const x=new URL(u); return (x.hostname==="localhost"?"127.0.0.1":x.hostname)+":"+(x.port||""); }catch(_){ return null; } };
       const hw = host(wrpc), hp = host(CFG.rpc);
       if(hw && hp && hw!==hp){
-        note(`Adena is signing against ${wrpc} and this page is reading ${CFG.rpc}. `
-           + `Both call themselves "${want}", but they are different nodes — point Adena at ${CFG.rpc} `
-           + `or this transaction lands on a chain that does not have what you are looking at.`);
+        /* WHAT TO DO, NOT WHAT IS WRONG. The first version explained chain
+           identity — that two nodes can share a name, that reads and writes
+           were going to different places — which is the diagnosis, not the fix,
+           and a reader staring at a wallet prompt cannot act on it. Where it is
+           pointed, where it should point, which screen changes it. */
+        const short = u => { try{ const x=new URL(u); return x.host; }catch(_){ return u; } };
+        note(`Adena is pointed at ${short(wrpc)} — this chain is ${short(CFG.rpc)}. `
+           + `Change the RPC in Adena's network settings, then try again.`);
         return;
       }
     }
@@ -8718,7 +8729,7 @@ function stakeTicket(slug,id,d){
   return `<div class="ticket" id="stake-ticket"><h3>Stake the claim</h3>
     <div class="argrow" style="margin-top:12px">
       <label for="stakeamt" class="small muted">amount</label>
-      <input id="stakeamt" class="sendin" type="text" inputmode="decimal" value="1"
+      <input id="stakeamt" class="sendin" type="text" inputmode="decimal" value="0"
              autocomplete="off" aria-describedby="stakeamtu">
       <span id="stakeamtu" class="small muted mono">${ccSym(slug)}</span>
       <span id="stakebal" class="small muted"></span>
