@@ -7895,7 +7895,18 @@ function signalChart(slug,id,d,nowH,ser,tl){
   const stamp = h => zdt? stampDate(zdt(h)) : `block ${fmtN(Math.round(h))}`;
   const zl = real? `${stamp(Math.round(x0))} · ${ago(Math.round(x0))}${demo?" · sample":""}`
     : demo? `sample window ≈${Math.round((ds?ds.span:WEEK)*BLOCK_SECS/86400)}d · synthesized shape` : `${stamp(Math.round(x0))} · ${ago(Math.round(x0))}`;
-  const zr = (demo && !real)? "now" : `${stamp(now)} · now`;
+  /* THE RIGHT LABEL DESCRIBES THE RIGHT EDGE, and it used to describe `now`
+     wherever now happened to be. The domain runs to the furthest event in
+     `cands` — a settle deadline, a reopen close, a vote close — so on any claim
+     with something scheduled ahead of it, `now` is a vertical somewhere in the
+     middle of the plot while the axis end was labelled with now's date. A reader
+     comparing the strip to the ladder found the chart ending on the 15th and the
+     vote closing on the 25th, ten days past an axis that claimed to stop today.
+     ago() already answers both cases: it returns "now" when the edge IS now, and
+     "in ≈Nd" when the plot runs past it, so one expression covers a claim with
+     nothing scheduled and a claim with a vote still to close. */
+  const xEnd = Math.round(x1);
+  const zr = (demo && !real)? ago(xEnd) : `${stamp(xEnd)} · ${ago(xEnd)}`;
   g+=`<text class="zone" x="${PL}" y="140">${esc(zl)}</text><text class="zone" x="${PR}" y="140" text-anchor="end">${esc(zr)}</text>`;
   const capR=[["now",r.inst],["week",r.week],["lifetime",r.life]].map(([k,v])=>`${k} ${Number.isFinite(v)?v+"%":"—"}`).join(" · ");
   const aria = real

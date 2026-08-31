@@ -97,6 +97,38 @@ for(const k of Object.keys(claims)){
   if(d.phase!=="open" && d.settleAt) ok("P8 "+k+" pre-freeze", last[0]<=d.settleAt-51840);
 }
 
+/* P8b: THE AXIS STRIP AGREES WITH THE PLOT. The domain runs to the furthest
+   event — a settle deadline, a reopen close, a vote close — but the right-hand
+   label was hardcoded to `now`, so on any claim with something scheduled ahead
+   of it the axis end read as today while the last marker on the plot was days
+   later. The reader who caught it was comparing the strip to the ladder: chart
+   ends the 15th, vote closes the 25th.
+   Asked of the RIGHT label against the FURTHEST event, not against a fixed
+   string, so it holds for a claim with nothing scheduled too. */
+{
+  const zoneOf = h => (h.match(/<text class="zone"[^>]*>([^<]*)<\/text>/g)||[])
+    .map(t=>t.replace(/<[^>]*>/g,""));
+  // orem/3 is disputed: a vote close sits days past now.
+  const disp = signalChart("orem",3,claims["orem/3"],NOW,null);
+  const zd = zoneOf(disp);
+  ok("P8b the axis end is not labelled now when the plot runs past now",
+     zd.length===2 && zd[1]!=="now" && /^in ≈/.test(zd[1]));
+  // orem/4 is settled: nothing is scheduled, so the edge IS now and still says so.
+  const done = zoneOf(signalChart("orem",4,claims["orem/4"],NOW,null));
+  ok("P8b ...and still says now when nothing is scheduled ahead",
+     done.length===2 && done[1]==="now");
+  // The distance named is the distance to the LAST marker, within rounding.
+  const d3 = claims["orem/3"];
+  const far = Math.max(NOW, d3.settleAt||0, d3.escrowUntil||0, d3.voteEndsAt||0);
+  const want = Math.round(Math.abs(far-NOW)*5/86400*10)/10;
+  ok("P8b the distance is the distance to that last marker",
+     zd[1] === "in ≈"+want+"d");
+  // A dated chart names the edge's date, not today's.
+  const ans = zoneOf(signalChart("orem",2,claims["orem/2"],NOW,serOf("orem/2")));
+  ok("P8b a dated strip stamps the edge, not now",
+     / · in ≈/.test(ans[1]) && !/ · now$/.test(ans[1]));
+}
+
 // P9: labels + §7.4
 ok("P9 demo real srcnote", h1.includes("a sample series in the chain's real form"));
 // NO FIGCAPTION. It named the axis, then the three series, then printed the
