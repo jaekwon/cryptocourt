@@ -138,3 +138,39 @@ func ClaimTierBps(courtSlug string, claimID uint64) int64 {
 func ClaimTierRef(courtSlug string, claimID uint64) int64 {
 	return mustClaim(mustCourt(courtSlug), claimID).tierRef
 }
+
+// spamNetBps is the spam discount, in bps of 1x — the SECOND multiplier on a
+// claim's draw, and the two compose rather than compete.
+//
+//	tierBpsFor   what the claim's SIZE says it is worth      (the money proxy)
+//	spamNetBps   what the voters said about it, if any voted (the human read)
+//
+// A DISCOUNT, NEVER A REPLACEMENT, and that is the whole reason it is written
+// this way. Size reaches 2x and this caps at 1x, so if spam replaced size a
+// small self-staked claim (0.25x) that got disputed and drew no spam would jump
+// to 1.00x — a 4x promotion for being disputed, bought for the price of a
+// dispute bond by a second address, since OpenDispute bars only the answerer.
+// Composed, a dispute can lower a claim and can never promote one.
+//
+// The shape is 1 - 2s where s is the spam share, so it reaches zero exactly at
+// the half the discard threshold uses (dispute.gno). The two constants are one
+// constant seen twice; the deploy invariant in court.gno says so.
+//
+//	 0% spam -> 1.00x      33% -> 0.34x
+//	10%      -> 0.80x      40% -> 0.20x
+//	25%      -> 0.50x      50% -> 0     (the claim stands and draws nothing)
+func spamNetBps(cs *claimState) int64 {
+	// NO DECIDED ROUND, NO DISCOUNT. Zero here means "nobody voted on this",
+	// which is every undisputed claim and every claim decided before this
+	// shipped — not "the voters said nothing, so pay nothing". Reading it the
+	// other way would zero the draw of every claim that never went to a vote,
+	// which is most of them.
+	if cs.spamTotalW <= 0 {
+		return tierParBps
+	}
+	net := cs.spamTotalW - mustMul(2, cs.spamW)
+	if net <= 0 {
+		return 0
+	}
+	return mulDiv128(net, tierParBps, cs.spamTotalW)
+}

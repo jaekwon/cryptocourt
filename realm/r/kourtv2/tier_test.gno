@@ -167,3 +167,68 @@ func TestAClaimIsNotInTheAverageItIsMeasuredAgainst(cur realm, t *testing.T) {
 	// The claim it belongs to is unaffected by its own arrival.
 	uassert.Equal(t, refBefore, cs.tierRef)
 }
+
+// THE SPAM DISCOUNT, against the owner's own table.
+//
+// 1 - 2s, reaching zero exactly at the half the discard threshold uses. The two
+// are one constant seen twice, so this table and dispute.gno's `spamW*2 > cast`
+// must move together or a gap opens between "pays nothing" and "is deleted".
+func TestTheSpamDiscountMatchesTheTable(cur realm, t *testing.T) {
+	const total = int64(100)
+	at := func(spam int64) int64 {
+		return spamNetBps(&claimState{spamW: spam, spamTotalW: total})
+	}
+
+	uassert.Equal(t, tierParBps, at(0))       // 1.00x
+	uassert.Equal(t, int64(8_000), at(10))    // 0.80x
+	uassert.Equal(t, int64(5_000), at(25))    // 0.50x
+	uassert.Equal(t, int64(3_400), at(33))    // 0.34x
+	uassert.Equal(t, int64(2_000), at(40))    // 0.20x
+	uassert.Equal(t, int64(0), at(50))        // pays nothing, still stands
+	uassert.Equal(t, int64(0), at(60))        // and past half it cannot go negative
+	uassert.Equal(t, int64(0), at(total))
+
+	// NO DECIDED ROUND IS NOT ZERO SPAM'S OPPOSITE. An undisputed claim, and
+	// every claim decided before this shipped, carries a zero denominator — and
+	// reading that as "the voters said nothing, so pay nothing" would zero the
+	// draw of most of the docket. It is "nobody voted", so nothing is discounted.
+	uassert.Equal(t, tierParBps, spamNetBps(&claimState{}))
+	uassert.Equal(t, tierParBps, spamNetBps(&claimState{spamW: 5}))
+
+	// THE ZERO IS EXACTLY THE DISCARD BAR. Just under half still pays; at half it
+	// does not. dispute.gno discards on spamW*2 > total, so these two lines are
+	// the seam between "draws nothing" and "is deleted" and they must stay
+	// adjacent.
+	if at(49) <= 0 {
+		t.Fatal("just under half must still pay something")
+	}
+	uassert.Equal(t, int64(0), at(50))
+}
+
+// THE TWO MULTIPLIERS COMPOSE, and a spam vote can never PROMOTE a claim.
+//
+// If spam replaced size instead, a small self-staked claim rated 0.25x that got
+// disputed and drew no spam would jump to 1.00x — 4x, bought for a dispute bond
+// by a second address, since OpenDispute bars only the answerer. Composition is
+// what makes a dispute one-directional.
+func TestASpamVoteCanOnlyLowerAClaimNeverPromoteIt(cur realm, t *testing.T) {
+	const ref = int64(1_000_000)
+	small := &claimState{tierRef: ref, xBarFrozen: ref / 4} // floor: 0.25x
+	uassert.Equal(t, tierFloorBps, tierBpsFor(small))
+
+	// Disputed, nobody flagged spam: the discount is par, so the claim keeps its
+	// size rating. Under a REPLACEMENT it would now be at 1.00x.
+	small.spamW, small.spamTotalW = 0, 100
+	uassert.Equal(t, tierParBps, spamNetBps(small))
+	uassert.Equal(t, tierFloorBps, tierBpsFor(small))
+	if mulDiv128(tierBpsFor(small), spamNetBps(small), tierParBps) != tierFloorBps {
+		t.Fatal("a clean dispute must leave a small claim at its size rating")
+	}
+
+	// And a big claim IS lowered by spam: 2.00x with a quarter flagging spam is
+	// 1.00x, not 2.00x and not 0.50x.
+	big := &claimState{tierRef: ref, xBarFrozen: 2 * ref, spamW: 25, spamTotalW: 100}
+	uassert.Equal(t, tierCeilBps, tierBpsFor(big))
+	uassert.Equal(t, tierParBps,
+		mulDiv128(tierBpsFor(big), spamNetBps(big), tierParBps))
+}

@@ -90,8 +90,17 @@ func Crystallize(cur realm, courtSlug string, claimID uint64) {
 	// mulDiv128, not mustMul: midGross is CONVICTION — stake × time, not
 	// supply-bounded — and the same warning the carrot's ×7 carries applies to a
 	// ×2 here at extreme scale.
+	// TWO MULTIPLIERS, COMPOSED. Size says what the claim was worth by the money
+	// that showed up; spam says what the voters made of it, on the one round that
+	// decided. Composed rather than either-or, so a dispute can only ever lower a
+	// claim — see spamNetBps for why replacing would let a small self-staked claim
+	// buy a promotion with a dispute bond.
+	//
+	// Floored twice, once per step, which is conservative in the only direction
+	// that matters: the draw is never rounded up.
 	tierBps := tierBpsFor(cs)
 	want := mulDiv128(midGross, tierBps, tierParBps)
+	want = mulDiv128(want, spamNetBps(cs), tierParBps)
 	// DRAW CAP: the claim may not mint more than the answer bond collateralized.
 	//
 	// WHY. A sniper stakes dust on one side, declares it, and lets 72h of silence

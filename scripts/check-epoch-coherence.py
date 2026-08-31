@@ -516,6 +516,29 @@ BOARD_READS = re.compile(
     r"\b(lookupStanding|getStanding|postLevel|levelFloor|passHeld|boardFrozen|"
     r"claimBoardFrozen|boardSupply|boardMark|boardWroteBy|mustBoardWritable|"
     r"mustSpendPost|boardOpen|PostsAvailable|HoldsPass)\b")
+# ARM: THE DRAW'S TWO MULTIPLIERS ARE BOTH APPLIED.
+#
+# A claim's draw is scaled twice — by its SIZE (tierBpsFor, the money proxy) and
+# by the deciding round's SPAM share (spamNetBps, the human read) — and the two
+# compose. Each has thorough unit tests; neither notices if crystallize stops
+# CALLING it. Measured: deleting `want = mulDiv128(want, spamNetBps(cs), ...)`
+# from crystallize passed every assertion in the realm suite.
+#
+# A behavioural test would be better and was attempted; driving a claim through
+# answer, settle and crystallize inside this suite ran into fixture trouble
+# unrelated to the thing under test, and a test that does not run is worse than
+# an honest source guard. This is the guard. If someone writes the behavioural
+# one, delete this.
+#
+# COMPOSED, NOT SUBSTITUTED, is the other half: spam must DISCOUNT the size
+# multiplier, never replace it. Replacing lets a small self-staked claim rated
+# 0.25x jump to 1.00x by being disputed with no spam — a 4x promotion bought for
+# a dispute bond. So the guard requires want to be fed through both, in order.
+DRAW_MULTIPLIERS = [
+    "want := mulDiv128(midGross, tierBps, tierParBps)",
+    "want = mulDiv128(want, spamNetBps(cs), tierParBps)",
+]
+
 CREDIT_HOOKS = re.compile(
     r"\b(creditFlagSlash|creditDisputeResolved|creditWinConviction)\(")
 # THREE, NOT FOUR: creditAuthorHigh is gone with the quality tier.
@@ -1004,6 +1027,25 @@ def main() -> int:
               "is the argument to answer first, then change this check.",
               file=sys.stderr)
         return 1
+
+    # THE DRAW'S TWO MULTIPLIERS, both applied and in order.
+    cry = (ROOT / "realm/r/kourtv2/crystallize.gno").read_text(encoding="utf-8")
+    at = -1
+    for line in DRAW_MULTIPLIERS:
+        i = cry.find(line)
+        if i < 0:
+            print(f"check-epoch-coherence: crystallize.gno no longer applies "
+                  f"`{line}`. The draw is scaled by the claim's SIZE and by the "
+                  f"deciding round's SPAM share, and dropping either silently "
+                  f"changes every payout while both functions keep passing "
+                  f"their own tests.", file=sys.stderr)
+            return 1
+        if i < at:
+            print("check-epoch-coherence: the draw's multipliers are applied out "
+                  "of order — spam must DISCOUNT the size multiplier, not be "
+                  "computed from midGross in its place.", file=sys.stderr)
+            return 1
+        at = i
 
     # Arm 4, after the whole kourtv2 tree has been read.
     for key, want, what in (
