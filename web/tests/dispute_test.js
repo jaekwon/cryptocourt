@@ -198,7 +198,37 @@ ok("weight is the pre-round snapshot, said in the modal",
 // live node", which is the truer message than a note about staking.
 ok("no eligibility prose survives on the ballot",
    !html.includes("cannot vote") && !html.includes("holder can vote"));
-ok("abstain button with turnout-only sub", html.includes("> Abstain") && html.includes("counts to turnout only, never to a side"));
+// ABSTAIN IS GONE, and its replacement is not a rename. Abstain was strictly
+// dominated — same coin locked, same turnout added, and the carrot pays only
+// voters who matched the verdict, so it had every cost and no upside. The third
+// button now DOES something: it cuts the reward in proportion, and past half it
+// deletes the claim.
+ok("the third choice is a spam flag, not an abstention",
+   html.includes("> Flag as spam") && !html.includes("> Abstain"));
+ok("...and it says what it does, not merely what it does not do",
+   html.includes("cuts the reward; past half, deletes the claim")
+   && !html.includes("counts to turnout only, never to a side"));
+// THE WIRE WORD MATTERS: the realm refuses the literal "abstain" now, so a
+// button still sending it would panic at signing rather than fail quietly.
+// THE WIRE WORD LIVES IN THE LIVE RENDER ONLY. Demo buttons are inert and carry
+// no args at all — deliberately, so sample data never ships a runnable call —
+// so this has to build a live ticket. Asserting it against `html` failed for
+// that reason and would have passed for the wrong one if demo had carried args.
+//
+// Matched in the escaped form the markup actually holds: btn() JSON-stringifies
+// into data-args and then esc()apes, so the quotes are entities.
+{
+  const save = CFG.mode; CFG.mode = "live";
+  const L = disputeTicket("orem", 3, d, NOW);
+  CFG.mode = save;
+  ok("...and it sends the word the realm accepts",
+     L.includes("choice&quot;:&quot;spam") && !/abstain/i.test(L));
+  // The realm REFUSES the literal "abstain" now, so a button still sending it
+  // would panic at signing rather than fail quietly — which is why the absence
+  // matters as much as the presence.
+  ok("...with no stale word left anywhere on the live ballot",
+     !L.includes("Abstain") && !L.includes("turnout only"));
+}
 
 // ---- one control per action, and it is the one with the verb on it --------
 // It used to be three: a gnoweb link carrying the label, a "CLI" toggle, and —
@@ -357,7 +387,13 @@ ok("reduced motion still shows the state, without moving",
 ok("the copy fallback survives a page with no clipboard API",
    /function cliBlock\(cmd\)/.test(src) && src.includes("no-clipboard")
    && src.includes("Selected — press Ctrl/⌘-C"));
-ok("abstain arg choice=abstain", html.includes('"choice":"abstain"') || html.includes("abstain"));
+// This asserted `includes('"choice":"abstain"') || includes("abstain")` — an OR
+// whose second arm matched the word anywhere on the page, including in the help
+// modal's prose. It could not fail while the modal merely MENTIONED abstaining,
+// so it never checked the argument it was named for. The word is gone from both
+// now, and the wire form is asserted on a live render above.
+ok("no abstention survives anywhere on the ballot or in its help",
+   !/abstain/i.test(html));
 // The rule is stated ONCE now, in the modal — it was on the ballot and in the
 // modal, in two different sets of words for the same fact.
 ok("who-pays-whom: burn/mint rule, in plain words",
