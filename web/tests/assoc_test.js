@@ -204,6 +204,35 @@ ok("the unexposed-close note names its round too", L3n.includes("round 2 is voti
      L.indexOf("failed rounds") < L.indexOf(">now<"));
   ok("dated ladder: and it says why it has no date",
      L.includes("publishes no stamp for a dispute round"));
+  /* THE DISPUTE ITSELF IS AN EVENT. The ladder had a row for rounds that FAILED
+     and none for the one that is running, so a claim in its first round read
+     "opened, answered, now, vote closes" — while the notice directly above it
+     said a dispute was under way. A reader had to infer the dispute from the
+     existence of a vote, on the surface whose whole job is saying what
+     happened. Dateless for the same reason the failed rounds are. */
+  ok("dated ladder: the dispute has a rung of its own",
+     L.includes("dispute opened · round 3"));
+  ok("dated ladder: ...dateless, like every other round event",
+     /dispute opened · round 3<\/div><div class="dt"[^>]*>—<\/div>/.test(L));
+  ok("dated ladder: ...after the rounds that failed, before now",
+     L.indexOf("failed rounds") < L.indexOf("dispute opened")
+     && L.indexOf("dispute opened") < L.indexOf(">now<"));
+  // A FIRST ROUND IS THE CASE THAT WAS BARE: no failed rounds to imply a
+  // dispute, so the rung is the only thing that names one.
+  {
+    const first = Object.assign({}, d3l, {round:0, phase:"disputed", voteEndsAt:NOW+70000});
+    const F = resolutionLadder(first, NOW, tl);
+    ok("dated ladder: a first-round dispute is named too",
+       F.includes("dispute opened · round 1") && !F.includes("failed round"));
+    // and the flat branch, which is a separate renderer and drifts if unasked
+    const G = resolutionLadder(first, NOW, null);
+    ok("flat ladder: it names the dispute as well", G.includes("dispute opened · round 1"));
+    // Neither names one when there is no dispute to name.
+    const calm = Object.assign({}, d3l, {round:0, phase:"answered", voteEndsAt:null});
+    ok("neither ladder invents a dispute on a claim that has none",
+       !resolutionLadder(calm, NOW, tl).includes("dispute opened")
+       && !resolutionLadder(calm, NOW, null).includes("dispute opened"));
+  }
   ok("dated ladder: the ticket carries no heading of its own, the section names it",
      !L.includes("<h3>"));
   // THE DATED BRANCH HAS ITS OWN fut2, and only the legacy one was covered — an

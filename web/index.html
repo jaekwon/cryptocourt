@@ -8466,6 +8466,16 @@ function resolutionLadder(d, nowH, tl, narrow, bare){
     // them apart, N identical rows are N copies of the same sentence.
     if(d.round) rows.push({t:nowT-0.5, nodate:true,
       what:`${d.round} failed round${d.round>1?"s":""}`});
+    /* THE DISPUTE ITSELF IS AN EVENT, and the ladder did not have a row for it.
+       On a claim in its FIRST round the rungs read opened, answered, now, vote
+       closes — while the notice above said "a dispute is under way". A reader
+       had to infer the dispute from the existence of a vote, on the one surface
+       whose whole job is to say what has happened.
+       Dateless, for the reason the failed rounds are: clock.gno stamps a round's
+       opening nowhere, so this carries an em-dash rather than a projection.
+       Sorted after the failed rounds, which is when it opened. */
+    if(d.phase==="disputed") rows.push({t:nowT-0.4, nodate:true,
+      what:`dispute opened · round ${(d.round||0)+1}`});
     if(d.voteEndsAt && nowH!=null) rows.push({h:d.voteEndsAt, t:nowT+(d.voteEndsAt-nowH)*BLOCK_SECS,
       what:`vote closes · round ${(d.round||0)+1}`, future:true, est:true});
     rows.push({t:nowT, h:tl.now.h, what:"now", now:true});
@@ -8522,6 +8532,9 @@ function resolutionLadder(d, nowH, tl, narrow, bare){
   if(d.round) rows.push([(nowH!=null? nowH : 0)-0.5,
     `${d.round} failed round${d.round>1?"s":""}`,
     "quorum was not met — half of each disputer's bond burned, half returned", true]);
+  // Same row, same reason, on the branch that has no timeline to date from.
+  if(d.phase==="disputed") rows.push([(nowH!=null? nowH : 0)-0.4,
+    `dispute opened · round ${(d.round||0)+1}`, "", true]);
   rows.sort((a,b)=>a[0]-b[0]);
   let fut=null;
   if(d.phase==="open") fut="awaiting an answer — anyone may post one with a bond";
