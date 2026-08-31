@@ -89,7 +89,7 @@ try {
    The default is still everything — a filter you have to remember to widen is a
    suite that quietly stops covering things. */
 const ALL = ["embed_layout.js", "tagrow_layout.js", "route_crawl.js",
-             "rowscope_layout.js", "chat_all.js"];
+             "rowscope_layout.js", "map_draws.js", "chat_all.js"];
 const only = (process.env.ONLY || process.argv.slice(2).join(",") || "").trim();
 const CHECKS = only
   ? ALL.filter(f => only.split(",").some(k => k && f.includes(k.trim())))
