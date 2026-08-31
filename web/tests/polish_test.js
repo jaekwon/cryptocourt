@@ -28,6 +28,7 @@ code += slice('function tx(', 'function btn(');
 // button is a decision btn() makes from an argument stakeTicket() computes, and
 // asserting on either alone would miss the wiring between them.
 code += "const PKG='gno.land/r/kourt/kourtv2';\n";
+code += slice('const ICN_CHEST =', 'const ICN_COURT =');
 code += slice('const shq =', 'function cliCmd(');
 code += slice('function cliCmd(', '/* A copyable command block');
 code += slice('function btn(', '/* SHELL-QUOTED');
@@ -127,8 +128,37 @@ ok("offered when the court opted into one", polishLink("orem",7,open,null,null,1
      && !/class="line"/.test(clear));
   ok("...and no longer claims nothing has paid out, above a live withdraw",
      !/Nothing has paid out/.test(clear) && !/Your principal is yours now/.test(clear));
-  ok("...with the timing rule on the button it applies to",
-     /participants first week, then anyone/.test(crysOf(clear)));
+  // NO ELIGIBILITY NOTE ANYWHERE. It named the schedule rather than answering
+  // whether the reader can press it, which is the only version of that fact
+  // worth the width. What the page CAN evaluate is still greyed; the rest the
+  // press answers.
+  ok("...and no eligibility schedule under the button",
+     !/participants first week/.test(clear) && !/then anyone/.test(clear));
+  /* THE PARTICIPANT WEEK IS GREYED, NOT DISCOVERED IN THE WALLET. Crystallize
+     is participant-only for FINALIZE_GRACE blocks after the verdict, and the
+     page used to offer it to everyone — a reader pressed it and got
+     "kourtv2: Crystallize is participant-only for its first week" relayed
+     through Adena. isParticipant is author, answerer, or a stake on either side
+     (dispute.gno:803), and fillWithdrawSides has all three in hand.
+     Driven through all six cases in a browser besides: a stranger inside the
+     week is the only one greyed. */
+  ok("...the button is marked so the filler can find it in the sample too",
+     /data-crys="1"/.test(clear));
+  ok("...the guard is gated on the mirrored window, not a literal",
+     /\(nowH - vAt\) < FINALIZE_GRACE/.test(src));
+  ok("...it greys only when author, answerer and stake all say no",
+     /d\.author!==CFG\.addr && d\.answerer!==CFG\.addr/.test(src)
+     && /!\(\+p\.yes > 0\) && !\(\+p\.no > 0\)/.test(src));
+  ok("...and stands whenever any of them is unknown",
+     /vAt && nowH!=null/.test(src) && /d\.author!=null && d\.answerer!=null/.test(src));
+  ok("...saying who may, in the page's own words",
+     /author, its answerer and its stakers can open the rewards in the first week/.test(src));
+  // The chest: this button collects rather than signs a statement.
+  // The chest is INTERPOLATED, so the rendered card holds the svg, not the name.
+  ok("...and it carries the chest rather than the pen",
+     /<span class="g"><svg class="icn"/.test(crysOf(clear))
+     && !/<span class="g">✍/.test(crysOf(clear)));
+
   // The withdraw pair is marked for the position read that filters and prices it.
   ok("...and the withdraw pair is marked for the position read",
      /data-wside="0"/.test(clear) && /data-wside="1"/.test(clear));

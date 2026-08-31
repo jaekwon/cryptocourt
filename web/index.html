@@ -1542,6 +1542,14 @@ const saveCfg = () => { Object.assign(CFG, cleanCfg(CFG)); store.set("cc.cfg", J
 
 const BLOCK_SECS = 5;      // gno.land block time — how block heights become wall-clock
 const WEEK = 120960;       // one emission period, in blocks (trailing-ratio window)
+/* THE PARTICIPANT-PRIORITY WINDOW, in blocks. Opening a settled claim's rewards
+   is participant-only for this long after the verdict, because whoever presses
+   it picks the block the reservoir is measured at and that changes what the
+   claim pays. It equals WEEK today and is mirrored separately anyway: two
+   constants that happen to be the same number are still two constants, and the
+   day one moves is the day a page that assumed otherwise starts greying the
+   wrong button. check-web-constants pins it to the realm's. */
+const FINALIZE_GRACE = 120960;
 // The comment cap, in CHARACTERS — maxBoardTextLen, counted with runeLen.
 //
 // IT WAS BYTES, and this counter measured bytes to match. The realm now counts
@@ -2312,7 +2320,7 @@ async function claimDetail(slug,id){
 
    Reads nothing new — positionOf is the same pair of StakeOf calls the vote
    lane and the me page already make. */
-async function fillWithdrawSides(slug, id){
+async function fillWithdrawSides(slug, id, d, nowH, vAt){
   if(!CFG.addr) return;
   /* KEYED ON data-wside, WHICH stakeTicket WRITES, not on the button's own
      data-func: the demo branch of btn() renders an inert button with none of
@@ -2323,6 +2331,27 @@ async function fillWithdrawSides(slug, id){
   let p;
   try{ p = await positionOf(slug, id, CFG.addr); }catch(_){ return; }   // unknown: leave both
   if(!p) return;
+  /* THE PARTICIPANT WEEK, NOW THAT WE KNOW WHO IS ASKING. Crystallize is
+     participant-only for FINALIZE_GRACE blocks after the verdict, and the page
+     used to offer it to everyone and let Adena relay the panic — which is
+     exactly what a reader got: a button they could press, and
+     "kourtv2: Crystallize is participant-only for its first week" from a wallet.
+     isParticipant is author, answerer, or a stake on either side (dispute.gno),
+     and all three are in hand here.
+     GREYED ONLY WHEN ALL THREE ARE KNOWN AND ALL THREE ARE NO. A missing
+     verdict height, an unread author, an unread position — any of those and the
+     button stands, because withholding a control from somebody who could have
+     used it is the worse error. */
+  const crys = document.querySelector(".stakewrap .ticket [data-crys] .btn");
+  if(crys && !crys.getAttribute("data-blocked") && vAt && nowH!=null
+     && (nowH - vAt) < FINALIZE_GRACE
+     && d && d.author!=null && d.answerer!=null
+     && d.author!==CFG.addr && d.answerer!==CFG.addr
+     && !(+p.yes > 0) && !(+p.no > 0)){
+    crys.setAttribute("data-blocked",
+      "Only this claim's author, its answerer and its stakers can open the rewards in the first week after the verdict. Anyone can after that.");
+    crys.setAttribute("aria-disabled","true");
+  }
   let shown = 0;
   for(const w of wraps){
     const side = +w.getAttribute("data-wside");
@@ -2879,7 +2908,7 @@ function tx(func, args){
    has to replace before it means anything. Two do: StartCourt and StartCourtP
    ship slug:"my-court", name:"My Court". Everything else on this page passes
    arguments the page derived itself, which is why they no longer stop to ask. */
-function btn(label, func, args, cls, sub, send, gate, edit, blocked){
+function btn(label, func, args, cls, sub, send, gate, edit, blocked, glyph){
   // In demo mode the data is a sample: an action that links a real network to
   // sample arguments is a trap, so the button is inert and says why.
   // `send` (Buy only): a concrete "<µGNOT>ugnot" from the receipt input — it
@@ -2902,7 +2931,8 @@ function btn(label, func, args, cls, sub, send, gate, edit, blocked){
   // data-cli RIDES THE BUTTON. The command line did not go away with the CLI
   // toggle — the dialog shows it, copyable, for anyone without a wallet — and
   // keeping it in the markup means buy_test's --send assertions still see it.
-  const inner = `<span class="g">${CFG.mode==="demo"?"↗":"✍"}</span> ${esc(label)}${sub?` <small>${esc(sub)}</small>`:""}`;
+  // `glyph` overrides the pen for a button whose verb is not "sign a statement".
+  const inner = `<span class="g">${glyph || (CFG.mode==="demo"?"↗":"✍")}</span> ${esc(label)}${sub?` <small>${esc(sub)}</small>`:""}`;
   /* The demo carries `blocked` too. It exists to show what the live page looks
      like, and a control the chain would refuse is part of that — the click
      still answers "demo data", because the inert branch is tested first, but
@@ -4348,6 +4378,9 @@ on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
 });
 function tierPill(t){ return t===2?`<span class="pill open">★ Featured</span>`: t===0?`<span class="pill void">Hidden</span>`:`<span class="pill">Listed</span>`; }
 const ICN_FOLDER = `<svg class="icn" viewBox="0 0 14 12" aria-hidden="true"><path d="M1 1.5h4.2l1.4 1.8H13a.6.6 0 0 1 .6.6v6.6a.9.9 0 0 1-.9.9H1.3a.9.9 0 0 1-.9-.9V2.1a.6.6 0 0 1 .6-.6z" fill="currentColor"/></svg>`;
+/* "Open the rewards" is the one button on this page that is not about signing a
+   statement, it is about collecting — so it gets the object, not the pen. */
+const ICN_CHEST = `<svg class="icn" viewBox="0 0 14 12" aria-hidden="true"><path d="M1.3 1h11.4a.6.6 0 0 1 .6.6v2.1H.7V1.6A.6.6 0 0 1 1.3 1zM.7 4.7h5.1v1.1h2.4V4.7h5.1v5.7a.6.6 0 0 1-.6.6H1.3a.6.6 0 0 1-.6-.6zM6.3 2.2h1.4v2.4H6.3z" fill="currentColor"/></svg>`;
 const ICN_COURT = `<svg class="icn" viewBox="0 0 14 12" aria-hidden="true"><path d="M7 0l6 2.8V4H1V2.8zM2.2 5h1.8v4.4H2.2zm3.9 0h1.8v4.4H6.1zm3.9 0h1.8v4.4H10zM1 10.4h12V12H1z" fill="currentColor"/></svg>`;
 /* Folders ARE on-chain (folders.gno) and LIVE courts now read them —
    chainFolders() fetches the flat chain shape and foldersFor() composes one
@@ -7495,7 +7528,7 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
   // Unconditional: the board is the one action on this page that needs no
   // address, and the sample answers it offline like everything else here.
   fillBoardChip(slug, id);
-  fillWithdrawSides(slug, id);
+  fillWithdrawSides(slug, id, d, nowH, tline && tline.verdict? tline.verdict.h : null);
   fillClaimComments(slug, id);
   if(isLive() && CFG.addr && d.disputeOpen) fillVoteEligibility(slug,id,d);
   if(isLive() && CFG.addr) fillVoteCommitment(slug,id);
@@ -8455,11 +8488,24 @@ function stakeTicket(slug,id,d){
              this page can evaluate; the other two need lastFlagEventAt and the
              reader's own stake, neither of which is published. Greying a control
              somebody could have used is worse than offering one they cannot. */
-          : btn("Open the rewards","Crystallize",{courtSlug:slug,claimID:id},"",
-                "participants first week, then anyone",null,null,null,
+          /* NO ELIGIBILITY NOTE. "participants first week, then anyone" told a
+             reader the schedule and not the answer — whether THEY can press it
+             — which is the only form of that fact worth four words under a
+             button. Two ways to say the useful version, neither of them free:
+             read the reader's own entitlement and grey it (needs verdictAt and
+             the finalize grace, neither published), or let the press answer.
+             The press answers. */
+          /* data-crys, for the same reason data-wside exists: the demo branch of
+             btn() emits no data-func, so a selector built on it finds nothing in
+             the sample — and the sample is where this is seen without a wallet.
+             The first version of the participant guard was written that way and
+             silently guarded nothing. */
+          : `<span data-crys="1">` + btn("Open the rewards","Crystallize",{courtSlug:slug,claimID:id},"",
+                "",null,null,null,
                 (d.flagOpen||d.counterOpen)
                   ? "A quality question is still open on this claim. The draw waits until it closes — principal never does."
-                  : null)}</div></div>`;
+                  : null,
+                ICN_CHEST) + `</span>`}</div></div>`;
   }
   if(d.phase!=="open"){
     return `<div class="ticket"><h3>Staking is frozen</h3>

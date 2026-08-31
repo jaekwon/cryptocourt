@@ -42,6 +42,12 @@ MIRRORS = {
     # at signing; below, they are stopped from writing something that would have
     # been accepted. Either way the page is the only warning they get.
     "MAX_COMMENT_CHARS": ("realm/r/kourtv2/board.gno", "maxBoardTextLen"),
+    # The participant-priority window on Crystallize. The page greys "Open the
+    # rewards" for a reader it can prove is outside it, quoting the realm's own
+    # refusal — so if the realm's window moved and the page's did not, the page
+    # would grey a button that works, or offer one that panics in the wallet.
+    # It equals periodBlocks today; that is a coincidence, not a definition.
+    "FINALIZE_GRACE": ("realm/r/kourtv2/dispute.gno", "finalizeGraceBlocks"),
 }
 
 # A PHRASE THE OVERLAY MATCHES ON, and the realm string it has to be found in.
