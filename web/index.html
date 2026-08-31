@@ -279,6 +279,13 @@ section{margin-top:34px}
   background:transparent; border:1px solid var(--rule)}
 .grid.stats>div{border-left:1px solid var(--rule); border-radius:0}
 .grid.stats>div:first-child{border-left:0}
+/* THE COURT'S FACE, in the directory row and beside its title. A fixed box either
+   way, so a real picture arriving after the paint does not reflow the row. */
+.courtface{flex:none; width:34px; height:34px; border-radius:3px; overflow:hidden;
+  display:block; background:var(--surface-2); align-self:center}
+.courtface svg,.courtface img{display:block; width:100%; height:100%; object-fit:cover}
+.lead-row .courtface{width:52px; height:52px; border-radius:4px; margin-right:14px}
+.leadface{display:flex; align-items:center}
 /* IN THE COLUMN THE STRIP IS A 2x2 BLOCK, at every width. auto-fit gave three
    across and one orphan on a second row, with the rules still drawn as if it
    were one line — the orphan carried a left edge and no top edge. Fixing that
@@ -341,7 +348,7 @@ a.card:hover{border-color:var(--line-2)}
 .docket a.crow .px{justify-self:end}
 .docket a.crow .pill{justify-self:end}
 .docket .t{overflow-wrap:anywhere}
-.docket a.courtrow{grid-template-columns:minmax(52px,auto) minmax(0,1fr) auto 124px; align-items:center}
+.docket a.courtrow{grid-template-columns:34px minmax(52px,auto) minmax(0,1fr) auto 124px; align-items:center}
 .docket a.courtrow .id{max-width:110px; overflow:hidden; text-overflow:ellipsis}
 .docket a.crow .t{font-family:var(--serif); font-size:15.5px; font-weight:600}
 .docket .id{font-family:var(--mono); font-size:12px; color:var(--muted); white-space:nowrap; display:flex; align-items:center; gap:6px}
@@ -1374,7 +1381,7 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
   .docket a.crow .id{grid-row:1/3; align-self:start}
   .docket a.crow .px{grid-row:2; grid-column:2; flex-direction:row; flex-wrap:wrap; align-items:baseline; gap:4px 8px; min-width:0}
   .docket a.crow .pill{grid-row:2; grid-column:3; justify-self:end}
-  .docket a.courtrow{grid-template-columns:minmax(44px,auto) minmax(0,1fr) auto}
+  .docket a.courtrow{grid-template-columns:30px minmax(44px,auto) minmax(0,1fr) auto}
   .rail{position:static; height:auto; flex-direction:column}
   .nav{flex-direction:row; flex-wrap:wrap; gap:4px} .nav .sec{width:100%}
   .rail .foot{border-top:1px solid var(--line)}
@@ -4798,6 +4805,7 @@ on(/^\/$/, async ()=>{
   } else {
     listed = pageSlice(listed, page);
   }
+  const faceSlugs = ((page===1? featured:[]).concat(listed)).map(c=>c.slug);
   const dirChips = (page===1 && listed.length>=2)
     ? `<span class="schips" role="group" aria-label="sort order"><button class="pill void" data-sort="rank" aria-pressed="${QP.sort!=="claims"}">GNOT burned</button><button class="pill void" data-sort="claims" aria-pressed="${QP.sort==="claims"}">busiest</button></span>` : "";
   const dirPager = pagerHtml("/", page, listed.length, listedTotal, "courts",
@@ -4823,6 +4831,7 @@ on(/^\/$/, async ()=>{
       <div class="stat"><div class="k">claims filed</div><div class="v tnum">${fmtN(claimsSum)}</div><div class="sub">across the ${loadedWithClaims.length} court${loadedWithClaims.length===1?"":"s"} on this page — filings, not judgments</div></div>
     </div><p class="small muted" style="margin:8px 0 0">${hiddenLine}</p></section>`;
   const card = (c,i) => `<a class="crow courtrow" data-rank="${i}"${c.claims!=null?` data-claims="${c.claims}"`:""} data-q="${esc("/"+c.slug+" "+c.name)}" href="#/c/${esc(c.slug)}">
+      ${courtFaceHtml(c.slug)}
       <span class="id">${ICN_COURT}/${esc(c.slug)}</span>
       <span><span class="t" id="cn-${esc(c.slug)}">${safeInline(c.name)}</span><span class="m" style="display:block" id="cm-${esc(c.slug)}">${c.claims!=null? `${c.claims} claim${c.claims===1?"":"s"}`:"…"}</span></span>
       <span class="px" id="cp-${esc(c.slug)}"><small>reading…</small></span>
@@ -4850,6 +4859,10 @@ on(/^\/$/, async ()=>{
   // stats fill for the visible rows only, chunked so a big directory cannot
   // burst hundreds of concurrent queries
   const visible = (page===1? featured:[]).concat(listed);
+  // ONE read for every face on the page, not one per court: CourtImages skips
+  // the courts with no picture, so this costs a query whether the directory has
+  // twenty images or none, and the drawn covers stay where it sends nothing.
+  fillCourtFaces(faceSlugs);
   inChunks(visible, 6, async c=>{
     try{
       const s = await courtStats(c.slug);
@@ -4912,7 +4925,7 @@ on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
     ? await one(`CourtDesc(${gstr(slug)})`).then(unesc).catch(()=>"")
     : "";
   main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:s.name}])
-    + `<div class="lead-row"><div>
+    + `<div class="lead-row leadface">${courtFaceHtml(slug)}<div>
         <h1 class="page-h">${safeInline(s.name)} <span class="seal">${esc(slug)}</span></h1>
         ${(()=>{
           // The chain first: it stores a description now, so copy saying it
@@ -4952,6 +4965,7 @@ on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
     total:totalClaims, slug, totalClaims, orderTail:" · newest first"};
   if(QP.sort) applySort(QP.sort); // before applyQ — the search caption reads QCTX.orderTail
   if(QP.q){ const qi=document.getElementById("q"); if(qi){ qi.value=QP.q; applyQ(QP.q); } }
+  if(isLive()) fillCourtFaces([slug]);
   if(isLive() && s.claims!=null) fillCourtRecord(slug, s.claims, s.minted);
   if(isLive()) fillJoinHeld(slug);
   if(isLive() && claims.length){
@@ -8740,6 +8754,53 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)\/board\/top$/, async (slug,id)=> boardView(slug, i
    history: a dashed lifetime reference, a trailing-week band, a "now" dot,
    and real event heights. One accent hue owns the series; events are ink
    and words (CVD-safe). */
+/* A COURT'S FACE. Every court looked the same above the fold — a name, a seal
+   chip, the same four figures — so the directory read as one long undifferentiated
+   list. A court can now carry a picture (SetCourtImage), but most will not, and a
+   placeholder that says "no image" is worse than the sameness it replaces.
+
+   So the fallback is DRAWN, deterministically, from the slug: same court, same
+   cover, on every machine and every reload, with no read and no bytes. Two bands
+   and the court's initials at a hash-chosen hue, kept at low saturation so a
+   directory of them reads as a set rather than as a bag of sweets.
+
+   The hue is the ONLY colour on the page not from the palette, which is the point:
+   it is the one thing that has to differ court by court. */
+function courtCover(slug){
+  const h = fnv1a(String(slug||"?"));
+  const hue = h % 360, hue2 = (hue + 28 + (h>>>9) % 40) % 360;
+  const ini = String(slug||"?").replace(/[^a-z0-9]/gi,"").slice(0,2).toUpperCase() || "?";
+  return `<svg viewBox="0 0 40 40" aria-hidden="true">`
+    + `<rect width="40" height="40" fill="hsl(${hue} 32% 46%)"/>`
+    + `<path d="M0 40 L40 0 L40 16 L16 40 Z" fill="hsl(${hue2} 34% 58%)"/>`
+    + `<path d="M0 22 L22 0 L30 0 L0 30 Z" fill="hsl(${hue} 30% 38%)" opacity=".55"/>`
+    + `<text x="20" y="20" text-anchor="middle" dominant-baseline="central"`
+    + ` font-family="Georgia,serif" font-size="17" font-weight="600" fill="#fff"`
+    + ` fill-opacity=".92">${esc(ini)}</text></svg>`;
+}
+/* The face slot: the drawn cover until a real picture arrives, and the same box
+   either way so nothing reflows when it does. */
+function courtFaceHtml(slug){
+  return `<span class="courtface" id="cf-${esc(slug)}">${courtCover(slug)}</span>`;
+}
+/* Fills the real pictures in, for a whole page of courts in ONE read. Courts with
+   no picture are not in the reply at all, so their drawn cover simply stays.
+   Archive-only thumbnails, like a folder's and for the same reason: a filer-chosen
+   mirror would send every reader's address wherever the filer liked. */
+async function fillCourtFaces(slugs){
+  if(!isLive() || !slugs.length || typeof mediaNodeThumb !== "function") return;
+  let packed;
+  try{ packed = await one(`CourtImages(${gstr(slugs.join(","))})`); }
+  catch(_){ return; }   // a chain without the entrypoint keeps the drawn covers
+  for(const line of String(unesc(packed)||"").split("\n")){
+    const tab = line.indexOf("\t");
+    if(tab < 1) continue;
+    const el = document.getElementById("cf-" + line.slice(0, tab));
+    if(!el) continue;
+    const html = mediaNodeThumb(mediaParse(line.slice(tab+1)), siteHost());
+    if(html) el.innerHTML = html;
+  }
+}
 function fnv1a(str){ let h=0x811c9dc5>>>0; for(let i=0;i<str.length;i++){ h^=str.charCodeAt(i); h=Math.imul(h,0x01000193)>>>0; } return h>>>0; }
 function mulberry32(a){ return function(){ a|=0; a=(a+0x6D2B79F5)|0; let t=Math.imul(a^(a>>>15),1|a); t=(t+Math.imul(t^(t>>>7),61|t))^t; return ((t^(t>>>14))>>>0)/4294967296; }; }
 function ratios(d){
