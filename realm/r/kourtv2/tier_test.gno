@@ -232,3 +232,45 @@ func TestASpamVoteCanOnlyLowerAClaimNeverPromoteIt(cur realm, t *testing.T) {
 	uassert.Equal(t, tierParBps,
 		mulDiv128(tierBpsFor(big), spamNetBps(big), tierParBps))
 }
+
+// THE TWO SPAM THRESHOLDS, on the seams.
+//
+// Both are integer comparisons with no division, because a fraction rounds and
+// rounding at a threshold is how "exactly half" lands on the wrong side of a
+// line somebody drew deliberately. Tested at the boundary rather than in the
+// middle: a wrong comparison operator is invisible everywhere except there.
+func TestTheSpamThresholdsSitWhereTheyWereDrawn(cur realm, t *testing.T) {
+	// DISCARD IS A BARE MAJORITY, strictly. Exactly half does NOT discard — the
+	// claim stands and draws nothing, which is the seam the discount's zero
+	// meets. One vote more does.
+	uassert.False(t, spamDiscards(50, 100))
+	uassert.True(t, spamDiscards(51, 100))
+	uassert.False(t, spamDiscards(1, 2))
+	uassert.True(t, spamDiscards(2, 3))
+	uassert.False(t, spamDiscards(0, 100))
+
+	// AND IT MEETS THE DISCOUNT EXACTLY. At the largest share that does not
+	// discard, the draw is already zero; at the smallest that does, it is zero
+	// too. No gap, no overlap — "pays nothing" and "is deleted" are adjacent.
+	uassert.Equal(t, int64(0), spamNetBps(&claimState{spamW: 50, spamTotalW: 100}))
+	if spamNetBps(&claimState{spamW: 49, spamTotalW: 100}) <= 0 {
+		t.Fatal("just under the bar must still pay, or the seam has a gap")
+	}
+
+	// THE DEPOSIT BURN IS A SUPERMAJORITY, and inclusive at exactly two thirds.
+	// Burning an author's deposit is the harshest money outcome reachable by
+	// somebody who posted no bond, so it does not ride the discard's margin.
+	uassert.False(t, spamBurnsDeposit(60, 100))
+	uassert.True(t, spamBurnsDeposit(67, 100))
+	uassert.True(t, spamBurnsDeposit(2, 3)) // exactly two thirds burns
+	uassert.False(t, spamBurnsDeposit(1, 2))
+
+	// THE TWO ARE ORDERED: anything that burns the deposit also discards, and
+	// never the reverse. A pair that crossed would burn a deposit on a claim the
+	// court had not thrown out.
+	for spam := int64(0); spam <= 100; spam++ {
+		if spamBurnsDeposit(spam, 100) && !spamDiscards(spam, 100) {
+			t.Fatalf("the deposit burned without a discard at %d%%", spam)
+		}
+	}
+}

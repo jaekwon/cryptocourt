@@ -340,6 +340,14 @@ func ResolveDispute(cur realm, courtSlug string, claimID uint64) {
 		if cs.failedRounds >= maxFailedRounds {
 			provCloseClaim(c, cs)
 		}
+	// DISCARDED, and its position in this switch is the protection. It sits
+	// AFTER the failed-quorum arm, so a discard is a fraction of a turnout that
+	// already cleared min(X̄, votable/3) — three voters cannot delete a claim.
+	// And BEFORE the verdict arms, because a claim the court threw out has no
+	// verdict to reach: whether the answer was right is not a question worth
+	// settling once the electorate has said the claim should not have been asked.
+	case spamDiscards(spamW, cast):
+		spamDiscardClaim(c, cs, spamW, cast)
 	case yes > 0 && yes*grc20votes.Bps >= (yes+no)*c.params.disputeThresholdBps:
 		// OVERTURN: the answer was wrong. The answer bond BURNS in full (the
 		// forfeiture); the disputer's own bond returns; comp mints
@@ -532,6 +540,91 @@ func compAmount(ownBond, burned int64) int64 {
 		comp = 0
 	}
 	return comp
+}
+
+// spamDiscardClaim ends a claim the electorate threw out: more than half the
+// weight cast called it spam.
+//
+// ONLY REACHABLE WITH QUORUM MET, because it is a case in ResolveDispute's
+// switch AFTER the failed-quorum arm. That ordering is the whole protection
+// against a three-voter deletion — the discard is a fraction of a turnout that
+// already had to clear min(X̄, votable/3).
+//
+// THE AUTHOR IS THE ONLY PARTY WHO LOSES, which is where the spam came from:
+//
+//	stakes, both sides   returned 1x   (provClose opens the same withdrawals)
+//	answerer's bond      returned      they did the work; the junk is not theirs
+//	disputer's bond      returned      they opened the round that FOUND it —
+//	                                   burning it would discourage the only path
+//	                                   that surfaces spam at all
+//	the fee              always burns  it is the anti-spam price and this is the
+//	                                   case it was priced for
+//	the deposit          burns at 2/3  a supermajority, not a bare majority: the
+//	                                   deposit is the harshest money consequence
+//	                                   in this system reachable by somebody who
+//	                                   posted no bond, so it wants a wider margin
+//	                                   than the discard itself
+//
+// It carries provClose as well as spamClosed. That is not sloppiness: provClose
+// is what every withdrawal path already reads to mean "everyone takes their
+// principal back", and reusing it is how the stake half of this needs no new
+// code. spamClosed is the REASON, so a page can tell a claim nobody turned up
+// for from one the court looked at and threw out.
+//
+// No draw is written and none is possible: the claim's own spam share is past
+// half, so spamNetBps is zero and crystallize multiplies the draw to nothing.
+// Belt and braces, in opposite directions — the money is refused here and the
+// arithmetic refuses it again there.
+// spamDiscards and spamBurnsDeposit are the two thresholds, as predicates.
+//
+// EXTRACTED so they can be tested without a claim. They are integer comparisons
+// with no division — a fraction here would round, and rounding at a threshold is
+// how "exactly half" ends up on the wrong side of a line the owner drew.
+//
+// The pair is deliberately asymmetric: the discard is a bare majority, and the
+// deposit burn wants a supermajority. Burning an author's deposit is the harshest
+// money consequence in this system reachable by somebody who posted no bond, so
+// it does not ride on the same margin that merely deletes the claim.
+func spamDiscards(spamW, cast int64) bool { return spamW*2 > cast }
+
+func spamBurnsDeposit(spamW, cast int64) bool { return spamW*3 >= cast*2 }
+
+func spamDiscardClaim(c *Court, cs *claimState, spamW, cast int64) {
+	cs.spamClosed = true
+	cs.provClose = true
+	cs.verdictAt = heightNow()
+	cs.verdictAtTime = nowTime()
+	cs.route = "spam"
+	cs.spamW, cs.spamTotalW = spamW, cast
+
+	if cs.answerBond > 0 {
+		c.coin.Transfer(c.escrow, cs.answerer, cs.answerBond)
+		cs.answerBond = 0
+	}
+	if cs.disputeBond > 0 {
+		c.coin.Transfer(c.escrow, cs.disputer, cs.disputeBond)
+		cs.disputeBond = 0
+	}
+	// THE SUPERMAJORITY ARM, in integers and on the same numbers the discard
+	// used: two thirds of the weight cast, not two thirds of the spam.
+	burnDeposit := spamBurnsDeposit(spamW, cast)
+	if cs.deposit > 0 {
+		if burnDeposit {
+			c.coin.Burn(c.escrow, cs.deposit)
+		} else {
+			c.coin.Transfer(c.escrow, cs.author, cs.deposit)
+		}
+		c.deposit -= cs.deposit
+		cs.deposit = 0
+	}
+	if cs.fee > 0 {
+		c.coin.Burn(c.escrow, cs.fee)
+		c.deposit -= cs.fee
+		cs.fee = 0
+	}
+	releasePriority(c, cs.answerer, cs.id)
+	stripExit(c, cs)
+	releaseMetaLatchIfMeta(c, cs)
 }
 
 // provCloseClaim closes a claim without a decision after three failed rounds:

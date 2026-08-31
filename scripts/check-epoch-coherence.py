@@ -212,7 +212,17 @@ FLOOR_SHAPE = re.compile(r"if held := c\.coin\.BalanceOf\([a-z]+\); held < ")
 # in its own right, and must not be counted as a terminal write.
 TERMINAL_VERDICT = re.compile(r"^\s*cs\.verdictAt\b[^=\n]*=", re.M)
 TERMINAL_CLOSED = re.compile(r"^\s*cs\.closed\b[^=\n]*=", re.M)
-TERMINAL_VERDICT_N = 3  # dispute.gno provClose + Finalize, session.gno settle
+# FOUR, and the fourth is spamDiscardClaim — a claim the electorate threw out,
+# more than half the weight cast having called it spam.
+#
+# RE-DERIVED, NOT BUMPED, which is what this arm asks for. The question it makes
+# a newcomer answer is votelock.gno's: the quality vote lock releases on
+# `verdictAt != 0 || closed`, so a new way for a claim to END that does not write
+# one of those leaves every quality vote on it locked forever, silently.
+# spamDiscardClaim writes cs.verdictAt, so the lock releases — checked, not
+# assumed, and that check is the entire reason this constant is not just a
+# number.
+TERMINAL_VERDICT_N = 4  # dispute.gno provClose + spamDiscard + Finalize, session.gno settle
 TERMINAL_CLOSED_N = 1   # claim.gno dead-claim close
 
 # ARM 6 — mustStakable has exactly ONE caller, and that is a safety invariant.
@@ -534,6 +544,19 @@ BOARD_READS = re.compile(
 # multiplier, never replace it. Replacing lets a small self-staked claim rated
 # 0.25x jump to 1.00x by being disputed with no spam — a 4x promotion bought for
 # a dispute bond. So the guard requires want to be fed through both, in order.
+# The discard must be REACHED, and reached in the right place. Its predicate and
+# its dispositions are unit-tested; neither notices if ResolveDispute stops
+# calling it — measured, replacing the case with `false` passed everything.
+#
+# POSITION IS THE PROTECTION, so the guard checks it: the discard sits AFTER the
+# failed-quorum arm, so three voters cannot delete a claim, and BEFORE the
+# verdict arms, because a claim the court threw out has no verdict to reach.
+SPAM_DISCARD_ORDER = [
+    "case cast < floor:",
+    "case spamDiscards(spamW, cast):",
+    "case yes > 0 && yes*grc20votes.Bps >= (yes+no)*c.params.disputeThresholdBps:",
+]
+
 DRAW_MULTIPLIERS = [
     "want := mulDiv128(midGross, tierBps, tierParBps)",
     "want = mulDiv128(want, spamNetBps(cs), tierParBps)",
@@ -1027,6 +1050,26 @@ def main() -> int:
               "is the argument to answer first, then change this check.",
               file=sys.stderr)
         return 1
+
+    # THE DISCARD IS REACHED, and between the right two arms.
+    dis = (ROOT / "realm/r/kourtv2/dispute.gno").read_text(encoding="utf-8")
+    at = -1
+    for line in SPAM_DISCARD_ORDER:
+        i = dis.find(line)
+        if i < 0:
+            print(f"check-epoch-coherence: ResolveDispute no longer has `{line}`. "
+                  f"The spam discard must sit AFTER the failed-quorum arm (so a "
+                  f"handful of voters cannot delete a claim) and BEFORE the "
+                  f"verdict arms (a claim the court threw out has no verdict to "
+                  f"reach). Its predicate and payouts are unit-tested; nothing "
+                  f"else notices if it stops being called.", file=sys.stderr)
+            return 1
+        if i < at:
+            print("check-epoch-coherence: the spam discard has moved out of "
+                  "order in ResolveDispute — quorum must gate it, and it must "
+                  "pre-empt the verdict.", file=sys.stderr)
+            return 1
+        at = i
 
     # THE DRAW'S TWO MULTIPLIERS, both applied and in order.
     cry = (ROOT / "realm/r/kourtv2/crystallize.gno").read_text(encoding="utf-8")

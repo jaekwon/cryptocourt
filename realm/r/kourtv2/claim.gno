@@ -323,6 +323,14 @@ type claimState struct {
 	// "no discount" rather than as "discount to nothing".
 	spamW      int64
 	spamTotalW int64
+	// spamClosed marks a claim the electorate DISCARDED — more than half the
+	// weight cast called it spam. It is a reason, not a mechanism: the claim
+	// also carries provClose, so every withdrawal path that already means
+	// "everyone takes their principal back" works unchanged. What this field
+	// buys is that a page, and a later reader, can tell "three rounds failed to
+	// reach quorum" from "the court looked and said this was junk" — two very
+	// different things that would otherwise be one flag.
+	spamClosed bool
 	authorPaid    bool
 	answererPaid  bool
 }
