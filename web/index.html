@@ -1363,6 +1363,10 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
 .amtflash{position:absolute; right:7px; top:50%; transform:translateY(-50%);
   font:11px var(--sans); color:var(--contra); pointer-events:none;
   opacity:0; transition:opacity .12s linear}
+/* "get some →" is a way out, so it has to be reachable — the rest of the flash
+   stays inert so it never eats a click meant for the field. */
+.amtwrap.flash .amtflash a{color:var(--contra); pointer-events:auto}
+.amtwrap.flash .amtflash a:hover{color:var(--accent-2)}
 .amtwrap.flash .amtflash{opacity:1}
 @media (prefers-reduced-motion:reduce){ .amtflash{transition:none} }
 /* An amount the court would refuse. Border AND text, so it is not colour alone. */
@@ -2414,6 +2418,10 @@ async function fillStakeBalance(slug){
      both numbers because it sits after both. */
   const fig = cc(micro, slug).replace(" " + ccSym(slug), "");
   out.textContent = "/ " + (micro>0? fig : "0") + " " + ccSym(slug);
+  // Left where the click handler can read it: whether the reader holds any coin
+  // decides what a refused amount should SAY, and that is decided at the press.
+  const w = document.getElementById("stakeamtwrap");
+  if(w) w.dataset.held = String(micro);
   if(micro<=0){ out.classList.add("none"); return; }
   out.classList.remove("none");
   out.addEventListener("click", ()=>{ f.value = String(micro/1e6); f.focus(); });
@@ -3556,6 +3564,24 @@ async function adenaSign(func, args, el){
            than nothing. */
         const w = document.getElementById("stakeamtwrap");
         if(!w) return;
+        /* WHAT IT SAYS DEPENDS ON WHY. "ya got none!" was printed for every
+           refusal, including a reader holding two hundred coins who had simply
+           not typed a number yet — and for the one it was true of, it named the
+           problem and not the way out. Holding none is a different situation
+           from having typed nothing, and only one of them has somewhere to go. */
+        const fl = w.querySelector(".amtflash");
+        const held = +(w.dataset.held || "-1");
+        if(fl){
+          fl.textContent = "";
+          if(held === 0){
+            const a2 = document.createElement("a");
+            a2.href = "#/c/" + encodeURIComponent((args||{}).courtSlug || "") + "?at=join";
+            a2.textContent = "get some →";
+            fl.appendChild(a2);
+          } else {
+            fl.textContent = "how much?";
+          }
+        }
         w.classList.add("flash");
         clearTimeout(w._flash);
         w._flash = setTimeout(()=>w.classList.remove("flash"), 1800);
@@ -8794,7 +8820,7 @@ function stakeTicket(slug,id,d){
              inputmode="decimal" value="0" autocomplete="off" aria-describedby="stakebal"
              aria-label="amount to stake, in ${esc(ccSym(slug))}"
              ><span class="amthave" id="stakebal" title="Stake all of it"></span
-             ><span class="amtflash" aria-hidden="true">ya got none!</span></span>
+             ><span class="amtflash" aria-hidden="true"></span></span>
     </div>
     <div class="actions" style="margin-top:10px">
       ${btn("Stake YES","Stake",{courtSlug:slug,claimID:id,side:0,amount:1000000},"yes","",null,null,null,null,null,true)}
