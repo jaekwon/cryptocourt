@@ -3403,7 +3403,19 @@ function signHelp(el){
         return;
       }
       close();
-      el.click();
+      /* THE CAPTURED NODE IS GONE BY NOW, and this is the bug that was reported
+         as "I clicked connect and it disappeared". adenaConnect() re-renders on
+         success and every route replaces main.innerHTML, so `el` is detached.
+         el.click() on a detached node dispatches an event that never reaches the
+         delegated listener on document -- so the dialog closed and the action
+         the reader was part-way through simply evaporated.
+         Re-find the equivalent control in the document that exists NOW, matched
+         on the function and arguments rather than on identity. */
+      const wantF = el.dataset.func || "", wantA = el.dataset.args || "";
+      const live = [...document.querySelectorAll("[data-act][data-func]")]
+        .find(n => (n.dataset.func||"") === wantF && (n.dataset.args||"") === wantA);
+      if(live) live.click();
+      else note("Connected as "+shortAddr(CFG.addr)+". Press the button again to continue.", true);
     }
   });
   dlg.addEventListener("close", ()=> dlg.remove());
@@ -3441,7 +3453,11 @@ async function adenaConnect(){
     if(acct.code!==0 || !acct.data || !acct.data.address){ throw new Error(acct.message||"no account"); }
     CFG.addr = acct.data.address; saveCfg();
     reflectWallet();
-    render();
+    /* AWAITED. render() is async, and a caller that wants to resume an
+       interrupted action needs the new DOM to exist before it looks for it.
+       Un-awaited, control came back while main still held the OLD markup (or
+       loading()'s placeholder), and the resume searched the wrong document. */
+    await render();
     return null;
   }catch(e){
     const why = "Adena: "+(e.message||e);

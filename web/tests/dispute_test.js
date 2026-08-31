@@ -286,8 +286,19 @@ ok("...offering Connect when the extension is there",
 // that a connect that did NOT take can say why in the dialog instead of closing
 // it — closing on failure was reported as "the connect button does nothing",
 // because the only account of the failure went to the rail hint behind the modal.
+// RESUMED ON A LIVE NODE, NEVER THE CAPTURED ONE. adenaConnect() awaits
+// render(), and every route replaces main.innerHTML, so the element the dialog
+// captured is DETACHED by the time the connect returns. Clicking it dispatches an
+// event that never reaches the delegated listener on document -- reported as "I
+// clicked connect and it disappeared". So the assertion is not that a retry
+// happens, it is that the retry does not use `el`.
 ok("...and the interrupted action retries itself once connected",
-   /await adenaConnect\(\);[\s\S]{0,1200}close\(\);\s*\n\s*el\.click\(\);/.test(src));
+   /await adenaConnect\(\);[\s\S]{0,2000}live\.click\(\);/.test(src));
+ok("...on a node re-found in the document that exists now",
+   src.includes('querySelectorAll("[data-act][data-func]")')
+   && src.includes("n.dataset.func") && src.includes("n.dataset.args"));
+ok("...and the connect awaits the re-render, or the re-find reads a stale DOM",
+   /reflectWallet\(\);[\s\S]{0,400}await render\(\);/.test(src));
 // A failed connect must neither retry nor reopen: it returns, leaving the dialog
 // standing with the reason in it.
 // BY ORDER WITHIN THE HANDLER, not by the presence of the guard. The first
@@ -310,6 +321,17 @@ ok("...and the interrupted action retries itself once connected",
      at("if(!CFG.addr)") < Infinity && at("return;") < at("close();"));
   ok("...and the dialog is not closed before the failure is reported",
      at("data-connect-why") < at("close();"));
+  // THE DETACHED CALL IS FORBIDDEN OUTRIGHT. This is the whole defect, stated as
+  // an absence rather than as an ordering, because there is no correct place for
+  // it: the node is gone by the time this code runs.
+  //
+  // COMMENTS STRIPPED FIRST. The overlay's comment at that spot NAMES el.click()
+  // while explaining why it was removed, so the bare regex matched the
+  // explanation and the assertion failed against correct code. An absence claim
+  // over source has to read only the code.
+  const code = h.replace(/\/\*[\s\S]*?\*\//g, "").replace(/(^|\n)\s*\/\/[^\n]*/g, "$1");
+  ok("...and the resume never clicks the captured element",
+     !/\bel\.click\(\)/.test(code));
 }
 // THE MARKUP, not the selector. `data-connect-why` appears twice -- once in the
 // dialog HTML and once in the querySelector reading it -- so includes() on the
