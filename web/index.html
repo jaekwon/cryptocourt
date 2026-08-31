@@ -6101,7 +6101,17 @@ function curValidSet(slug, count){
 const CHAIN_FOLDER_CAP = 100;
 async function chainFolders(slug){
   const s2=gstr(slug);
-  const n = await one(`FolderCount(${s2})`).catch(()=>null);
+  /* THE COUNT AND THE SHAPE TOGETHER. FolderTree does not need the count — it
+     answers for the whole court either way — so asking for one and then the
+     other put two round trips in a row before a single folder name was even
+     requested. Measured on kourt.xyz: FolderCount left at 960ms, FolderTree at
+     1020ms, the names at 1140ms, and the page painted at 1484ms.
+     The count still decides whether there is anything to draw; it just no longer
+     decides WHEN the tree is asked for. */
+  const [n, treeRaw] = await Promise.all([
+    one(`FolderCount(${s2})`).catch(()=>null),
+    one(`FolderTree(${s2})`).then(unesc).catch(()=>null),
+  ]);
   if(n==null) return null;                 // the read itself failed
   if(n<1) return {folders:[], count:0, capped:false};
   const F = Math.min(n, CHAIN_FOLDER_CAP);
@@ -6115,7 +6125,6 @@ async function chainFolders(slug){
   // FolderTree existed answers nothing, and a flat tree is what the overlay drew
   // for that realm anyway. The feature degrades to the old behaviour rather than
   // to an error.
-  const treeRaw = await one(`FolderTree(${s2})`).then(unesc).catch(()=>null);
   const shape = new Map();
   if(typeof treeRaw === "string" && treeRaw){
     for(const row of treeRaw.split(",")){

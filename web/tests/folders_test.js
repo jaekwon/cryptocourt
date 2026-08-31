@@ -141,10 +141,18 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
      cff.folders[1].name==="[purged:9.2]<img src=x onerror=alert(1)>" && cff.folders[1].img==="" && !cff.folders[1].failed);
   global.FTREE=undefined; global.FIMG=undefined;
 
-  // zero folders = exactly one read
+  // Zero folders costs TWO reads that go together, and never the per-folder
+  // fan-out. It used to be one, and the second is a deliberate trade: the count
+  // and the tree are now asked at the same time, because FolderTree never needed
+  // the count and waiting for it put two round trips in a row ahead of every
+  // folder name. A court with no folders therefore pays one query it does not
+  // use — and no extra WALL TIME, since it is in flight beside the count.
+  // What must not come back is the loop: no FolderName or FolderItems here.
   global.FCOUNT=0; CALLS=[];
   const cf0 = await chainFolders("orem");
-  ok("F=0 → one read, empty", CALLS.length===1 && cf0.folders.length===0);
+  ok("F=0 → the count and the tree, together, and nothing per folder",
+     CALLS.length===2 && cf0.folders.length===0
+     && !CALLS.some(c=>/FolderName|FolderItems/.test(c)));
   // cap
   global.FCOUNT=150; const cfC = await chainFolders("orem");
   ok("cap at 100, capped flag", cfC.folders.length===100 && cfC.capped && cfC.count===150);
