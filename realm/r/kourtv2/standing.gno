@@ -664,10 +664,8 @@ func creditAuthorHigh(c *Court, cs *claimState, tier int64) {
 // the money and left the record untouched, which is A18's lesson — an
 // unadjudicated stand earns nothing — unapplied to the newer ledger.
 //
-// TWO RATES, NOT A GATE. slotConsumed — set in exactly two places, both a
-// quality tally that reached a conclusion — is the only field that means "the
-// court actually decided something here"; it now selects the RATE rather than
-// admitting or refusing the credit outright. See standingUnadjudicatedBps.
+// TWO RATES, NOT A GATE. The rate turns on whether the COURT decided this claim
+// or a deadline did; see standingUnadjudicatedBps and `adjudicated` below.
 //
 // The tier arm is the real refusal, and it is the one that matters: `cs.tier = tierMidX` is what an
 // UNADJUDICATED claim is stamped with — provCloseClaim and the settle path both
@@ -675,10 +673,6 @@ func creditAuthorHigh(c *Court, cs *claimState, tier int64) {
 // claim nobody looked at receives. So a gate reading `tier >= tierMidX` admits
 // exactly the author-mill's habitat: open a claim, self-answer it, self-stake
 // the answered side, settle undisputed, collect on a default nobody voted for.
-// `slotConsumed` is set in precisely two places, both of them a quality tally
-// that reached a conclusion, so it is the only field that means "the court
-// actually decided something here". This is the same reasoning the author row
-// already uses one function up; the two now agree.
 //
 // The tier arm stays beside it because a CONCLUSIVE low is adjudicated and still
 // pays nothing: tierLowX is zero, so the draw is zero, and the record follows
@@ -697,11 +691,32 @@ func creditWinConviction(c *Court, cs *claimState, who address, p *stakePos) {
 	}
 	r := creditRatesFor(c)
 	bps := r.conviction
-	if !cs.slotConsumed {
+	if !adjudicated(cs) {
 		bps = bps * r.unadjudicated / 10_000
 	}
 	creditStanding(c, who, scaleBps(timeAvgStake(cs, p.rawHi, p.rawLo), bps), standingCatConv)
 }
+
+// adjudicated reports whether the COURT decided this claim, rather than a
+// deadline deciding it by nobody turning up.
+//
+// ONE DEFINITION, and the reason is the same one qualityQuestionOpen exists for:
+// a sentence this load-bearing spelled two ways is how two callers come to mean
+// different things by it. check-epoch-coherence counts that pattern.
+//
+// IT WAS `!cs.slotConsumed`, which was set in exactly two places, both of them a
+// quality tally that reached a conclusion. That field is going away with the
+// quality lane, and the surviving thing that means "the court actually decided
+// something here" is a dispute round that reached a verdict — decidedPID is set
+// at dispute.gno's two decide sites and nowhere else.
+//
+// WHAT MOVES, stated rather than discovered later: a claim whose quality was
+// adjudicated by a FLAG but which was never disputed used to earn the full
+// conviction rate and now earns half. That population is exactly the one the
+// flag lane existed to reach, and it is being removed on purpose. Nothing else
+// changes hands — a dispute-decided claim was full-rate before and is full-rate
+// now, and an untouched claim was half before and is half now.
+func adjudicated(cs *claimState) bool { return cs.decidedPID != 0 }
 
 // ------------------------------------------------------------------ reads --
 

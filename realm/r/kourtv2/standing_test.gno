@@ -159,7 +159,10 @@ func TestSplittingAPositionNeverIncreasesTotalStanding(cur realm, t *testing.T) 
 	// sharing one holder's capital must never out-earn that holder undivided.
 	// Linear is the unique rule that achieves it — any clamp or per-claim cap is
 	// concave and pays the split MORE, which is why none exists here.
-	cs.tier, cs.slotConsumed, cs.openBlocks = tierMidX, true, 1_000
+	// Adjudicated, so the credit is unscaled — the invariant holds at either
+	// rate (both sides scale together), and an unscaled one keeps the arithmetic
+	// in the failure message readable.
+	cs.tier, cs.decidedPID, cs.openBlocks = tierMidX, 7, 1_000
 	pos := func(raw uint64) *stakePos { return &stakePos{rawLo: raw} }
 	const conv = uint64(4_000_000_000)
 	creditWinConviction(c, cs, whole, pos(conv))
@@ -358,7 +361,12 @@ func TestConvictionStandingIsRatedByWhatTheCourtDecided(cur realm, t *testing.T)
 	// partly noise — a griefer can open one — so paying only the adjudicated case
 	// would punish a correct staker for not having been attacked, on the path
 	// most claims take by design.
-	cs.tier, cs.slotConsumed = tierMidX, false
+	// THE FIELD MOVED, THE RULE DID NOT. This drove cs.slotConsumed, which meant
+	// "a quality tally reached a conclusion" and is going away with that lane.
+	// The rate now turns on `adjudicated(cs)` — a dispute round that reached a
+	// verdict — so the fixture sets decidedPID. Every assertion below is the one
+	// it always was.
+	cs.tier, cs.decidedPID = tierMidX, 0
 	creditWinConviction(c, cs, alice, p)
 	uassert.Equal(t, half, Standing("sg13", alice))
 
@@ -368,20 +376,21 @@ func TestConvictionStandingIsRatedByWhatTheCourtDecided(cur realm, t *testing.T)
 	// gate that pays into an empty row are indistinguishable at zero, which is
 	// how the earlier version of this test hid the case it was written for.
 	before := Standing("sg13", alice)
-	cs.tier, cs.slotConsumed = tierLowX, true
+	cs.tier, cs.decidedPID = tierLowX, 7
 	creditWinConviction(c, cs, alice, p)
 	uassert.Equal(t, before, Standing("sg13", alice))
 
-	// A VOTED MID EARNS FULL — same tier value as the first case, double the
-	// credit, which is the whole point of reading slotConsumed and not the tier.
-	cs.tier, cs.slotConsumed = tierMidX, true
+	// AN ADJUDICATED MID EARNS FULL — same tier value as the first case, double
+	// the credit, which is the whole point of reading the adjudication and not
+	// the tier.
+	cs.tier, cs.decidedPID = tierMidX, 7
 	creditWinConviction(c, cs, alice, p)
 	uassert.Equal(t, half+full, Standing("sg13", alice))
 
 	// provClose needs no arm of its own, and the arm it once had was wrong:
 	// crystallize says provClose DRAWS, so refusing it withheld a credit on a
-	// path that pays MID emission. It is rated on its tier and slot like
-	// anything else.
+	// path that pays MID emission. It is rated on its tier and its adjudication
+	// like anything else.
 	cs.provClose = true
 	creditWinConviction(c, cs, alice, p)
 	uassert.Equal(t, half+full*2, Standing("sg13", alice))
@@ -389,6 +398,15 @@ func TestConvictionStandingIsRatedByWhatTheCourtDecided(cur realm, t *testing.T)
 	// And the two rates really are 2:1, stated as its own assertion so the
 	// owner's ruling is pinned by a number rather than by two additions.
 	uassert.Equal(t, full, half*2)
+
+	// THE PREDICATE, directly. Everything above reaches it through a credit, so
+	// a re-key that got the sense backwards would show up as four wrong numbers
+	// rather than as one wrong answer.
+	uassert.False(t, adjudicated(&claimState{}))
+	uassert.True(t, adjudicated(&claimState{decidedPID: 1}))
+	// slotConsumed no longer has any say — asserted while the field still
+	// exists, because after it is deleted this can only be asserted by absence.
+	uassert.False(t, adjudicated(&claimState{slotConsumed: true}))
 }
 
 // ---------------------------------------------------- the hooks, end to end --
@@ -653,7 +671,10 @@ func TestTimeAvgStakeClampsWhereDiv128WouldPanic(cur realm, t *testing.T) {
 func TestCreditRatesInheritUntilACourtOverrides(cur realm, t *testing.T) {
 	alice := testutils.TestAddress("sg17-alice")
 	c, cs, _ := standingFixture(cur, "sg17", alice)
-	cs.tier, cs.slotConsumed, cs.openBlocks = tierMidX, true, 1_000
+	// decidedPID, not slotConsumed: the full conviction rate is what an
+	// ADJUDICATED claim earns, and this test is about the rate TABLE rather than
+	// about which field selects the rate.
+	cs.tier, cs.decidedPID, cs.openBlocks = tierMidX, 7, 1_000
 	p := &stakePos{rawLo: 4_000_000_000}
 	avg := int64(4_000_000)
 
