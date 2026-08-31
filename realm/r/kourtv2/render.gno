@@ -467,6 +467,19 @@ func renderClaim(slug string, id uint64) string {
 			// editorial rating rather than as the difference in what is paid.
 			b.WriteString("- the rating is the money that showed up, not a vote: " +
 				"a claim of typical size pays 1.00×, and it is capped at 0.25× and 2.00×\n")
+			// AND THE SPAM CUT, when a round has decided. Two multipliers reach
+			// this claim's draw and the page showed only one, which on a claim a
+			// quarter of the voters flagged reported double what it actually pays.
+			//
+			// BOTH FIGURES, not the product: a reader handed "0.75x" cannot tell a
+			// large claim the crowd cut down from a small one nobody touched, and
+			// those are opposite facts about the same number.
+			if cs.spamTotalW > 0 && cs.spamW > 0 {
+				b.WriteString("- and " + tierText(spamNetBps(cs)) +
+					" of that, because " + strconv.FormatInt(cs.spamW, 10) +
+					" of " + strconv.FormatInt(cs.spamTotalW, 10) +
+					" of the weight cast flagged it as spam\n")
+			}
 		}
 		switch {
 		case cs.flagOpen:
@@ -668,6 +681,16 @@ func claimStatus(cs *claimState) string {
 	switch {
 	case cs.closed:
 		return "closed — never answered; every stake exited 1×, the deposit refunded"
+	// SPAM COMES FIRST, because a discarded claim also carries provClose — that
+	// flag is how it reuses every withdrawal path that already means "everyone
+	// takes their principal back". Without this case ahead of it the page would
+	// report a claim the court deliberately THREW OUT as one that merely failed
+	// to reach quorum three times: the same words for the opposite event, and
+	// the one reading a reader would use to judge whether the system worked.
+	case cs.spamClosed:
+		return "discarded — more than half the weight cast called this claim spam; " +
+			"every stake withdraws 1×, the answerer's and disputer's bonds return, " +
+			"the filing fee burns"
 	case cs.provClose:
 		return "closed without a decision — three dispute rounds failed quorum; everyone withdraws 1×, deposit and fee refunded"
 	case cs.verdictAt != 0:

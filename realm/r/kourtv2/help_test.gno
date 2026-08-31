@@ -647,3 +647,71 @@ func TestTheClaimPageSaysWhatADisputeDoesNotJustItsPrice(cur realm, t *testing.T
 		}
 	}
 }
+
+// THE PAGE REPORTS BOTH MULTIPLIERS, and names a discarded claim for what it is.
+//
+// A claim's draw is scaled twice — by its size, and by the deciding round's spam
+// share — so a page showing only the first reports DOUBLE what a claim a quarter
+// of the voters flagged actually pays. And a discarded claim carries provClose,
+// so without its own status line it reads as "three rounds failed quorum": the
+// same words for the opposite event, on the line a reader uses to judge whether
+// the system worked.
+func TestTheClaimPageShowsTheSpamCutAndNamesADiscard(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("spamcut-alice")
+	c, id := boardFixture(cur, "spamcut", alice)
+	cs := mustClaim(c, id)
+	path := "spamcut/" + strconv.FormatUint(id, 10)
+
+	// Answered and rated by size, with no round decided yet: one multiplier, and
+	// no spam line at all — zero spam and "nobody voted" must not read alike.
+	cs.frozenAt, cs.answer = 100, int8(sideYES)
+	cs.xBarFrozen, cs.tierRef = 4_000_000, 2_000_000
+	page := Render(path)
+	if !strings.Contains(page, "pays 2.00×") {
+		t.Fatalf("the size rating must show:\n%s", page)
+	}
+	if strings.Contains(page, "flagged it as spam") {
+		t.Fatalf("no round has decided, so there is no spam share to report:\n%s", page)
+	}
+
+	// A round decided with a quarter of the weight flagging spam: the cut is
+	// reported, with BOTH figures — a bare "0.50×" cannot tell a large claim the
+	// crowd cut down from a small one nobody touched.
+	cs.spamW, cs.spamTotalW = 25, 100
+	cut := Render(path)
+	if !strings.Contains(cut, "and 0.50× of that") {
+		t.Fatalf("the spam cut must show beside the size rating:\n%s", cut)
+	}
+	if !strings.Contains(cut, "25 of 100 of the weight cast") {
+		t.Fatalf("the cut must carry the share it came from:\n%s", cut)
+	}
+	// The size rating is still there — the two compose, and hiding either makes
+	// the other unreadable.
+	if !strings.Contains(cut, "pays 2.00×") {
+		t.Fatal("the size rating must survive beside the cut")
+	}
+
+	// A round where nobody flagged spam reports no cut, rather than "1.00× of
+	// that", which is noise dressed as information.
+	cs.spamW = 0
+	if clean := Render(path); strings.Contains(clean, "flagged it as spam") {
+		t.Fatalf("a clean round has no cut to report:\n%s", clean)
+	}
+
+	// AND A DISCARD IS NAMED. Not "closed without a decision" — the court
+	// decided, and decided the claim should not have been asked.
+	cs.spamClosed, cs.provClose = true, true
+	cs.verdictAt = heightNow()
+	st := claimStatus(cs)
+	if !strings.Contains(st, "discarded") || !strings.Contains(st, "called this claim spam") {
+		t.Fatalf("a discarded claim must say so, got %q", st)
+	}
+	if strings.Contains(st, "failed quorum") {
+		t.Fatalf("a discard is not a failed quorum, got %q", st)
+	}
+	// The three dispositions a reader needs are on that line.
+	if !strings.Contains(st, "withdraws 1×") || !strings.Contains(st, "bonds return") ||
+		!strings.Contains(st, "fee burns") {
+		t.Fatalf("the status must say who is paid and what burns, got %q", st)
+	}
+}
