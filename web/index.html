@@ -4973,6 +4973,18 @@ function buyRowsHtml(q, price, slug, after){
   return `<div class="line"><span class="l">You receive</span><span class="r tnum">${cc(Number(q.units),slug)} <small>${fmtN(Number(q.units))} units</small></span></div>`;
 }
 let BUYQ=null, BUYCTX=null;
+/* THE FORM SURVIVES A RE-RENDER, and this is a bug fix rather than a nicety.
+   Connecting a wallet calls render(), which replaces main.innerHTML, so the
+   amount somebody typed and the acknowledgement they ticked were discarded.
+   The reader saw: fill the form, press Buy, approve the wallet, and land back on
+   an empty form with a gated button — reported as "it connected and
+   disappeared". The resume found the button and clicked it; the button refused,
+   because the tick it needed had just been thrown away.
+   Kept per court, so switching courts does not inherit the last one's tick. */
+let BUYFORM = {slug:"", amt:"", ack:false};
+function buyFormFor(slug){
+  return BUYFORM.slug === slug ? BUYFORM : {slug, amt:"", ack:false};
+}
 function buyActionsHtml(slug, q){
   const ok = !!(q && q.units>0n);
   const acked = !!(document.getElementById("buyack")||{}).checked;
@@ -6931,24 +6943,31 @@ function joinPanel(slug, s){
   const sym = "KOURT:" + esc(slug).toUpperCase(); // canonical display (MODERATION.md §13.9)
   const minted = s.minted!=null? s.minted : null;
   BUYQ = null; BUYCTX = null;
+  const form = buyFormFor(slug);
+  const ackAttr = form.ack? " checked" : "";
   let body;
   if(minted==null){
     BUYCTX = {slug, noquote:true};
     body = `<div class="kv"><div class="k">coin price</div><div class="v tnum">${priceText(s.price, s.minted)} <small>µGNOT/unit</small></div></div>
         <div class="kv"><div class="k">supply</div><div class="v tnum">${cc(s.supply,slug)}</div></div>
         <p class="small muted" style="margin:8px 0 0">No quote — the node did not answer the curve read; the chain computes the true amount when you buy.</p>
-        <label class="ack small"><input type="checkbox" id="buyack"> I understand ${sym} cannot be sold back to the court.</label>
+        <label class="ack small"><input type="checkbox" id="buyack"${ackAttr}> I understand ${sym} cannot be sold back to the court.</label>
         <div class="actions" style="margin-top:10px" id="buyactions">${buyActionsHtml(slug,null)}</div>`;
   }else{
     BUYCTX = {slug, minted, supply:s.supply, price:s.price};
-    const q = BUYQ = curveQuote(minted, s.supply, 100000000n);
+    /* THE TYPED AMOUNT, NOT THE DEFAULT, when there is one to restore — and the
+       quote is computed from the same figure, so the receipt below the field
+       cannot disagree with the field itself. */
+    const amtVal = form.amt !== "" ? form.amt : "100";
+    const amtMicro = parseGnot(amtVal);
+    const q = BUYQ = curveQuote(minted, s.supply, amtMicro==null? 100000000n : amtMicro);
     body = `<div class="ticket buyrcpt compact">
           <div class="line"><span class="l"><label for="buyamt">You send</label></span>
-            <span class="r tnum"><input id="buyamt" type="text" inputmode="decimal" value="100" autocomplete="off" aria-describedby="buynote"> GNOT
-              <small id="buyugnot">= ${fmtN(1e8)} µGNOT</small></span></div>
+            <span class="r tnum"><input id="buyamt" type="text" inputmode="decimal" value="${esc(amtVal)}" autocomplete="off" aria-describedby="buynote"> GNOT
+              <small id="buyugnot">${amtMicro==null? "= not a GNOT amount" : "= "+fmtN(Number(amtMicro))+" µGNOT"}</small></span></div>
           <div id="buyrows" aria-live="polite">${buyRowsHtml(q, s.price, slug)}</div>
         </div>
-        <label class="ack small"><input type="checkbox" id="buyack"> I understand ${sym} cannot be sold back to the court.</label>
+        <label class="ack small"><input type="checkbox" id="buyack"${ackAttr}> I understand ${sym} cannot be sold back to the court.</label>
         <div class="actions" style="margin-top:10px" id="buyactions">${buyActionsHtml(slug,q)}</div>
         <div class="ticket buyrcpt" style="margin-top:10px" id="buyrows2" aria-live="polite">${buyRowsHtml(q, s.price, slug, true)}</div>
         <p id="buynote" class="small muted" style="margin:10px 0 0">${isLive()
@@ -6987,8 +7006,20 @@ function refreshBuyActions(){
   // never stale and never needs re-expanding.
   wrap.innerHTML = buyActionsHtml(BUYCTX.slug, BUYQ);
 }
-document.addEventListener("input", ev=>{ if(ev.target && ev.target.id==="buyamt") recomputeBuy(); });
-document.addEventListener("change", ev=>{ if(ev.target && ev.target.id==="buyack") refreshBuyActions(); });
+/* NAMED, AND THE LISTENER STAYS ON ONE LINE. buy_test.js evaluates a slice of
+   this file and strips these two registrations with a single-line regex; a
+   multi-line body left it deleting the first line only, and the orphaned `} });`
+   was a syntax error in the harness. The body belongs in a function anyway. */
+function rememberBuyAmt(el){
+  if(BUYCTX) BUYFORM = {slug:BUYCTX.slug, amt:String(el.value||""), ack:BUYFORM.ack};
+  recomputeBuy();
+}
+document.addEventListener("input", ev=>{ if(ev.target && ev.target.id==="buyamt") rememberBuyAmt(ev.target); });
+function rememberBuyAck(el){
+  if(BUYCTX) BUYFORM = {slug:BUYCTX.slug, amt:BUYFORM.amt, ack:!!el.checked};
+  refreshBuyActions();
+}
+document.addEventListener("change", ev=>{ if(ev.target && ev.target.id==="buyack") rememberBuyAck(ev.target); });
 /* THE FIGURES SIT IN THE LEFT COLUMN, not above both. Full width they pushed the
    whole two-column body — and the Join panel heading the right column — 200px
    down the page, so a reader who came to buy met four reference numbers first
