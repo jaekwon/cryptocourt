@@ -578,6 +578,25 @@ html.embed .main{grid-column:1; grid-row:1; max-width:none; padding:0;
 .bigchart .zone{font:9.5px var(--sans); fill:var(--muted); letter-spacing:.08em; text-transform:uppercase}
 .bigchart .evt{stroke:var(--ink-2); stroke-width:1; stroke-dasharray:2 2}
 .bigchart .evtDot{fill:var(--ink-2)}
+/* NOW, LOUDER THAN THE REST. It divides what happened from what is scheduled,
+   and it was drawn as one more 3px dot among the deadlines. A rule the full
+   height of the plot, a ringed dot on the axis, and a label that is not the
+   same muted grey as everything else. */
+.bigchart .evtnow{stroke:var(--accent); stroke-width:1.4; stroke-dasharray:none; opacity:.55}
+.bigchart .nowHalo{fill:var(--surface); stroke:var(--accent); stroke-width:1.4}
+.bigchart .nowDot{fill:var(--accent)}
+.bigchart .nowL{fill:var(--accent); font-weight:600}
+/* The hover readout. Hidden until a pointer is over the plot — `.on` is set by
+   the delegated listener, so a chart with no points never shows an empty box.
+   pointer-events:none throughout: the layer sits over the plot and must not
+   steal the hover that put it there, nor the event dots' own tooltips. */
+.bigchart .xh{opacity:0; pointer-events:none; transition:opacity .09s linear}
+.bigchart .xh.on{opacity:1}
+.bigchart .xhl{stroke:var(--ink-2); stroke-width:1; stroke-dasharray:2 3}
+.bigchart .xhd{fill:var(--surface); stroke:var(--data); stroke-width:2.25}
+.bigchart .xhbox rect{fill:var(--ink); opacity:.92}
+.bigchart .xht{font:600 10px var(--mono); fill:var(--surface)}
+@media (prefers-reduced-motion:reduce){ .bigchart .xh{transition:none} }
 .bigchart .evtL{font:10px var(--sans); fill:var(--ink-2)}
 .bigchart .hit{fill:transparent}
 .bigchart .hit:hover + .evtDot, .bigchart .hit:focus + .evtDot{r:5}
@@ -2620,6 +2639,81 @@ function claimEvidenceNote(c){
    One delegated listener in the CAPTURE phase, because `error` does not bubble
    and these images are written into innerHTML in two places that re-render. No
    inline onerror: the CSP would allow one, but this stays out of the markup. */
+/* HOVERING THE CHART READS OUT THE POINT UNDER THE POINTER. Delegated from the
+   document so every chart on every route is covered by one listener and none of
+   them needs a mount call — a chart written into innerHTML by a later render is
+   live the moment it lands.
+   The svg carries its own points (data-hov: x,y,unix,share) and whether they
+   could be dated (data-hovdated). Nothing is computed about TIME here; the
+   chart already did that with the same dater its axis uses, because a second
+   opinion about when a point happened is precisely the bug this surface has
+   had three times over.
+   Nearest by X only. A share series is a step function — the pointer is asking
+   "what was it around here", which is a question about the horizontal axis, and
+   nearest-in-2D would jump to a far point that happens to share a y. */
+function chartHoverAt(svg, clientX){
+  const raw = svg.getAttribute("data-hov"); if(!raw) return null;
+  const box = svg.getBoundingClientRect(); if(!box.width) return null;
+  const vx = (clientX - box.left) / box.width * 640;   // the viewBox is 640 wide
+  let best=null, bd=Infinity;
+  for(const q of raw.split(";")){
+    const p2=q.split(",");
+    const d2=Math.abs(+p2[0]-vx);
+    if(d2<bd){ bd=d2; best={x:+p2[0], y:+p2[1], t:+p2[2], share:+p2[3]}; }
+  }
+  /* NOTHING TO READ OUT PAST THE LINE. Most of the plot's right side is the
+     future wash — scheduled deadlines, no recorded points — and nearest-by-X
+     with no bound answered every one of them with the last real point, snapping
+     the crosshair a third of the width away while the pointer sat over a date
+     the series never reached. Beyond this the answer is "no reading here",
+     which is the honest one. */
+  return (best && bd <= 36)? best : null;
+}
+function chartHoverShow(svg, hit){
+  const xh = svg.querySelector(".xh"); if(!xh) return;
+  if(!hit){ xh.classList.remove("on"); return; }
+  const dated = svg.getAttribute("data-hovdated")==="1";
+  const label = (dated? stampDate(hit.t) + " · " : "") + hit.share.toFixed(1) + "% YES";
+  xh.classList.add("on");
+  xh.querySelector(".xhl").setAttribute("x1", hit.x);
+  xh.querySelector(".xhl").setAttribute("x2", hit.x);
+  const dot = xh.querySelector(".xhd");
+  dot.setAttribute("cx", hit.x); dot.setAttribute("cy", hit.y);
+  const t = xh.querySelector(".xht");
+  t.textContent = label;
+  // Measured, then placed: the box has to hold whatever the label came out as,
+  // and it flips to the left of the crosshair when it would run off the plot.
+  const w = Math.ceil(t.getComputedTextLength()) + 12;
+  const left = hit.x + 8 + w > 606;
+  const bx = left? hit.x - 8 - w : hit.x + 8;
+  const by = Math.max(14, Math.min(104, hit.y - 22));
+  const rect = xh.querySelector(".xhbox rect");
+  rect.setAttribute("x", bx); rect.setAttribute("y", by);
+  rect.setAttribute("width", w);
+  t.setAttribute("x", bx + 6); t.setAttribute("y", by + 12);
+}
+/* mousemove, NOT pointermove. Every pointing device synthesizes mouse events —
+   pointer events are the richer API and the one a headless browser turns out
+   not to synthesize from a driven cursor at all, so a readout built on them
+   cannot be tested by driving a mouse across the plot, which is the only way to
+   know it works. A hover readout is a pointing-device affordance either way;
+   touch reaches the same facts through the event dots' own titles. */
+document.addEventListener("mousemove", (e) => {
+  const svg = e.target && e.target.closest && e.target.closest(".bigchart svg");
+  if(!svg) return;
+  chartHoverShow(svg, chartHoverAt(svg, e.clientX));
+});
+/* THE SVG ITSELF, NOT ANY DESCENDANT. mouseleave fires on every element the
+   pointer leaves, and closest() answers yes for all of them — so crossing from
+   one path to the next INSIDE the chart hid the readout that the mousemove
+   directly before it had just filled in. The text was right and the layer was
+   invisible, which is the hardest kind of wrong to see. Capture, because
+   mouseleave does not bubble; identity, because only the svg's own leave means
+   the pointer is off the chart. */
+document.addEventListener("mouseleave", (e) => {
+  const t = e.target;
+  if(t && t.matches && t.matches(".bigchart svg")) chartHoverShow(t, null);
+}, true);
 document.addEventListener("error", (e) => {
   const t = e.target;
   if (!t || !t.classList) return;
@@ -7225,12 +7319,15 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
        by side that is a redundancy AND a squeeze — the chart had 1.3 of 2.3
        columns to plot a week of movement in. Stacked, the chart is the full
        width of the section and the ladder reads as its axis spelled out.
-       The ladder keeps a heading here. It had one when it was its own section;
-       an unlabelled block of dates under a chart is a legend nobody named. */
+       THE LADDER WENT BACK DOWNSTAIRS, though, and the chart answers for itself:
+       hovering a point reads out that point's date and share, which is what the
+       ladder under the plot was for and is a better version of it — it names the
+       moment you are actually pointing at instead of five fixed ones. The
+       section below keeps the ladder for what a hover cannot carry: a dateless
+       failed round, a verdict, the events with no point on the line. */
     + `<section><div class="sec-h">The signal <span class="count">${d.phase==="open"?"staking live": d.phase==="closed"?"never frozen — claim died unanswered":"frozen at the answer"}</span></div>
         <div class="stakewrap${ladderTakesTheTicket(d)?" solo":""}">
-          <div class="panel">${signalChart(slug,id,d,seriesH,ser,tline)}${stakeBar(d,slug)}${chartChips(d,slug)}${
-            ladderTakesTheTicket(d)? `<div class="subh">Timeline</div>${resolutionLadder(d,nowH,tline,false,true)}` : ""}</div>
+          <div class="panel">${signalChart(slug,id,d,seriesH,ser,tline)}${stakeBar(d,slug)}${chartChips(d,slug)}</div>
           ${ladderTakesTheTicket(d)? "" : stakeTicket(slug,id,d)}
         </div></section>`
     + resolutionSection(slug,id,d,nowH,tline)
@@ -7876,6 +7973,11 @@ function signalChart(slug,id,d,nowH,ser,tl){
 <line class="mid" x1="${PL}" y1="${y(50)}" x2="${PR}" y2="${y(50)}"></line>
 <line class="axis" x1="${PL}" y1="${Y0}" x2="${PR}" y2="${Y0}"></line>
 `;
+  /* WHAT A HOVER CAN READ OUT. Every point the chart actually draws, as
+     x,y,height,share — the readout names the moment the pointer is on rather
+     than the five fixed ones a ladder under the plot could list. Collected while
+     the series is drawn so it cannot drift from the shape: one loop, one truth. */
+  const hov=[];
   const endY = Number.isFinite(r.inst)? y(r.inst) : null;
   [[100,y(100)],[50,y(50)],[0,Y0]].forEach(([t,ty])=>{ if(endY==null || Math.abs(ty-endY)>=11) g+=`<text class="tickL" x="610" y="${ty+3}">${t}</text>`; });
   // washes (under marks): 72h window, escrow reopenable, scheduled future
@@ -7899,6 +8001,7 @@ function signalChart(slug,id,d,nowH,ser,tl){
       const xx=X(h), yy=y(sh);
       if(!seg) seg={sx:xx, y0:yy, d:`M ${xx} ${yy}`, a:"", cur:yy, share:sh};
       else { seg.d+=` H ${xx} V ${yy}`; seg.a+=` L ${xx} ${seg.cur} L ${xx} ${yy}`; seg.cur=yy; seg.share=sh; }
+      hov.push([xx,yy,h,sh]);
       lastShare=sh;
     }
     closeSeg(endH, (!frozen && Number.isFinite(r.inst))? r.inst : null);
@@ -7917,6 +8020,7 @@ function signalChart(slug,id,d,nowH,ser,tl){
     }
   } else if(demo && ds){
     const sx=f=>X(ds.x0+f*ds.span);
+    ds.pts.forEach(pt=>hov.push([sx(pt[0]), y(pt[1]), Math.round(ds.x0+pt[0]*ds.span), pt[1]]));
     const P=ds.pts.map(pt=>`${sx(pt[0])},${y(pt[1])}`).join(" ");
     g+=`<path class="ar" d="M ${sx(0)} ${Y0} L ${P.split(" ").join(" L ")} L ${sx(1)} ${Y0} Z"></path>`;
     g+=`<polyline class="ln" points="${P}"></polyline>`;
@@ -7942,7 +8046,17 @@ function signalChart(slug,id,d,nowH,ser,tl){
   evts.forEach((e,i)=>{
     const x=X(Math.max(d0,Math.min(d1,e[0]))), above=i%2===0;
     const ly= above? 22+((i>>1)%2)*11 : 112-((i>>1)%2)*11;
-    g+=`<g><line class="evt" x1="${x}" y1="${above?ly+3:Y100}" x2="${x}" y2="${above?Y0:ly-9}"></line><circle class="hit" cx="${x}" cy="${Y0}" r="10"><title>${esc(e[2])}</title></circle><circle class="evtDot" cx="${x}" cy="${Y0}" r="3"></circle><text class="evtL" x="${Math.min(x+4,560)}" y="${ly}">${esc(e[1])}</text></g>`;
+    /* NOW IS THE ONE MARK A READER LOOKS FOR FIRST, and it was a 3px dot in a
+       row of identical 3px dots — the line dividing what happened from what is
+       scheduled, drawn exactly like the schedule. It gets its own class: a full
+       height rule rather than a stub, a ringed dot on the axis, and a label in
+       the accent rather than the muted grey the other events share. */
+    const isNow = e[0]===now;
+    g+=`<g class="${isNow?"evNow":"ev"}"><line class="${isNow?"evtnow":"evt"}" x1="${x}" y1="${isNow?Y100:(above?ly+3:Y100)}" x2="${x}" y2="${isNow?Y0:(above?Y0:ly-9)}"></line>`
+      + `<circle class="hit" cx="${x}" cy="${Y0}" r="10"><title>${esc(e[2])}</title></circle>`
+      + (isNow? `<circle class="nowHalo" cx="${x}" cy="${Y0}" r="6"></circle><circle class="nowDot" cx="${x}" cy="${Y0}" r="3.2"></circle>`
+              : `<circle class="evtDot" cx="${x}" cy="${Y0}" r="3"></circle>`)
+      + `<text class="${isNow?"evtL nowL":"evtL"}" x="${Math.min(x+4,560)}" y="${ly}">${esc(e[1])}</text></g>`;
   });
   // zone strip
   // THE STRIP UNDER THE PLOT SAYS WHEN, NOT WHICH BLOCK. It read "block
@@ -7987,8 +8101,29 @@ function signalChart(slug,id,d,nowH,ser,tl){
   const srcnote = !demo? ""
     : real? `sample data — a sample series in the chain's real form (hourly for a week, daily beyond; a flat run means the pools did not change). YES-share of stakes, not a price.`
     : `sample data — a synthesized shape anchored to the claim’s three real ratios (lifetime conviction · trailing week · now). YES-share of stakes, not a price. This shape is illustrative — the chain records only those three numbers for this claim.`;
+  /* THE HOVER LAYER. A crosshair, a dot on the point, and a readout naming its
+     date and its share — the thing a ladder under the plot was standing in for,
+     except it answers about the moment under the pointer.
+     THE POINTS RIDE ON THE SVG as x,y,height,share quads, so one delegated
+     listener serves every chart on the page and survives a re-render: there is
+     no mount step to forget to call, and a chart drawn into innerHTML after the
+     fact works with no extra wiring. Dates are computed HERE, from the same
+     dater the axis strip uses, rather than in the listener — the two must never
+     be able to disagree about a point, which is the bug this chart has already
+     had three times.
+     Hidden until a pointer arrives, and never when there is nothing to read:
+     the live fallback with no series has no points and gets no layer. */
+  const hovAttr = hov.length
+    ? ` data-hov="${hov.map(q=>q[0]+","+q[1]+","+(zdt? Math.round(zdt(q[2])) : 0)+","+q[3]).join(";")}"`
+      + ` data-hovdated="${zdt?1:0}"`
+    : "";
+  const layer = hov.length? `<g class="xh" aria-hidden="true">`
+      + `<line class="xhl" x1="0" y1="${Y100}" x2="0" y2="${Y0}"></line>`
+      + `<circle class="xhd" cx="0" cy="0" r="4"></circle>`
+      + `<g class="xhbox"><rect rx="2" x="0" y="0" width="0" height="17"></rect>`
+      + `<text class="xht" x="0" y="0"></text></g></g>` : "";
   return `<figure class="bigchart">
-<svg viewBox="0 0 640 150" role="img" aria-label="${esc(aria)}">${g}</svg>
+<svg viewBox="0 0 640 150" role="img" aria-label="${esc(aria)}"${hovAttr}>${g}${layer}</svg>
 ${srcnote? `<div class="srcnote">${srcnote}</div>`:""}</figure>`;
 }
 /* The stake split, as one bar the width of the chart above it. Two numbers side
@@ -8258,9 +8393,8 @@ function resolutionSection(slug,id,d,nowH,tl){
   // Drawn here only when the signal column did not take it — one ladder per
   // page. The heading follows the content: a section titled "Timeline" holding
   // no timeline is worse than a section named for what it actually has.
-  const moved = ladderTakesTheTicket(d);
-  const ladder = moved? "" : resolutionLadder(d, nowH, tl);
-  const head = moved? "Resolution" : "Timeline";
+  const ladder = resolutionLadder(d, nowH, tl);
+  const head = "Timeline";
   if(d.phase==="closed"){
     // No notice here. It used to repeat the stake ticket almost verbatim —
     // both opened "Closed — never answered" and both ended "stakes were never

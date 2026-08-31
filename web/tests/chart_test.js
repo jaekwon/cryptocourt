@@ -38,6 +38,7 @@ code += slice('const DEMO_CHAIN = {', '/* ===== END GENERATED').replace('const D
 code += slice('function mergeDemo(', 'const DEMO = mergeDemo') + '\n';
 code += 'var DEMO = mergeDemo(DEMO_CHAIN, DEMO_OVERLAY);\n';
 code+=slice('function demoSeries(','async function fetchStakeSeries(');
+code+=slice('function chartHoverAt(','document.addEventListener("mousemove"');
 code+=slice('const MON=','function resolutionLadder(');  // stampDate + sinceWords
 code+=slice('function resolutionLadder(','function resolutionSection(');
 code+=slice('function signalChart(','function chartChips(');
@@ -266,6 +267,45 @@ for(const k of Object.keys(claims)){
   // And it is five days out, not five days scaled by a stalled chain's history.
   ok("P8d ...and it is the five days the vote actually has",
      /in ≈5(\.\d)?d/.test(zones[1]), zones[1]);
+}
+
+/* P8e: THE HOVER READOUT. It replaced a ladder of five fixed dates under the
+   plot with the date of the point actually under the pointer, so the points and
+   their times ride on the svg — and they must be the SAME times the axis strip
+   and the ladder use, which is the invariant this chart keeps breaking. */
+{
+  const DAY=86400;
+  const TL={ opened:{t:1600000000, h:1000},
+             answered:{t:1600000000+1500*DAY, h:3000},
+             now:{t:1600000000+1800*DAY, h:5000} };
+  const SER={pts:[[4900,60],[4950,62],[4990,64]], firstH:4900};
+  LIVE=true;
+  const h=signalChart("orem",9,{title:"T",yesStake:10,noStake:3,statusText:"answered",
+                                phase:"answered",answer:0,settleAt:5000+51840},5000,SER,TL);
+  const bare=signalChart("orem",9,{title:"T",yesStake:10,noStake:3,statusText:"open",
+                                   phase:"open"},5000,null,TL);
+  LIVE=false;
+  const pts=(h.match(/data-hov="([^"]*)"/)||[])[1];
+  ok("P8e every drawn point is hoverable", !!pts && pts.split(";").length===SER.pts.length);
+  ok("P8e ...and the layer is there to read them out", h.includes('class="xh"'));
+  // The times on the points are the dater's, not a second opinion.
+  const zdt=heightDater(TL);
+  const last=pts.split(";").pop().split(",");
+  ok("P8e a point's time is the one the axis would give it",
+     +last[2] === Math.round(zdt(SER.pts[SER.pts.length-1][0])));
+  ok("P8e ...and its share is the share that was plotted",
+     +last[3] === SER.pts[SER.pts.length-1][1]);
+  ok("P8e a chart with no points carries no layer to hover",
+     !/data-hov=/.test(bare) && !bare.includes('class="xh"'));
+
+  // chartHoverAt: nearest by x, and nothing at all past the line.
+  const svg={ getAttribute:k=> k==="data-hov"? "100,50,111,60;200,40,222,62" : "1",
+              getBoundingClientRect:()=>({left:0, width:640}) };
+  ok("P8e picks the point nearest the pointer",
+     chartHoverAt(svg, 110).t===111 && chartHoverAt(svg, 190).t===222);
+  ok("P8e and reads out nothing beyond the series",
+     chartHoverAt(svg, 400)===null && chartHoverAt(svg, 0)===null);
+  ok("P8e no points, no reading", chartHoverAt({getAttribute:()=>null}, 10)===null);
 }
 
 // P9: labels + §7.4

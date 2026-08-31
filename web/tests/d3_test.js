@@ -89,14 +89,14 @@ ok("atTarget uses getElementById (no selector injection)", src.includes('AT_OK.h
 ok("hashchange prefers the at-target", src.includes('const t = atTarget();\n  if(t){ t.focus({preventScroll:true}); t.scrollIntoView(); return; }'));
 ok("hashchange yields to route-landed focus", src.includes('main.contains(document.activeElement)) return;'));
 ok("boot render mirrors the at-scroll", src.includes('render().then(()=>{ const t=atTarget();'));
-// The anchor is on both returns; the HEADING is not a literal any more. It is
-// "Timeline" when the section holds the ladder and "Resolution" when the signal
-// column took it — a section titled Timeline holding no timeline is worse than
-// one named for what it has.
+// The anchor is on both returns. The heading went through a spell of following
+// the ladder around; the ladder lives here again, so it is a constant again —
+// still interpolated, because the section builds it in one place.
 ok("timeline anchor on both returns",
    (src.match(/<section id="timeline" tabindex="-1"><div class="sec-h">\$\{head\}/g)||[]).length===2);
-ok("...and the heading follows the ladder",
-   src.includes('const head = moved? "Resolution" : "Timeline";'));
+ok("...and the section that is called Timeline holds one",
+   src.includes('const ladder = resolutionLadder(d, nowH, tl);')
+   && src.includes('const head = "Timeline";'));
 // The focus-ring rule was written against the old id; a renamed section with an
 // orphaned CSS rule gets a browser outline nobody asked for.
 ok("...and the focus-ring rule followed it", src.includes("#timeline:focus,#timeline:focus-visible"));
