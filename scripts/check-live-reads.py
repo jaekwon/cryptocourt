@@ -58,8 +58,12 @@ PROBES = [
     ("Provisional", '("{c}",{i})'), ("ProvClose", '("{c}",{i})'),
     ("Settled", '("{c}",{i})'), ("Verdict", '("{c}",{i})', 'Settled("{c}",{i})'),
     ("VerdictRoute", '("{c}",{i})', 'Settled("{c}",{i})'), ("Crystallized", '("{c}",{i})'),
-    ("DrawSlices", '("{c}",{i})', 'Crystallized("{c}",{i})'), ("QualityTier", '("{c}",{i})'),
-    ("FlagState", '("{c}",{i})'), ("FlagBondNext", '("{c}",{i})'),
+    ("DrawSlices", '("{c}",{i})', 'Crystallized("{c}",{i})'),
+    # QualityTier, FlagState and FlagBondNext went with the quality lane. Removed
+    # here too, or this conformance check reports three failures forever against a
+    # realm that is correct — and a checker that always fails is a checker nobody
+    # reads. It found them still being called by the overlay first, which was the
+    # real bug (efa5203); this is the other half of the same removal.
     ("ClaimClosed", '("{c}",{i})'), ("ClaimSeeded", '("{c}",{i})'),
     ("ClaimPurged", '("{c}",{i})'), ("HiddenFromListing", '("{c}",{i})'),
     ("TextRedacted", '("{c}",{i})'),
