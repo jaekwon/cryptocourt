@@ -127,7 +127,7 @@ func render(path string) string {
 
 func renderDirectory() string {
 	b := strings.Builder{}
-	b.WriteString("# " + platformName + "\n\nLet truth be told.\n\n")
+	b.WriteString("# " + platformName + "\n\nLet Truth be told.\n\n")
 	// THE WAY IN, on the page every stranger lands on first. Read cold, the
 	// motto above says nothing about what happens here, and a list of court
 	// names says less. The explanation existed only in docs/ and in the overlay,

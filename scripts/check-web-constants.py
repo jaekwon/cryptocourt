@@ -64,7 +64,7 @@ PHRASES = {
     # was nothing to notice when one of them was rewritten — which is how a
     # chain page and the site over it end up introducing the same product with
     # two different sentences.
-    "Let truth be told.": "realm/r/kourtv2/render.gno",
+    "Let Truth be told.": "realm/r/kourtv2/render.gno",
 }
 
 # web symbol -> (the call the realm counts it with, the call the overlay does)
