@@ -1,5 +1,17 @@
 # Vote weight: snapshot ceiling, live floor
 
+> **SUPERSEDED IN PART — THE QUALITY LANE IS GONE.** The passages below about the
+> three-bucket quality vote, the flag slot, the flag bond, the conclusive-low
+> slash and the counter-flag window describes a mechanism that has been REMOVED
+> from the realm. It is left in place because the reasoning around it is still
+> the reasoning for what replaced it, and because rewriting it in line would lose
+> the argument that produced the decision.
+>
+> What actually ships, and why: **[docs/SPAM_AND_SIZE.md](docs/SPAM_AND_SIZE.md)**
+> — one ballot (overturn / uphold / spam), two multipliers on the draw, and
+> `Unstake` forfeiting conviction in proportion. Read that first; treat any
+> quality-lane passage below as history.
+
 **SHIPPED 2026-08-20, on panel 3's ordering. Revision 4 was the plan; this header
 records what actually happened, including the three places the plan was wrong.**
 

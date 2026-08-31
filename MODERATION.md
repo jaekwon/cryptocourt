@@ -1,5 +1,17 @@
 # MODERATION.md — render-layer moderation, the meta court, and seeding
 
+> **SUPERSEDED IN PART — THE QUALITY LANE IS GONE.** Everything below about the
+> three-bucket quality vote, the flag slot, the flag bond, the conclusive-low
+> slash and the counter-flag window describes a mechanism that has been REMOVED
+> from the realm. It is left in place because the reasoning around it is still
+> the reasoning for what replaced it, and because rewriting it in line would lose
+> the argument that produced the decision.
+>
+> What actually ships, and why: **[docs/SPAM_AND_SIZE.md](docs/SPAM_AND_SIZE.md)**
+> — one ballot (overturn / uphold / spam), two multipliers on the draw, and
+> `Unstake` forfeiting conviction in proportion. Read that first; treat any
+> quality-lane passage below as history.
+
 > **STATUS: v0.52 — CONVERGED + BUILDING. Design converged at round 7; v0.9
 > added the meta/local peer install (owner), v0.10 folded in its three-way vet
 > consensus (§3.3). Modules 1–5 are BUILT AND GREEN on branch

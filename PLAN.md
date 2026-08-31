@@ -1,5 +1,17 @@
 # PLAN — kourt tokenomics V2: no-loss conviction staking
 
+> **SUPERSEDED IN PART — THE QUALITY LANE IS GONE.** Everything below about the
+> three-bucket quality vote, the flag slot, the flag bond, the conclusive-low
+> slash and the counter-flag window describes a mechanism that has been REMOVED
+> from the realm. It is left in place because the reasoning around it is still
+> the reasoning for what replaced it, and because rewriting it in line would lose
+> the argument that produced the decision.
+>
+> What actually ships, and why: **[docs/SPAM_AND_SIZE.md](docs/SPAM_AND_SIZE.md)**
+> — one ballot (overturn / uphold / spam), two multipliers on the draw, and
+> `Unstake` forfeiting conviction in proportion. Read that first; treat any
+> quality-lane passage below as history.
+
 > **STATUS: DESIGN CONVERGED at v0.31 — no unvetted mechanism remains.**
 > 14 adversarial vet passes; the 22-attack ledger (§5) holds zero DRAFTs and
 > every rule in it was attacked, including the fixes (the T-series closed the

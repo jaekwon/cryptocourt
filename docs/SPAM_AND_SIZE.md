@@ -157,6 +157,70 @@ SEALED — `SkipHeights(epochBlocks)` then `touch` — between minting voters an
 opening a dispute. Without it the failure is `govern: already voted`, which names
 the wrong thing entirely and cost three rounds of fruitless address-fiddling.
 
+## What the removal itself turned up
+
+The design above was decided before `quality.gno` was deleted. Deleting it was an
+EXTRACTION, not a file removal, and six things came out of it that no plan
+predicted. They are here because none is recoverable from the diff.
+
+**The answer bond's floor had three jobs and only one of them was the slash.** The
+floor existed so a levy could never clamp from under its own collateral, so the
+obvious move was to delete it with the slash. `answer.gno` names two more, and
+both outlive it: the bond scales with the claim's CONVICTION rather than its stake
+alone, and it is what keeps the dispute bond answerer-independent — measured 1.86×
+apart without it. Deleting it would have re-priced every answer by roughly 5× and
+reopened that spread, neither of which anyone asked for. Kept, renamed
+`bondFloorAt`, arithmetic bit-identical, and re-argued at the call site.
+
+**The carrot's already-claimed latch was correct by accident.** It keyed on
+`cs.conclusiveSeq`, which is 0 on a dispute-decided claim — so the key was `"c"` +
+eight zero bytes + the address, a working per-address latch by accident of the
+constant rather than by design. `conclusiveSeq` was on the delete list. Re-keyed
+onto `decidedPID`, the round that actually paid. Getting this wrong pays the
+carrot twice to one address.
+
+**Twenty-three claim fields survived with no writer**, and several were still
+READ: `render.gno` announced an open flag vote and an escrowed slash on branches
+that could never be reached, and `votelock.gno` carried a whole lock arm keyed on
+a `qVoteSeq` nothing increments. An unreachable lock arm is worse than none — it
+reads as a live hold and is the first thing a future reader copies.
+
+**Dropping those fields exposed a vacuous test.** `drawcap_test` opened with
+`if cs.tier != tierMidX`, which passed by construction because
+`SettleUndisputed` wrote that value on every undisputed claim. The fixture was
+never a MID claim: it is one large claim in a court whose running average is still
+at its supply floor, so size rates it on the 2× CEILING and the draw was being
+doubled the whole time.
+
+**The overlay was calling nine entrypoints that no longer exist**, three of them
+inside a `Promise.all` — where one missing read takes the whole batch with it. So
+every answered claim's detail fetch was failing against a live chain. Found by
+pointing `check-live-reads.py` at a real node, which is now the only thing that
+would have caught it.
+
+**`crystallize`'s 24-hour quiet window went too**, because `lastFlagEventAt` was
+stamped only by the flag lane. Left in, it would have compared against block 0
+forever — and it WAS reachable on a young chain, which is how two testclock
+fixtures caught it.
+
+## What this cost, in tests
+
+Thirty realm tests deleted, each with a one-line note naming why, so a RETIRED
+finding stays distinguishable from one never found. `audit_m3_test.gno`'s header
+lists the seven adversarial cases that die with their mechanism — M3-HIGH-1,
+M3-HIGH-2, M3-MED-1, M3-LOW-1 — and flags M3-MED-1 as the one to watch: it was a
+liveness finding, and disputes can still delay a draw even though flags cannot.
+
+**One real gap, recorded rather than dropped.** `voteLockedOf` takes the MAX
+across a holder's open rows, not the sum and not the last written — under-committing
+is the vote-then-sell rental the lock exists to price. The rule is still in the
+code and still load-bearing, but the only fixture that could open two rows on one
+claim used the verdict and quality lanes together. The verdict and ELECTION lanes
+can still both be open, so it is reachable; it needs a genuinely new fixture,
+because an election needs a court shaped by `electionCourt` and `escrowsum_test`'s
+header records that cramming both shapes into one fixture leaves each half
+contorted. Tracked, unpinned, and not silently weakened.
+
 ## Where the code is
 
 | | |
