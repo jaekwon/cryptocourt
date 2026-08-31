@@ -33,6 +33,16 @@ CHAINDIR="$STATEDIR/chain"
 FAUCET_PREMINE="${FAUCET_PREMINE:-5000000000000}"
 OWNER_ADDR="${OWNER_ADDR:-}"          # optional: an address to premine for yourself
 OWNER_PREMINE="${OWNER_PREMINE:-1000000000000}"
+# EXTRA PREMINES, space-separated `g1...=<ugnot>` pairs. Genesis is the only place
+# balances can be created from nothing, so an account that must hold coin on a
+# fresh chain has to be named here — after the chain is up the only routes are the
+# faucet's 100-GNOT drip or a transfer from somebody who already holds some.
+#
+# This exists so a SCENARIO can be seeded onto a remote chain. Its actors are
+# random keys made per run (scripts/seed-node.sh does the same locally), and they
+# need funding before the first block; OWNER_ADDR premines exactly one address and
+# a scenario needs seventeen. scripts/seed-remote.sh builds this string.
+EXTRA_PREMINE="${EXTRA_PREMINE:-}"
 # gnoweb's loopback port. NOT 8888: that is gnodev's default, and on a host that
 # runs anything else it is likely already taken — which is exactly how the first
 # deploy failed, inside systemd, with "bind: address already in use".
@@ -150,13 +160,42 @@ echo "    validator $VAL_ADDR"
 
 echo "==> phase 2: genesis, built here from this repo"
 python3 scripts/genesis-pkgs.py "$WORK/pkgs" --gno "$GNOROOT"
-# A deployer key for the genesis txs. It signs nothing after genesis and the node
-# starts with -skip-genesis-sig-verification, so it is ephemeral by design.
-GNOHOME="$WORK/gnohome"; mkdir -p "$GNOHOME"
-"$WORK/gnokey-host" add deployer -home "$GNOHOME" -insecure-password-stdin >/dev/null 2>&1 <<EOF
+# THE DEPLOYER KEY OUTLIVES THE DEPLOY, and it used to not — GNOHOME was
+# "$WORK/gnohome", a temp dir, and the comment here said the key was "ephemeral by
+# design" because it signs nothing after genesis and the node runs with
+# -skip-genesis-sig-verification. That is true about SIGNING and wrong about
+# consequences.
+#
+# testclock.gno captures the address that deployed the package:
+#
+#     func init() { tcDeployer = unsafe.OriginCaller() }
+#
+# and mustDeployer gates every test-clock write on it. Throwing the key away
+# therefore left tcDeployer set to an address nobody could ever sign as, so the
+# clock could never be armed and no owner-only entrypoint was reachable for the
+# life of the chain. Measured on kourt-1: exactly that.
+#
+# Reused across deploys ON PURPOSE. A --reset gives a new chain, and the same
+# deployer owning it is what makes a re-seed possible; a fresh key each time would
+# reintroduce the bug one reset later.
+#
+# LOSING THIS DIRECTORY IS UNRECOVERABLE for owner-only entrypoints. It is a key,
+# not a cache; back it up with the rest of the chain's secrets.
+DEPLOYER_HOME="${DEPLOYER_HOME:-$HOME/.kourt/deployer-$CHAINID}"
+GNOHOME="$DEPLOYER_HOME"; mkdir -p "$GNOHOME"; chmod 700 "$GNOHOME"
+if "$WORK/gnokey-host" list -home "$GNOHOME" 2>/dev/null | grep -q '\bdeployer\b'; then
+    echo "    reusing the deployer key in $GNOHOME"
+else
+    "$WORK/gnokey-host" add deployer -home "$GNOHOME" -insecure-password-stdin >/dev/null 2>&1 <<EOF
 kourt-genesis
 kourt-genesis
 EOF
+    echo "    made a deployer key in $GNOHOME — BACK THIS UP, it owns the realm"
+fi
+DEPLOYER_ADDR="$("$WORK/gnokey-host" list -home "$GNOHOME" 2>/dev/null \
+    | sed -n 's/^[0-9]*\. deployer (.*addr: \(g1[a-z0-9]*\).*/\1/p' | head -1)"
+[ -n "$DEPLOYER_ADDR" ] || { echo "REFUSE: could not read the deployer address back" >&2; exit 1; }
+echo "    deployer $DEPLOYER_ADDR (owns the realm; only it may drive the test clock)"
 "$WORK/gnogenesis-host" generate --chain-id "$CHAINID" --output-path "$WORK/genesis.json" >/dev/null
 "$WORK/gnogenesis-host" validator add -genesis-path "$WORK/genesis.json" \
     -address "$VAL_ADDR" -pub-key "$VAL_PUB" -name kourt0 -power 1 >/dev/null
@@ -167,6 +206,18 @@ if [ -n "$OWNER_ADDR" ]; then
         -single "$OWNER_ADDR=${OWNER_PREMINE}ugnot" >/dev/null
     echo "    premined owner $OWNER_ADDR"
 fi
+# VALIDATED, NOT PASSED THROUGH. A malformed pair here fails inside gnogenesis
+# with a message about the genesis file rather than about the argument, and the
+# operator is then debugging the wrong thing.
+for pair in ${EXTRA_PREMINE:-}; do
+    case "$pair" in
+        g1*=*[0-9]) ;;
+        *) echo "REFUSE: EXTRA_PREMINE entry is not g1<addr>=<ugnot>: $pair" >&2; exit 2 ;;
+    esac
+    "$WORK/gnogenesis-host" balances add -genesis-path "$WORK/genesis.json" \
+        -single "${pair}ugnot" >/dev/null
+    echo "    premined ${pair%%=*} with ${pair##*=} ugnot"
+done
 # The whole closure in ONE call: gnogenesis sorts per invocation and cannot see
 # packages already in the file (scripts/genesis-pkgs.py says more).
 "$WORK/gnogenesis-host" txs add packages "$WORK/pkgs" -genesis-path "$WORK/genesis.json" \
