@@ -1596,9 +1596,10 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
        anything else on the page. Top-right is where this page's own chrome
        already lives, so it joins it: the same .acctbtn shape as the wallet
        button, one flex row, quieter. rel="noopener" is load-bearing —
-       deploy.sh refuses to ship a page carrying an unmarked external href. -->
-  <a class="acctbtn forkbtn" href="https://github.com/jaekwon/cryptocourt"
-     target="_blank" rel="noopener" title="Fork Kourt on GitHub">
+       deploy.sh refuses to ship a page carrying an unmarked external href, and
+       that gate reads LINE BY LINE: href and rel must share a line or the deploy
+       stops with "the overlay references an external URL". Do not wrap this. -->
+  <a class="acctbtn forkbtn" href="https://github.com/jaekwon/cryptocourt" rel="noopener" target="_blank" title="Fork Kourt on GitHub">
     <span class="g" aria-hidden="true">&#9670;</span><span>Fork</span></a>
   <button type="button" class="acctbtn" id="acctbtn" aria-haspopup="menu"
           aria-expanded="false" aria-controls="acctpop">
