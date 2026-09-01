@@ -2857,6 +2857,36 @@ async function claimParties(slug, id, d){
    read the refusal. One read, the same CoinBalanceOf the court page makes.
    Pressing it fills the field: a reader who wants all of it should not have to
    retype a number the page already knows. */
+/* UNSTAKE IS ONLY OFFERED WHERE THERE IS SOMETHING TO TAKE BACK. Both buttons
+   were drawn unconditionally, so a reader with nothing staked — which is every
+   reader on their first visit — met four buttons of which two could only fail,
+   and failed in the wallet with a realm panic after the extension had woken.
+   The same rule the settled ticket already applies to its withdraw sides.
+
+   HIDDEN RATHER THAN GREYED, unlike the crystallize button: a greyed control
+   says "not yet, and here is why", which is true of a reward that has to wait
+   for a window. There is no story for unstaking a position you never took, and a
+   permanently dead button is furniture.
+
+   Marked with data-unstake because btn()'s demo branch emits an inert button
+   with no data-func, so a selector built on the function name matches nothing in
+   the sample — the mistake three earlier fills here made. */
+async function fillUnstakeSides(slug, id){
+  const wrap = document.getElementById("stake-ticket");
+  if(!wrap) return;
+  const sides = [...wrap.querySelectorAll("[data-unstake]")];
+  if(!sides.length) return;
+  if(!CFG.addr) return;                 // no wallet: nothing is known, so nothing is offered
+  let pos;
+  try{ pos = await positionOf(slug, id, CFG.addr); }catch(_){ return; }
+  for(const el of sides){
+    const held = el.dataset.unstake === "0"? Number(pos.yes) : Number(pos.no);
+    if(!(held > 0)) continue;           // stays hidden
+    el.hidden = false;
+    const b = el.querySelector(".btn");
+    if(b) b.insertAdjacentHTML("beforeend", ` <small>${esc(cc(held, slug))}</small>`);
+  }
+}
 async function fillStakeBalance(slug){
   const out = document.getElementById("stakebal");
   const f = document.getElementById("stakeamt");
@@ -3570,7 +3600,12 @@ function btn(label, func, args, cls, sub, send, gate, edit, blocked, glyph, amt)
   // toggle — the dialog shows it, copyable, for anyone without a wallet — and
   // keeping it in the markup means buy_test's --send assertions still see it.
   // `glyph` overrides the pen for a button whose verb is not "sign a statement".
-  const inner = `<span class="g">${glyph || (CFG.mode==="demo"?"↗":"✍")}</span> ${esc(label)}${sub?` <small>${esc(sub)}</small>`:""}`;
+  /* U+FE0E after the pen: TEXT presentation, not emoji. Without it macOS and
+     iOS draw U+270D as a full-colour yellow hand, which is the only saturated
+     thing on a page of flat ink and reads as a sticker somebody left on the
+     button. The variation selector costs three bytes and every platform that
+     has no colour glyph ignores it. */
+  const inner = `<span class="g">${glyph || (CFG.mode==="demo"?"↗":"✍\uFE0E")}</span> ${esc(label)}${sub?` <small>${esc(sub)}</small>`:""}`;
   /* The demo carries `blocked` too. It exists to show what the live page looks
      like, and a control the chain would refuse is part of that — the click
      still answers "demo data", because the inert branch is tested first, but
@@ -8856,6 +8891,7 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
      ClaimTimeline publishes `now` next to `verdict` precisely so a consumer can
      subtract two heights from the same clock. */
   fillStakeBalance(slug);
+  fillUnstakeSides(slug, id);
   fillWithdrawSides(slug, id, d,
     tline && tline.now? tline.now.h : nowH,
     tline && tline.verdict? tline.verdict.h : null);
@@ -10015,8 +10051,8 @@ function stakeTicket(slug,id,d){
     <div class="actions" style="margin-top:10px">
       ${btn("Stake YES","Stake",{courtSlug:slug,claimID:id,side:0,amount:1000000},"yes","",null,null,null,null,null,true)}
       ${btn("Stake NO","Stake",{courtSlug:slug,claimID:id,side:1,amount:1000000},"no","",null,null,null,null,null,true)}
-      ${btn("Unstake YES","Unstake",{courtSlug:slug,claimID:id,side:0,amount:1000000},"","",null,null,null,null,null,true)}
-      ${btn("Unstake NO","Unstake",{courtSlug:slug,claimID:id,side:1,amount:1000000},"","",null,null,null,null,null,true)}
+      <span data-unstake="0" hidden>${btn("Unstake YES","Unstake",{courtSlug:slug,claimID:id,side:0,amount:1000000},"","",null,null,null,null,null,true)}</span>
+      <span data-unstake="1" hidden>${btn("Unstake NO","Unstake",{courtSlug:slug,claimID:id,side:1,amount:1000000},"","",null,null,null,null,null,true)}</span>
     </div></div>`;
 }
 
