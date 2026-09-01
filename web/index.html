@@ -6349,7 +6349,23 @@ const MAPK = {
   // needs and no taller, so raising this costs a short claim nothing. It is the
   // other half of the width measurement above — six lines of a 206 box holds 162
   // characters, which covers this docket's longest title at 139.
-  fs:{header:12, id:12, title:11, court:14}, charW:0.62, maxTitleLines:6,
+  // A LITTLE BIGGER, ASKED FOR BY THE OWNER, AND PAID FOR RATHER THAN BORROWED.
+  // Raising a size shrinks the wrap budget — floor(inner/(fs*charW)) — and the
+  // covid docket had no slack to give: measured live, five of eleven nodes sat
+  // on the six-line cap and the longest line was 31 characters, which IS
+  // floor(214/(11*0.62)). A bump alone would have dropped that to 28 and cut
+  // the titles the sweep in this comment was written to stop cutting.
+  // charW paid for it. It used to do two jobs — the fit budget AND the rendered
+  // width — and the second is measured now, so it is free to be what its name
+  // says: a conservative upper bound on the advance of the faces actually drawn.
+  // Measured over the live docket those are 0.531em for a serif title and
+  // 0.549 for a sans header, so 0.62 was carrying about 12% of dead margin.
+  // At 0.56 the budget is 31 chars/line and 186 over six lines — bit-identical
+  // to before the bump, which is the whole point.
+  // OVERFLOW IS NOT THE RISK HERE. textLength is Math.min(est, room), so a line
+  // can never be drawn wider than its box; an underestimate crowds the letters,
+  // it does not spill them.
+  fs:{header:13, id:13, title:12, court:16}, charW:0.56, maxTitleLines:6,
   // THE SMALLEST A TITLE IS ALLOWED TO LAND, in CSS pixels, after the viewBox
   // scale. Three separate zoom decisions aim at it — the opening view, centring
   // on a node, and fitting a folder — and all three used to spell it as a bare
@@ -6360,6 +6376,12 @@ const MAPK = {
   // It is a floor and not a target: Math.max keeps a reader's own zoom when
   // they are already closer in.
   readPx:13,
+  // HOW FAR IN THE ZOOM GOES. Doubled from 8 on the owner's ask for "2x more".
+  // The slider is log2 of this, so its max attribute is derived rather than
+  // written down twice — a slider that stops at 3 while the clamp allows 4 is a
+  // control that lies about its own range, and there is no way to notice by
+  // looking at either number alone.
+  zMax:16,
 };
 /* maxLines is a PARAMETER because the box that holds the text decides it. In ids
    mode a folder node is 26px tall and two lines of 12px text do not fit — the
@@ -7831,7 +7853,7 @@ on(/^\/c\/([a-z0-9-]+)\/map$/, async (slug)=>{
            <button class="pill void" id="mz-out" aria-label="zoom out">−</button>
            <button class="pill void" id="mz-in" aria-label="zoom in">+</button>
            <button class="pill void" id="mz-fit">fit</button>
-           <input type="range" id="mz-slider" min="-1" max="3" step="0.01" value="0" aria-label="zoom level">
+           <input type="range" id="mz-slider" min="-1" max="${Math.log2(MAPK.zMax)}" step="0.01" value="0" aria-label="zoom level">
          </span>
          <a class="tlink" href="#/c/${esc(slug)}/curate">curate<span aria-hidden="true">→</span></a>
          <a class="tlink mapbar-x" href="#/c/${esc(slug)}" aria-label="Close the map">close<span aria-hidden="true">✕</span></a>
@@ -7955,7 +7977,7 @@ function mountMap(slug, data, focusId, focusPath){
     apply(); }
   function setZ(nz, anchor){
     const el=svgEl(); if(!el) return;
-    nz=Math.min(8, Math.max(0.5, nz));
+    nz=Math.min(MAPK.zMax, Math.max(0.5, nz));
     if(anchor){
       cx = anchor.x + (cx-anchor.x)*z/nz;
       cy = anchor.y + (cy-anchor.y)*z/nz;
@@ -8095,7 +8117,7 @@ function mountMap(slug, data, focusId, focusPath){
     // centring on a claim shows a box with its sentence hidden.
     const el = svgEl(), px = el && el.clientWidth;
     let tz = z;
-    if(px) tz = Math.min(8, Math.max(z, MAPK.readPx*fit.w/(MAPK.fs.title*px)));
+    if(px) tz = Math.min(MAPK.zMax, Math.max(z, MAPK.readPx*fit.w/(MAPK.fs.title*px)));
     glideTo(b.cx, b.cy, tz);
   }
   /* THE CARD'S TEXT IS READ WHEN THE CARD IS OPENED, not for the whole docket
@@ -8241,7 +8263,7 @@ function mountMap(slug, data, focusId, focusPath){
       const zForNodeWidth = w => w*fit.w/(MAPK.node[mode].w*px);
       zf = Math.max(MAPK.readPx*fit.w/(MAPK.fs.title*px), Math.min(zf, zForNodeWidth(300)));
     }
-    z = Math.min(8, Math.max(0.5, zf));
+    z = Math.min(MAPK.zMax, Math.max(0.5, zf));
   }
   /* A FOLDER ARRIVES SELECTED, not just centred. Coming from the folder page the
      reader has already chosen a folder; showing its box in the middle with no
@@ -8258,7 +8280,7 @@ function mountMap(slug, data, focusId, focusPath){
     if(n){ cx=n.x+n.w/2; cy=n.y+n.h/2;
       // land zoomed so titles clear the LOD line (enter<7px, leave>8.5px)
       const el=svgEl();
-      z=Math.min(8, Math.max(1, MAPK.readPx*fit.w/(MAPK.fs.title*((el&&el.clientWidth)||960))));
+      z=Math.min(MAPK.zMax, Math.max(1, MAPK.readPx*fit.w/(MAPK.fs.title*((el&&el.clientWidth)||960))));
       apply();
       const a=box.querySelector(`.mnode-a[data-id="${focusId}"]`); if(a) a.focus({preventScroll:true});
     } }

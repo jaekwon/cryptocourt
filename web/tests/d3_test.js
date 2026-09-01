@@ -135,7 +135,22 @@ ok("demo miss note", src.includes('no claim #${mfocus} in the sample court'));
 ok("ring re-applied inside put()", src.includes('if(focusId!=null){ const a=box.querySelector(`.mnode-a[data-id="${focusId}"]`); if(a) a.classList.add("focused"); }'));
 ok("focused stroke distinct from hover", src.includes('.mnode-a.focused .mnode{stroke:var(--accent); stroke-width:3}'));
 ok("camera lands once after initial put", src.includes('cx=n.x+n.w/2; cy=n.y+n.h/2;'));
-ok("zoom from the LOD line, clamped", src.includes('z=Math.min(8, Math.max(1, MAPK.readPx*fit.w/(MAPK.fs.title*'));
+ok("zoom from the LOD line, clamped", src.includes('z=Math.min(MAPK.zMax, Math.max(1, MAPK.readPx*fit.w/(MAPK.fs.title*'));
+// THE SLIDER AND THE CLAMP ARE ONE RANGE. The control is log2 of the zoom, so a
+// slider that stops at 3 while the clamp allows 16 is a handle that hits its end
+// with the map still able to go further — and nothing about either number looks
+// wrong on its own. Derived in the markup, and checked here by reading both.
+{
+  const zMax = +(src.match(/zMax:(\d+)/) || [])[1];
+  ok("the zoom ceiling was found", isFinite(zMax) && zMax > 1, "zMax=" + zMax);
+  ok(`...doubled to ${zMax}, so the slider reaches log2 of it`,
+     zMax === 16 && src.includes('min="-1" max="${Math.log2(MAPK.zMax)}"'));
+  ok("...and no clamp is left holding the old literal 8",
+     !/Math\.min\(8, Math\.max\(/.test(src));
+  // Every clamp on the way in, not just the one d3_test happened to name.
+  ok("...with all four zoom clamps on the constant",
+     src.split('Math.min(MAPK.zMax, ').length - 1 === 4);
+}
 // ONE KNOB, THREE DECISIONS. The opening view, centring on a node and fitting a
 // folder each aim at the same smallest-readable size, and each used to spell it
 // as its own bare 9 — so raising it meant finding all three, and missing one
