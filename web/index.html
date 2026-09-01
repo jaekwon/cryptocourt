@@ -4848,7 +4848,9 @@ function qCaption(state){
       : `searches all ${fmtN(state.loaded)} ${noun} — the sample is complete`)
     : state.kind==="court names"
     ? `searches the ${fmtN(state.loaded)} loaded court names — ${fmtN(Math.max(0,state.total-state.loaded))} more are not loaded; page older ›`
-    : `searches the ${fmtN(state.loaded)} loaded ${noun} of ${fmtN(state.total)} — older claims live on the docket pages`;
+    : state.loaded < state.total
+    ? `searches the ${fmtN(state.loaded)} loaded ${noun} of ${fmtN(state.total)} — older claims live on the docket pages`
+    : `searches all ${fmtN(state.loaded)} ${noun}`;
 }
 function qBarHtml(placeholder, cap){
   return `<div class="addrbar qbar"><input id="q" type="search" class="mono" placeholder="${esc(placeholder)}" spellcheck="false" autocomplete="off" aria-label="filter loaded titles or jump to a claim id" aria-describedby="qcap">
@@ -7187,6 +7189,24 @@ function mapDotClass(short, side){
   if(short==="never answered") return "vf";
   return "v"; // open
 }
+/* WHAT THE MAP SAYS IT IS SHOWING, and it used to say something untrue.
+   The live line was unconditional: "newest 11 of 11 shown — older claims live on
+   the docket pages". At 11 of 11 there ARE no older claims and nothing lives
+   anywhere else, so the sentence sends a reader off to look for claims that are
+   already in front of them. It only earns that clause when it is actually
+   holding some back.
+   The demo branch beside it had the shape right all along — it tests
+   total>loaded and says "the sample is complete" otherwise — so this is the
+   live path catching up with its own sibling rather than a new idea.
+   A FUNCTION, not a ternary at the call site, because the bug is in a CONDITION
+   and a condition inside a template literal in an async route cannot be tested
+   without a browser. Out here it is three cases and three assertions. */
+function mapCountLine(demo, shown, total){
+  if(demo) return `${shown} claims, ${shown} shown`;
+  return shown < total
+    ? `newest ${shown} of ${fmtN(total)} shown — older claims live on the docket pages`
+    : `all ${fmtN(total)} claims shown`;
+}
 function mapSvg(L, data, slug){
   const K=MAPK, [vx,vy,vw,vh]=L.viewBox, out=[];
   /* THE WIDTH IS MEASURED, NOT GUESSED — and the guess is why the map read as a
@@ -7852,9 +7872,7 @@ on(/^\/c\/([a-z0-9-]+)\/map$/, async (slug)=>{
     looseName: demo? "(no folder)" : "docket — newest "+parsed.length,
     linkFolders: !!cur};
   const total = demo? data.all.length : (cs.claims!=null? cs.claims : parsed.length+(parsed.more||0));
-  const countLine = demo
-    ? `${data.all.length} claims, ${data.all.length} shown`
-    : `newest ${parsed.length} of ${fmtN(total)} shown — older claims live on the docket pages`;
+  const countLine = mapCountLine(demo, demo? data.all.length : parsed.length, total);
   const chainRelNote = chainRels.length
     ? `${chainRels.length} relation${chainRels.length===1?"":"s"} read from the chain`
     : "no relations on chain";

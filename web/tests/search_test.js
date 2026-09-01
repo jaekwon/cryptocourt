@@ -14,6 +14,7 @@ let code = '';
 code += slice('function esc(', '\n');
 code += slice('function fmtN(', 'function ugnot(');
 code += slice('function qPredicate(', 'let QCTX').replace('let QCTX','');
+code += slice('function mapCountLine(', '\nfunction mapSvg(');
 eval(code);
 
 let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else console.log("ok:",n); };
@@ -37,6 +38,30 @@ ok("reject junk", parseJump("7x","orem")===null && parseJump("orem/7x",null)===n
 
 // captions (canonical family)
 ok("idle live court", qCaption({mode:"idle",demo:false,kind:"claim titles",loaded:50,total:214})==="searches the 50 loaded claim titles of 214 — older claims live on the docket pages");
+/* A LIVE COURT THAT IS ALL LOADED MUST NOT SEND ANYBODY AWAY. Reported from the
+   map as «newest 11 of 11 shown — older claims live on the docket pages»: at
+   11 of 11 there are no older claims and nothing is on another page, so the
+   clause is an instruction to go looking for something that is already on
+   screen. The demo branch had tested this all along; the live branch had not,
+   and there was no case here for loaded === total to notice. */
+ok("idle live court, everything loaded",
+   qCaption({mode:"idle",demo:false,kind:"claim titles",loaded:11,total:11})
+   === "searches all 11 claim titles");
+ok("...and it does not promise more elsewhere",
+   !/older claims live/.test(qCaption({mode:"idle",demo:false,kind:"claim titles",loaded:11,total:11})));
+
+// The map's own line, the one that was reported. Three cases, because the bug
+// was that only two of them existed.
+ok("map, live and truncated, names the window and where the rest are",
+   mapCountLine(false, 50, 214) === "newest 50 of 214 shown — older claims live on the docket pages");
+ok("map, live and complete, says so without sending anybody away",
+   mapCountLine(false, 11, 11) === "all 11 claims shown");
+ok("...and carries no docket-page promise",
+   !/older claims live/.test(mapCountLine(false, 11, 11)));
+ok("map, demo, is unchanged", mapCountLine(true, 11, 11) === "11 claims, 11 shown");
+// The boundary itself: one held back is still truncation.
+ok("map, one claim short, is still truncated",
+   /older claims live/.test(mapCountLine(false, 10, 11)));
 ok("idle demo court", qCaption({mode:"idle",demo:true,kind:"claim titles",loaded:11,total:11})==="searches all 11 claim titles — the sample is complete");
 ok("idle live directory", qCaption({mode:"idle",demo:false,kind:"court names",loaded:32,total:214})==="searches the 32 loaded court names — 182 more are not loaded; page older ›");
 ok("idle demo directory", qCaption({mode:"idle",demo:true,kind:"court names",loaded:2,total:2})==="searches all 2 court names — the sample is complete");

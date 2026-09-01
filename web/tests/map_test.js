@@ -916,7 +916,17 @@ const TILES = svg => [...svg.matchAll(
 }
 ok("nodes are links", (svgs.titles.match(/<a href="#\/c\/orem\/\d+"/g)||[]).length===11);
 ok("folder nodes link to folder pages", svgs.titles.includes('href="#/c/orem/f/0"'));
-ok("count line present in source", src.includes("${data.all.length} claims, ${data.all.length} shown"));
+/* The count line's TEXT moved into mapCountLine(), where search_test.js exercises
+   it as three real cases — truncated, complete and demo — instead of pinning one
+   template literal by eye. What is left to check here is the WIRING: that the map
+   route still asks it, and with the right count. Those are two different failures
+   and the split is deliberate. A pin on the string alone would have gone on
+   passing through the bug this replaced, since the wrong sentence was spelled
+   perfectly. */
+ok("the map asks mapCountLine for its count line",
+   src.includes("const countLine = mapCountLine(demo,"));
+ok("...passing the drawn count, not the total, when live",
+   src.includes("mapCountLine(demo, demo? data.all.length : parsed.length, total)"));
 ok("live honesty lines present (chain-read + no-folders)", src.includes("folders read from the chain — moderator curation") && src.includes("this court's moderators have filed no folders"));
 ok("controls present", ["mt-titles","mt-ids","mz-in","mz-out","mz-fit","mz-slider"].every(id=>src.includes(id)));
 /* FULL SCREEN NEEDS A WAY OUT, and more than one: a fixed overlay with no visible
