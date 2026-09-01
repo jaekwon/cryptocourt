@@ -292,6 +292,35 @@ func (l *Ledger) PastTotal(at uint32) int64 {
 // realm wanting idle weight dropped out of the denominator wraps this.
 func (l *Ledger) EngagedTotal(at uint32) int64 { return l.PastTotal(at) }
 
+// WalkSupply visits the supply's CHANGE points, newest first, and stops early
+// when fn returns true. An epoch in which supply did not move is not a point:
+// a reader forward-fills between them.
+//
+// A WALK, not a per-epoch read. PastTotal answers one epoch and is the wrong
+// shape for drawing a line — a chart over a year of hourly epochs would be
+// 8,760 lookups to find the handful of epochs that actually moved. The archive
+// already stores only the movements, so this hands them over directly and the
+// cost is the number of mints, not the age of the court.
+//
+// Unsealed on purpose, unlike PastTotal: the newest point may be the running
+// epoch, which is exactly the value a live chart wants at its right edge. It
+// may still coalesce before the epoch seals, so it is a reading and not a
+// record.
+func (l *Ledger) WalkSupply(fn func(e uint32, v int64) bool) {
+	// The two hot slots hold the newest points and are not in the archive yet.
+	if e0 := l.supply.Since(); e0 != 0 {
+		if fn(e0, l.supply.Value()) {
+			return
+		}
+	}
+	if e1, prev := l.supply.Prev(); e1 != 0 {
+		if fn(e1, prev) {
+			return
+		}
+	}
+	l.archive.WalkDesc(supplyKey, fn)
+}
+
 // Epoch is now. A proposal snapshots Epoch()-1 and stores it; nothing
 // re-derives it later.
 func (l *Ledger) Epoch() uint32 {
