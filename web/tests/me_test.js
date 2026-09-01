@@ -77,7 +77,20 @@ ok("needs sealed-vote honesty",
    src.includes("a sealed vote is deciding — its countdown is on the claim page")
    && !src.includes("no close height is published"));
 ok("needs sections", src.includes(">Against your side <span") && src.includes(">With your side <span"));
-ok("no cross-court sums", src.includes("coins are per-court, never summed"));
+/* NO CROSS-COURT SUMS. This was a pin on the exact sentence "coins are per-court,
+   never summed", and it fired when the coin-held stat was added — the wording
+   moved to the branch that can actually show more than one court, while the rule
+   it stands for was never broken. A phrase pin cannot tell those two apart.
+   So it asserts the RULE now, in the only two ways source can:
+     - the disclaimer exists wherever multiple courts are shown, and
+     - nothing folds heldList into a single number. A reduce over it is the only
+       way to produce a cross-court total, and KOURT:COVID plus KOURT:OREM is a
+       figure with no exchange rate behind it. */
+ok("no cross-court sums — the holdings are listed, not added",
+   /never summed/.test(src)
+   && src.includes('heldList.map(([sl,,b])=>cc(b,sl)).join(" · ")'));
+ok("...and nothing reduces the holdings to one total",
+   !/heldList\s*\.\s*reduce/.test(src));
 ok("demo senior sums to seniorOwed", (()=>{ const m=src.match(/amount:700_000, paid:60_000/); return !!m; })());
 // §7.4 sweep of the two rewritten view bodies
 {

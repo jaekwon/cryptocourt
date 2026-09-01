@@ -10439,6 +10439,7 @@ async function meHoldings(addr,courts){
   let seniorCount=0;
   const snapshot={h:nowH, claims:{}};
   let posClaims=0, posCourts=0, anyArec=false;
+  const heldList=[];   // [slug, court name, balance] for every court holding coin
   for(const slug of courts.slugs){
     const bal = await balanceOf(slug,addr).catch(()=>{mefail++; return 0;});
     // LIVE: one read names the holder's own positions, so only those claims are
@@ -10484,6 +10485,7 @@ async function meHoldings(addr,courts){
       if(bal || rows.length){ posCourts++; posClaims+=rows.length; }
       const st = await courtStats(slug).catch(()=>null);
       const cname = st? st.name : slug;
+      if(bal>0) heldList.push([slug, cname, bal]);
       let arec = 0;
       if(isLive()) arec = (await one(`AnswerRecord(${gstr(slug)},${gstr(addr)})`).catch(()=>0)) || 0;
       if(arec>0) anyArec = true;
@@ -10541,8 +10543,24 @@ async function meHoldings(addr,courts){
       <div class="actions" style="margin-top:8px">${pullsNow.filter(r=>r.act).map(r=>btn(r.act[0]==="WithdrawStake"?"Withdraw #"+r.id: r.act[0]==="Finalize"?"Finalize #"+r.id: r.act[0]+" #"+r.id, r.act[0], r.act[1])).join("")}</div></div></section>` : "";
   const maybeSec = maybeCourts.length? `<section style="margin-top:14px"><div class="sec-h">Maybe — the court decides <span class="count">${maybeCourts.length} court${maybeCourts.length>1?"s":""}</span></div>
       <p class="small muted">${maybeCourts.map(([sl,nm])=>`Voted in a dispute in ${safeInline(nm)}? Voters in the deciding round may have a reward waiting — the court will tell you when you pull it from the claim's own page.`).join(" ")}</p></section>` : "";
+  /* WHAT YOU HOLD, FIRST, because it is the thing a holder opens this page to see
+     and it was not in the summary at all. Reported as "i have 19.5 Kourt:covid.
+     i don't see any in 'positions'" — the balance WAS on the page, in the court
+     section's own heading, under a strip whose first number said "open positions
+     0". Nothing was missing; the summary was answering a different question in
+     the place a reader looks for this one, and 0 beat 19.5 for attention.
+     A LIST, NOT A SUM, and that is not a shortcut. KOURT:COVID and KOURT:OREM are
+     different coins with different prices and no exchange rate between them, so
+     a single total would be a number that means nothing. One court gets its
+     balance; several get a count with the balances spelled out beneath. */
+  const heldStat = !heldList.length
+    ? `<div class="stat"><div class="k">coin held</div><div class="v tnum">none</div><div class="sub">buy a court's coin from its own page to take a position</div></div>`
+    : heldList.length===1
+    ? `<div class="stat"><div class="k">coin held</div><div class="v tnum">${cc(heldList[0][2], heldList[0][0])}</div><div class="sub">in ${safeInline(heldList[0][1])} — stake it on a claim to earn conviction</div></div>`
+    : `<div class="stat"><div class="k">coin held</div><div class="v tnum">${heldList.length} courts</div><div class="sub">${heldList.map(([sl,,b])=>cc(b,sl)).join(" · ")} — one coin per court, never summed</div></div>`;
   const strip = `<section><div class="grid stats">
-      <div class="stat"><div class="k">open positions</div><div class="v tnum">${posClaims}</div><div class="sub">across ${posCourts} court${posCourts===1?"":"s"} — coins are per-court, never summed</div></div>
+      ${heldStat}
+      <div class="stat"><div class="k">staked on claims</div><div class="v tnum">${posClaims}</div><div class="sub">${posClaims? `across ${posCourts} court${posCourts===1?"":"s"}` : "holding coin is a position; staking it takes a side"}</div></div>
       <div class="stat"><div class="k">you can pull now</div><div class="v tnum">${pullsNow.length}</div><div class="sub">principal and earned pools — open each claim</div></div>
       <div class="stat"><div class="k">maybe — the court decides</div><div class="v tnum">${maybeCourts.length}</div><div class="sub">voter carrots — a pull costs only gas</div></div>
       <div class="stat"><div class="k">senior tickets</div><div class="v tnum">${seniorCount}</div><div class="sub">owed payouts — paid as budget accrues${isLive()? " · newest 25 per court checked":""}</div></div>
