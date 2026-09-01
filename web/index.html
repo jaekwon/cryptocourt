@@ -10603,17 +10603,48 @@ async function meHoldings(addr,courts){
   const snapshot={h:nowH, claims:{}};
   let posClaims=0, posCourts=0, anyArec=false;
   const heldList=[];   // [slug, court name, balance] for every court holding coin
+  /* EVERY COURT'S READS START AT ONCE, and the loop below then walks them in
+     order. Measured as waves of requests against the live node, the page fired
+     covid's four reads at 1082ms and meta's at 1942ms — the second court was
+     waiting on the first court's entire body, including its per-claim detail
+     fetches, for no reason: no court's reads depend on another's.
+     PREFETCHED RATHER THAN PARALLELISED IN PLACE. The loop pushes into blocks,
+     seniorBlocks, pullsNow and heldList, and the order of those pushes is the
+     order of the page; running the bodies concurrently would make the layout
+     depend on which reply landed first. Starting the READS up front and leaving
+     the assembly sequential overlaps the round trips and keeps the render
+     deterministic. */
+  const preRead = new Map(courts.slugs.map(slug => [slug, (async () => {
+    const lv = isLive();
+    return Promise.all([
+      balanceOf(slug,addr).catch(()=>{mefail++; return 0;}),
+      seniorFor(slug, addr).catch(()=>{mefail++; return {rows:[],total:0,scanned:0};}),
+      lv? one(`StakedPage(${gstr(slug)},${gstr(addr)},0,0)`).catch(()=>{mefail++; return null;})
+        : Promise.resolve(null),
+      lv? one(`StakedSize(${gstr(slug)},${gstr(addr)})`).catch(()=>null)
+        : Promise.resolve(null),
+    ]);
+  })()]));
   for(const slug of courts.slugs){
-    const bal = await balanceOf(slug,addr).catch(()=>{mefail++; return 0;});
+    /* FOUR INDEPENDENT QUESTIONS, ASKED AT ONCE. These were four awaits in a row —
+       the balance, the holder's staked page, its size, and the senior tickets —
+       and not one of them needs another's answer. Measured against the live node,
+       a read from a browser costs about 142ms of which the node itself is ~25ms:
+       the rest is the round trip, so three extra ROUND TRIPS per court is what
+       this cost, not three extra queries. The senior scan moved up here from
+       below the row loop for the same reason; it never depended on the rows.
+       Promise.all and not a batch: gno runs a JSON-RPC array serially, which the
+       cache's own note above records as measurably slower than letting the
+       browser use its one HTTP/2 connection in parallel. */
+    const live = isLive();
+    const [bal, sen, stakedRaw, held] = await preRead.get(slug);
     // LIVE: one read names the holder's own positions, so only those claims are
     // probed. DEMO has no chain and keeps the sample scan.
     let ids, mine = [];
-    if(isLive()){
-      const got = parseStaked(
-        await one(`StakedPage(${gstr(slug)},${gstr(addr)},0,0)`).catch(()=>{mefail++; return null;}));
+    if(live){
+      const got = parseStaked(stakedRaw);
       mine = stakedByClaim(got);
       ids = mine.map(r=>r.id);
-      const held = await one(`StakedSize(${gstr(slug)},${gstr(addr)})`).catch(()=>null);
       // POSITIONS against POSITIONS. StakedSize counts (claim, side) entries and
       // stakedByClaim collapses both sides of a claim into one row, so comparing the
       // grouped length here claimed the page was truncated for anyone holding both
@@ -10632,9 +10663,20 @@ async function meHoldings(addr,courts){
       ? mine.map(r => ({id:r.id, p:{yes:r.yes, no:r.no, cy:r.cy, cn:r.cn}}))
       : await inChunks(ids, 8, id => positionOf(slug,id,addr).then(p=>({id,p})).catch(()=>{mefail++; return null;}));
     const rows=[]; let courtHasVoteSettle=false;
-    for(const hit of probes.filter(Boolean)){
-      const {id,p}=hit; if(!(p.yes||p.no||p.cy||p.cn)) continue;
-      const d = await meDetail(slug,id,addr).catch(()=>{mefail++; return null;});
+    /* THE DETAILS ARE FETCHED TOGETHER, THEN WALKED. This loop awaited meDetail
+       per row, so a holder with ten positions paid ten round trips end to end —
+       about 1.4 seconds of pure waiting on a page whose reads do not depend on
+       each other at all. Eight at a time, the same width inChunks already uses
+       for the demo probe, so the node sees the same burst shape it always did.
+       The walk below stays a plain loop: it pushes into rows, pullsNow and
+       snapshot in order, and order is what makes the page deterministic. */
+    const held0 = probes.filter(Boolean).filter(h => h.p.yes||h.p.no||h.p.cy||h.p.cn);
+    const details = await inChunks(held0, 8,
+      h => meDetail(slug,h.id,addr).catch(()=>{mefail++; return null;}));
+    for(let hi=0; hi<held0.length; hi++){
+      const hit = held0[hi];
+      const {id,p}=hit;
+      const d = details[hi];
       if(!d){ rows.push({cl:{id,title:"claim #"+id+" — read failed"}, p, d:null}); continue; }
       snapshot.claims[slug+"/"+id]=d.phase;
       if(d.route==="vote" && d.crystallized && d.draw && d.draw.carrot>0) courtHasVoteSettle=true;
@@ -10642,8 +10684,8 @@ async function meHoldings(addr,courts){
       c.now.forEach(r=>pullsNow.push({slug, ...r, d}));
       rows.push({cl:{id, title: d.title || ("claim #"+id)}, p, d});
     }
-    // senior tickets are owed regardless of current holdings — scan every court
-    const sen = await seniorFor(slug, addr).catch(()=>{mefail++; return {rows:[],total:0,scanned:0};});
+    // senior tickets are owed regardless of current holdings; asked for above,
+    // alongside the balance, because it never depended on the rows.
     if(bal || rows.length || sen.rows.length){
       if(bal || rows.length){ posCourts++; posClaims+=rows.length; }
       const st = await courtStats(slug).catch(()=>null);
@@ -10771,9 +10813,22 @@ async function needsList(addr,courts){
     const probes = await inChunks(ids, 8, id => positionOf(slug,id,addr).then(p=>({id,p})).catch(()=>{failed++; return null;}));
     posBySlug[slug] = new Set(probes.filter(Boolean).filter(h=>h.p.yes||h.p.no||(h.p.cy||0)||(h.p.cn||0)).map(h=>h.id));
     const before = items.length;
-    for(const hit of probes.filter(Boolean)){
-      if(!hit.p.yes && !hit.p.no && !(hit.p.cy||0) && !(hit.p.cn||0)) continue;
-      const d=await meDetail(slug,hit.id,addr).catch(()=>{failed++; return null;});
+    /* SAME SHAPE AS meView'S, AND IT WAS FOUND THE SAME WAY. This awaited
+       meDetail once per held position inside the loop, so "What needs you" cost
+       one round trip per claim end to end — at ~142ms a read from a browser,
+       ten positions is a second and a half of waiting on reads that do not
+       depend on each other. The assertion written for meView's version failed
+       here, which is how this copy surfaced; narrowing the test to meView would
+       have left the second one serial and the guard lying about coverage.
+       Eight wide, matching the probe fetch just above, and the walk stays a
+       plain loop because it pushes into items in order. */
+    const heldHits = probes.filter(Boolean)
+      .filter(h => h.p.yes || h.p.no || (h.p.cy||0) || (h.p.cn||0));
+    const heldDetails = await inChunks(heldHits, 8,
+      h => meDetail(slug,h.id,addr).catch(()=>{failed++; return null;}));
+    for(let hi=0; hi<heldHits.length; hi++){
+      const hit = heldHits[hi];
+      const d = heldDetails[hi];
       if(!d||!d.answered||d.settled||d.provClose) continue;
       const yourSide = (hit.p.yes+(hit.p.cy||0)) >= (hit.p.no+(hit.p.cn||0)) ? 0 : 1;
       const standing = d.provisional>=0 ? d.provisional : d.answer;

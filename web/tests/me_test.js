@@ -66,6 +66,21 @@ ok("diff: unchanged → empty", diffSeen({h:1,claims:{"o/3":"open"}},{h:2,claims
 
 // source-level checks
 ok("snapshot only when mefail==0", src.includes("if(mefail===0) store.set(seenKey(addr)"));
+/* THE READS ARE OVERLAPPED, and this is a shape that reverts easily — an await
+   moved back inside the loop looks perfectly natural and costs a round trip per
+   court. Measured as request waves against the live node: covid's reads fired at
+   1082ms and meta's at 1942ms, because the second court waited on the first
+   court's whole body including its per-claim details. Prefetched, both fire at
+   918ms and the page drops from seven waves to five.
+   Pinned as three facts: the prefetch exists, the loop CONSUMES it rather than
+   issuing its own, and the per-row detail fetch is chunked rather than awaited
+   one at a time inside a for. */
+ok("every court's reads start before the loop", src.includes("const preRead = new Map(courts.slugs.map("));
+ok("...and the loop consumes them instead of issuing its own",
+   src.includes("const [bal, sen, stakedRaw, held] = await preRead.get(slug);"));
+ok("...and per-claim details are fetched in chunks, not one await at a time",
+   src.includes("const details = await inChunks(held0, 8,")
+   && !/for\(const hit of probes[\s\S]{0,200}await meDetail/.test(src));
 ok("last-visit copy verbatim", src.includes("this browser's memory of your last look") && src.includes("Clear storage and it forgets"));
 ok("senior owed-not-earned copy", src.includes("owed, not earned") && src.includes("paid as budget accrues, the court's pace, not a promise"));
 ok("needs deadline string", src.includes("you may dispute until ≈block"));
