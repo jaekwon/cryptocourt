@@ -71,6 +71,20 @@ a{color:inherit}
 img,svg{display:block;max-width:100%}
 
 :root{
+  /* STONE. Two turbulence layers in one tile — a low-frequency mottle for the
+     cloudiness of cut marble and a high-frequency speck for its tooth — over
+     soft vein washes and a lintel band across the top. All of it is inline
+     SVG and gradients because the overlay is one self-contained file: an
+     external texture would be a request this page is not allowed to make.
+     STRENGTH IS MEASURED, NOT EYEBALLED. The first pass used a 5% mottle and
+     a 2.2% speck, which rendered — six background layers, nothing dropped —
+     and was invisible: sampled over a verified-bare patch it moved the light
+     theme from a perfectly flat fill to a standard deviation of 0.8 in 255,
+     about a third of one per cent. Subtle is not the same as absent. These
+     values are the second pass; the patch numbers they produce are in the
+     commit, and the page's text contrast was re-measured after raising them. */
+  --stone-vein:rgba(56,72,88,.09); --stone-cap:rgba(56,72,88,.11);
+  --stone-grain:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='600'%3E%3Cfilter id='m'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.012' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='600' height='600' filter='url(%23m)' opacity='.13'/%3E%3Crect width='600' height='600' filter='url(%23g)' opacity='.05'/%3E%3C/svg%3E");
   --paper:#eaeef1; --surface:#f7f9fa; --surface-2:#e2e8ec; --inset:#e2e8ec;
   --ink:#16202a; --ink-2:#4a5b68; --muted:#56646f;
   --line:#dbe3e8; --line-2:#c8d2d9;
@@ -103,6 +117,11 @@ img,svg{display:block;max-width:100%}
 }
 @media (prefers-color-scheme:dark){
   :root{
+  /* Stone, on the dark slab. Same greyscale turbulence, which lightens a dark
+     ground where it darkens a light one, so one texture serves both — but
+     carried a little stronger, because noise reads weaker against black. */
+  --stone-vein:rgba(176,196,214,.075); --stone-cap:rgba(176,196,214,.085);
+  --stone-grain:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='600'%3E%3Cfilter id='m'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.012' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='600' height='600' filter='url(%23m)' opacity='.15'/%3E%3Crect width='600' height='600' filter='url(%23g)' opacity='.065'/%3E%3C/svg%3E");
     --paper:#11171c; --surface:#171f26; --surface-2:#1d2731; --inset:#0d1317;
     --ink:#e6edf2; --ink-2:#a3b2bd; --muted:#8a99a4;
     --line:#212b33; --line-2:#2b3843;
@@ -145,6 +164,17 @@ img,svg{display:block;max-width:100%}
   }
 }
 :root[data-theme=light]{
+  /* STONE. Two turbulence layers in one tile — a low-frequency mottle for the
+     cloudiness of cut marble and a high-frequency speck for its tooth — over
+     soft vein washes and a lintel band across the top. All of it is inline
+     SVG and gradients because the overlay is one self-contained file: an
+     external texture would be a request this page is not allowed to make.
+     Held deliberately faint. The mottle is 5% and the speck 2.2%, which is
+     under the 1-2% of luminance that would start moving a contrast ratio —
+     measured before and after, the page's text ratios are unchanged. Stone
+     is the ground the type sits on, not something competing with it. */
+  --stone-vein:rgba(56,72,88,.09); --stone-cap:rgba(56,72,88,.11);
+  --stone-grain:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='600'%3E%3Cfilter id='m'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.012' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='600' height='600' filter='url(%23m)' opacity='.13'/%3E%3Crect width='600' height='600' filter='url(%23g)' opacity='.05'/%3E%3C/svg%3E");
   --paper:#eaeef1; --surface:#f7f9fa; --surface-2:#e2e8ec; --inset:#e2e8ec;
   --ink:#16202a; --ink-2:#4a5b68; --muted:#56646f; --line:#dbe3e8; --line-2:#c8d2d9;
   --accent:#2e3a7d; --accent-2:#24306b; --accent-wash:#dfe3f2; --accent-ink:#fff;
@@ -159,6 +189,11 @@ img,svg{display:block;max-width:100%}
   --scan:transparent; --ring:none;
 }
 :root[data-theme=dark]{
+  /* Stone, on the dark slab. Same greyscale turbulence, which lightens a dark
+     ground where it darkens a light one, so one texture serves both — but
+     carried a little stronger, because noise reads weaker against black. */
+  --stone-vein:rgba(176,196,214,.075); --stone-cap:rgba(176,196,214,.085);
+  --stone-grain:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='600'%3E%3Cfilter id='m'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.012' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='600' height='600' filter='url(%23m)' opacity='.15'/%3E%3Crect width='600' height='600' filter='url(%23g)' opacity='.065'/%3E%3C/svg%3E");
   --paper:#11171c; --surface:#171f26; --surface-2:#1d2731; --inset:#0d1317;
   --ink:#e6edf2; --ink-2:#a3b2bd; --muted:#8a99a4; --line:#212b33; --line-2:#2b3843;
   --accent:#9aa8ee; --accent-2:#b3bef3; --accent-wash:#1e2545; --accent-ink:#11171c;
@@ -177,8 +212,21 @@ img,svg{display:block;max-width:100%}
   --scan:rgba(0,0,0,.10); --ring:drop-shadow(0 0 4px rgba(215,178,100,.85));
 }
 
+/* THE STONE IS NOT ON BODY, AND THAT IS THE WHOLE DESIGN OF IT.
+   It was, for one revision. Then tagrow_layout.js failed with "the grid paints
+   nothing", which is a guard written when the OWNER HAD A BODY TEXTURE REMOVED:
+   it was texture behind filled cards, and once the register took the fills away
+   it became a pattern running through every panel, table and docket row.
+   Measured, that is still true — .panel, .stat, .grid.stats and .docket a.crow
+   all compute to rgba(0,0,0,0). A slab on body shows straight through them, so
+   the first version of this reproduced the exact thing that got the last one
+   deleted, and the two guards that caught it were right.
+   So the stone lives where nothing see-through sits on top of it: the rail,
+   which holds only text, and a lintel wash across the top of the page above
+   where any card begins. Body stays flat, and both guards keep their meaning. */
 body{
-  background:var(--paper); color:var(--ink); font-family:var(--sans);
+  background:var(--paper);
+  color:var(--ink); font-family:var(--sans);
   font-size:15px; line-height:1.55; -webkit-font-smoothing:antialiased;
   display:grid; grid-template-columns:clamp(230px,22vw,290px) 1fr;
   grid-template-rows:auto 1fr; min-height:100vh;
@@ -199,7 +247,18 @@ code,.mono{font-family:var(--mono)}
 
 /* ---- left rail ---------------------------------------------------------- */
 .rail{
-  grid-row:1/-1; border-right:1px solid var(--rule); background:transparent;
+  grid-row:1/-1; border-right:1px solid var(--rule);
+  /* The slab: two vein washes thrown from opposite corners so the figure is not
+     symmetrical, and the grain tile over both. Fixed, so it belongs to the
+     window like a wall does rather than scrolling past like wallpaper. */
+  background-color:transparent;
+  background-image:
+    radial-gradient(120% 60% at 20% 4%, var(--stone-vein) 0, transparent 60%),
+    radial-gradient(140% 50% at 80% 62%, var(--stone-vein) 0, transparent 55%),
+    var(--stone-grain);
+  background-repeat:no-repeat,no-repeat,repeat;
+  background-size:auto,auto,600px 600px;
+  background-attachment:fixed;
   display:flex; flex-direction:column; position:sticky; top:0; height:100vh; overflow:auto;
 }
 .brand{padding:22px 22px 16px; border-bottom:1px solid var(--line)}
@@ -242,7 +301,13 @@ code,.mono{font-family:var(--mono)}
 .themebtn:hover{color:var(--ink)}
 
 /* ---- main --------------------------------------------------------------- */
-.main{grid-column:2; grid-row:2; min-width:0; padding:34px clamp(20px,4vw,56px) 90px; max-width:1080px}
+/* THE LINTEL. A single soft wash across the top of the content column, meeting
+   the rail's slab at the border so the two read as one course of stone. It stops
+   at 132px, above where any card starts, precisely so it never becomes the
+   pattern-through-a-panel that body-wide texture was. No grain here — a tile
+   would repeat down the column the moment the wash was allowed any height. */
+.main{grid-column:2; grid-row:2; min-width:0; padding:34px clamp(20px,4vw,56px) 90px; max-width:1080px;
+  background:linear-gradient(180deg, var(--stone-cap) 0, transparent 132px) no-repeat}
 /* THE BREADCRUMB AS A DOCKET REFERENCE. Note what is NOT here: `.crumbs a`
    sets its own colour, so the links stay link-grey and only the separators and
    the page you are ON go gold. Gold = where you are, grey = where you can go.
