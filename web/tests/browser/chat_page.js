@@ -136,16 +136,7 @@ async function courtPage(browser, opts) {
   {
     const page = await browser.newPage();
     const external = [];
-    // file: is the page itself. data: is INLINE — the bytes are already in the
-    // document, and Chrome raises a request event for one anyway, so counting it
-    // reports a network call for something that cannot reach the network. The
-    // rail's stone texture is an inline SVG and tripped this on arrival.
-    // Narrow, deliberately: any real scheme still counts, which is the promise
-    // this assertion exists to keep.
-    page.on("request", r => {
-      const u = r.url();
-      if (!u.startsWith("file:") && !u.startsWith("data:") && !u.startsWith("blob:")) external.push(u);
-    });
+    page.on("request", r => { if (!r.url().startsWith("file:")) external.push(r.url()); });
     await page.goto(PAGE + "#/c/orem", {waitUntil: "load"});
     await page.waitForFunction(
       () => !!document.querySelector("#courtchat .chatlog"), {timeout: 20000});
