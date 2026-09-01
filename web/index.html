@@ -6437,6 +6437,20 @@ const MAPK = {
   // It is a floor and not a target: Math.max keeps a reader's own zoom when
   // they are already closer in.
   readPx:13,
+  /* HOW FAST THE WHEEL ZOOMS, as a per-delta-unit multiplier. Named because the
+     number is meaningless on its own: what a reader feels is the ratio over one
+     wheel NOTCH, which browsers report as deltaY 100.
+         1.0015  one notch = 1.16x   <- was this, and asked to be more
+         1.0030  one notch = 1.35x   <- is this
+     The old rate put a notch at well under one press of the +/- buttons, which
+     step 1.25 — so spinning the wheel felt like it was doing less than clicking,
+     and the natural response is to spin it harder. A notch is now a little more
+     than a press.
+     It stays EXPONENTIAL in deltaY, which is what makes a trackpad's stream of
+     small deltas compose into the same total as one mouse notch of the same
+     distance: pow(r,a)*pow(r,b) == pow(r,a+b). A linear rate would make the two
+     input devices disagree. */
+  wheelRate:1.003,
   // AND A BIGGER ONE FOR THE NODE YOU JUST PICKED. readPx above is the floor for
   // a view you did not ask for — the map opening, a folder being fitted — where
   // 13px is a size you can scan. Clicking a node is a request to READ it, and
@@ -8063,7 +8077,7 @@ function mountMap(slug, data, focusId, focusPath){
   };
   box.addEventListener("wheel", ev=>{
     ev.preventDefault();
-    setZ(z*Math.pow(1.0015, -ev.deltaY), toWorld(ev));
+    setZ(z*Math.pow(MAPK.wheelRate, -ev.deltaY), toWorld(ev));
   }, {passive:false});
   let drag=null, dragged=false;
   box.addEventListener("pointerdown", ev=>{

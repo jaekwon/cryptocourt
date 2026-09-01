@@ -171,6 +171,27 @@ ok("...which together are still every zoom decision, none left on a literal",
 // Literals, not the constants under test, or the expectation moves with them.
 ok("the scan floor is 13 and the reading floor is meaningfully bigger",
    /readPx:13,/.test(src) && /readSelPx:22,/.test(src));
+/* THE WHEEL'S RATE, in the only unit a reader feels: the ratio over one notch,
+   which browsers report as deltaY 100. The stored number is a per-delta-unit
+   multiplier and says nothing on its own — 1.0015 and 1.003 look like the same
+   number and are 1.16x against 1.35x per notch, which is the difference between
+   the wheel doing less than the +/- buttons and a little more.
+   So the assertion raises it to the power the browser will: it fails on a rate
+   that is merely different AND on one that has quietly gone back to being
+   weaker than a button press. */
+{
+  const rate = +(src.match(/wheelRate:([\d.]+),/) || [])[1];
+  const perNotch = Math.pow(rate, 100);
+  const perPress = 1.25;   // bind("mz-in", ()=>setZ(z*1.25))
+  ok("the wheel rate was found", isFinite(rate) && rate > 1, "rate=" + rate);
+  ok(`...and one notch is ${perNotch.toFixed(3)}x, a little past a button press`,
+     perNotch > perPress && perNotch < 1.45);
+  ok("...spent through the constant, with no bare rate left in the handler",
+     src.includes("Math.pow(MAPK.wheelRate, -ev.deltaY)") && !src.includes("Math.pow(1.0015"));
+  // The buttons' own step, read out rather than assumed, so the comparison above
+  // cannot silently be against a number that moved.
+  ok("...and the button step really is 1.25", src.includes("setZ(z*1.25)"));
+}
 ok("...and no bare 9 is left aiming at it",
    !src.includes('9*fit.w/(MAPK.fs.title*'));
 // 13, not 9. Asserted as a LITERAL: spelling the expectation as MAPK.readPx
