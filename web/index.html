@@ -1063,6 +1063,33 @@ p.sub{font-size:13.5px; color:var(--ink-2); max-width:54ch; margin-top:6px}
 .mhdr-t,.mverdict{font-family:var(--sans)}
 .mnode{fill:var(--surface); stroke:var(--ink-2); stroke-width:1}
 .mnode-a{cursor:pointer}
+/* THE PICKED CLAIM GROWS, so its title is readable without leaving the map.
+   Scaled on the <a> that wraps the box AND its text, so the words grow with the
+   box rather than staying put inside a bigger frame.
+   transform-box:fill-box is load-bearing, not tidiness: without it an SVG
+   transform-origin resolves against the whole viewBox, so `center` is the
+   middle of the MAP and a scale flings the node across the drawing instead of
+   swelling it in place.
+   THE OVERSHOOT IS THE POINT. A plain ease lands so softly at this duration and
+   this size that the change reads as a redraw; the back-out curve passes 1.18,
+   touches about 1.23 and settles, which is what makes it legible AS motion —
+   the eye is told where to look. 180ms because it has to finish before the
+   camera glide it rides along with, or the two motions argue.
+   The dim is what keeps the grown node readable against its neighbours: it does
+   not paint above them — SVG has no z-index and reordering the nodes to fake it
+   would scramble tab order — so the contrast has to come from everything else
+   stepping back, which .dim already does. */
+.mnode-a{transform-box:fill-box; transform-origin:center;
+  transition:transform .18s cubic-bezier(.34,1.56,.64,1)}
+.mnode-a.selected{transform:scale(1.18)}
+/* NO LOCAL reduced-motion RULE, deliberately. One was written here and it was
+   dead the moment it landed: this stylesheet already carries
+   `*{transition:none!important}` under the same query, which outranks anything
+   per-class. Ablating the local rule changed nothing, which is how it was found.
+   The behaviour it was meant to give is the right one and still happens — the
+   node grows to full size, it just arrives instead of springing, because only
+   the TRANSITION is suppressed and the transform is not. browser/map_boing.js
+   asserts both halves of that under emulated reduce. */
 .mnode-a:hover .mnode,.mnode-a:focus .mnode{stroke:var(--accent); stroke-width:2}
 .mnode-a.focused .mnode{stroke:var(--accent); stroke-width:3}
 .mnode-a.selected .mnode{stroke:var(--accent); stroke-width:3; fill:var(--accent-wash)}
