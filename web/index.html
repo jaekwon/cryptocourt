@@ -362,67 +362,7 @@ section{margin-top:34px}
   display:block; background:var(--surface-2); align-self:center}
 .courtface svg,.courtface img{display:block; width:100%; height:100%; object-fit:cover}
 .lead-row .courtface{width:52px; height:52px; border-radius:4px; margin-right:14px}
-/* flex-start, not center. Centred, the court's seal is centred against the WHOLE
-   header — beam plus description plus tagrow — which parks it below the beam,
-   floating in the bay between the two piers like something that fell off. At
-   the start it sits level with the stone it belongs to. */
-.leadface{display:flex; align-items:flex-start}
-/* The seal carries align-self:center of its own, which centres it against the
-   ENTIRE header — beam, description and tagrow — and parks it in the bay under
-   the stone. Overridden only here, and nudged down to sit on the title's own
-   line rather than on the beam's top edge. */
-.leadface > .courtface{align-self:flex-start; margin-top:22px}
-/* THE COURT'S NAME AS A TEMPLE: one stone lifted by two.
-   The h1 is the LINTEL — a marble beam carrying the name — and its ::before and
-   ::after are the two PIERS beneath it. Pseudo-elements rather than markup, so
-   the header's HTML is untouched and nothing that asserts on it has to move.
-   SHARP, AND GOLD. Square corners, no radius anywhere: a rounded stone is a
-   pebble. The hairline is --gilt, which the palette already carries in both
-   themes (deep #9a6f12 on the pale page, brighter #e2b552 on the dark one), so
-   the edge is gold without inventing a fifth gold.
-   A CREDIT CARD COULD NOT FIT IN. The piers are pulled up by exactly the width
-   of the line they meet — margin-top:-1px against border-top:0 — so the lintel's
-   bottom edge and the pier's top edge are THE SAME PIXEL ROW, one shared gold
-   seam rather than two lines with a gap between them. Butted, not stacked: at
-   this size a 1px gap reads as a mistake, and a 2px one reads as scaffolding.
-   The marble is the same two-turbulence tile the rail uses, over its own opaque
-   --surface fill. Opaque matters: this is a filled stone, not a wash, so the
-   texture cannot bleed through anything the way a body-wide slab would. */
-/* The beam spans the column. Without this the h1's wrapper is shrink-to-fit
-   inside .lead-row's space-between, so the lintel ended where the longest line
-   of text did and sat off to one side of its own piers — a temple with the
-   architrave slid off the columns. */
-.leadface > div{flex:1; min-width:0}
-.leadface .page-h{
-  position:relative; margin:0 0 58px; padding:18px 24px 20px; text-align:center;
-  border:1px solid var(--gilt); border-radius:0;
-  background-color:var(--surface);
-  /* Doubled vein against the rail's, because this stone is small and lit: the
-     same wash that reads across a whole column disappears inside a 90px band. */
-  background-image:
-    radial-gradient(120% 160% at 16% -10%, var(--stone-vein) 0, transparent 62%),
-    radial-gradient(110% 140% at 84% 110%, var(--stone-vein) 0, transparent 58%),
-    radial-gradient(80% 100% at 50% 50%, var(--stone-vein) 0, transparent 70%),
-    var(--stone-grain);
-  background-repeat:no-repeat,no-repeat,no-repeat,repeat;
-  background-size:auto,auto,auto,600px 600px;
-  /* IT IS BEING HELD UP, so it throws a shadow into the bay it spans. Short and
-     tight — the beam sits ON the piers, it does not hover over them. */
-  box-shadow:0 7px 12px -9px rgba(20,26,34,.5);
-}
-.leadface .page-h::before,.leadface .page-h::after{
-  content:""; position:absolute; top:100%; margin-top:-1px;
-  height:42px; width:19%;
-  border:1px solid var(--gilt); border-top:0; border-radius:0;
-  background-color:var(--surface);
-  background-image:
-    radial-gradient(140% 100% at 50% 0%, var(--stone-vein) 0, transparent 70%),
-    var(--stone-grain);
-  background-repeat:no-repeat,repeat;
-  background-size:auto,600px 600px;
-}
-.leadface .page-h::before{left:9%}
-.leadface .page-h::after{right:9%}
+.leadface{display:flex; align-items:center}
 /* IN THE COLUMN THE STRIP IS A 2x2 BLOCK, at every width. auto-fit gave three
    across and one orphan on a second row, with the rules still drawn as if it
    were one line — the orphan carried a left edge and no top edge. Fixing that
