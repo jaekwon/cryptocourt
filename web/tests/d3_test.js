@@ -151,13 +151,26 @@ ok("zoom from the LOD line, clamped", src.includes('z=Math.min(MAPK.zMax, Math.m
   ok("...with all four zoom clamps on the constant",
      src.split('Math.min(MAPK.zMax, ').length - 1 === 4);
 }
-// ONE KNOB, THREE DECISIONS. The opening view, centring on a node and fitting a
-// folder each aim at the same smallest-readable size, and each used to spell it
-// as its own bare 9 — so raising it meant finding all three, and missing one
-// left a map that opened readable and went small the moment you clicked.
-// Counted, not just spot-checked: a fourth site added later must join them.
-ok("the readable floor is one named constant, used by every zoom decision",
-   src.split('MAPK.readPx*fit.w/(MAPK.fs.title*').length - 1 === 3);
+/* TWO FLOORS, THREE DECISIONS, AND NO BARE NUMBERS. All three zoom decisions
+   once spelled their target as its own literal 9, so raising it meant finding
+   all three and missing one left a map that opened readable and went small the
+   moment you clicked. They are named constants now — but not the SAME one, and
+   that split is the point rather than an inconsistency:
+     readPx     the opening view, and fitting a folder — sizes you did not ask
+                for, where the job is to make the map scannable
+     readSelPx  centring on the node you just picked, which is a request to READ
+                one thing and wants a bigger number
+   Counted per constant, so a fourth site added later has to join one of them,
+   and asserted to cover all three so neither can quietly lose a caller. */
+ok("the opening view and the folder fit share the scan floor",
+   src.split('MAPK.readPx*fit.w/(MAPK.fs.title*').length - 1 === 2);
+ok("...and selection aims at the bigger reading floor",
+   src.split('MAPK.readSelPx*fit.w/(MAPK.fs.title*').length - 1 === 1);
+ok("...which together are still every zoom decision, none left on a literal",
+   src.split('*fit.w/(MAPK.fs.title*').length - 1 === 3);
+// Literals, not the constants under test, or the expectation moves with them.
+ok("the scan floor is 13 and the reading floor is meaningfully bigger",
+   /readPx:13,/.test(src) && /readSelPx:22,/.test(src));
 ok("...and no bare 9 is left aiming at it",
    !src.includes('9*fit.w/(MAPK.fs.title*'));
 // 13, not 9. Asserted as a LITERAL: spelling the expectation as MAPK.readPx

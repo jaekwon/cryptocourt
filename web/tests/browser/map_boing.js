@@ -14,12 +14,12 @@
 // map away from where the reader clicked. It looks like a bug in the layout,
 // not like a missing one-line property, and no source harness can see it.
 //
-// WHAT IT DOES NOT COVER. Layout-dependent overlap. The sweep below asserts
-// that no node drawn AFTER the selected one overlaps it, which is true of this
-// docket's ring spacing at 1.18x — SVG has no z-index, so a grown node cannot
-// paint above a later sibling, and reordering the DOM to fake it would scramble
-// tab order. If the layout ever packs nodes tighter, this check is where it
-// surfaces, as a count rather than as a screenshot somebody happens to look at.
+// WHAT IT DOES NOT COVER. Layout-dependent overlap, and it does not bound the
+// spring's size — see the sweep's own comment. SVG has no z-index, so a grown
+// node cannot paint above a later sibling and reordering the DOM to fake it
+// would scramble tab order; the sweep therefore counts obscuring overlap so a
+// tighter layout surfaces as a number rather than as a screenshot somebody
+// happens to look at. On this docket it stays incidental even at 2.0x.
 //
 // ABLATED, each on its own arm:
 //   dropping transform-box:fill-box     the in-place assertion fails (origin is the map's)
@@ -82,6 +82,19 @@ const PAGE = 'file://' + path.join(__dirname, '..', '..', 'index.html');
   ok("the map drew claim nodes to click", n >= 3, "nodes=" + n);
 
   // ------------------------------------------------------------ grows, and springs
+  /* MEASURED OFF THE TRANSFORM, NOT OFF THE SCREEN, and the first version of
+     this check got that wrong. getBoundingClientRect().width includes the map's
+     own zoom, and selecting a node now moves the CAMERA too — so the on-screen
+     width grew 1.898x from a 1.35 spring times a 1.406 camera, and the check
+     failed on a value that was correct. The node's own scale is the first entry
+     of its computed matrix; the camera is not in it. */
+  const scaleOf = () => page.evaluate(() => {
+    const a = document.querySelector('.mnode-a.selected') || document.querySelector('.mnode-a');
+    const m = getComputedStyle(a).transform;
+    if (!m || m === "none") return 1;
+    const n = m.match(/matrix\(([^)]+)\)/);
+    return n ? parseFloat(n[1].split(",")[0]) : NaN;
+  });
   const before = await page.evaluate(() => {
     const a = document.querySelector('.mnode-a'), r = a.getBoundingClientRect();
     const cs = getComputedStyle(a), t = a.querySelector('text.mtitle');
@@ -91,14 +104,16 @@ const PAGE = 'file://' + path.join(__dirname, '..', '..', 'index.html');
             boxW: a.querySelector('.mnode').getBBox().width,
             boxH: a.querySelector('.mnode').getBBox().height};
   });
+  const scale0 = await scaleOf();
   await clickNode(0);
   // Mid-flight. A back-out curve is PAST its destination at this point; a plain
-  // ease has not reached it. That difference is the whole "boing".
-  await new Promise(r => setTimeout(r, 120));
-  const mid = await page.evaluate(() =>
-    (document.querySelector('.mnode-a.selected') || document.querySelector('.mnode-a'))
-      .getBoundingClientRect().width);
-  await new Promise(r => setTimeout(r, 700));
+  // ease has not reached it. That difference is the whole "boing" — and it has
+  // to be read off the transform, because the camera glide is moving at the same
+  // time and would otherwise be indistinguishable from the spring.
+  await new Promise(r => setTimeout(r, 130));
+  const midScale = await scaleOf();
+  await new Promise(r => setTimeout(r, 900));
+  const scale1 = await scaleOf();
   const after = await page.evaluate(() => {
     const a = document.querySelector('.mnode-a.selected');
     if (!a) return null;
@@ -109,11 +124,29 @@ const PAGE = 'file://' + path.join(__dirname, '..', '..', 'index.html');
   ok("clicking a node selects it on the map, without leaving for its page", !!after);
   if (!after) { await browser.close(); process.exit(1); }
 
-  const grew = after.w / before.w;
-  ok(`the selected node is bigger (${grew.toFixed(3)}x)`, grew > 1.10 && grew < 1.30,
-     `${before.w.toFixed(1)} -> ${after.w.toFixed(1)}`);
-  ok(`...and the motion overshoots its landing (mid ${mid.toFixed(1)} > settled ${after.w.toFixed(1)})`,
-     mid > after.w);
+  // Bounds as LITERALS around the authored 1.35 — spelling them as the CSS value
+  // would move with it and pass at 1.0.
+  ok(`the node's own scale is up (${scale0} -> ${scale1})`,
+     Math.abs(scale0 - 1) < 0.01 && scale1 > 1.28 && scale1 < 1.45);
+  ok(`...and the spring overshoots its landing (mid ${midScale} > settled ${scale1})`,
+     midScale > scale1);
+  /* THE READER'S ACTUAL QUESTION, and it is a RATIO because an absolute floor
+     could not tell the two mechanisms apart. First written as `>= 28px`, which
+     passed either way: on this fixture the scan-size zoom already lands the
+     picked title at exactly 28 and the reading-size zoom at 38, so the threshold
+     sat on the boundary and certified nothing. Ablating readSelPx back to readPx
+     is what exposed it — the arm stayed green.
+     A ratio against the SAME map's unselected title separates them. The spring
+     alone can only ever deliver its own 1.35; anything past that came from the
+     camera, which is the half the transform cannot do. 1.6 therefore fails a
+     build where selection stopped zooming, and the absolute floor beside it
+     stops a tiny court satisfying the ratio while still being unreadable. */
+  {
+    const ratio = after.titleH / before.titleH;
+    ok(`the picked title is readable, not just bigger (${before.titleH}px -> ${after.titleH}px, ${ratio.toFixed(2)}x)`,
+       ratio >= 1.6 && after.titleH >= 30,
+       "the 1.35 spring alone would give " + (before.titleH * 1.35).toFixed(1) + "px");
+  }
   ok("...quickly — under a quarter second",
      parseFloat(before.dur) > 0 && parseFloat(before.dur) <= 0.25, "dur=" + before.dur);
   // The curve's own numbers, so "overshoot" cannot be satisfied by a timing
@@ -155,15 +188,48 @@ const PAGE = 'file://' + path.join(__dirname, '..', '..', 'index.html');
       const r = a.getBoundingClientRect();
       const all = [...document.querySelectorAll('.mnode-a,.mfold-a,.mcourt-a')];
       const j = all.indexOf(a);
-      const hit = (x, y) => !(y.right < x.left || y.left > x.right || y.bottom < x.top || y.top > x.bottom);
+      const area = (x, y) => {
+        const w = Math.min(x.right, y.right) - Math.max(x.left, y.left);
+        const h = Math.min(x.bottom, y.bottom) - Math.max(x.top, y.top);
+        return (w > 0 && h > 0) ? w * h : 0;
+      };
+      const mine = r.width * r.height;
+      const later = all.slice(j + 1)
+        .map(o => ({dim: o.classList.contains('dim'), a: area(r, o.getBoundingClientRect())}))
+        .filter(o => o.a > 0);
       return {sel: a.classList.contains('selected'),
-              later: all.slice(j + 1).filter(o => hit(r, o.getBoundingClientRect())).length};
+              lit: later.filter(o => !o.dim).length,
+              worstPct: later.length ? Math.round(100 * Math.max(...later.map(o => o.a)) / mine) : 0};
     }, i));
   }
   ok(`every one of the ${n} nodes selects when clicked`, sweep.every(s => s.sel));
-  ok("...and none is overlapped by a node drawn after it",
-     sweep.every(s => s.later === 0),
-     "overlapped=" + sweep.filter(s => s.later > 0).length);
+  /* OBSCURING OVERLAP, NOT ANY OVERLAP, and the distinction was forced by a
+     measurement. The first version counted every later sibling whose box touched
+     the grown one, and at 1.35x it failed with overlapped=1 — which sounded like
+     the scale had gone too far. It had not: that one case was 3% of the node's
+     area and the neighbour doing the clipping was DIMMED, which is the state the
+     selection puts everything else into. A dimmed corner behind a lit node is
+     the design working, not a collision.
+     So the two facts are separated. A LIT later sibling over the selected node
+     is unacceptable at any size — SVG has no z-index, so it genuinely covers.
+     A dimmed one is tolerable but still bounded, because "dimmed" stops being an
+     excuse somewhere: at 40% of the node the corner is gone whatever its
+     opacity. Both numbers are printed, so growing the spring again shows its
+     cost here instead of hiding it.
+     HOW MUCH TEETH THIS HAS, measured rather than assumed: pushing the spring to
+     2.0 leaves the worst overlap at 11% and the lit count at zero, so BOTH arms
+     still pass. They do not bound the current size and are not the reason for
+     it — they are a regression guard for a layout that packs nodes tighter than
+     this docket's rings do. Said plainly here because the CSS comment beside the
+     scale first claimed the opposite, and a check described as setting a limit
+     it does not set is worse than no description. */
+  ok("...and no LIT node drawn after it covers the selected one",
+     sweep.every(s => s.lit === 0), "lit overlaps=" + sweep.filter(s => s.lit > 0).length);
+  {
+    const worst = Math.max(...sweep.map(s => s.worstPct));
+    ok(`...with dimmed overlap staying incidental (worst ${worst}% of the node)`, worst <= 15,
+       sweep.filter(s => s.worstPct > 0).map(s => s.worstPct + "%").join(" "));
+  }
 
   // ------------------------------------------------- folders and the court too
   // THE REGRESSION THIS EXISTS FOR. The first version animated .mnode-a only.
@@ -183,20 +249,23 @@ const PAGE = 'file://' + path.join(__dirname, '..', '..', 'index.html');
     }, kind);
     await page.evaluate(k => document.querySelector(k)
       .dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true})), kind);
-    await new Promise(r => setTimeout(r, 120));
-    const wMid = await page.evaluate(k =>
-      document.querySelector(k).getBoundingClientRect().width, kind);
-    await new Promise(r => setTimeout(r, 700));
-    const w1 = await page.evaluate(k => {
-      const a = document.querySelector(k);
-      return a.classList.contains('selected') ? a.getBoundingClientRect().width : null;
-    }, kind);
+    const mtx = (k) => page.evaluate(q => {
+      const a = document.querySelector(q), m = getComputedStyle(a).transform;
+      if (!m || m === "none") return 1;
+      const n = m.match(/matrix\(([^)]+)\)/);
+      return n ? parseFloat(n[1].split(",")[0]) : NaN;
+    }, k);
+    await new Promise(r => setTimeout(r, 130));
+    const wMid = await mtx(kind);
+    await new Promise(r => setTimeout(r, 900));
+    const w1 = await page.evaluate(k =>
+      document.querySelector(k).classList.contains('selected'), kind) ? await mtx(kind) : null;
     ok(`${kind}: clicking it selects it`, w1 !== null);
     if (w1 === null) continue;
-    const g = w1 / w0.w;
-    ok(`${kind}: grows (${g.toFixed(3)}x)`, g > 1.05 && g < 1.30,
-       `${w0.w.toFixed(1)} -> ${w1.toFixed(1)}`);
-    ok(`${kind}: springs past its landing`, wMid > w1, `mid ${wMid.toFixed(1)}`);
+    // Folders take the full 1.35 step, the court a smaller 1.18, so the floor
+    // spans both while still failing a node that does not move at all.
+    ok(`${kind}: scale is up (${w1})`, w1 > 1.12 && w1 < 1.45);
+    ok(`${kind}: springs past its landing`, wMid > w1, `mid ${wMid}`);
     ok(`${kind}: scales about itself`, w0.box === "fill-box", w0.box);
   }
   await openMap();

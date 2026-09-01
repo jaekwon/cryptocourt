@@ -1076,21 +1076,36 @@ p.sub{font-size:13.5px; color:var(--ink-2); max-width:54ch; margin-top:6px}
    middle of the MAP and a scale flings the node across the drawing instead of
    swelling it in place.
    THE OVERSHOOT IS THE POINT. A plain ease lands so softly at this duration and
-   this size that the change reads as a redraw; the back-out curve passes 1.18,
-   touches about 1.23 and settles, which is what makes it legible AS motion —
-   the eye is told where to look. 180ms because it has to finish before the
-   camera glide it rides along with, or the two motions argue.
+   this size that the change reads as a redraw; the back-out curve passes its
+   target and comes back, which is what makes it legible AS motion — the eye is
+   told where to look. 200ms: enough for a longer throw to be seen travelling,
+   still finishing before the camera glide it rides along with.
+   BIGGER, ON THE OWNER'S ASK — 1.18 to 1.35, and the curve's overshoot from
+   1.56 to 1.9 so the spring grew with the step rather than the same nudge over a
+   longer distance.
+   THIS SIZE IS A JUDGEMENT, AND THE RING DOES NOT BOUND IT. That is worth
+   recording because the opposite was written here first: the claim was that
+   collision with a neighbour sets the ceiling, since SVG cannot paint the grown
+   node above its siblings. Measured, it does not. Pushed to 2.0 on the demo
+   docket the worst overlap is still 11% of the node and every overlapping
+   neighbour is DIMMED, which is the state selection puts them in — so nothing in
+   the layout objects to a much larger spring, and 1.35 is chosen rather than
+   forced. map_boing.js keeps counting it anyway, as a guard for a layout that
+   packs tighter later, not as the reason for this number.
+   WHAT DOES THE READING IS THE CAMERA, not this. A transform can only multiply a
+   12-unit font by 1.35; selection also zooms to MAPK.readSelPx, and that is what
+   took the picked title from 19px to 38px.
    The court gets a smaller step. It is already the largest box on the map and
-   sits at the centre of everything, so the same 1.18 there is a lurch rather
+   sits at the centre of everything, so the full step there is a lurch rather
    than a nudge; the point is to answer the click, not to fill the view.
    The dim is what keeps the grown node readable against its neighbours: it does
    not paint above them — SVG has no z-index and reordering the nodes to fake it
    would scramble tab order — so the contrast has to come from everything else
    stepping back, which .dim already does. */
 .mnode-a,.mfold-a,.mcourt-a{transform-box:fill-box; transform-origin:center;
-  transition:transform .18s cubic-bezier(.34,1.56,.64,1)}
-.mnode-a.selected,.mfold-a.selected{transform:scale(1.18)}
-.mcourt-a.selected{transform:scale(1.10)}
+  transition:transform .2s cubic-bezier(.34,1.9,.64,1)}
+.mnode-a.selected,.mfold-a.selected{transform:scale(1.35)}
+.mcourt-a.selected{transform:scale(1.18)}
 /* NO LOCAL reduced-motion RULE, deliberately. One was written here and it was
    dead the moment it landed: this stylesheet already carries
    `*{transition:none!important}` under the same query, which outranks anything
@@ -6412,6 +6427,17 @@ const MAPK = {
   // It is a floor and not a target: Math.max keeps a reader's own zoom when
   // they are already closer in.
   readPx:13,
+  // AND A BIGGER ONE FOR THE NODE YOU JUST PICKED. readPx above is the floor for
+  // a view you did not ask for — the map opening, a folder being fitted — where
+  // 13px is a size you can scan. Clicking a node is a request to READ it, and
+  // that is a different number: reported as "spring bigger. still can[']t read"
+  // while the selected title measured 19px, because a transform on the box can
+  // only ever multiply a 12-unit font by 1.35 and the shortfall is in the CAMERA.
+  // So selection zooms until the title is this tall, and the spring is then a
+  // multiplier on top of an already-readable size rather than a substitute for
+  // one. Measured on the live covid docket, that lands the picked title near
+  // 30px against 19 before.
+  readSelPx:22,
   // HOW FAR IN THE ZOOM GOES. Doubled from 8 on the owner's ask for "2x more".
   // The slider is log2 of this, so its max attribute is derived rather than
   // written down twice — a slider that stops at 3 while the clamp allows 4 is a
@@ -8153,7 +8179,7 @@ function mountMap(slug, data, focusId, focusPath){
     // centring on a claim shows a box with its sentence hidden.
     const el = svgEl(), px = el && el.clientWidth;
     let tz = z;
-    if(px) tz = Math.min(MAPK.zMax, Math.max(z, MAPK.readPx*fit.w/(MAPK.fs.title*px)));
+    if(px) tz = Math.min(MAPK.zMax, Math.max(z, MAPK.readSelPx*fit.w/(MAPK.fs.title*px)));
     glideTo(b.cx, b.cy, tz);
   }
   /* THE CARD'S TEXT IS READ WHEN THE CARD IS OPENED, not for the whole docket
