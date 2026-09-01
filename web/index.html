@@ -2691,26 +2691,49 @@ async function claimDetail(slug,id){
       one(`SettleDeadline(${s},${i})`)]);
     Object.assign(d,{answer:ans, answerer, answerBond:bond, record:rec, settleAt});
   }
-  if(answered && !settled){
-    d.round = await one(`FailedRounds(${s},${i})`).catch(()=>0);
-    d.disputeBondNext = await one(`DisputeBondNext(${s},${i})`).catch(()=>0);
-    d.escrowUntil = await one(`EscrowUntil(${s},${i})`).catch(()=>0);
-    // the running round's own bar was snapshotted at open and is unexposed;
-    // this is the bar a NEW dispute faces today — labeled that way in the UI
-    if(disputeOpen) d.quorumFloor = await one(`QuorumFloorOf(${s},${i})`).catch(()=>null);
-    // THE ROUND'S CLOSE, at last read rather than guessed. Until
-    // DisputeVoteCloses existed this was a demo-only field and live mode said
-    // so; every clock on a live claim fell back to "about 7 days after this
-    // round opened", which is the window's length, not the time left in it.
-    // A HEIGHT — the number the governor actually gates on (dispute.gno) —
-    // so everything downstream keeps treating it as one. 0 means no open
-    // round, and 0 is falsy, which is the same "nothing to show" every
-    // consumer already handled.
-    if(disputeOpen) d.voteEndsAt = await one(`DisputeVoteCloses(${s},${i})`).catch(()=>0) || null;
-  }
-  if(settled && !provClose){ d.verdict = await one(`Verdict(${s},${i})`).catch(()=>-1); d.route = await one(`VerdictRoute(${s},${i})`).catch(()=>""); }
-  if(await one(`Crystallized(${s},${i})`).catch(()=>false)){
-    const ds = await tup(`DrawSlices(${s},${i})`); d.crystallized=true; d.draw={w:ds[0],a:ds[1],ans:ds[2],carrot:ds[3]};
+  /* ONE WAVE, NOT NINE. Every read below was awaited on its own line, so a claim
+     page walked FailedRounds -> DisputeBondNext -> EscrowUntil -> QuorumFloorOf
+     -> DisputeVoteCloses -> Crystallized -> ... one round trip at a time.
+     Measured on kourt.xyz before this: the reads marched from 1610ms to 3220ms
+     in thirteen steps of about 80ms each, while the node answered every one of
+     them in under a hundred. Nothing here reads a value the line above it
+     produced — they are all keyed on the same claim and gated on flags this
+     function already has — so waiting was pure ceremony.
+
+     The phase flags still gate what is ASKED: a settled claim is not asked for a
+     dispute bond. What changed is that the asking happens at once.
+
+     Each keeps its own .catch, because Promise.all rejects as a whole and one
+     absent entrypoint must cost its own field rather than the page — the same
+     reason the answer batch above it is written that way. */
+  {
+    const live = answered && !settled;
+    const ready = settled && !provClose;
+    const [round, bondNext, escrow, quorum, voteEnds, verdict, route, cryst] = await Promise.all([
+      live? one(`FailedRounds(${s},${i})`).catch(()=>0) : null,
+      live? one(`DisputeBondNext(${s},${i})`).catch(()=>0) : null,
+      live? one(`EscrowUntil(${s},${i})`).catch(()=>0) : null,
+      // the running round's own bar was snapshotted at open and is unexposed;
+      // this is the bar a NEW dispute faces today — labeled that way in the UI
+      (live && disputeOpen)? one(`QuorumFloorOf(${s},${i})`).catch(()=>null) : null,
+      // THE ROUND'S CLOSE, read rather than guessed. A HEIGHT — the number the
+      // governor actually gates on (dispute.gno) — so everything downstream
+      // keeps treating it as one. 0 means no open round, and 0 is falsy, which
+      // is the same "nothing to show" every consumer already handled.
+      (live && disputeOpen)? one(`DisputeVoteCloses(${s},${i})`).catch(()=>0) : null,
+      ready? one(`Verdict(${s},${i})`).catch(()=>-1) : null,
+      ready? one(`VerdictRoute(${s},${i})`).catch(()=>"") : null,
+      one(`Crystallized(${s},${i})`).catch(()=>false),
+    ]);
+    if(live){
+      d.round = round; d.disputeBondNext = bondNext; d.escrowUntil = escrow;
+      if(disputeOpen){ d.quorumFloor = quorum; d.voteEndsAt = voteEnds || null; }
+    }
+    if(ready){ d.verdict = verdict; d.route = route; }
+    if(cryst){
+      const ds = await tup(`DrawSlices(${s},${i})`);
+      d.crystallized = true; d.draw = {w:ds[0], a:ds[1], ans:ds[2], carrot:ds[3]};
+    }
   }
   // phase for the demo-shaped views
   d.phase = d.closed?"closed": d.provClose?"provClose": d.settled?"settled": d.disputeOpen?"disputed": (d.provisional>=0?"provisional": d.answered?"answered":"open");

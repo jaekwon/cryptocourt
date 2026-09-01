@@ -570,9 +570,15 @@ ok("live: no invented deadline",
 // The read that made the guess unnecessary. Asserted as the CALL, because a
 // realm function nobody invokes is the failure this feature would otherwise
 // have: the ballot would look identical and always take the read-failed path.
+// Asserted as the CALL and its DESTINATION, not as one statement's shape: the
+// nine reads around it were awaited line by line and are now one Promise.all,
+// which changed every one of those shapes without changing what is asked. The
+// failure this guards against is unchanged — a realm function nobody invokes,
+// leaving the ballot on its read-failed path for ever.
 ok("live: the close height is read from the chain",
    src.includes('DisputeVoteCloses(${s},${i})')
-   && /disputeOpen\) d\.voteEndsAt = await one/.test(src));
+   && /disputeOpen\)\?\s*one\(`DisputeVoteCloses/.test(src)
+   && /d\.voteEndsAt = voteEnds/.test(src));
 ok("live: no turnout row without read", !htmlL.includes("turnout bar"));
 // The async fill marks the vote BUTTONS now instead of writing a paragraph, so
 // what has to be present is the block it looks for.
