@@ -2882,9 +2882,31 @@ async function fillUnstakeSides(slug, id){
   for(const el of sides){
     const held = el.dataset.unstake === "0"? Number(pos.yes) : Number(pos.no);
     if(!(held > 0)) continue;           // stays hidden
-    el.hidden = false;
     const b = el.querySelector(".btn");
-    if(b) b.insertAdjacentHTML("beforeend", ` <small>${esc(cc(held, slug))}</small>`);
+    /* THE AMOUNT IS WRITTEN HERE, NOT IN THE MARKUP, and that was the bug.
+       The button shipped with a hardcoded amount:1000000 — one whole coin — and
+       this function then appended the REAL holding to its label. So it showed
+       "Unstake YES 19.5 KOURT:COVID" and sent an unstake of 1.0: under a coin
+       the realm refused the whole transaction with "unstaking more than is
+       staked", and over a coin it quietly unstaked a fraction of what the label
+       named. The second is the worse half — a wrong number that succeeds.
+       data-args is read at click time, so rewriting it here is the fix, and it
+       has to happen BEFORE the button is revealed.
+       FAIL CLOSED. If the args cannot be parsed or rewritten the button stays
+       hidden, because the only alternative is offering a control that sends an
+       amount nobody chose. */
+    if(b){
+      let ok = false;
+      try{
+        const a = JSON.parse(b.dataset.args || "{}");
+        a.amount = held;
+        b.dataset.args = JSON.stringify(a);
+        ok = true;
+      }catch(_){ ok = false; }
+      if(!ok) continue;                 // stays hidden rather than send 1000000
+      b.insertAdjacentHTML("beforeend", ` <small>${esc(cc(held, slug))}</small>`);
+    }
+    el.hidden = false;
   }
 }
 async function fillStakeBalance(slug){
@@ -7770,12 +7792,30 @@ document.addEventListener("change", ev=>{ if(ev.target && ev.target.id==="buyack
    down the page, so a reader who came to buy met four reference numbers first
    and had to scroll for the button. In the column they are 2x2 and level with
    the docket. */
+/* A ZERO REWARD ROW IS NOISE, not information, and the rule is already stated at
+   voteLockFigures: a figure that says nothing should print nothing. On a young
+   court the reservoir and the senior queue are both 0.00, so two of the four
+   tiles were a zero under a sentence of explanation the reader has no use for
+   yet. They appear the moment they carry a number. Price and supply always show
+   — those are the two a buyer came for. */
+function statTile(k, v, sub){
+  return `<div class="stat"><div class="k">${k}</div><div class="v tnum">${v}</div>`
+    + (sub? `<div class="sub">${sub}</div>` : "") + `</div>`;
+}
 function courtStatsHtml(slug, s){
+  const tiles = [
+    statTile("coin price", `${priceText(s.price, s.minted)}<small> µGNOT/unit</small>`,
+      `one-way — the GNOT is burned. 1 ${ccSym(slug)} = 1,000,000 units`),
+    // The emitted split is a footnote on supply, and only once any exists.
+    statTile("coin supply", cc(s.supply,slug),
+      s.emitted>0? `${cc(s.emitted,slug)} of it earned as rewards` : ""),
+  ];
+  if(s.reservoir>0) tiles.push(statTile("reward reservoir", cc(s.reservoir,slug),
+    "available to claims settling and paying out"));
+  if(s.seniorOwed>0) tiles.push(statTile("senior queue owed", cc(s.seniorOwed,slug),
+    "earned payouts, paid as budget accrues"));
   return `<section class="courtstats"><div class="grid stats">
-        <div class="stat"><div class="k">coin price</div><div class="v tnum">${priceText(s.price, s.minted)}<small> µGNOT/unit</small></div><div class="sub">one-way curve — the GNOT is burned. 1 ${ccSym(slug)} = 1,000,000 units</div></div>
-        <div class="stat"><div class="k">coin supply</div><div class="v tnum">${cc(s.supply,slug)}</div><div class="sub">${cc(s.emitted,slug)} of it earned as rewards</div></div>
-        <div class="stat"><div class="k">reward reservoir</div><div class="v tnum">${cc(s.reservoir,slug)}</div><div class="sub">available to claims settling and paying out</div></div>
-        <div class="stat"><div class="k">senior queue owed</div><div class="v tnum">${cc(s.seniorOwed,slug)}</div><div class="sub">earned payouts (comps, bounties, voter rewards), paid as budget accrues</div></div>
+       ${tiles.join("\n       ")}
        </div></section>`;
 }
 function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pendQ){
@@ -9940,9 +9980,14 @@ function stakeTicket(slug,id,d){
     return `<div class="ticket"><h3>Closed — never answered</h3>
       <div class="hint">Nobody answered before the dead-claim timeout, so the claim died. Stakes were never frozen: unstake freely, 1×. New staking is closed.
         The author's deposit is refunded and the filing fee is burned — the price of filing something nobody would answer.</div>
+      <!-- Wrapped and hidden like the live ticket's pair, so fillUnstakeSides
+           reveals them and writes the real amount in. Unwrapped, the filler
+           found no [data-unstake] here and returned early, which left this
+           branch shipping the hardcoded one-coin unstake to anyone whose claim
+           died unanswered. -->
       <div class="actions" style="margin-top:14px">
-        ${btn("Unstake YES","Unstake",{courtSlug:slug,claimID:id,side:0,amount:1000000})}
-        ${btn("Unstake NO","Unstake",{courtSlug:slug,claimID:id,side:1,amount:1000000})}
+        <span data-unstake="0" hidden>${btn("Unstake YES","Unstake",{courtSlug:slug,claimID:id,side:0,amount:0})}</span>
+        <span data-unstake="1" hidden>${btn("Unstake NO","Unstake",{courtSlug:slug,claimID:id,side:1,amount:0})}</span>
       </div></div>`;
   }
   if(d.phase==="settled"||d.phase==="provClose"){
@@ -10051,8 +10096,12 @@ function stakeTicket(slug,id,d){
     <div class="actions" style="margin-top:10px">
       ${btn("Stake YES","Stake",{courtSlug:slug,claimID:id,side:0,amount:1000000},"yes","",null,null,null,null,null,true)}
       ${btn("Stake NO","Stake",{courtSlug:slug,claimID:id,side:1,amount:1000000},"no","",null,null,null,null,null,true)}
-      <span data-unstake="0" hidden>${btn("Unstake YES","Unstake",{courtSlug:slug,claimID:id,side:0,amount:1000000},"","",null,null,null,null,null,true)}</span>
-      <span data-unstake="1" hidden>${btn("Unstake NO","Unstake",{courtSlug:slug,claimID:id,side:1,amount:1000000},"","",null,null,null,null,null,true)}</span>
+      <!-- amount:0 is a placeholder the realm would refuse ("unstake must be
+           positive"). It is deliberately unusable: fillUnstakeSides writes the
+           holder's real stake in before revealing the button, so a value that
+           escaped without being filled fails loudly instead of moving a coin. -->
+      <span data-unstake="0" hidden>${btn("Unstake YES","Unstake",{courtSlug:slug,claimID:id,side:0,amount:0},"","",null,null,null,null,null,true)}</span>
+      <span data-unstake="1" hidden>${btn("Unstake NO","Unstake",{courtSlug:slug,claimID:id,side:1,amount:0},"","",null,null,null,null,null,true)}</span>
     </div></div>`;
 }
 

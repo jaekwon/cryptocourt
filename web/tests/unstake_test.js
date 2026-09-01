@@ -58,10 +58,19 @@ ok("the ticket is addressable by the id the fill looks for",
 
 // --------------------------------------------------------------- the fill ---
 // A DOM small enough to read: the two wraps, each with the button inside it.
-function makeTicket(){
+function makeTicket(badArgs){
+  /* THE STUB CARRIES data-args, because the real button does and the amount now
+     lives there. Without it this fixture modelled a button that could not be
+     filled — and the fill FAILS CLOSED, so the first version of this hid both
+     sides and the "offered YES and only YES" assertion failed for a reason that
+     had nothing to do with sides. A fixture thinner than the thing it stands in
+     for tests the stand-in. */
   const mk = side => ({
     dataset: {unstake: side}, hidden: true,
     btn: {html: "Unstake " + (side==="0"?"YES":"NO"),
+          dataset: {func: "Unstake",
+                    args: badArgs? "{not json"
+                        : JSON.stringify({courtSlug:"covid", claimID:7, side:Number(side), amount:0})},
           insertAdjacentHTML(_, s){ this.html += s; }},
     querySelector(sel){ return sel === ".btn" ? this.btn : null; },
   });
@@ -87,6 +96,20 @@ eval(slice("async function fillUnstakeSides(", "\nasync function fillStakeBalanc
   await fillUnstakeSides("covid", 7);
   ok("one read, and it asks for this reader's position on this claim",
      asked.length === 1 && asked[0][0] === "covid" && asked[0][1] === 7 && asked[0][2] === "g1reader");
+  /* THE AMOUNT COMES FROM THE POSITION. It used to be a hardcoded 1000000 in the
+     markup while this fill appended the REAL holding to the label, so the button
+     read "Unstake YES 20.0 KOURT:COVID" and sent one coin: under a coin the
+     realm refuses the transaction outright — "unstaking more than is staked",
+     which is how this surfaced — and over a coin it silently unstakes a
+     fraction of what the label promised. The label was never the bug; the
+     argument was. */
+  {
+    const a = JSON.parse(TICKET.sides[0].btn.dataset.args);
+    ok("...and the button now carries the reader's whole stake, not a fixed coin",
+       a.amount === 20_000_000);
+    ok("...with the rest of the call untouched",
+       a.courtSlug === "covid" && a.claimID === 7 && a.side === 0);
+  }
   ok("a reader holding YES is offered YES and only YES",
      shown().length === 1 && shown()[0].startsWith("Unstake YES"));
   ok("and the button says what taking it back returns",
@@ -127,6 +150,18 @@ eval(slice("async function fillUnstakeSides(", "\nasync function fillStakeBalanc
   global.document = { getElementById: () => null };
   await fillUnstakeSides("covid", 7);
   ok("no ticket on the page: the fill asks nothing", asked.length === 0);
+
+  /* MALFORMED ARGS MUST NOT BECOME A BUTTON. If data-args cannot be parsed the
+     amount cannot be written, and the only alternative to hiding is offering a
+     control that sends whatever the markup happened to ship with — which is the
+     failure this whole change removes. Fails closed, and silently: there is
+     nothing a reader could do about it. */
+  TICKET = makeTicket(true); POS = {yes: 20_000_000, no: 0}; asked = [];
+  await fillUnstakeSides("covid", 7);
+  ok("a button whose args cannot be rewritten stays hidden",
+     TICKET.sides.every(x => x.hidden === true));
+  ok("...and no amount is smuggled onto its label",
+     TICKET.sides.every(x => !/KOURT/.test(x.btn.html)));
 
   DONE = true;
   console.log(fail ? "\n" + fail + " FAILURES" : "\nALL PASS");
