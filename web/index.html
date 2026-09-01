@@ -256,6 +256,19 @@ code,.mono{font-family:var(--mono)}
 .claimbody p:last-child{margin-bottom:0}
 .crumbs{font-family:var(--mono); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase;
   color:var(--mark); opacity:.85; margin-bottom:18px; display:flex; gap:7px; flex-wrap:wrap; align-items:center}
+/* A JUMP SET INTO A HEADING. It must not inherit the h1's clamp(26px,3.4vw,36px)
+   — at that size it competes with the folder's own name — so the size, weight
+   and family are all restated. Baseline-aligned rather than middle: the heading
+   is serif with a long descender and `middle` floats the link visibly high.
+   white-space:nowrap because "on the map" breaking after "on" next to a wrapped
+   folder title is the one way this can look accidental. */
+.page-h .hjump{display:inline-flex; align-items:center; gap:6px; white-space:nowrap;
+  margin-left:14px; vertical-align:baseline; text-decoration:none;
+  font-family:var(--sans); font-size:13px; font-weight:500; letter-spacing:0;
+  color:var(--accent-2)}
+.page-h .hjump .icn{width:16px; height:14px; flex:none}
+.page-h .hjump:hover{color:var(--accent); text-decoration:underline}
+.page-h .hjump:focus-visible{outline:2px solid var(--accent); outline-offset:2px}
 .seal{font-family:var(--mono); font-size:11px; letter-spacing:.16em; text-transform:uppercase;
   border:1px solid var(--mark); color:var(--mark); border-radius:0; padding:3px 7px;
   white-space:nowrap; vertical-align:middle}
@@ -5218,6 +5231,14 @@ const ICN_CHEST = `<svg class="icn" viewBox="0 0 14 12" aria-hidden="true"><path
 /* A BIN, for the spam flag. Same 14x12 box as the rest so it sits on the text
    baseline the way ICN_CHEST and ICN_COURT do. Lid, body, two staves. */
 const ICN_BIN = `<svg class="icn" viewBox="0 0 14 12" aria-hidden="true"><path d="M5.4 0h3.2l.5.9h3.1v1.5H1.8V.9h3.1zM2.6 3.5h8.8l-.6 7.6a.9.9 0 0 1-.9.9H4.1a.9.9 0 0 1-.9-.9zM5.4 5h1.1v5H5.4zm2.7 0h1.1v5H8.1z" fill="currentColor"/></svg>`;
+/* STARLIGHT CONSTELLATION ROUTES, asked for by name, and apt rather than
+   decorative: the map IS four dots with lines drawn between them, so a star
+   chart is a picture of the destination instead of a generic arrow. The routes
+   are a stroked polyline at reduced opacity and the stars are filled circles —
+   the lines have to sit behind the stars, which in SVG means drawn first.
+   Not a path with round caps pretending to be dots: at 14x12 a cap is a smear,
+   and the stars need to read as points. */
+const ICN_CONSTEL = `<svg class="icn" viewBox="0 0 14 12" aria-hidden="true"><path d="M2.1 9.4 5.5 3.2 9 6.5 12 2.3" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linejoin="round" opacity=".5"/><circle cx="2.1" cy="9.4" r="1.15" fill="currentColor"/><circle cx="5.5" cy="3.2" r="1.15" fill="currentColor"/><circle cx="9" cy="6.5" r="1.15" fill="currentColor"/><circle cx="12" cy="2.3" r="1.15" fill="currentColor"/></svg>`;
 const ICN_COURT = `<svg class="icn" viewBox="0 0 14 12" aria-hidden="true"><path d="M7 0l6 2.8V4H1V2.8zM2.2 5h1.8v4.4H2.2zm3.9 0h1.8v4.4H6.1zm3.9 0h1.8v4.4H10zM1 10.4h12V12H1z" fill="currentColor"/></svg>`;
 /* Folders ARE on-chain (folders.gno) and LIVE courts now read them —
    chainFolders() fetches the flat chain shape and foldersFor() composes one
@@ -8466,7 +8487,13 @@ on(/^\/c\/([a-z0-9-]+)\/f\/([0-9.]+)$/, async (slug,fpath)=>{
   omitted += resolved.filter(m=>m.drop).length;
   const fpager = pagerHtml(`/c/${slug}/f/${fpath}`, fpage, fwin.length, (f.claims||[]).length, "claims", "curated order");
   main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:slug,href:"#/c/"+slug},...trail])
-    + `<h1 class="page-h">${ICN_FOLDER} ${safeInline(f.name)} <span class="seal">${esc(slug)}</span></h1>`
+    /* THE JUMP RIDES THE HEADING. It was a paragraph of its own underneath, which
+       put a whole line between the folder's name and the one action that name
+       affords — and on a folder with a picture and a description it ended up
+       three elements down. Inline after the seal it reads as part of the title:
+       "Fauci · COVID · on the map". */
+    + `<h1 class="page-h">${ICN_FOLDER} ${safeInline(f.name)} <span class="seal">${esc(slug)}</span> `
+      + `<a class="hjump" href="#/c/${esc(slug)}/map?ffocus=${esc(fpath)}">${ICN_CONSTEL}on the map</a></h1>`
     /* THE FOLDER'S ONE PICTURE, at a size worth looking at. On the map it is a
        tint under a label, which is right there and not enough anywhere else:
        this is the page a reader lands on when they follow the folder, and the
@@ -8476,7 +8503,6 @@ on(/^\/c\/([a-z0-9-]+)\/f\/([0-9.]+)$/, async (slug,fpath)=>{
        that the page does not already say in words. */
     + (f.img? `<img class="folderface" src="${esc(f.img)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : "")
     + (fdesc? `<p class="sub">${esc(fdesc)}</p>` : "")
-    + `<p class="tacts" style="margin:0 0 10px"><a class="tlink" href="#/c/${esc(slug)}/map?ffocus=${esc(fpath)}">on the map<span aria-hidden="true">→</span></a></p>`
     + `<p class="page-sub">A folder is moderator curation with zero economic weight — the claims below are ordinary claims of this court. ${curF.source==="chain"? "Read live from the chain." : curF.source==="local"? CUR_LABEL+"." : "Read from the sample data."}${omitted? ` ${omitted} hidden or unreadable row${omitted===1?" is":"s are"} omitted.`:""}</p>`
     + (subs? `<section><div class="sec-h">Subfolders</div><div class="docket">${subs}</div></section>` : "")
     + `<section${subs?' style="margin-top:22px"':""}><div class="sec-h">Claims <span class="count">${(f.claims||[]).length}</span></div>`

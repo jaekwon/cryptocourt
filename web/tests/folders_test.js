@@ -316,6 +316,36 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
   // Those nine cover chain nesting, which is exactly where a regression shipped
   // this week: subfolders became unreachable while the court page went on linking
   // to them. The tests for it existed and could not have caught it.
+  /* THE FOLDER'S JUMP TO THE MAP rides the heading, not a paragraph below it.
+     Asked for as: move it right of the name, and replace the arrow with a map
+     icon "like starlight constellation routes".
+     Source assertions, because this harness has no browser — the GEOMETRY (that
+     it lands right of the seal, on the same line) is measured in the deploy
+     screenshot rather than here, and this side pins the things a rename or a
+     tidy-up would break: that the link is inside the h1 at all, that the old
+     paragraph is gone, and that the icon is the constellation rather than an
+     arrow character. */
+  ok("the folder's map jump is inside the heading",
+     src.includes('<span class="seal">${esc(slug)}</span> `')
+     && src.includes('<a class="hjump" href="#/c/${esc(slug)}/map?ffocus=${esc(fpath)}">${ICN_CONSTEL}on the map</a></h1>'));
+  ok("...and the paragraph it used to live in is gone",
+     !src.includes('<p class="tacts" style="margin:0 0 10px"><a class="tlink" href="#/c/${esc(slug)}/map?ffocus='));
+  ok("...with no arrow glyph left on the folder heading",
+     !/hjump[^`]*→/.test(src));
+  /* The icon is a constellation: routes drawn BEHIND stars, which in SVG means
+     the stroked path is emitted before the circles. Asserted as an order, not
+     just a presence — circles first would put the joins over the points and the
+     thing stops reading as a star chart. */
+  {
+    const i = src.indexOf("const ICN_CONSTEL =");
+    const decl = src.slice(i, src.indexOf("\n", i));
+    ok("the constellation icon exists", i > 0 && decl.length > 60);
+    ok("...with four stars", (decl.match(/<circle /g) || []).length === 4);
+    ok("...joined by one route", (decl.match(/<path /g) || []).length === 1);
+    ok("...routes drawn behind the stars", decl.indexOf("<path ") < decl.indexOf("<circle "));
+    ok("...and it inherits the link's colour", !/#[0-9a-f]{3,6}/i.test(decl)
+       && (decl.match(/currentColor/g) || []).length >= 2);
+  }
   console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");
   process.exit(fail?1:0);
 })();
