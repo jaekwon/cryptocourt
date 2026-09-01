@@ -165,6 +165,42 @@ const PAGE = 'file://' + path.join(__dirname, '..', '..', 'index.html');
      sweep.every(s => s.later === 0),
      "overlapped=" + sweep.filter(s => s.later > 0).length);
 
+  // ------------------------------------------------- folders and the court too
+  // THE REGRESSION THIS EXISTS FOR. The first version animated .mnode-a only.
+  // Claim nodes all grew, this check passed, and the feature was reported as not
+  // working — because the obvious thing to click on a map is a big labelled
+  // FOLDER box, and those sat still. "A node" means any of the three kinds, so
+  // the check has to walk all three or it certifies a third of the feature.
+  for (const kind of [".mfold-a", ".mcourt-a"]) {
+    await openMap();
+    const cnt = await page.evaluate(k => document.querySelectorAll(k).length, kind);
+    ok(`the map drew ${kind} to click`, cnt >= 1, "count=" + cnt);
+    if (!cnt) continue;
+    const w0 = await page.evaluate(k => {
+      const a = document.querySelector(k);
+      return {w: a.getBoundingClientRect().width, box: getComputedStyle(a).transformBox,
+              dur: getComputedStyle(a).transitionDuration};
+    }, kind);
+    await page.evaluate(k => document.querySelector(k)
+      .dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true})), kind);
+    await new Promise(r => setTimeout(r, 120));
+    const wMid = await page.evaluate(k =>
+      document.querySelector(k).getBoundingClientRect().width, kind);
+    await new Promise(r => setTimeout(r, 700));
+    const w1 = await page.evaluate(k => {
+      const a = document.querySelector(k);
+      return a.classList.contains('selected') ? a.getBoundingClientRect().width : null;
+    }, kind);
+    ok(`${kind}: clicking it selects it`, w1 !== null);
+    if (w1 === null) continue;
+    const g = w1 / w0.w;
+    ok(`${kind}: grows (${g.toFixed(3)}x)`, g > 1.05 && g < 1.30,
+       `${w0.w.toFixed(1)} -> ${w1.toFixed(1)}`);
+    ok(`${kind}: springs past its landing`, wMid > w1, `mid ${wMid.toFixed(1)}`);
+    ok(`${kind}: scales about itself`, w0.box === "fill-box", w0.box);
+  }
+  await openMap();
+
   // --------------------------------------------------------- reduced motion
   // The SIZE is the feature and the spring is the delivery, so reduce takes the
   // spring only. Asserting the node still grows is the half that a blanket
