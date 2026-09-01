@@ -56,7 +56,12 @@ const html = disputeTicket("orem", 3, d, NOW);
 // wording survives only where the answer did not read — a question naming the
 // WRONG side is worse than one naming none.
 ok("the ballot names the answer on the record and asks about it",
-   /The answer on the record is <b>(YES|NO)<\/b>\. Should it be overturned\?/.test(html));
+   /Overturn the <b>(YES|NO)<\/b> answer\?/.test(html));
+// It has to fit one line beside the clock, which is why it is four words and not
+// a sentence — the first version read "The answer on the record is YES. Should it
+// be overturned?" and wrapped.
+ok("...in a heading short enough not to wrap",
+   (/<h3>([^<]*(?:<b>[^<]*<\/b>)?[^<]*)<\/h3>/.exec(html)||[,""])[1].replace(/<[^>]+>/g,"").length < 30);
 ok("...and falls back to the unnamed question when the answer is unknown",
    src.includes('"Should this answer be overturned?"'));
 ok("the hint is one line, and it is the clock",

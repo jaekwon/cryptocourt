@@ -5664,7 +5664,7 @@ function disputeTicket(slug, id, d, nowH){
      than one that names none. */
   const ansSide = (d.answer===0 || d.answer===1)? sideName(d.answer) : null;
   const ballotQ = ansSide
-    ? `The answer on the record is <b>${ansSide}</b>. Should it be overturned?`
+    ? `Overturn the <b>${ansSide}</b> answer?`     // one line at every width
     : "Should this answer be overturned?";
   return `<div class="ticket" style="margin-top:12px"><h3>${ballotQ}</h3>
       <div class="hint">${ballotHint(slug, d, nowH)} <button type="button" class="helplink" data-help="help-vote">How this vote works →</button></div>
@@ -8611,8 +8611,18 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
     if(n===null){ main.innerHTML = crumbs([{label:"Directory",href:"#/"}]) + notFound("No such court on this node (or the node did not answer)."); return; }
     if(idn<1 || idn>n){ main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:slug,href:"#/c/"+slug}]) + notFound("No claim by that id."); return; }
   }
-  const cs = await courtStats(slug); const d = await claimDetail(slug,id);
-  const nowH = await chainHeight();
+  /* THE COURT, THE CLAIM, THE HEIGHT AND THE AUTHOR, ALL AT ONCE. These were four
+     sequential awaits. Only one dependency is real — claimDetail's own later
+     reads are gated on flags it fetches first — and courtStats, chainHeight and
+     ClaimAuthor need nothing from each other or from the claim. Measured on
+     kourt.xyz before this, a claim page walked twelve round trips of ~80ms while
+     the node answered each in under a hundred. */
+  const [cs, d, nowH, authorRead] = await Promise.all([
+    courtStats(slug),
+    claimDetail(slug, id),
+    chainHeight(),
+    isLive()? one(`ClaimAuthor(${gstr(slug)},${id})`).catch(()=>null) : null,
+  ]);
   // titles for the association rows: demo reads its dataset; live reuses the
   // docket's own render read ONCE, and only when local curation has relations
   let assocLookup = null;
@@ -8629,7 +8639,7 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
   }
   if(!d){ main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:slug,href:"#/c/"+slug}]) + notFound("No claim by that id."); return; }
   // opened-by: a file names who opened it — one read, claim page only
-  const author = isLive()? await one(`ClaimAuthor(${gstr(slug)},${id})`).catch(()=>null)
+  const author = isLive()? authorRead
                          : ((DEMO.claims[slug+"/"+id]||{}).author||null);
   /* ONTO d, not just into a local. This read existed only to print "opened by"
      and stayed a local variable, so every later question about who the author
@@ -8644,7 +8654,7 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
   const openedBy = author? `<span class="tfact">opened by <span class="mono" aria-hidden="true">${shortAddr(author)}</span><span class="sr-only">${esc(author)}</span></span>` : "";
   // moderation provenance: four booleans, claim route only; a failed read
   // renders nothing — the page makes no completeness certificate to defend
-  let mHidden=null, mRedacted=null, mPurged=null, mSeeded=null, polishBlocks=null;
+  let mHidden=null, mRedacted=null, mPurged=null, mSeeded=null, polishBlocks=null, tlRaw=null;
   if(isLive()){
     const s2m = gstr(slug);
     // polishBlocks rides along in the same round trip. It is the court's
@@ -8652,12 +8662,16 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
     // title froze before the opening transaction returned. A realm too old to
     // answer leaves it null, which hides the offer — the safe direction, since
     // the alternative is a form the realm refuses.
-    [mHidden, mRedacted, mPurged, mSeeded, polishBlocks] = await Promise.all([
+    /* AND THE TIMELINE RIDES WITH THEM. It was a wave of its own, immediately
+       after this one and needing nothing from it — one more 80ms round trip on a
+       page that was making twelve. Parsed below, where it was. */
+    [mHidden, mRedacted, mPurged, mSeeded, polishBlocks, tlRaw] = await Promise.all([
       one(`HiddenFromListing(${s2m},${id})`).catch(()=>null),
       one(`TextRedacted(${s2m},${id})`).catch(()=>null),
       one(`ClaimPurged(${s2m},${id})`).catch(()=>null),
       one(`ClaimSeeded(${s2m},${id})`).catch(()=>null),
       one(`CourtStakeOpenDelay(${s2m})`).catch(()=>null),
+      one(`ClaimTimeline(${gstr(slug)},${id})`).catch(()=>null),
     ]);
   } else { const dd0=DEMO.claims[slug+"/"+id]||{};
     mHidden=dd0.hidden===true; mRedacted=dd0.redacted===true; mPurged=dd0.purged===true; mSeeded=dd0.seeded===true; }
@@ -8666,7 +8680,7 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
   // to the three-ratio display byte-identically
   // the claim's clock, as the chain recorded it (dates, with heights beside)
   let tline=null;
-  if(isLive()) tline = parseTimeline(await one(`ClaimTimeline(${gstr(slug)},${id})`).catch(()=>null));
+  if(isLive()) tline = parseTimeline(tlRaw);
   else { const dd1=DEMO.claims[slug+"/"+id]||{}; tline = parseTimeline(dd1.timeline); }
   // ONE HEIGHT SPACE. chainHeight() reads the RPC's latest_block_height, which
   // knows nothing about the realm's test-height skew — and ClaimSeries records
