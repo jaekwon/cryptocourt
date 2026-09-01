@@ -42,37 +42,34 @@ const party = role => ({role});
      /href="#\/c\/covid\/3\/board"/.test(boardChip("covid", 3, 0, true, [])));
 }
 
-// ---- the fact, not the count ---------------------------------------------
-// "5 comments" does not tell a reader whether it is worth opening. Who replied
-// does, and the count is then the size of what is behind the link.
+// ---- the count, whoever spoke ---------------------------------------------
+// It used to lead with who had replied — "the author and the answerer have
+// replied · 5 comments" — on the argument that a fact beats a number. The owner
+// asked for it gone: in a row where every neighbour is one word, it was a
+// sentence. What must NOT come back is the party prefix; the parties are on the
+// board, and the chip says there is something there and how much.
 {
-  ok("both parties",
-     boardChipLabel(5, true, [party("author"), party("answerer")])
-     === "the author and the answerer have replied · 5 comments");
-  ok("the author alone",
-     boardChipLabel(5, true, [party("author")]) === "the author has replied · 5 comments");
-  // NOT the same string with a word removed: the realm returns ONE party row
-  // when only one party has commented and it may be either of them, so this
-  // branch is reachable without the author's.
-  ok("the answerer alone",
-     boardChipLabel(5, true, [party("answerer")]) === "the answerer has replied · 5 comments");
-  ok("neither party — the count stands on its own",
-     boardChipLabel(5, true, []) === "5 comments");
-  ok("an unrecognised role is not silently read as a party",
+  const party = r => ({role: r});
+  ok("both parties still get the plain count",
+     boardChipLabel(5, true, [party("author"), party("answerer")]) === "5 comments");
+  ok("the author alone", boardChipLabel(5, true, [party("author")]) === "5 comments");
+  ok("the answerer alone", boardChipLabel(5, true, [party("answerer")]) === "5 comments");
+  ok("neither party", boardChipLabel(5, true, []) === "5 comments");
+  ok("an unrecognised role changes nothing",
      boardChipLabel(5, true, [party("moderator")]) === "5 comments");
+  ok("no label mentions a party any more",
+     ![[party("author")], [party("answerer")], [party("author"), party("answerer")]]
+       .some(ps => /replied|author|answerer/.test(boardChipLabel(5, true, ps))));
 }
 
 // ---- one label for the count ---------------------------------------------
-// An earlier draft said "5 comments" beside a party line and "5 comments and
-// replies" without one — one number described two ways reads as two numbers.
 {
-  const withParty = boardChipLabel(5, true, [party("author")]);
-  const without   = boardChipLabel(5, true, []);
-  ok("the count is phrased identically on both branches",
-     withParty.endsWith(without));
   ok("one comment is singular", boardChipLabel(1, true, []) === "1 comment");
-  ok("...on the party branch too",
-     boardChipLabel(1, true, [party("author")]) === "the author has replied · 1 comment");
+  ok("and plural above one", boardChipLabel(2, true, []) === "2 comments");
+  ok("an empty board that is still open invites",
+     boardChipLabel(0, true, []) === "discuss this claim");
+  ok("and a settled one with nothing on it says nothing",
+     boardChipLabel(0, false, []) === "");
 }
 
 // ---- the sample boards ----------------------------------------------------

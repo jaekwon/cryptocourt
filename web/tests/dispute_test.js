@@ -49,7 +49,16 @@ const html = disputeTicket("orem", 3, d, NOW);
 // token flows were seven dense lines between the question and the buttons — a
 // reader had to get through the mechanism to reach the choice. All of it is in
 // the modal now.
-ok("ballot h3", html.includes("Should this answer be overturned?"));
+// AND IT NAMES THE ANSWER IT IS ASKING ABOUT. "Should this answer be
+// overturned?" made a reader work out which answer, on a page that argues both
+// sides, while the buttons under it say "overturn" and "uphold" without saying
+// what. The side on the record is one word; the ballot prints it. The old
+// wording survives only where the answer did not read — a question naming the
+// WRONG side is worse than one naming none.
+ok("the ballot names the answer on the record and asks about it",
+   /The answer on the record is <b>(YES|NO)<\/b>\. Should it be overturned\?/.test(html));
+ok("...and falls back to the unnamed question when the answer is unknown",
+   src.includes('"Should this answer be overturned?"'));
 ok("the hint is one line, and it is the clock",
    html.includes('<div class="hint">Closes in about'));
 // THE ROUND WENT TO THE TIMELINE, where the claim's other events are. The

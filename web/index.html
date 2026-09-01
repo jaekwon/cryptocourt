@@ -251,7 +251,9 @@ code,.mono{font-family:var(--mono)}
 /* The author's statement, in the serif the titles use — it is the same voice.
    Bounded to a reading measure rather than the panel width: 90 characters of
    prose is a wall, and this sits directly under a headline. */
-.claimbody{margin:-4px 0 16px; max-width:74ch}
+/* A CLAIM'S STATEMENT NEEDS AIR UNDER THE TITLE. This was -4px, which pulled the
+   body up against a 36px serif heading and read as one wrapped block. */
+.claimbody{margin:10px 0 18px; max-width:74ch}
 .claimbody p{font-family:var(--serif); font-size:15.5px; line-height:1.6; color:var(--ink-2); margin:0 0 9px}
 .claimbody p:last-child{margin-bottom:0}
 .crumbs{font-family:var(--mono); font-size:10.5px; letter-spacing:.1em; text-transform:uppercase;
@@ -2200,9 +2202,12 @@ async function boardParties(slug, id){
   return await readBoardParties(slug, id);
 }
 
-/* THE CHIP SAYS A FACT, NOT A COUNT. "5 comments" tells a reader nothing about
-   whether it is worth opening; "the author and the answerer have replied" is the
-   reason to click, and the count is the size of what is behind it.
+/* THE CHIP IS THE COUNT. It used to lead with who had spoken — "the author and
+   the answerer have replied · 5 comments" — on the argument that a fact beats a
+   number. In the row it lives in, beside four other links, that is a sentence
+   where every neighbour is a word, and the owner asked for it gone. The parties
+   are still on the board; the chip's job is to say there is something there and
+   how much of it.
 
    ONE LABEL FOR THE COUNT on every branch. An earlier draft said "5 comments"
    beside a party line and "5 comments and replies" without one, which reads as
@@ -2217,12 +2222,7 @@ async function boardParties(slug, id){
    Pure so it can be tested without a DOM — the caller does the reads. */
 function boardChipLabel(n, open, parties){
   if(!(n > 0)) return open ? "discuss this claim" : "";
-  const roles = new Set((parties||[]).map(r => r.role));
-  const who = roles.has("author") && roles.has("answerer") ? "the author and the answerer have replied"
-            : roles.has("author")   ? "the author has replied"
-            : roles.has("answerer") ? "the answerer has replied"
-            : "";
-  return (who ? who + " · " : "") + n + (n === 1 ? " comment" : " comments");
+  return n + (n === 1 ? " comment" : " comments");
 }
 function boardChip(slug, id, n, open, parties){
   const label = boardChipLabel(n, open, parties);
@@ -5151,7 +5151,7 @@ on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
         <div class="tagrow">
           <span class="tfacts">${tierPill(s.tier)}<span class="tfact mono">/${esc(slug)}</span></span>
           <span class="tacts"><a class="tlink" href="#/c/${esc(slug)}/map">map<span aria-hidden="true">→</span></a><a class="tlink" href="#/c/${esc(slug)}/curate">curate<span aria-hidden="true">→</span></a><a class="tlink" href="#/raw/${esc(slug)}/mod">moderation log<span aria-hidden="true">→</span></a>
-<a class="tlink" href="#/raw/${esc(slug)}">view as the chain serves it<span aria-hidden="true">→</span></a></span>
+<a class="tlink" href="#/raw/${esc(slug)}" title="What the realm itself serves for this court, unstyled">chain<span aria-hidden="true">→</span></a></span>
           ${s.tier===0? `<span class="tfact">unlisted — hidden from the directory by moderation; this page is reachable by direct link only.</span>`:""}</div>
        </div>
        </div>`
@@ -5632,7 +5632,18 @@ function disputeTicket(slug, id, d, nowH){
   // through the rules of the court to reach the decision. They are all in "How
   // this vote works" now, which is one click and was already the place for
   // them. What is left is the question, the clock, and the buttons.
-  return `<div class="ticket" style="margin-top:12px"><h3>Should this answer be overturned?</h3>
+  /* THE QUESTION NAMES THE ANSWER IT IS ABOUT. "Should this answer be
+     overturned?" left a reader to work out which answer, on a page that argues
+     both sides — and the two buttons under it say "overturn" and "uphold"
+     without ever saying what. The answer on the record is one word and the
+     ballot can afford to print it. Falls back to the old wording only when the
+     answer did not read, because a question that names the wrong side is worse
+     than one that names none. */
+  const ansSide = (d.answer===0 || d.answer===1)? sideName(d.answer) : null;
+  const ballotQ = ansSide
+    ? `The answer on the record is <b>${ansSide}</b>. Should it be overturned?`
+    : "Should this answer be overturned?";
+  return `<div class="ticket" style="margin-top:12px"><h3>${ballotQ}</h3>
       <div class="hint">${ballotHint(slug, d, nowH)} <button type="button" class="helplink" data-help="help-vote">How this vote works →</button></div>
       <div class="actions" id="voteactions" style="margin-top:10px"${
         closed? ` data-voteblocked="Voting has closed for this round. All that is left is to resolve it."` : ""}>
@@ -5898,10 +5909,14 @@ function associationSection(slug, id, lookup, chainRows){
   // true: "the chain stores no relations". It stores associations now. What it
   // still does not store is containment and supersedes, so the caption names the
   // source that actually applies rather than one blanket disclaimer.
+  /* IT SITS IN THE SLOT A COUNT NORMALLY SITS IN, so it has to read as a caption
+     and not as a definition of the heading. "Where this claim sits · the chain's
+     own record" was two noun phrases with nothing joining them, and the owner
+     read it as confusing. Every branch now names the thing being sourced. */
   const srcNote = chain.length
     ? (mine.some(r=>r.type!=="bears")
-        ? "associations from the chain; containment and supersedes are curation"
-        : "the chain's own record")
+        ? "relations read from the chain; containment and supersedes are curation"
+        : "relations read from the chain")
     : (cur && cur.source==="local"? CUR_LABEL : "sample curation — the chain stores no relations");
   let g = `<section style="margin-top:22px"><div class="sec-h">Where this claim sits <span class="count">${esc(srcNote)}</span></div>`;
   // The parent is CONTAINMENT, the same axis as "Rests on" and pointing the
@@ -8671,8 +8686,8 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
     + claimExhibits(d)
     + `<div class="tagrow">
         <span class="tfacts">${verdictBanner(d)}${openedBy}${seededSpan}</span>
-        <span class="tacts">${polish}<span id="boardchip"></span>${chip}${mapLink}<a class="tlink" href="#/raw/${esc(slug)}/${id}">as the chain serves it<span aria-hidden="true">→</span></a>
-        <button type="button" class="tlink" data-help="share-dlg" aria-haspopup="dialog">share<span aria-hidden="true">↗</span></button></span></div>`
+        <span class="tacts">${polish}${chip}${mapLink}<a class="tlink" href="#/raw/${esc(slug)}/${id}">chain<span aria-hidden="true">→</span></a>
+        <button type="button" class="tlink" data-help="share-dlg" aria-haspopup="dialog">share<span aria-hidden="true">↗</span></button><span id="boardchip"></span></span></div>`
     + shareDialog(slug, id, d, cs ? cs.name : slug)
     + modBanner(mPurged, mRedacted, mHidden, slug)
     /* THE CHART AND THE LADDER ARE ONE PANEL when the ticket beside them was
