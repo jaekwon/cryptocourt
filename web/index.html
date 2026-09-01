@@ -2651,6 +2651,40 @@ async function listClaimsPage(slug, page, total, parsed){
   await nameTheSide(slug, out);   // deep pages read ClaimStatus directly, so they need it too
   return out.sort((a,b)=>b.id-a.id);
 }
+/* THE PACKED CLAIM RECORD, parsed by POSITION. Thirty-nine tab-separated columns
+   in the order claim.gno's ClaimHead documents; the width is checked before any
+   of them is read, because a record of the wrong length means the realm and this
+   page disagree about the format and reading it anyway would put a bond in the
+   deadline's variable with nothing to notice.
+   Returns null on any doubt — a missing entrypoint, a short record, an
+   unparseable number — and the caller then reads every field the old way. */
+const CLAIM_HEAD_FIELDS = 39;
+async function claimHeadOf(s, i){
+  let raw;
+  try{ raw = await one(`ClaimHead(${s},${i},${WEEK})`); }
+  catch(_){ return null; }                  // an older realm: read them singly
+  const f = String(unesc(raw||"")).split("\t");
+  if(f.length !== CLAIM_HEAD_FIELDS) return null;
+  const n = k => { const v = Number(f[k]); return Number.isFinite(v)? v : null; };
+  const b = k => f[k] === "1";
+  const h = {
+    yesStake:n(0), noStake:n(1), convYes:n(2), convNo:n(3),
+    trailOI:n(4), trailOImature:b(5), trailYesAvg:n(6), trailYesMature:b(7),
+    answered:b(8), disputeOpen:b(9), settled:b(10), provClose:b(11),
+    provisional:n(12), closed:b(13),
+    answer:n(14), answerBond:n(15), settleAt:n(16), answerer:f[17], answerRecord:n(18),
+    round:n(19), disputeBondNext:n(20), escrowUntil:n(21),
+    quorumFloor:n(22) || null, voteCloses:n(23) || null,
+    verdict:n(24), route:f[25], crystallized:b(26),
+    drawW:n(27), drawA:n(28), drawAns:n(29), drawCarrot:n(30),
+    author:f[31] || null, hidden:b(32), redacted:b(33), purged:b(34), seeded:b(35),
+    stakeOpenDelay:n(36), boardSize:n(37), boardOpen:b(38),
+  };
+  // a number that did not parse is a format disagreement, not a zero
+  for(const k of ["yesStake","noStake","convYes","convNo","trailOI","trailYesAvg"])
+    if(h[k] === null) return null;
+  return h;
+}
 async function claimDetail(slug,id){
   if(!isLive()){ const d=DEMO.claims[slug+"/"+id]; if(!d) return null;
     const ph=d.phase;
@@ -2663,11 +2697,35 @@ async function claimDetail(slug,id){
       provisional: ph==="provisional"? (d.provisional!=null? d.provisional:0) : -1,
       closed: ph==="closed"}; }
   const s=gstr(slug), i=id;
+  /* ONE READ FOR EVERY NUMBER ON THIS PAGE. A qeval costs the same whatever it
+     returns — measured against the live node, one field takes 270ms and
+     eighty-eight take 310ms, because the price is loading the realm into the VM
+     before the question is even read. A claim page asking thirty-eight of them
+     paid that toll thirty-eight times, which no amount of parallelism, HTTP/2 or
+     caching could touch. ClaimHead is the same thirty-eight answers in one call.
+
+     The free text keeps its own reads: a title may contain a tab and a body
+     contains newlines, and a delimited record that a caption can break is worse
+     than a second query. Those four go in the same wave, so it is one round trip
+     either way.
+
+     A chain without the entrypoint answers "name ClaimHead not declared", and
+     then every field is read the old way — this page is static and can be
+     pointed at any node. */
+  const head = isLive()? await claimHeadOf(s, i) : null;
   const [title,status,pools,pconv,toi,tyes,answered,disputeOpen,settled,provClose,provisional,closed,body,mediaRaw] = await Promise.all([
-    one(`ClaimTitle(${s},${i})`).then(unesc), one(`ClaimStatus(${s},${i})`), tup(`StakePools(${s},${i})`),
-    tup(`PoolConviction(${s},${i})`), tup(`TrailingOI(${s},${i},${WEEK})`), tup(`TrailingYes(${s},${i},${WEEK})`),
-    one(`HasAnswer(${s},${i})`), one(`DisputeOpen(${s},${i})`), one(`Settled(${s},${i})`),
-    one(`ProvClose(${s},${i})`), one(`Provisional(${s},${i})`), one(`ClaimClosed(${s},${i})`).catch(()=>false),
+    one(`ClaimTitle(${s},${i})`).then(unesc),
+    one(`ClaimStatus(${s},${i})`),
+    head? [head.yesStake, head.noStake] : tup(`StakePools(${s},${i})`),
+    head? [head.convYes, head.convNo] : tup(`PoolConviction(${s},${i})`),
+    head? [head.trailOI, head.trailOImature] : tup(`TrailingOI(${s},${i},${WEEK})`),
+    head? [head.trailYesAvg, head.trailYesMature] : tup(`TrailingYes(${s},${i},${WEEK})`),
+    head? head.answered : one(`HasAnswer(${s},${i})`),
+    head? head.disputeOpen : one(`DisputeOpen(${s},${i})`),
+    head? head.settled : one(`Settled(${s},${i})`),
+    head? head.provClose : one(`ProvClose(${s},${i})`),
+    head? head.provisional : one(`Provisional(${s},${i})`),
+    head? head.closed : one(`ClaimClosed(${s},${i})`).catch(()=>false),
     // A realm deployed before bodies existed has no ClaimBody, and a claim page
     // that fails whole because of a missing optional field would be the worse
     // bug. Empty is the same answer as "this claim has no body".
@@ -2675,20 +2733,22 @@ async function claimDetail(slug,id){
     // Same tolerance, same reason: a realm deployed before media existed has no
     // ClaimMedia, and "[]" is the same answer as "this claim carries none".
     one(`ClaimMedia(${s},${i})`).then(unesc).catch(()=>"[]")]);
-  const d = {id, title, body, media: (typeof mediaParse==="function"? mediaParse(mediaRaw) : []), statusText:status, yesStake:pools[0], noStake:pools[1],
+  const d = {head, id, title, body, media: (typeof mediaParse==="function"? mediaParse(mediaRaw) : []), statusText:status, yesStake:pools[0], noStake:pools[1],
     convYes:pconv[0], convNo:pconv[1], trailOImature:toi[1], trailOI:toi[0], trailYesMature:tyes[1], trailYesAvg:tyes[0],
     answered, disputeOpen, settled, provClose, provisional, closed};
   if(answered){
-    const answerer = await one(`Answerer(${s},${i})`);
+    const answerer = head? head.answerer : await one(`Answerer(${s},${i})`);
     /* THREE READS FEWER. QualityTier, FlagState and FlagBondNext went with the
        quality lane and no longer exist on chain — every claim page was asking a
        realm that answers InvalidPkgPathError, and Promise.all means one missing
        read takes the whole batch with it. The claim's SIZE rating comes from the
        realm's own Render now (see tierText in render.gno); the page does not
        recompute it. */
-    const [ans,bond,rec,settleAt] = await Promise.all([
-      one(`AnswerVerdict(${s},${i})`), one(`AnswerBond(${s},${i})`), one(`AnswerRecord(${s},${gstr(answerer)})`).catch(()=>0),
-      one(`SettleDeadline(${s},${i})`)]);
+    const [ans,bond,rec,settleAt] = head
+      ? [head.answer, head.answerBond, head.answerRecord, head.settleAt]
+      : await Promise.all([
+          one(`AnswerVerdict(${s},${i})`), one(`AnswerBond(${s},${i})`), one(`AnswerRecord(${s},${gstr(answerer)})`).catch(()=>0),
+          one(`SettleDeadline(${s},${i})`)]);
     Object.assign(d,{answer:ans, answerer, answerBond:bond, record:rec, settleAt});
   }
   /* ONE WAVE, NOT NINE. Every read below was awaited on its own line, so a claim
@@ -2709,7 +2769,10 @@ async function claimDetail(slug,id){
   {
     const live = answered && !settled;
     const ready = settled && !provClose;
-    const [round, bondNext, escrow, quorum, voteEnds, verdict, route, cryst] = await Promise.all([
+    const [round, bondNext, escrow, quorum, voteEnds, verdict, route, cryst] = head
+      ? [head.round, head.disputeBondNext, head.escrowUntil, head.quorumFloor,
+         head.voteCloses, head.verdict, head.route, head.crystallized]
+      : await Promise.all([
       live? one(`FailedRounds(${s},${i})`).catch(()=>0) : null,
       live? one(`DisputeBondNext(${s},${i})`).catch(()=>0) : null,
       live? one(`EscrowUntil(${s},${i})`).catch(()=>0) : null,
@@ -2725,14 +2788,18 @@ async function claimDetail(slug,id){
       ready? one(`VerdictRoute(${s},${i})`).catch(()=>"") : null,
       one(`Crystallized(${s},${i})`).catch(()=>false),
     ]);
+    // the draw slices ride in the record too, so a crystallized claim costs no
+    // extra round trip either
+    if(head && cryst) d.draw = {w:head.drawW, a:head.drawA, ans:head.drawAns, carrot:head.drawCarrot};
     if(live){
       d.round = round; d.disputeBondNext = bondNext; d.escrowUntil = escrow;
       if(disputeOpen){ d.quorumFloor = quorum; d.voteEndsAt = voteEnds || null; }
     }
     if(ready){ d.verdict = verdict; d.route = route; }
     if(cryst){
-      const ds = await tup(`DrawSlices(${s},${i})`);
-      d.crystallized = true; d.draw = {w:ds[0], a:ds[1], ans:ds[2], carrot:ds[3]};
+      d.crystallized = true;
+      if(!d.draw){ const ds = await tup(`DrawSlices(${s},${i})`);
+        d.draw = {w:ds[0], a:ds[1], ans:ds[2], carrot:ds[3]}; }
     }
   }
   // phase for the demo-shaped views
@@ -8621,6 +8688,9 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
     courtStats(slug),
     claimDetail(slug, id),
     chainHeight(),
+    // ClaimAuthor is in the packed record too, but claimDetail has not returned
+    // yet at this point — so it stays a read, and is free when it hits the
+    // 30-second client cache on the way back.
     isLive()? one(`ClaimAuthor(${gstr(slug)},${id})`).catch(()=>null) : null,
   ]);
   // titles for the association rows: demo reads its dataset; live reuses the
@@ -8665,12 +8735,17 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
     /* AND THE TIMELINE RIDES WITH THEM. It was a wave of its own, immediately
        after this one and needing nothing from it — one more 80ms round trip on a
        page that was making twelve. Parsed below, where it was. */
+    /* FIVE OF THESE SIX ARE IN THE PACKED RECORD claimDetail already read, so
+       they cost nothing here — only the timeline is free text and needs its own
+       query. Where the realm is too old to answer ClaimHead, d.head is null and
+       every one is asked the way it always was. */
+    const H = d && d.head;
     [mHidden, mRedacted, mPurged, mSeeded, polishBlocks, tlRaw] = await Promise.all([
-      one(`HiddenFromListing(${s2m},${id})`).catch(()=>null),
-      one(`TextRedacted(${s2m},${id})`).catch(()=>null),
-      one(`ClaimPurged(${s2m},${id})`).catch(()=>null),
-      one(`ClaimSeeded(${s2m},${id})`).catch(()=>null),
-      one(`CourtStakeOpenDelay(${s2m})`).catch(()=>null),
+      H? H.hidden   : one(`HiddenFromListing(${s2m},${id})`).catch(()=>null),
+      H? H.redacted : one(`TextRedacted(${s2m},${id})`).catch(()=>null),
+      H? H.purged   : one(`ClaimPurged(${s2m},${id})`).catch(()=>null),
+      H? H.seeded   : one(`ClaimSeeded(${s2m},${id})`).catch(()=>null),
+      H? H.stakeOpenDelay : one(`CourtStakeOpenDelay(${s2m})`).catch(()=>null),
       one(`ClaimTimeline(${gstr(slug)},${id})`).catch(()=>null),
     ]);
   } else { const dd0=DEMO.claims[slug+"/"+id]||{};
