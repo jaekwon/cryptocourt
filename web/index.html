@@ -1195,7 +1195,17 @@ p.sub{font-size:13.5px; color:var(--ink-2); max-width:54ch; margin-top:6px}
 .mapsel-c:hover,.mapsel-c:focus,.mapsel-f:hover,.mapsel-f:focus{background:var(--inset); color:var(--ink)}
 .mapsel-c .mono,.mapsel-f .mono{color:var(--accent-2)}
 
-.mtext{fill:var(--ink)} .mtitle{fill:var(--ink-2)}
+/* THE TITLE IS PRIMARY INK, and it was secondary. Reported as "i can't read
+   because the fore and back is greyish", and measured that is exactly what it
+   was: --ink-2 is a slate (74,91,104) on a near-white box, 6.66:1 in light and
+   7.66:1 in dark — passing AA and still visibly GREY, sitting right beside an id
+   drawn in --ink at 15.61:1. Two inks in one box, and the muted one was on the
+   sentence somebody is trying to read.
+   The verdict line keeps --ink-2 deliberately. Hierarchy is the reason the two
+   tokens exist, and "in dispute" is a label on the claim rather than the claim;
+   with the title at full strength there is now something for it to be secondary
+   TO, which there was not when both were the same grey. */
+.mtext{fill:var(--ink)} .mtitle{fill:var(--ink)}
 /* The id heads the title and the verdict closes the node. Both survive the
    level-of-detail rule below, which hides only .mtitle. */
 .mid{fill:var(--ink); font-weight:600}

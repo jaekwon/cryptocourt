@@ -173,6 +173,67 @@ const PAGE = 'file://' + path.join(__dirname, '..', '..', 'index.html');
   ok("the site's serif and sans are different stacks",
      m.tokens["--serif"] && m.tokens["--serif"] !== m.tokens["--sans"]);
 
+  // -------------------------------------------------------------- contrast
+  /* GREY ON GREY IS A READING FAILURE, AND IT WAS ONE. Reported as "i can't read
+     because the fore and back is greyish": the claim title was drawn in --ink-2,
+     a slate, measured at 6.66:1 in light and 7.66:1 in dark — passing WCAG AA
+     and still visibly grey, sitting inside the same box as an id drawn in --ink
+     at 15.61:1. Two inks on one card, and the muted one carried the sentence.
+     Measured in BOTH THEMES because they are separate palettes: a token pair
+     that is fine on white can collapse on near-black, and this page ships both.
+     The floor is 7:1 — WCAG AAA for body text — for everything that carries
+     content, and AA's 4.5 for the verdict line, which is deliberately secondary.
+     Literals, not the tokens: an expectation spelled as var(--ink) would follow
+     the token wherever it went. */
+  const WANT = {mtitle: 7, mid: 7, "mcourt-t": 7, "mhdr-t": 7, mverdict: 4.5};
+  for (const scheme of ["light", "dark"]) {
+    await page.emulateMediaFeatures([{name: 'prefers-color-scheme', value: scheme}]);
+    await page.goto(PAGE + '#/c/' + slug + '/map', {waitUntil: 'networkidle2'});
+    for (let i = 0; i < 20; i++) {
+      if (await page.evaluate(() => !!document.querySelector('.mapwrap svg text'))) break;
+      await new Promise(r => setTimeout(r, 400));
+    }
+    await new Promise(r => setTimeout(r, 1800));
+    const seen = await page.evaluate(() => {
+      const rgb = t => { const m = String(t).match(/[\d.]+/g) || []; return m.length >= 3 ? [+m[0], +m[1], +m[2]] : null; };
+      const lum = c => { const f = c.map(v => { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+        return 0.2126 * f[0] + 0.7152 * f[1] + 0.0722 * f[2]; };
+      const ratio = (a, b) => { if (!a || !b) return null; const x = lum(a), y = lum(b);
+        const [h, l] = x > y ? [x, y] : [y, x]; return +((h + 0.05) / (l + 0.05)).toFixed(2); };
+      // The court is a <g>, not an <a> — the first version of this probe looked
+      // only for an anchor and reported the court's contrast as null.
+      const boxOf = {mtitle: '.mnode', mid: '.mnode', mverdict: '.mnode',
+                     'mhdr-t': '.mfold', 'mcourt-t': '.mcourt'};
+      const out = {};
+      for (const t of document.querySelectorAll('.mapwrap svg text')) {
+        const cls = (t.getAttribute('class') || "").replace('mtext ', '').split(/\s+/)[0];
+        if (out[cls]) continue;
+        const holder = t.closest('a,g.mcourt-a');
+        const box = holder ? holder.querySelector(boxOf[cls] || 'rect') : null;
+        if (!box) continue;
+        out[cls] = ratio(rgb(getComputedStyle(t).fill), rgb(getComputedStyle(box).fill));
+      }
+      return out;
+    });
+    for (const [cls, floor] of Object.entries(WANT)) {
+      const got = seen[cls];
+      ok(`${scheme}: ${cls} reads against its own box (${got}:1, needs ${floor})`,
+         got !== undefined && got !== null && got >= floor);
+    }
+    /* AND THE TITLE MATCHES THE ID, which is the invariant the floors alone
+       cannot express. Reverting the title to --ink-2 fails the 7:1 floor in
+       LIGHT at 6.66 and slips past it in DARK at 7.66 — so a floor high enough
+       to catch both would have to sit above 7.66, and the court's own name is
+       legitimately 7.31 there. No single number separates them.
+       These two labels share one box and both carry content, so they should
+       carry the same ink; the bug was that they did not. Comparing them catches
+       the regression in either theme without inventing a threshold. */
+    ok(`${scheme}: the title is the same ink as the id in the same box`,
+       seen.mtitle != null && seen.mid != null && Math.abs(seen.mtitle - seen.mid) < 0.2,
+       `title ${seen.mtitle} vs id ${seen.mid}`);
+  }
+  await page.emulateMediaFeatures([{name: 'prefers-color-scheme', value: 'light'}]);
+
   ok("no page errors on the map route", errs.length === 0, errs.slice(0, 2).join(" | "));
 
   await browser.close();
