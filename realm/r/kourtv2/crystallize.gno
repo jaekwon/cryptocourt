@@ -234,8 +234,7 @@ func Crystallize(cur realm, courtSlug string, claimID uint64) {
 	// here (the gate above refuses while a slash is in its counter window), so
 	// whatever remains in answerBond is un-slashed and owed back, exactly once.
 	if cs.answerBond > 0 {
-		c.coin.Transfer(c.escrow, cs.answerer, cs.answerBond)
-		cs.answerBond = 0
+		settleAnswerBond(c, cs)
 	}
 }
 

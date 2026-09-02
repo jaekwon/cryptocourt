@@ -1,9 +1,9 @@
 // The answerer's bond, after the quality lane.
 //
 // This file is what survived quality.gno. settleAnswerBond was never about
-// quality — it is the answer bond's terminal disposition, shared by Finalize
-// (dispute.gno) and SettleUndisputed (session.gno) — but it lived in that file
-// because the reserve it carved was the flag lane's slash.
+// quality — it is the answer bond's terminal disposition, shared by every
+// terminal path that RETURNS the bond — but it lived in that file because the
+// reserve it carved was the flag lane's slash.
 package kourtv2
 
 // settleAnswerBond returns the answer bond to the answerer at a terminal path.
@@ -20,6 +20,19 @@ package kourtv2
 // lines character-identically before this function existed, and the corpus was
 // paying for the copy in the open — M3-HIGH-1 stood as TWO rows with
 // byte-identical find and replace, one aimed at each path.
+//
+// AND IT WAS EXTRACTED WITHOUT BEING ADOPTED. It had two callers — Finalize and
+// SettleUndisputed — while THREE more terminal paths still ran the two lines
+// inline: crystallize (the mid happy path), spamDiscardClaim and provCloseClaim.
+// So the copy this function exists to remove had gone from two to three
+// somewhere else, which is the failure mode of extracting a helper and leaving
+// the call sites alone: the next change to the disposition reaches two paths of
+// five and nothing says so. All five now call it.
+//
+// FIVE REFUND PATHS, NOT SIX. dispute.gno's overturn arm also zeroes
+// cs.answerBond, and it must NOT come here: that path BURNS the bond as the
+// forfeiture, and routing a burn through a function whose one job is to hand the
+// coin back is how a forfeiture quietly becomes a refund.
 //
 // The caller keeps its own `if cs.answerBond > 0` guard: each terminal path has
 // its own reason to be standing there and its own note about it, and what is

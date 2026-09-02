@@ -562,8 +562,7 @@ func spamDiscardClaim(c *Court, cs *claimState, spamW, cast int64) {
 	cs.decidedPID, cs.carrotChoice, cs.carrotDenom = cs.proposalID, voteSpam, spamW
 
 	if cs.answerBond > 0 {
-		c.coin.Transfer(c.escrow, cs.answerer, cs.answerBond)
-		cs.answerBond = 0
+		settleAnswerBond(c, cs)
 	}
 	if cs.disputeBond > 0 {
 		c.coin.Transfer(c.escrow, cs.disputer, cs.disputeBond)
@@ -600,8 +599,7 @@ func provCloseClaim(c *Court, cs *claimState) {
 	cs.verdictAtTime = nowTime()
 	cs.route = "closed"
 	if cs.answerBond > 0 {
-		c.coin.Transfer(c.escrow, cs.answerer, cs.answerBond)
-		cs.answerBond = 0
+		settleAnswerBond(c, cs)
 	}
 	if cs.deposit > 0 {
 		c.coin.Transfer(c.escrow, cs.author, cs.deposit)
