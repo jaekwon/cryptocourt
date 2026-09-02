@@ -5160,7 +5160,8 @@
   "file": "votelock.gno",
   "label": "voteLockedOf: the commitment is the LAST open row, not the largest (under-locks)",
   "find": "if w := v.(int64); w > most && voteLockOpen(c, who, k) {",
-  "replace": "if w := v.(int64); voteLockOpen(c, who, k) {"
+  "replace": "if w := v.(int64); voteLockOpen(c, who, k) {",
+  "why": "Found SURVIVING the whole suite, and it UNDER-commits, which is the vote-then-sell rental the lock exists to price. voteLocks is walked in KEY order and the kinds are \"d\" and \"e\", so the election row is always last for a holder: a last-wins bug reports the ELECTION weight. Killed now by TestVoteCommitmentIsTheMaxOfOpenRowsNotTheLastRowWalked, which is built so the election row is the SMALLER of the two -- got 10000000 against a correct 149500000, i.e. 139500000 of coin riding an open dispute round reads as spendable."
  },
  {
   "pkg": "kourtv2",
@@ -5213,6 +5214,14 @@
   "find": "\t\treturn e.seq == id && !e.resolved",
   "replace": "\t\treturn e.seq == id",
   "why": "Covered, and the kill names the consequence rather than a count: the voter's coin stays committed after the election resolves, so a later spend aborts with 'not enough uncommitted CC -- coin you voted with stays in your balance and keeps voting, but it is committed until that question resolves'."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "votelock.gno",
+  "label": "voteLockedOf: the commitment is the SUM of open rows rather than the max",
+  "find": "\t\tif w := v.(int64); w > most && voteLockOpen(c, who, k) {\n\t\t\tmost = w\n\t\t}",
+  "replace": "\t\tif w := v.(int64); voteLockOpen(c, who, k) {\n\t\t\tmost += w\n\t\t}",
+  "why": "The other direction: a voter who is one voter on two questions gets billed twice. Over-committing is the safe direction and still wrong -- it strands coin nobody has a claim on. Killed by the same fixture, which pins the exact figure rather than a bound: got 159500000 against a correct 149500000."
  },
  {
   "pkg": "kourtv2",

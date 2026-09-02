@@ -837,3 +837,108 @@ func TestADeadRoundsRowStaysDeadWhenTheNextRoundOpens(cur realm, t *testing.T) {
 			got, round1, cs.proposalID)
 	}
 }
+
+// THE COMMITMENT IS THE MAX OF A HOLDER'S OPEN ROWS — found SURVIVING. Drop the
+// `w > most` guard from voteLockedOf so the last row walked wins, and the whole
+// kourtv2 suite still passes while a holder UNDER-COMMITS: exactly the
+// vote-then-sell rental the lock was built to price.
+//
+// The two deleted quality-lane tests were the only fixtures that ever opened two
+// rows for one holder, and this is the replacement (#57). The verdict and
+// ELECTION lanes can both be open at once, which is what makes it reachable at
+// all.
+//
+// WHY THE ROW ORDER IS THE WHOLE DESIGN. voteLocks is walked in KEY order, not in
+// the order the rows were written, and the kinds are "d" for dispute and "e" for
+// election — so the ELECTION row is always the last one seen for a holder. A
+// last-wins bug therefore reports the ELECTION weight, and the only fixture that
+// can catch it is one where the election row is the SMALLER of the two. Build it
+// the other way round and MAX and last-wins return the same number, which is why
+// a fixture that merely opens two rows proves nothing.
+//
+// SO THE WEIGHTS ARE MADE TO DIFFER, and the mechanism is the epoch rather than
+// the balance. Both lanes lock min(PastVotes at their own epoch, live balance) —
+// the dispute at the round's epoch, the election at the election's — so a holder
+// who is poor when the election opens and rich when the dispute opens carries a
+// small "e" row beside a large "d" row.
+func TestVoteCommitmentIsTheMaxOfOpenRowsNotTheLastRowWalked(cur realm, t *testing.T) {
+	creator := testutils.TestAddress("vlmx-creator")
+	holder := testutils.TestAddress("vlmx-holder") // the double-committed voter
+	newMod := testutils.TestAddress("vlmx-newmod")
+	author := testutils.TestAddress("vlmx-author")
+	staker := testutils.TestAddress("vlmx-staker")
+	// POOR AT FIRST, and sealed that way: this is the election's epoch.
+	const small = int64(10_000_000)
+	const extra = int64(90_000_000)
+	c := electionCourt(cur, "vlmx", creator, []address{holder}, []int64{small})
+	c.coin.Mint(creator, 40_000_000_000)
+	c.coin.Mint(author, 4_000_000_000)
+	c.coin.Mint(staker, 4_000_000_000)
+	c.coin.Mint(holder, 50_000_000) // bond money for the candidate registration
+
+	// THE ELECTION ROW, taken while the holder is poor.
+	testing.SetRealm(testing.NewUserRealm(holder))
+	cand := RegisterModCandidate(cross(cur), "vlmx", 1, newMod)
+	testing.SetRealm(testing.NewUserRealm(holder))
+	OpenElection(cross(cur), "vlmx", cand)
+	// Voting opens when the nomination window closes. This skip crosses many
+	// epochs, which does NOT disturb the design above: ApproveCandidate weighs
+	// the holder at e.epoch, frozen when the election opened and while they were
+	// still poor.
+	testing.SkipHeights(nominationWindow)
+	testing.SetRealm(testing.NewUserRealm(holder))
+	ApproveCandidate(cross(cur), "vlmx", cand)
+	eRow := VoteLockedOf("vlmx", holder)
+	if eRow <= 0 {
+		t.Fatal("fixture: the election approval must commit coin, or there is no " +
+			"second row for the MAX to be taken over")
+	}
+
+	// NOW RICH, and sealed again: this becomes the dispute round's epoch. The
+	// election is left OPEN — nobody calls ResolveElection, and voteLockOpen reads
+	// the resolved FLAG rather than a deadline, so the row stays live.
+	c.coin.Mint(holder, extra)
+	testing.SkipHeights(epochBlocks * 2)
+
+	// THE DISPUTE ROW, taken while the holder is rich. The holder neither authors
+	// nor stakes: a participant is barred from the verdict, and the row has to
+	// belong to the same address as the election row.
+	id := stakeAnswerDispute(cur, "vlmx", author, staker)
+	testing.SetRealm(testing.NewUserRealm(staker))
+	OpenDispute(cross(cur), "vlmx", id)
+	testing.SetRealm(testing.NewUserRealm(holder))
+	VoteDispute(cross(cur), "vlmx", id, "no")
+
+	// BOTH ROWS OPEN, and the election one is the SMALLER — without which
+	// last-wins and MAX agree and this test would pass under the defect.
+	if rows := voteLockRows(c, holder); rows < 2 {
+		t.Fatalf("fixture is vacuous: need two rows for one holder, got %d", rows)
+	}
+	dRow := int64(0)
+	pre := string(holder)
+	c.voteLocks.Iterate(pre, pre+"\xff", func(k string, v any) bool {
+		if w := v.(int64); w > dRow {
+			dRow = w
+		}
+		return false
+	})
+	if dRow <= eRow {
+		t.Fatalf("fixture is vacuous: the dispute row must be the LARGER, or the "+
+			"last row walked (always the \"e\" one) is already the max: "+
+			"dispute=%d election=%d", dRow, eRow)
+	}
+
+	// THE RULE. The commitment is the largest open row — not the last one walked,
+	// which is the election's smaller figure, and not the sum.
+	got := VoteLockedOf("vlmx", holder)
+	if got != dRow {
+		t.Fatalf("the commitment is the MAX of open rows: got %d, want %d "+
+			"(election row %d, sum would be %d)", got, dRow, eRow, dRow+eRow)
+	}
+	// AND THE UNDER-COMMITMENT IS THE POINT: a last-wins bug frees this much coin
+	// that is still committed to an open dispute.
+	if got <= eRow {
+		t.Fatalf("under-committed: the holder would be free to move %d that is "+
+			"still riding an open dispute round", dRow-eRow)
+	}
+}
