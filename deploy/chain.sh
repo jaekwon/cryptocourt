@@ -158,6 +158,12 @@ fi
 # pick this up on the next restart too.
 "$APPDIR/bin/gnoland" config set -config-path "$CHAINDIR/data/config/config.toml" \
     consensus.skip_timeout_commit true >/dev/null
+# AND STOP MAKING BLOCKS OUT OF NOTHING. With the commit timeout gone, the
+# default create_empty_blocks produced fifty empty blocks a second on an idle
+# chain — pure CPU, and every commit takes the same lock queries need. Blocks
+# now happen when there are transactions to put in them.
+"$APPDIR/bin/gnoland" config set -config-path "$CHAINDIR/data/config/config.toml" \
+    consensus.create_empty_blocks false >/dev/null
 
 # The faucet's wallet. Generated here, printed nowhere: the mnemonic goes
 # straight into a root-owned 0600 file that systemd hands to the unit as a

@@ -1987,14 +1987,71 @@ async function chainHeight(){
    painted render is anyway. */
 const RPC_TTL_MS = 30000;
 const RPCC = new Map();          // "path\0data" -> {t, p}
-function chainCacheClear(){ RPCC.clear(); }
+
+/* THE SAME CACHE, SURVIVING A RELOAD.
+ *
+ * The map above is memory, so F5 threw it away and the page asked all 122
+ * questions again. That is the one case where the reader is most obviously
+ * waiting, because they just watched the page work and asked for it again.
+ *
+ * sessionStorage rather than localStorage: a cache that outlives the tab would
+ * have to answer for its own staleness on a machine that has been closed for a
+ * week, and nothing here is worth that. Per TAB is exactly the span where "I
+ * was just looking at this" holds.
+ *
+ * Keyed by endpoint, so switching Source or pointing at another node cannot be
+ * answered out of the last one's cache.
+ *
+ * Only whole successful answers are written, and only small ones: a render can
+ * be large, the quota is a few megabytes, and a cache that throws on write is
+ * worse than no cache at all. Every write is wrapped for that reason — quota
+ * and disabled-storage both surface as exceptions, and neither is fatal here. */
+const RPC_SS_MAX = 64 * 1024;    // per entry; a big render is not worth a slot
+function ssKey(k){ return "rpcc\u0000" + (CFG.rpc||"") + "\u0000" + k; }
+function ssGet(k){
+  try{
+    const raw = sessionStorage.getItem(ssKey(k));
+    if(!raw) return null;
+    const rec = JSON.parse(raw);
+    if(!rec || Date.now() - rec.t >= RPC_TTL_MS){ sessionStorage.removeItem(ssKey(k)); return null; }
+    return rec;
+  }catch(_){ return null; }
+}
+function ssPut(k, v){
+  try{
+    if(typeof v !== "string" || v.length > RPC_SS_MAX) return;
+    sessionStorage.setItem(ssKey(k), JSON.stringify({t:Date.now(), v}));
+  }catch(_){ /* full, or storage disabled: the memory cache still works */ }
+}
+function chainCacheClear(){
+  RPCC.clear();
+  try{
+    for(let i = sessionStorage.length - 1; i >= 0; i--){
+      const key = sessionStorage.key(i);
+      if(key && key.startsWith("rpcc\u0000")) sessionStorage.removeItem(key);
+    }
+  }catch(_){}
+}
 function abci(path, data){
   const k = path + "\u0000" + data;
   const hit = RPCC.get(k);
   const now = Date.now();
   if(hit && now - hit.t < RPC_TTL_MS) return hit.p;
+  // Carried over from the last load of this tab, if it is still fresh.
+  const stored = ssGet(k);
+  if(stored){
+    const p = Promise.resolve(stored.v);
+    RPCC.set(k, {t:stored.t, p});
+    return p;
+  }
   const p = abciFetch(path, data);
   RPCC.set(k, {t:now, p});
+  // Both arms, not a bare .then: a rejection handler is REQUIRED here, because
+  // .then(fn) alone forks a second promise nobody is watching and every failed
+  // query becomes an unhandled rejection in the console. The eviction below
+  // handles the same failure for the cache; this one is only about not leaking
+  // a branch.
+  p.then(v => ssPut(k, v), () => {});
   // A refusal is not an answer. Evict it so the next ask is a real one, and
   // swallow nothing — the caller still sees the rejection it was handed.
   p.catch(()=>{ const c = RPCC.get(k); if(c && c.p === p) RPCC.delete(k); });
