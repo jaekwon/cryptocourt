@@ -257,7 +257,19 @@ ok("the third choice is a spam flag, not an abstention",
 // `class="btn no mini"` with a closing quote, which demo mode breaks by appending
 // ` inert`. The bin's own path data is the thing that identifies the bin.
 ok("...and it is the compact one, with a bin on it",
-   /class="btn no mini/.test(html) && html.includes("M5.4 0h3.2l.5.9h3.1v1.5H1.8V.9h3.1z"));
+   /class="btn mute mini/.test(html) && html.includes("M5.4 0h3.2l.5.9h3.1v1.5H1.8V.9h3.1z"));
+// AND IT IS NOT DRESSED AS A VERDICT. It carried .btn.no and so read as the red
+// half of the question. Spam is not the "no" side — it says the question should
+// not have been asked — so the colour was saying the wrong thing. Pinned in the
+// negative as well, because the class it used to carry is one character from
+// coming back and nothing else here would notice.
+//
+// `no mini` TOGETHER, which is the spam control's old signature and not just
+// `no`: "Vote to overturn" legitimately wears .btn.no — overturning IS the
+// adversarial half — and it is the only other red button on the ballot. A
+// negative on `no` alone therefore failed on the wrong button, which is how this
+// assertion got its scope.
+ok("...and it does not wear the verdict red", !/class="btn no mini/.test(html));
 // THE EXPLANATION MOVED, IT DID NOT GO. What the flag DOES is the thing a reader
 // must be able to learn — abstain's replacement is only meaningful if its effect
 // is discoverable — so this asserts the modal carries it now that the button does

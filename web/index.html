@@ -614,6 +614,14 @@ a.card:hover{border-color:var(--line-2)}
 .btn.no{border-color:var(--no); color:var(--no)} .btn.no:hover{background:var(--no-wash)}
 /* On hover only: a page of permanently glowing buttons is a slot machine. */
 .btn.yes:hover{box-shadow:var(--glow-y)} .btn.no:hover{box-shadow:var(--glow-n)}
+/* SPAM IS NOT A VERDICT, so it must not be dressed as one. It used to wear
+   .btn.no and read as the red half of the question; it is not the "no" side,
+   it says the question should not have been asked at all. Off-white grey via
+   --ink-2, which is #a3b2bd on dark and #4a5b68 on light -- a token, not a
+   hardcoded colour, so it stays legible in both themes. No glow either: the
+   two verdict buttons emit on hover and this one deliberately does not. */
+.btn.mute{border-color:var(--line-2); color:var(--ink-2)}
+.btn.mute:hover{border-color:var(--muted); background:var(--surface-2); box-shadow:none}
 /* the side an embed's button asked for — a ring, not a pre-filled form */
 .btn.picked{box-shadow:0 0 0 3px var(--accent-wash); outline:2px solid var(--accent-2)}
 .btn .g{font-size:13px; opacity:.85}
@@ -6432,7 +6440,7 @@ function disputeTicket(slug, id, d, nowH){
         closed? ` data-voteblocked="Voting has closed for this round. All that is left is to resolve it."` : ""}>
         ${btn("Vote to overturn","VoteDispute",{courtSlug:slug,claimID:id,choice:"yes"},"no")}
         ${btn("Vote to uphold","VoteDispute",{courtSlug:slug,claimID:id,choice:"no"},"yes")}
-        ${btn("Spam","VoteDispute",{courtSlug:slug,claimID:id,choice:"spam"},"no mini","",null,null,null,null,ICN_BIN)}</div>
+        ${btn("Spam","VoteDispute",{courtSlug:slug,claimID:id,choice:"spam"},"mute mini","",null,null,null,null,ICN_BIN)}</div>
       <!-- RESOLVE IS NOT A VOTE, so it sits outside the block the eligibility
            check marks: somebody who staked on this claim may not judge it and may
            still close the round once the window has passed. -->
