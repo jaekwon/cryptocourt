@@ -17,7 +17,10 @@ const curve = slice('const CURVE_D', 'function courtBody');
 // Slicing to the first newline used to capture the whole function; it now
 // truncates it mid-body.
 const helpers = slice('function fmtN(', 'function ccSym(')
-  + slice('function ccSym(', 'function ugnot(');
+  + slice('function ccSym(', 'function ugnot(')
+  // The voice-share line uses the site's one small-percentage spelling, which
+  // is declared further down the file than these two.
+  + slice('function pctText(', '\n}') + '\n}';
 // esc()
 // the gas pair the wallet and the printed command share — sliced, never retyped
 const gasDecls = slice('const GAS_WANTED', 'const CFG_DEFAULTS');

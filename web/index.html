@@ -3449,6 +3449,17 @@ function clockLine(nowH, phaseShort, settleAt, escrowUntil){
   return "";
 }
 function pctYes(y,n){ const t=(y||0)+(n||0); return t>0? Math.round(1000*y/t)/10 : null; }
+/* ONE WAY TO WRITE A SMALL PERCENTAGE. The buy panel already floored its voice
+   share at "<0.1%" — below a tenth of a percent the digits are noise, and a
+   figure like 0.0002% reads as broken rather than small. Shared so the two
+   places that quote a share of supply round it the same way.
+   Empty on a zero denominator: a share of nothing is not 0%, it is nothing. */
+function pctText(part, whole){
+  if(!(whole > 0)) return "";
+  const p = (part || 0) / whole * 100;
+  if(!isFinite(p) || p <= 0) return "";
+  return p < 0.1 ? "&lt;0.1%" : p.toFixed(1) + "%";
+}
 /* A per-claim sparkline from the three ratio series the realm actually keeps:
    lifetime conviction -> trailing week -> instantaneous. No invented history. */
 function sparkSvg(pts){
@@ -5862,7 +5873,7 @@ function buyRowsHtml(q, price, slug, after){
   if(after) return `<div class="line"><span class="l">Average price you pay</span><span class="r tnum">${q.avg.toFixed(4)} <small>µGNOT/unit</small></span></div>`
     + (q.refund>0n? `<div class="line"><span class="l">Returned to you</span><span class="r tnum">${q.refund.toLocaleString("en-US")} <small>µGNOT, sent back in the same transaction</small></span></div>` : "")
     + `<div class="line"><span class="l">Price after this</span><span class="r tnum">${fmtN(q.priceAfter)} <small>µGNOT/unit · now ${fmtN(price)}</small></span></div>`
-    + `<div class="line"><span class="l">Your voice share</span><span class="r tnum">${pct<0.1? "&lt;0.1%" : pct.toFixed(1)+"%"}</span></div>`;
+    + `<div class="line"><span class="l">Your voice share</span><span class="r tnum">${pctText(pct, 100)}</span></div>`;
   return `<div class="line"><span class="l">You receive</span><span class="r tnum">${cc(Number(q.units),slug)} <small>${fmtN(Number(q.units))} units</small></span></div>`;
 }
 let BUYQ=null, BUYCTX=null;
@@ -8306,8 +8317,11 @@ function courtStatsHtml(slug, s){
       s.minted===0? priceText(s.price, s.minted)
                   : `${priceText(s.price, s.minted)}<small> µGNOT/unit</small>`),
     // The emitted split is a footnote on supply, and only once any exists.
+    // A SHARE, NOT AN AMOUNT. "0.01 KOURT:COVID of it earned as rewards" made
+    // the reader divide two figures to learn the one thing the line is for:
+    // how much of this supply nobody paid for.
     statTile("coin supply", cc(s.supply,slug),
-      s.emitted>0? `${cc(s.emitted,slug)} of it earned as rewards` : ""),
+      s.emitted>0? `${pctText(s.emitted, s.supply)} of it earned as rewards` : ""),
     // THE THIRD COLUMN, and the only graph on the strip. Price and supply are
     // figures; this is the one worth a shape, because it is the one that cannot
     // be faked — supply grows on emissions nobody paid for and price is the
