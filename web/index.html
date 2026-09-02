@@ -440,6 +440,14 @@ a.card:hover{border-color:var(--line-2)}
 .rpcwrap{width:min(260px,60%); height:3px; margin:14px auto 6px; background:var(--line); border-radius:2px; overflow:hidden}
 .rpcbar{height:100%; width:0; background:var(--accent); transition:width .18s linear}
 .rpcnum{font-size:11px; color:var(--muted); font-variant-numeric:tabular-nums}
+/* The folded timeline. A summary is a control, so it says so — and the marker
+   is the only affordance it has, which is why it keeps the default triangle
+   rather than being styled into a heading. */
+.tlfold{margin-top:12px; border-top:1px solid var(--line); padding-top:8px}
+.tlfold > summary{cursor:pointer; font-size:11px; text-transform:uppercase;
+  letter-spacing:.09em; color:var(--muted); list-style-position:outside}
+.tlfold > summary:hover{color:var(--accent)}
+.tlfold[open] > summary{margin-bottom:8px}
 /* The chat's slot in the rail. It TAKES THE LEFTOVER HEIGHT rather than a fixed
    one — the rail is a flex column, so min-height:0 is what lets it shrink below
    its content and scroll inside instead of pushing the account block off the
@@ -5220,9 +5228,14 @@ function setNav(hash){
 }
 const AT_OK = new Set(["timeline","join"]); // ?at= allowlist — QP is user text, never a selector
 const atTarget = () => (QP.at && AT_OK.has(QP.at))? document.getElementById(QP.at) : null;
+/* A LINK THAT POINTS AT A FOLD HAS TO OPEN IT. The timeline is a <details> now,
+   and ?at=timeline came from "Closing soonest" and the pulls list — arriving at
+   a shut dropdown answers nothing. Scrolling to a closed box would be worse
+   than not linking at all. */
+function atReveal(t){ if(t && t.tagName === "DETAILS") t.open = true; }
 window.addEventListener("hashchange", async ()=>{
   await render();
-  const t = atTarget();
+  const t = atTarget(); atReveal(t);
   if(t){ t.focus({preventScroll:true}); t.scrollIntoView(); return; }
   // a route that already landed focus (e.g. the map's ?focus node) keeps it —
   // an innerHTML swap leaves focus on <body>, so ordinary navigation passes through
@@ -9727,7 +9740,7 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
         return `<section><div class="sec-h">The signal${d.phase==="open"? ` <span class="count">staking live</span>`
             : d.phase==="closed"? ` <span class="count">claim died unanswered</span>` : ""}</div>
         <div class="stakewrap${sideCol?"":" solo"}">
-          <div class="panel">${signalChart(slug,id,d,seriesH,ser,tline)}${stakeBar(d,slug)}${chartChips(d,slug)}</div>
+          <div class="panel">${signalChart(slug,id,d,seriesH,ser,tline)}${stakeBar(d,slug)}${chartChips(d,slug)}${timelineFold(d, (tline&&tline.now&&tline.now.h!=null)?tline.now.h:seriesH, tline, !!sideCol)}</div>
           ${sideCol? `<div class="sidecol">${sideCol}</div>` : ""}
         </div></section>`;
       })()
@@ -11097,6 +11110,24 @@ function sinceWords(nowT, t){
 /* `narrow` when the ladder is drawn beside the chart rather than under the page:
    it has about half the width there, and the grid that is right at full width
    turns the label column into one word per line at half. */
+/* THE TIMELINE FOLDS, INSIDE THE SIGNAL. It was a section of its own under the
+   chart and the dated ladder is the tallest thing on the page — for something a
+   reader consults once rather than reads. Collapsed, and next to the chart it
+   annotates, which is where the dates are actually wanted.
+   ONLY THE LADDER MOVED. The resolution notices carry the Answer and Close
+   buttons; an action behind a shut dropdown is an action nobody finds.
+   NARROW WHEN THE SIGNAL IS SHARING, because the panel loses half its width to
+   the ticket column and the wide ladder turns its labels into one word a line —
+   the case resolutionLadder's own `narrow` flag was written for.
+   Keeps the timeline anchor, so ?at=timeline still lands here — atReveal opens
+   the fold on arrival, because scrolling somebody to a shut box answers
+   nothing. */
+function timelineFold(d, rH, tl, narrow){
+  const ladder = resolutionLadder(d, rH, tl, narrow);
+  if(!ladder) return "";
+  return `<details id="timeline" class="tlfold" tabindex="-1">`
+    + `<summary>Timeline</summary>${ladder}</details>`;
+}
 function resolutionLadder(d, nowH, tl, narrow, bare){
   const rows=[];
   if(tl){
@@ -11236,18 +11267,19 @@ function resolutionSection(slug,id,d,nowH,tl){
      tl.now.h equals nowH and nothing changes. */
   const rH = (tl && tl.now && tl.now.h != null)? tl.now.h : nowH;
   let inner="";
-  // Drawn here only when the signal column did not take it — one ladder per
-  // page. The heading follows the content: a section titled "Timeline" holding
-  // no timeline is worse than a section named for what it actually has.
-  const ladder = resolutionLadder(d, rH, tl);
-  const head = "Timeline";
+  /* THE LADDER LIVES IN THE SIGNAL NOW, folded — see timelineFold. What stays
+     here are the notices, which carry buttons and must not be behind a shut
+     dropdown. So the heading is no longer "Timeline": this section holds the
+     resolution, and a heading naming content that moved is worse than none.
+     A phase whose only content WAS the ladder renders nothing at all. */
+  const head = "Resolution";
   if(d.phase==="closed"){
     // No notice here. It used to repeat the stake ticket almost verbatim —
     // both opened "Closed — never answered" and both ended "stakes were never
     // frozen, unstake freely". The two facts it alone carried (deposit
     // refunded, fee burned) now live in the ticket, next to the buttons they
     // describe; the ladder already carries the dates.
-    return `<section id="timeline" tabindex="-1"><div class="sec-h">${head}</div>${ladder}</section>`;
+    return "";   // the ladder was all it had, and the ladder moved
   }
   if(d.phase==="provClose"){
     inner = `<div class="notice void"><span class="g">◌</span><div><b>Closed without a decision.</b>
@@ -11291,7 +11323,8 @@ function resolutionSection(slug,id,d,nowH,tl){
         ${btn("Answer NO","PostAnswer",{courtSlug:slug,claimID:id,verdict:1},"no")}
         ${btn("Close dead claim","CloseDeadClaim",{courtSlug:slug,claimID:id},"","if its timeout passed")}</div></div></div>`;
   }
-  return `<section id="timeline" tabindex="-1"><div class="sec-h">${head}</div>${ladder}${inner}</section>`;
+  if(!inner) return "";
+  return `<section id="resolution" tabindex="-1"><div class="sec-h">${head}</div>${inner}</section>`;
 }
 
 /* THE REWARD POOLS, and nothing else. This was qualitySection: a tier line, a
@@ -12687,7 +12720,7 @@ function initControls(){
 }
 applyTheme(CFG.theme);
 initControls();
-render().then(()=>{ const t=atTarget(); if(t){ t.focus({preventScroll:true}); t.scrollIntoView(); } });
+render().then(()=>{ const t=atTarget(); atReveal(t); if(t){ t.focus({preventScroll:true}); t.scrollIntoView(); } });
 </script>
 </body>
 </html>

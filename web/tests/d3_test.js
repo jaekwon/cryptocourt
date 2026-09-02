@@ -78,21 +78,42 @@ ok("and no inline colour survives in a tagrow link",
 // buy panel. It is an allowlist precisely because QP.at is user text — every
 // member has to be a section id that exists, which the next two assertions pin.
 ok("AT_OK allowlist", src.includes('const AT_OK = new Set(["timeline","join"])'));
+/* The ids, not the attribute order. The timeline is a <details> now and carries
+   a class between its id and its tabindex, so matching the two together pinned
+   the markup rather than the anchor. What must hold is that each allowlisted
+   name is an id something actually renders, and is focusable when reached. */
 ok("...and every name in it is a real anchor",
-   src.includes('id="timeline" tabindex="-1"') && src.includes('id="join" tabindex="-1"'));
+   /id="timeline"[^>]*tabindex="-1"/.test(src) && /id="join"[^>]*tabindex="-1"/.test(src));
+// A fold that a deep link lands on has to be opened, or the reader arrives at a
+// shut box — worse than not linking at all.
+ok("...and a fold target is opened on arrival",
+   src.includes('if(t && t.tagName === "DETAILS") t.open = true;')
+   && (src.match(/atReveal\(t\)/g)||[]).length >= 2);
 ok("no ?at=timeline link survives the rename", !src.includes("at=resolution"));
 ok("atTarget uses getElementById (no selector injection)", src.includes('AT_OK.has(QP.at))? document.getElementById(QP.at) : null'));
-ok("hashchange prefers the at-target", src.includes('const t = atTarget();\n  if(t){ t.focus({preventScroll:true}); t.scrollIntoView(); return; }'));
+ok("hashchange prefers the at-target",
+   /const t = atTarget\(\);[^\n]*\n\s*if\(t\)\{ t\.focus\(\{preventScroll:true\}\); t\.scrollIntoView\(\); return; \}/.test(src));
 ok("hashchange yields to route-landed focus", src.includes('main.contains(document.activeElement)) return;'));
 ok("boot render mirrors the at-scroll", src.includes('render().then(()=>{ const t=atTarget();'));
-// The anchor is on both returns. The heading went through a spell of following
-// the ladder around; the ladder lives here again, so it is a constant again —
-// still interpolated, because the section builds it in one place.
-ok("timeline anchor on both returns",
-   (src.match(/<section id="timeline" tabindex="-1"><div class="sec-h">\$\{head\}/g)||[]).length===2);
-ok("...and the section that is called Timeline holds one",
-   src.includes('const ladder = resolutionLadder(d, rH, tl);')
-   && src.includes('const head = "Timeline";'));
+/* THE LADDER MOVED INTO THE SIGNAL, FOLDED. It was the tallest thing on the
+   page for something a reader consults rather than reads, so it is a <details>
+   beside the chart it annotates. Three things have to hold together, and any
+   one alone would let the others rot:
+     - the anchor exists ONCE, on the fold, so ?at=timeline has one target;
+     - the ladder is built ONLY there, so the page cannot grow a second copy;
+     - what stays behind is the resolution NOTICES, which carry buttons and
+       must never end up behind a shut dropdown. */
+ok("the timeline anchor exists exactly once",
+   (src.match(/id="timeline"/g)||[]).length===1);
+ok("...and it is the fold, in the signal panel",
+   src.includes('<details id="timeline" class="tlfold"')
+   && src.includes("${timelineFold(d, "));
+ok("...and the ladder is built only by the fold",
+   (src.match(/resolutionLadder\(d, rH, tl/g)||[]).length===1
+   && src.includes("function timelineFold("));
+ok("...and the notices that carry buttons stayed out of it",
+   src.includes('const head = "Resolution";')
+   && src.includes('<section id="resolution"'));
 // rH, NOT nowH, and that is the whole point of the argument. nowH is the RPC's
 // block height; every height the ladder plots — and every height the ballot and
 // the reopen/finalize/settle guards compare — is a REALM height, which on a
