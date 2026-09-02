@@ -207,8 +207,8 @@
   "pkg": "kourtv2",
   "file": "crystallize.gno",
   "label": "capBonus F9 bound loosened 1000x",
-  "find": "\tbound := mustMul(cs.tier, rawAvg) / 2",
-  "replace": "\tbound := mustMul(cs.tier, rawAvg) * 1000"
+  "find": "\tbound := mulDiv128(rawAvg, tierBpsFor(cs), 2*tierParBps)",
+  "replace": "\tbound := mulDiv128(rawAvg, tierBpsFor(cs)*1000, 2*tierParBps)"
  },
  {
   "pkg": "kourtv2",
@@ -816,22 +816,15 @@
   "pkg": "kourtv2",
   "file": "crystallize.gno",
   "label": "AnswererBonus: the tier bound never binds",
-  "find": "\tif bound := mustMul(cs.tier, cs.answerBond0) / 2; pay > bound {",
-  "replace": "\tif bound := mustMul(cs.tier, cs.answerBond0) * 1000; pay > bound {"
+  "find": "\tif bound := mulDiv128(cs.answerBond0, tierBpsFor(cs), 2*tierParBps); pay > bound {",
+  "replace": "\tif bound := mulDiv128(cs.answerBond0, tierBpsFor(cs)*1000, 2*tierParBps); pay > bound {"
  },
  {
   "pkg": "kourtv2",
   "file": "crystallize.gno",
   "label": "AnswererBonus: the bound is a whole bond, not half",
-  "find": "\tif bound := mustMul(cs.tier, cs.answerBond0) / 2; pay > bound {",
-  "replace": "\tif bound := mustMul(cs.tier, cs.answerBond0); pay > bound {"
- },
- {
-  "pkg": "kourtv2",
-  "file": "crystallize.gno",
-  "label": "AnswererBonus: the bound reads one tier too high",
-  "find": "\tif bound := mustMul(cs.tier, cs.answerBond0) / 2; pay > bound {",
-  "replace": "\tif bound := mustMul(cs.tier+1, cs.answerBond0) / 2; pay > bound {"
+  "find": "\tif bound := mulDiv128(cs.answerBond0, tierBpsFor(cs), 2*tierParBps); pay > bound {",
+  "replace": "\tif bound := mulDiv128(cs.answerBond0, tierBpsFor(cs), tierParBps); pay > bound {"
  },
  {
   "pkg": "kourtv2",
