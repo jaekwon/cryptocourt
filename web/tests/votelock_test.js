@@ -7,11 +7,7 @@
 // already found wrong, and neither may claim staking is refused when it is not.
 const fs = require('fs');
 const src = fs.readFileSync(require('path').join(__dirname,'..','index.html'),'utf8');
-function slice(from, to){
-  const a = src.indexOf(from); if(a<0) throw new Error("missing "+from);
-  const b = src.indexOf(to, a); if(b<0) throw new Error("missing "+to);
-  return src.slice(a, b);
-}
+const { slice } = require("./srcslice");
 global.document = { addEventListener: ()=>{}, getElementById: ()=>null };
 global.CFG = { mode:'demo' };
 global.isLive = ()=> CFG.mode==='live';

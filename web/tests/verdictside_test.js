@@ -15,11 +15,7 @@
 // tested as hard as the splice.
 const fs = require('fs');
 const src = fs.readFileSync(require('path').join(__dirname, '..', 'index.html'), 'utf8');
-function slice(from, to){
-  const a = src.indexOf(from); if(a<0) throw new Error("missing "+from);
-  const b = src.indexOf(to, a); if(b<0) throw new Error("missing "+to);
-  return src.slice(a, b);
-}
+const { slice, fn } = require("./srcslice");
 let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else console.log("ok:",n); };
 
 // ---- the real code under test, lifted from the page ----
@@ -37,8 +33,7 @@ eval(slice('async function nameTheSide(', '/* A deeper docket window'));
 // the real function goes in rather than a stub.
 eval(slice('function safeInline(', '\n'));
 eval(slice('function claimTitleHtml(', '\nfunction verdictBanner('));
-// slice() is exclusive of its terminator, so the closing brace goes back on.
-eval(slice('function verdictBanner(', '\n}') + '\n}');
+eval(fn('verdictBanner'));   // fn takes the closing brace with it
 
 // ---- stubs: the chain, and the batcher that talks to it ----
 let asked = [], verdicts = {};

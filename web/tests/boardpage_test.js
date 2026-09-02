@@ -9,11 +9,7 @@
 // with an innerHTML setter — which is all boardView ever touches.
 const fs = require('fs');
 const src = fs.readFileSync(require('path').join(__dirname, '..', 'index.html'), 'utf8');
-function slice(from, to){
-  const a = src.indexOf(from); if(a<0) throw new Error("missing "+from);
-  const b = src.indexOf(to, a); if(b<0) throw new Error("missing end "+to);
-  return src.slice(a, b);
-}
+const { slice } = require("./srcslice");
 // `const` inside eval is block-scoped to the eval; `function` is not.
 const V = s => s.replace(/^const /gm, 'var ');
 

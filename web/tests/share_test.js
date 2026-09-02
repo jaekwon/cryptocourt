@@ -19,11 +19,7 @@
 const fs = require('fs');
 const SRC = require('path').join(__dirname, '..', 'index.html');
 const src = fs.readFileSync(SRC, 'utf8');
-function slice(from, to){
-  const a = src.indexOf(from); if(a<0) throw new Error("missing "+from);
-  const b = src.indexOf(to, a); if(b<0) throw new Error("missing "+to);
-  return src.slice(a, b);
-}
+const { slice } = require("./srcslice");
 
 // A canvas that records instead of painting, so the clip's geometry is
 // checkable without a browser. measureText is proportional to the text so the

@@ -1,11 +1,7 @@
 // B4 harness: disputeTicket from the live file, demo + live shapes.
 const fs = require('fs');
 const src = fs.readFileSync(require('path').join(__dirname,'..','index.html'),'utf8');
-function slice(from, to){
-  const a = src.indexOf(from); if(a<0) throw new Error("missing "+from);
-  const b = src.indexOf(to, a); if(b<0) throw new Error("missing "+to);
-  return src.slice(a, b);
-}
+const { slice } = require("./srcslice");
 global.document = { addEventListener: ()=>{}, getElementById: ()=>null };
 global.CFG = { mode:'demo', gnoweb:'https://gno.land', rpc:'http://x', chainid:'dev' };
 global.PKG = 'gno.land/r/kourt/kourtv2';

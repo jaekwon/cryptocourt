@@ -8,11 +8,7 @@
 // and the second is whether the page tells the truth about rows it cannot show.
 const fs = require('fs');
 const src = fs.readFileSync(require('path').join(__dirname, '..', 'index.html'), 'utf8');
-function slice(from, to){
-  const a = src.indexOf(from); if(a<0) throw new Error("missing "+from);
-  const b = src.indexOf(to, a); if(b<0) throw new Error("missing "+to);
-  return src.slice(a, b);
-}
+const { slice } = require("./srcslice");
 // The helpers the renderers lean on, taken from the file rather than restated —
 // a local copy of esc() that is kinder than the real one would prove nothing.
 eval(slice('function esc(s){', '\n/* undo the realm'));

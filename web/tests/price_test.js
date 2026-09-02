@@ -24,11 +24,7 @@
 const fs = require('fs');
 const path = require('path');
 const src = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
-function slice(from, to){
-  const a = src.indexOf(from); if(a < 0) throw new Error("missing " + from);
-  const b = src.indexOf(to, a); if(b < 0) throw new Error("missing " + to);
-  return src.slice(a, b);
-}
+const { slice } = require("./srcslice");
 let fail = 0;
 const ok = (n, c) => { if(!c){ fail++; console.log("FAIL:", n); } else console.log("ok:", n); };
 
@@ -39,13 +35,7 @@ const ok = (n, c) => { if(!c){ fail++; console.log("FAIL:", n); } else console.l
    which does not exist under node. This file died on "document is not defined"
    while testing two pure string functions. A function ends at the first line
    that is exactly "}", which is true of every function in this file's style. */
-function fn(name){
-  const a = src.indexOf("function " + name + "(");
-  if(a < 0) throw new Error("missing function " + name);
-  const b = src.indexOf("\n}", a);
-  if(b < 0) throw new Error("unterminated function " + name);
-  return src.slice(a, b + 2);
-}
+const { fn } = require("./srcslice");
 eval(fn("fmtN"));
 eval(fn("priceText"));
 

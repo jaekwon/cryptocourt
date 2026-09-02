@@ -11,11 +11,7 @@
 //      them agree — the first draft of orem/2 declared 5 rows and contained 4.
 const fs = require('fs');
 const src = fs.readFileSync(require('path').join(__dirname, '..', 'index.html'), 'utf8');
-function slice(from, to){
-  const a = src.indexOf(from); if(a<0) throw new Error("missing "+from);
-  const b = src.indexOf(to, a); if(b<0) throw new Error("missing "+to);
-  return src.slice(a, b);
-}
+const { slice } = require("./srcslice");
 // esc and shortAddr come from the FILE, not from a local copy: a re-typed
 // escaper that is kinder than the real one would let an escaping assertion pass
 // against a function the page never calls.

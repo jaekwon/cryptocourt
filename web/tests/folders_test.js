@@ -2,11 +2,7 @@
 // folderMeta first-wins, purge-name escaping, caption switches, read counts.
 const fs = require('fs');
 const src = fs.readFileSync(require('path').join(__dirname,'..','index.html'),'utf8');
-function slice(from, to){
-  const a = src.indexOf(from); if(a<0) throw new Error("missing "+from);
-  const b = src.indexOf(to, a); if(b<0) throw new Error("missing "+to);
-  return src.slice(a, b);
-}
+const { slice } = require("./srcslice");
 global.document = { addEventListener: ()=>{}, getElementById: ()=>null };
 // siteHost() reads it, and a folder's picture resolves to https://<host>/m/<sha>.
 global.location = { protocol:"https:", host:"kourt.xyz", origin:"https://kourt.xyz" };

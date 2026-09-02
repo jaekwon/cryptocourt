@@ -21,11 +21,7 @@
 // the board, so the defence is measured against what it replaced.
 const fs = require('fs');
 const src = fs.readFileSync(require('path').join(__dirname, '..', 'index.html'), 'utf8');
-function slice(from, to){
-  const a = src.indexOf(from); if(a<0) throw new Error("missing "+from);
-  const b = src.indexOf(to, a); if(b<0) throw new Error("missing "+to);
-  return src.slice(a, b);
-}
+const { slice } = require("./srcslice");
 eval(slice('function wireFields(', '\nconst boardNewestRows'));
 eval(slice('const boardNewestRows', '\n\n').replace(/^const /gm, 'var '));
 // parseTyped is pulled in NOT to test it but to demonstrate against it: the last

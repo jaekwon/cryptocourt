@@ -13,11 +13,7 @@
 // row at all — an unreadable balance must leave the row hidden, never show 0.
 const fs = require('fs');
 const src = fs.readFileSync(require('path').join(__dirname,'..','index.html'),'utf8');
-function slice(from, to){
-  const a = src.indexOf(from); if(a<0) throw new Error("missing "+from);
-  const b = src.indexOf(to, a); if(b<0) throw new Error("missing "+to);
-  return src.slice(a, b);
-}
+const { slice } = require("./srcslice");
 
 // The coin name is markup now (the gold bar), so compare the TEXT of it. That
 // text is "Kourt:META", not "KOURT:META": the bar carries the word as written
