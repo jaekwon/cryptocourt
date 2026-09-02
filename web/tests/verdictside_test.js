@@ -33,6 +33,10 @@ eval(slice('const sideName =', '\n').replace('const sideName =', 'var sideName =
 eval(slice('function phaseClass(', 'function statusPill('));
 eval(slice('function statusPill(', 'function docketRow('));
 eval(slice('async function nameTheSide(', '/* A deeper docket window'));
+// The claim page's own title, which carries the verdict. safeInline is esc, so
+// the real function goes in rather than a stub.
+eval(slice('function safeInline(', '\n'));
+eval(slice('function claimTitleHtml(', '\nfunction verdictBanner('));
 
 // ---- stubs: the chain, and the batcher that talks to it ----
 let asked = [], verdicts = {};
@@ -188,6 +192,77 @@ const run = async (rows, v, mode) => {
   ok("node and pill agree on settled",
      phaseClass("settled NO — every stake withdraws 1×").short === "settled" &&
      phaseClass("settled NO — every stake withdraws 1×").side === "NO");
+
+  // ------------------------------------------------- the title carries it too
+  /* WHY THIS EXISTS. A settled-NO claim page named its verdict in a pill, a
+     chip, a banner and a status line, and the sentence at the top of the page —
+     the thing a reader actually looks at — read exactly as it did the day it
+     was filed. */
+  const T = "Q3 city revenue exceeded the June forecast.";
+  const titled = (over) => claimTitleHtml(Object.assign({phase:"settled", title:T}, over));
+
+  /* THE ASYMMETRY IS THE POINT, and it is asserted as a pair. A claim is a
+     statement and a NO verdict is the court saying it is not so, which is what
+     a strikethrough means. Striking a settled YES would state the opposite of
+     the record — so this is not a "closed" marker, and the YES arm below is
+     what stops it becoming one. */
+  ok("a claim the court answered NO is struck through",
+     titled({verdict:1}).includes("<s>" + T + "</s>"));
+  ok("...and a claim it upheld is NOT struck",
+     titled({verdict:0}).includes(">" + T + " <") && !titled({verdict:0}).includes("<s>"));
+  ok("both name the side in the shared oval",
+     /<span class="sidetag vtag n">NO<\/span>/.test(titled({verdict:1}))
+     && /<span class="sidetag vtag y">YES<\/span>/.test(titled({verdict:0})));
+  /* THE OVAL IS OUTSIDE THE STRIKE. The claim was contradicted; the verdict was
+     not. A strike drawn through both would cross out the court's own finding. */
+  ok("the verdict itself is not struck",
+     /<\/s> <span class="sidetag vtag n">/.test(titled({verdict:1})));
+
+  /* VERDICT BEATS ANSWER, the precedence verdictBanner uses. This is the real
+     sample record: answered NO, settled YES. Reading the wrong field strikes a
+     claim the court upheld, which is the worst output this function has. */
+  ok("a claim answered NO but settled YES is not struck",
+     !titled({verdict:0, answer:1}).includes("<s>")
+     && titled({verdict:0, answer:1}).includes('vtag y">YES<'));
+  ok("...and the answer is used only when there is no verdict",
+     titled({answer:1}).includes("<s>") && titled({answer:0}).includes('vtag y">YES<'));
+
+  /* NOTHING BEFORE SETTLED. A provisional verdict is reopenable by a new
+     dispute and an answer is disputable, so either would strike a sentence that
+     can still come back. "closed" and "provClose" ended with no decision at
+     all, which is not a NO. Every phase the page can be in is listed, so a new
+     one cannot quietly inherit the mark. */
+  for(const ph of ["open","answered","disputed","provisional","closed","provClose"]){
+    const h = claimTitleHtml({phase:ph, title:T, verdict:1, answer:1});
+    ok(`a ${ph} claim is neither struck nor badged`,
+       !h.includes("<s>") && !h.includes("sidetag"));
+  }
+  /* AN UNREADABLE SIDE PRINTS NO MARK rather than sideName's dash, the way
+     statusText and the pill beside it already refuse. An oval reading "—" makes
+     a missing read look like a decision. */
+  ok("a settled claim with no readable side gets a plain title",
+     claimTitleHtml({phase:"settled", title:T}) === `<h1 class="page-h">${T}</h1>`);
+  ok("...and never an oval with a dash in it",
+     !claimTitleHtml({phase:"settled", title:T}).includes("—"));
+
+  /* THE TITLE IS STILL ESCAPED, inside the strike as much as outside it. It is
+     attacker-supplied text going into innerHTML, and adding a wrapper around it
+     is exactly the kind of edit that drops an esc(). */
+  const eviltitled = claimTitleHtml({phase:"settled", verdict:1, title:'<img src=x onerror=1>'});
+  ok("a hostile title is escaped inside the strike",
+     eviltitled.includes("&lt;img") && !eviltitled.includes("<img"));
+
+  /* THE OVAL IS SIZED AGAINST THE VIEWPORT, NOT THE HEADING. .page-h is
+     clamp(26px,3.4vw,36px), so the shared rule's .86em would set the side in
+     31px type inside a 40px pill — a second heading rather than a mark on the
+     first. Pinned because inheriting the shared size is the obvious
+     simplification and it is wrong at every width. */
+  ok("the title's oval does not inherit the shared em size",
+     /\.page-h \.vtag\{font-size:clamp\(/.test(src));
+  /* And the strike is drawn in the losing side's hue: a grey rule through a
+     title reads as "deleted", and nothing here was deleted. */
+  ok("the strike carries the verdict's colour, not ink",
+     /\.page-h s\{[^}]*text-decoration-color:var\(--no\)/.test(src));
 
   console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");
   process.exit(fail?1:0);

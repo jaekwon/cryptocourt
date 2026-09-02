@@ -768,6 +768,24 @@ html.embed .main{grid-column:1; grid-row:1; max-width:none; padding:0;
    ballot the tag is inside an <h3>, which is already bold — pinning 600 there
    would make the named side LIGHTER than the words around it. */
 .sbout .sidetag{margin-right:2px; font-weight:600}
+/* THE VERDICT'S OVAL, beside the claim title. SIZED AGAINST THE VIEWPORT, NOT
+   THE HEADING: .page-h is clamp(26px,3.4vw,36px), so the shared .86em would set
+   the side in 31px type inside a 40px pill and read as a second heading rather
+   than a mark on the first. This tracks the ballot's oval, which is the size the
+   mark was designed at, and stops growing when the heading does.
+   THE SIDE'S HUE HERE, unlike the ballot's ink. "Overturn the YES answer?" is a
+   neutral question about one side, so it takes the heading's colour; a verdict
+   IS a side. color, not border-color, because .sidetag draws in currentColor —
+   one declaration tints the border and the word together. */
+.page-h .vtag{font-size:clamp(12px,1.1vw,15px); vertical-align:.22em; margin-left:.12em;
+  font-weight:600; letter-spacing:.1em}
+.page-h .vtag.y{color:var(--yes)}
+.page-h .vtag.n{color:var(--no)}
+/* THE STRIKE IS THE COURT'S, so it is drawn in the losing side's hue rather than
+   in ink — a grey rule through a title reads as "deleted", and nothing here was
+   deleted. Thickness in em so it tracks the clamped heading instead of going
+   hairline at 36px and heavy at 26px. */
+.page-h s{text-decoration-thickness:.05em; text-decoration-color:var(--no)}
 /* NO FILL, A HAIRLINE, AND REGISTRATION MARKS AT THE CORNERS. A court of record
    is rules and type; a filled card is a slab floating over a page. Taking the
    fill away is what makes the one glowing line on the page mean something.
@@ -9571,7 +9589,7 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
   const mapLink = (mHidden!==true && (!isLive() || (ccount!=null && id>ccount-50)))? `<a class="tlink" href="#/c/${esc(slug)}/map?focus=${id}">on the map<span aria-hidden="true">→</span></a>` : "";
   const polish = polishLink(slug, id, d, mPurged, mRedacted, polishBlocks);
   main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:courtCrumb(slug, cs&&cs.name),href:"#/c/"+slug},{label:"Claim #"+id}])
-    + `<h1 class="page-h">${safeInline(d.title)}</h1>`
+    + claimTitleHtml(d)
     + claimBody(d)
     /* THE EVIDENCE, ON THE PAGE THE CLAIM ACTUALLY LIVES ON. claimDetail has
        always read ClaimMedia into d.media — the round trip was already paid —
@@ -10870,6 +10888,38 @@ function focusStakeSide(side){
   const b = t.querySelector(".act .btn." + side);
   if(b) b.classList.add("picked");
   t.scrollIntoView({block: "center", behavior: "smooth"});
+}
+/* THE CLAIM TITLE CARRIES THE VERDICT — struck through when the court said NO.
+   Reported as: a settled-NO claim page named its verdict in a pill, a chip, a
+   banner and a status line, and the one thing a reader actually looks at — the
+   sentence at the top — read exactly as it did the day it was filed.
+   STRUCK ONLY ON NO, and this is the whole point of the treatment. A claim is a
+   statement; a NO verdict is the court saying it is not so, which is what a
+   strikethrough means. Striking a settled YES would say the opposite of the
+   record, so the strike is not a "this is closed" marker and must never become
+   one — "settled" is a phase, and phases already have pills.
+   THE OVAL APPEARS ON BOTH, because naming the side is not the same act as
+   contradicting the claim. A settled YES gets its oval and keeps its title
+   intact; that symmetry is what makes the strike mean something when it shows.
+   NOTHING BEFORE SETTLED. A provisional verdict is reopenable by a new dispute
+   and an answer is disputable, so striking either would strike a sentence that
+   can still come back — and "closed" and "provClose" ended with no decision at
+   all, which is not a NO.
+   The verdict precedence is verdictBanner's, deliberately: these two print the
+   same fact a few pixels apart and must not disagree about which field it is
+   in. sideName's dash is filtered rather than printed, the way statusText and
+   the pill beside it already refuse an unreadable side. */
+function claimTitleHtml(d){
+  const t = safeInline(d && d.title);
+  if(!d || d.phase !== "settled") return `<h1 class="page-h">${t}</h1>`;
+  const v = (d.verdict != null ? d.verdict : d.answer);
+  if(v !== 0 && v !== 1) return `<h1 class="page-h">${t}</h1>`;
+  const no = v === 1;
+  // <s>, not a class on the h1: the element means "no longer accurate", which is
+  // the claim about the sentence — and it keeps the oval outside the strike,
+  // since the verdict is not itself struck.
+  return `<h1 class="page-h">${no ? `<s>${t}</s>` : t}`
+    + ` <span class="sidetag vtag ${no ? "n" : "y"}">${sideName(v)}</span></h1>`;
 }
 function verdictBanner(d){
   if(d.phase==="provClose") return `<span class="pill void">closed · no decision</span>`;
