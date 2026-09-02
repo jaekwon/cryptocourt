@@ -877,6 +877,30 @@ print("\ncheck-mutant-collisions")
 # how the anchors differed. An exact twin needs no hardcoded realm text and so
 # cannot rot. The widened-anchor case was ablated by hand when the guard landed.
 #
+# A ROW WHOSE ANCHOR STILL APPLIES, chosen by predicate rather than by position.
+#
+# Both arms below used to copy _corpus[0] and it has been pointing at
+# realm/r/kourtv2/quality.gno, deleted with the quality lane. So the planted row
+# was unappliable for the ANCHOR reason and never reached the question the arm
+# asks -- the duplicate never got compared, the no-op never got measured -- and
+# both arms reported SILENT, which reads as "the guard has a hole" when the truth
+# is "the plant was smothered". MEASURED: planting a copy of row 0 puts "PROBE
+# duplicate mutant" in the unappliable list and prints neither "SAME mutant" nor
+# "one mutant"; planting a copy of the first LIVE row (index 9, SetTier's admin
+# guard, directory.gno) prints both. The guard was right the whole time.
+#
+# Positional selection is the fragility, not that row 0 happens to be dead: a
+# corpus reorder would break these arms again, silently, in the same way.
+def _live_row(corpus):
+    """The first row whose `find` still matches exactly once in its file."""
+    for row in corpus:
+        p = os.path.join(REPO, "realm/r", row.get("pkg", "kourtv2"), row["file"])
+        if os.path.exists(p) and open(p, encoding="utf-8").read().count(row["find"]) == 1:
+            return row
+    raise SystemExit("selftest: no mutation row in the corpus still applies — "
+                     "these two arms cannot plant anything (see `make anchors`)")
+
+
 # Prepended with a JSON round-trip, not a string splice, for the reason inject()
 # records below: an arm must not depend on the whitespace of the file it edits.
 _col = "two rows that produce one mutant"
@@ -885,7 +909,7 @@ _bk = MUTS + ".selftest-backup"
 shutil.copy(MUTS, _bk)
 try:
     _corpus = json.load(open(_bk))
-    _twin = dict(_corpus[0])
+    _twin = dict(_live_row(_corpus))
     _twin["label"] = "SELFTEST duplicate mutant"
     with open(MUTS, "w") as _fh:
         json.dump([_twin] + _corpus, _fh, indent=2, ensure_ascii=False)
@@ -909,7 +933,7 @@ _bk2 = MUTS + ".selftest-backup"
 shutil.copy(MUTS, _bk2)
 try:
     _corpus2 = json.load(open(_bk2))
-    _flat = dict(_corpus2[0])
+    _flat = dict(_live_row(_corpus2))
     _flat["label"] = "SELFTEST no-op row"
     _flat["replace"] = _flat["find"]
     with open(MUTS, "w") as _fh2:
