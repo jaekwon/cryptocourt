@@ -1922,8 +1922,8 @@
   "pkg": "kourtv2",
   "file": "dispute.gno",
   "label": "provCloseClaim: the answer bond is never returned",
-  "find": "\tif cs.answerBond > 0 {\n\t\tc.coin.Transfer(c.escrow, cs.answerer, cs.answerBond)\n\t\tcs.answerBond = 0\n\t}",
-  "replace": ""
+  "find": "\tif cs.answerBond > 0 {\n\t\tsettleAnswerBond(c, cs)\n\t}\n\tif cs.deposit > 0 {",
+  "replace": "\tif cs.deposit > 0 {"
  },
  {
   "pkg": "kourtv2",
@@ -7140,18 +7140,18 @@
  },
  {
   "pkg": "kourtv2",
-  "file": "crystallize.gno",
+  "file": "answerbond.gno",
   "label": "crystallize: the answer bond is paid out but the field still claims it",
-  "find": "\t\tc.coin.Transfer(c.escrow, cs.answerer, cs.answerBond)\n\t\tcs.answerBond = 0",
-  "replace": "\t\tc.coin.Transfer(c.escrow, cs.answerer, cs.answerBond)",
+  "find": "\tc.coin.Transfer(c.escrow, cs.answerer, cs.answerBond)\n\tcs.answerBond = 0",
+  "replace": "\tc.coin.Transfer(c.escrow, cs.answerer, cs.answerBond)",
   "why": "The claim's LAST escrow disposal, and the corpus had nothing on it \u2014 the three crystallize.gno rows mentioning answerBond are all about AnswererBonus's tier bound. Both halves are now caught by TestTheEscrowHoldsExactlyWhatItOwes, which reconciles the escrow's balance against every obligation recorded against it; the two mutations break it in opposite directions and the failure prints both sides. Here the coin leaves and the field stays: the escrow holds 0 and owes 18000000."
  },
  {
   "pkg": "kourtv2",
-  "file": "crystallize.gno",
+  "file": "answerbond.gno",
   "label": "crystallize: the answer-bond field is cleared but the coin never moves",
-  "find": "\t\tc.coin.Transfer(c.escrow, cs.answerer, cs.answerBond)\n\t\tcs.answerBond = 0",
-  "replace": "\t\tcs.answerBond = 0",
+  "find": "\tc.coin.Transfer(c.escrow, cs.answerer, cs.answerBond)\n\tcs.answerBond = 0",
+  "replace": "\tcs.answerBond = 0",
   "why": "The claim's LAST escrow disposal, and the corpus had nothing on it \u2014 the three crystallize.gno rows mentioning answerBond are all about AnswererBonus's tier bound. Both halves are now caught by TestTheEscrowHoldsExactlyWhatItOwes, which reconciles the escrow's balance against every obligation recorded against it; the two mutations break it in opposite directions and the failure prints both sides. Here the field is cleared and the coin stays: the escrow holds 18000000 and owes 0."
  },
  {
