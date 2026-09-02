@@ -102,6 +102,10 @@ ok("no series is fetched that nothing draws",
 ok("the court stats read the burn total", src.includes('one(`CourtBurnedGNOT(${s})`).catch(()=>null)'));
 ok("burn is the tile carrying the graph", src.includes("tileSpark(parseSeries(s.burnHist))"));
 ok("price and supply are figures only", (src.match(/tileSpark\(parseSeries/g)||[]).length === 1);
+// Dust does not earn a cell. Both extra figures are unminted claims on future
+// supply, so they show only once they could move the supply figure above them.
+ok("the extra figures are gated on size, not on being non-zero",
+   src.includes("v >= s.supply / 100") && !src.includes("if(s.reservoir>0)"));
 // GNOT, not µGNOT: three cells share the left column and the raw figure does
 // not fit. Reuses the helper that already handles the sub-0.01 dust case.
 ok("burn is shown in GNOT, not raw micro-units", src.includes("gnotAmt(s.burned)"));
