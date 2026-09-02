@@ -122,7 +122,7 @@
   "pkg": "kourtv2",
   "file": "crystallize.gno",
   "label": "PullCarrot: the carrot is not once-per-address, so it can be claimed twice",
-  "find": "\tif cs.qVoted.Has(claimedKey) {",
+  "find": "\tif cs.voted.Has(claimedKey) {",
   "replace": "\tif false {"
  },
  {
@@ -963,22 +963,22 @@
   "pkg": "kourtv2",
   "file": "crystallize.gno",
   "label": "PullCarrot: the claim latch is never written",
-  "find": "\tcs.qVoted.Set(claimedKey, true)",
+  "find": "\tcs.voted.Set(claimedKey, true)",
   "replace": ""
  },
  {
   "pkg": "kourtv2",
   "file": "dispute.gno",
   "label": "VoteDispute: the carrot record always says yes",
-  "find": "\tcs.qVoted.Set(\"d\"+beClaimKey(uint64(cs.proposalID))+string(who), choice)",
-  "replace": "\tcs.qVoted.Set(\"d\"+beClaimKey(uint64(cs.proposalID))+string(who), \"yes\")"
+  "find": "\tcs.voted.Set(\"d\"+beClaimKey(uint64(cs.proposalID))+string(who), choice)",
+  "replace": "\tcs.voted.Set(\"d\"+beClaimKey(uint64(cs.proposalID))+string(who), \"yes\")"
  },
  {
   "pkg": "kourtv2",
   "file": "dispute.gno",
   "label": "VoteDispute: the carrot record drops the round it was cast in",
-  "find": "\tcs.qVoted.Set(\"d\"+beClaimKey(uint64(cs.proposalID))+string(who), choice)",
-  "replace": "\tcs.qVoted.Set(\"d\"+string(who), choice)"
+  "find": "\tcs.voted.Set(\"d\"+beClaimKey(uint64(cs.proposalID))+string(who), choice)",
+  "replace": "\tcs.voted.Set(\"d\"+string(who), choice)"
  },
  {
   "pkg": "kourtv2",
