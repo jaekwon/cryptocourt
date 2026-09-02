@@ -42,6 +42,7 @@ eval(grab("parseSeries"));
 eval(grab("lastEpoch"));
 eval(grab("stepPath"));
 eval(grab("seriesScales"));
+eval(grab("sinceWords"));
 eval(grab("anchorNow"));
 eval(grab("sinceLabel"));
 eval(grab("dot"));
@@ -110,11 +111,18 @@ ok("a zero reading is not an anchor", anchorNow("now:0:1") === null);
 // 30 — the arithmetic this test got wrong the first time.
 const anchor = Date.UTC(2026, 5, 15) / 1000;              // 15 Jun 2026
 const ser30d = parseSeries("720,800,0;80:5,800:9");       // first point 720 epochs = 30 days ago
-ok("within the year it names the day", sinceLabel(ser30d, anchor) === "since 16 May");
-ok("a series starting now dates to today", sinceLabel(parseSeries("720,40,0;40:1"), anchor) === "since 15 Jun");
-// Across a year boundary the year is the useful half, and the day is not.
+ok("the date and the distance, both", sinceLabel(ser30d, anchor) === "since 16 May 2026, 30 days ago");
+// A span of zero gets the date alone: sinceWords reads an identical time as
+// the future ("in 1 min"), which is worse than saying nothing.
+ok("a zero span shows the date alone", sinceLabel(parseSeries("720,40,0;40:1"), anchor) === "since 15 Jun 2026");
+ok("an hour-old start does carry its distance", /^since .+ 2026, 1 hour ago$/.test(sinceLabel(parseSeries("720,41,0;40:1"), anchor)));
+// The year is never dropped, whatever the span — a date that sometimes has one
+// makes the reader work out which kind it is before they can read it.
 const serOld = parseSeries("720,9000,0;40:5,9000:9");   // ~1 year back
-ok("across a year it names the month and year", /^since [A-Z][a-z]{2} 2025$/.test(sinceLabel(serOld, anchor)));
+ok("an old start names its own year", /^since \d{1,2} [A-Z][a-z]{2} 2025, .+ ago$/.test(sinceLabel(serOld, anchor)));
+ok("every label carries a year and a distance",
+   [sinceLabel(ser30d, anchor), sinceLabel(serOld, anchor)]
+     .every(l => /\b20\d\d,/.test(l) && / ago$/.test(l)));
 // No anchor, no date — the graph still says the same thing without one.
 ok("no anchor means no date", sinceLabel(ser30d, null) === "" && sinceLabel(ser30d, 0) === "");
 ok("no data means no date", sinceLabel(parseSeries("720,5,0;"), anchor) === "");

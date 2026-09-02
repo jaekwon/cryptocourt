@@ -7965,14 +7965,19 @@ function sinceLabel(ser, nowUnix){
   const back = (ser.now - ser.pts[0].e) * ser.width * BLOCK_SECS;
   const d = new Date((nowUnix - back) * 1000);
   if(!Number.isFinite(d.getTime())) return "";
-  // WITHIN THIS YEAR, NAME THE DAY. A court whose whole history is a week old
-  // reads "since Dec 2026" while today is also Dec 2026 — true, and it tells
-  // the reader nothing. The year is the useful half only once there is a year
-  // between them.
-  const now = new Date(nowUnix * 1000);
-  return d.getUTCFullYear() === now.getUTCFullYear()
-    ? `since ${d.getUTCDate()} ${MON[d.getUTCMonth()]}`
-    : `since ${MON[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+  // THE DATE AND THE DISTANCE. The date alone makes the reader do the
+  // subtraction, and the distance alone makes them ask when. The year is always
+  // there, even when it is the current one: a date that sometimes carries one
+  // makes the reader work out which kind they are looking at first.
+  //
+  // sinceWords is the page's own phrasing for a span, used here so this line
+  // and every other elapsed figure on the site say it the same way.
+  const when = `${d.getUTCDate()} ${MON[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+  // Under a minute the distance says nothing the date does not, and sinceWords
+  // reads it as the FUTURE at exactly zero — its `past` test is strict, so an
+  // identical time comes back "in 1 min". The date alone is the honest answer.
+  if(back < 60) return `since ${when}`;
+  return `since ${when}, ${sinceWords(nowUnix, nowUnix - back)}`;
 }
 /* A ZERO-LENGTH LINE, not a circle. The box is stretched on both axes, which
    turns any circle into an ellipse; a round stroke cap stays round because

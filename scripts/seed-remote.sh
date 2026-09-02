@@ -37,7 +37,11 @@ HOST="${HOST:?set HOST=user@server}"
 CHAINID="${CHAINID:-kourt-1}"
 REMOTE="${REMOTE:-https://rpc.$(echo "$HOST" | sed 's/.*@//')}"
 GNOROOT="${GNOROOT:-$HOME/gopath/src/github.com/gnolang/gno}"
-OWNER_ADDR="${OWNER_ADDR:-}"
+# Jae's wallet. Defaulted rather than left empty because a reset wipes every
+# balance, and an unpremined owner gets "insufficient network fee" from their
+# wallet — which means no coin at all, not an expensive fee. Override to premine
+# somebody else; set it empty to premine nobody.
+OWNER_ADDR="${OWNER_ADDR-g1w746drdmenjdg0ll38dltjt7kkgtq5lmsmghcg}"
 PASS="kourt-genesis"                    # chain.sh's, and not ours to choose
 KEYDIR="${DEPLOYER_HOME:-$HOME/.kourt/deployer-$CHAINID}"
 
