@@ -20,10 +20,20 @@ Group=kourt
 # which is the safe default for a direct listener but wrong here — every client
 # would look like the proxy and the throttle would be one global bucket.
 # --trusted-proxy must therefore name the proxy, or the header is still ignored.
+# --chain IS NOT OPTIONAL HERE, and leaving it out is why the chat was dead on
+# this host: the flag defaults to "dev" alone, the overlay posts to
+# /api/chat/{chain}/{court} with the real chain id, and every request came back
+# "unknown chain \"kourt-1\"". The service was healthy the whole time and
+# answering the only chain it had been told about.
+#
+# BOTH NAMES, because one binary serves whatever is pointed at it: "dev" keeps a
+# local gnodev working against this same service, and kourt-1 is the chain this
+# host actually runs. Adding a chain here is the only thing needed to serve it.
 ExecStart=/opt/kourt/kourtchat \
     --addr 127.0.0.1:8788 \
     --db /var/lib/kourt/chat.db \
     --secret-file /var/lib/kourt/secret/iphash.key \
+    --chain dev,kourt-1 \
     --behind-proxy \
     --trusted-proxy 127.0.0.1/32,::1/128
 
