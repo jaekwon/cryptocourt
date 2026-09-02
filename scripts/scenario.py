@@ -747,17 +747,15 @@ def emit_txs(scn, addrs):
         raise SystemExit(f"scenario.py: no address for {', '.join(missing)} — "
                          f"the accounts map is stale.")
     keys = {n: pubkey_b64(gpub) for n, (_, gpub) in addrs.items()}
-    out = []
-    for st in scn.steps:
-        if st["kind"] != "call":
-            continue          # notes are narration; expects are reads; refusals are for tests
+
+    def tx_line(who, func, args, send=None):
         msg = {"@type": "/vm.m_call",
-               "caller": addrs[st["who"]][0],
-               "send": str(st.get("send") or ""),
+               "caller": addrs[who][0],
+               "send": str(send or ""),
                "pkg_path": REALM,
-               "func": st["func"],
-               "args": [str(a) for a in st["args"]]}
-        out.append(json.dumps({"tx": {
+               "func": func,
+               "args": [str(a) for a in args]}
+        return json.dumps({"tx": {
             "msg": [msg],
             "fee": {"gas_wanted": str(GAS_WANTED), "gas_fee": f"{GAS_FEE_UGNOT}ugnot"},
             # ONE SIGNATURE ENTRY, with an EMPTY signature string. An empty
@@ -766,9 +764,37 @@ def emit_txs(scn, addrs):
             # genesis_txs.jsonl carries a pub_key and `"signature":""` rather
             # than nothing at all.
             "signatures": [{"pub_key": {"@type": "/tm.PubKeySecp256k1",
-                                        "value": keys[st["who"]]},
+                                        "value": keys[who]},
                             "signature": ""}],
-            "memo": ""}}, separators=(",", ":")))
+            "memo": ""}}, separators=(",", ":"))
+
+    out = []
+    for st in scn.steps:
+        if st["kind"] != "call":
+            continue          # notes are narration; expects are reads; refusals are for tests
+        out.append(tx_line(st["who"], st["func"], st["args"], st.get("send")))
+    # SEAL THE CLOCK, exactly as emit_plan's postamble does. This emitter walks
+    # scenario STEPS, and the seal is not one: emit_plan appends it itself for a
+    # scenario that armed the clock and never sealed it. So this path used to end
+    # with the clock still ARMED while the broadcast path ended sealed — the two
+    # seeds produced different chains from the same scenario, and the difference
+    # was the one piece of state that says whether later transactions can still
+    # move every date on the chain.
+    #
+    # MEASURED, on kourt-1: after a genesis seed of covid_demo,
+    # TestClockActive() answered true where the plan path leaves it false. It is
+    # invisible in the docket — every claim, folder and board row reads the same
+    # — which is why it survived until the genesis path was pointed at a chain
+    # somebody reads.
+    #
+    # emit_txtar DOES NOT DO THIS, and that is not an oversight to fix next. The
+    # seal belongs to the two emitters that produce a SERVED chain, where an
+    # armed clock means every date on it can still be moved. A txtar is a test:
+    # it asserts and exits, and sealing under it would take away a clock a later
+    # assertion may need to advance. So the knowledge is duplicated exactly
+    # twice, on purpose, and the pair is what has to agree.
+    if scn._clock_armed:
+        out.append(tx_line(DEPLOYER, "SealTestClock", []))
     return "\n".join(out) + "\n"
 
 

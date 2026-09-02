@@ -283,6 +283,40 @@ done
 kourt-genesis
 EOF
 
+# A SCENARIO'S TRANSACTIONS, IF THE CALLER BUILT A SHEET — applied at InitChain
+# instead of broadcast one at a time after boot. scripts/seed-remote.sh passes
+# this; scripts/seed-node.sh does the same thing locally with gnodev's
+# -txs-file. See scenario.py's emit_txs for why the file costs nothing to make.
+#
+# AFTER THE PACKAGES, necessarily. Genesis transactions are replayed in file
+# order (applyInMemoryAppState in gno.land/pkg/gnoland/app.go), and a call to a
+# realm that does not exist yet is just a failed transaction — silently, because
+# genesis application is bulk and does not stop on one.
+#
+# AND AFTER THE BALANCES, which is the ordering the chain gives us for free:
+# applyBalance runs before the tx replay, and the ante handler refuses a signer
+# whose account does not exist ("account %s does not exist"). Every actor in the
+# sheet is premined above via EXTRA_PREMINE.
+if [ -n "${GENESIS_TXS:-}" ]; then
+    [ -f "$GENESIS_TXS" ] || {
+        echo "REFUSE: GENESIS_TXS is set but there is no sheet at $GENESIS_TXS" >&2; exit 2; }
+    # UNSIGNED, AND ONLY SAFE WHILE THE UNIT SAYS SO. Every genesis transaction
+    # signs over (chainID, 0, 0) — the ante handler zeroes the account number
+    # and sequence at height 0, see tm2/pkg/sdk/auth/ante.go "At genesis, both
+    # are zero regardless of actual values" — and the node then skips genesis
+    # signature verification altogether, so the sheet carries an empty
+    # signature. Take that flag away and every transaction in the sheet is
+    # refused at boot, leaving a chain that came up clean and empty with nothing
+    # to say why. Checked here rather than assumed.
+    grep -q -- '-skip-genesis-sig-verification' deploy/kourtnode.service || {
+        echo "REFUSE: deploy/kourtnode.service no longer passes -skip-genesis-sig-verification," >&2
+        echo "        so every unsigned transaction in the sheet would be refused at boot." >&2
+        exit 2; }
+    "$WORK/gnogenesis-host" txs add sheets "$GENESIS_TXS" \
+        -genesis-path "$WORK/genesis.json" >/dev/null
+    echo "    $(wc -l <"$GENESIS_TXS" | tr -d ' ') scenario transactions into genesis"
+fi
+
 else
     echo "==> config only: units and nginx, chain untouched"
 fi

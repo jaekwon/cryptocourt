@@ -93,19 +93,73 @@ done <"$WORK/accounts"
 DEP="$(addr deployer)"
 [ -n "$DEP" ] || { echo "seed-remote: no deployer key" >&2; exit 1; }
 
+# TWO WAYS TO SEED, and the fast one is the default — the same split
+# scripts/seed-node.sh has run locally for a while, brought over here.
+#
+#   genesis  every transaction goes into the genesis file, applied at InitChain
+#   plan     every transaction is a `gnokey maketx -broadcast`, one at a time
+#
+# MEASURED against kourt.xyz on covid_demo: 656 transactions, ~0.36s each, which
+# is very nearly the whole ten-minute run. Almost none of it is the chain — the
+# node answers a query in ~30ms and commits one to two blocks a second — it is
+# the LOCAL keyring decrypt and signature, once per transaction. The genesis path
+# pays none of it: nothing is signed and no gnokey is spawned, because a genesis
+# transaction signs over (chainID, 0, 0) and the node skips verifying it.
+#
+# THE PLAN PATH STAYS, and not for sentiment: it checks every transaction as it
+# lands and prints the realm's own panic when one fails. Genesis application is
+# bulk and does not stop on a failure, so reach for SEED_MODE=plan when a
+# scenario is being debugged rather than merely served.
+SEED_MODE="${SEED_MODE:-genesis}"
+
+# name, address AND pubkey, for BOTH modes: --emit txs needs the key for its
+# signature slot (std.Tx.ValidateBasic refuses an empty signatures array
+# outright, so each transaction carries its caller's pubkey with empty signature
+# bytes — the shape gno.land's own genesis_txs.jsonl uses), and --emit checks
+# needs the addresses to assert against. Built here, above the split, because
+# the assertions run either way.
+gnokey list -home "$KEYDIR" 2>/dev/null |
+  sed -n 's/^[0-9]*\. \([a-z0-9]*\) (.*addr: \(g1[a-z0-9]*\) pub: \(gpub1[a-z0-9]*\).*/\1	\2	\3/p' \
+  >"$WORK/accounts.map"
+[ -s "$WORK/accounts.map" ] || {
+    echo "seed-remote: read no name/addr/pubkey lines out of $KEYDIR" >&2; exit 1; }
+
+GENESIS_TXS=""
+if [ "$SEED_MODE" = genesis ]; then
+    echo "==> the scenario's transactions, into genesis"
+    python3 scripts/scenario.py "$SCN" --emit txs \
+        --accounts-map "$WORK/accounts.map" --out "$WORK/genesis_txs.jsonl" >/dev/null
+    GENESIS_TXS="$WORK/genesis_txs.jsonl"
+    echo "    $(wc -l <"$GENESIS_TXS" | tr -d ' ') transactions, signed by nobody, applied at boot"
+elif [ "$SEED_MODE" != plan ]; then
+    echo "seed-remote: SEED_MODE is genesis or plan, not $SEED_MODE" >&2; exit 2
+fi
+
 echo "==> the chain, with those accounts premined at genesis"
 # DEPLOYER_HOME is the whole trick: chain.sh signs the genesis packages with THIS
 # keyring's deployer, so tcDeployer lands on a key the scenario below can use.
-DEPLOYER_HOME="$KEYDIR" EXTRA_PREMINE="$PREMINE" \
+DEPLOYER_HOME="$KEYDIR" EXTRA_PREMINE="$PREMINE" GENESIS_TXS="$GENESIS_TXS" \
   make chain HOST="$HOST" GNOROOT="$GNOROOT" OWNER_ADDR="$OWNER_ADDR" RESET=--reset
 
-echo "==> the scenario's transactions, against $REMOTE"
-python3 scripts/scenario.py "$SCN" --emit plan --out "$WORK/seed.sh" >/dev/null
-chmod +x "$WORK/seed.sh"
-KEYDIR="$KEYDIR" REMOTE="$REMOTE" CHAINID="$CHAINID" PASS="$PASS" sh "$WORK/seed.sh"
+if [ "$SEED_MODE" = plan ]; then
+    echo "==> the scenario's transactions, against $REMOTE"
+    python3 scripts/scenario.py "$SCN" --emit plan --out "$WORK/seed.sh" >/dev/null
+    chmod +x "$WORK/seed.sh"
+    KEYDIR="$KEYDIR" REMOTE="$REMOTE" CHAINID="$CHAINID" PASS="$PASS" sh "$WORK/seed.sh"
+fi
 
 echo "==> checking the chain agrees"
-python3 scripts/scenario.py "$SCN" --emit checks --out "$WORK/checks.sh" >/dev/null 2>&1 || true
+# RUN, not merely emitted. This line used to print above a call that emitted
+# checks.sh and never executed it — and `--emit checks` requires
+# --accounts-map, so the call failed and `|| true` swallowed that too: the
+# heading printed and nothing whatsoever was checked. On the genesis path these
+# reads are the ONLY evidence the seed applied, because bulk application does
+# not stop on a failed transaction, so a silent no-op here is the one thing this
+# script cannot afford.
+python3 scripts/scenario.py "$SCN" --emit checks \
+    --accounts-map "$WORK/accounts.map" --out "$WORK/checks.sh" >/dev/null
+chmod +x "$WORK/checks.sh"
+REMOTE="$REMOTE" sh "$WORK/checks.sh"
 cat <<EOF
 
 Seeded $CHAINID at $REMOTE from $SCN.
