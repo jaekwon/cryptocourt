@@ -161,7 +161,18 @@ async function courtPage(browser, opts) {
   {
     const page = await browser.newPage();
     const external = [];
-    page.on("request", r => { if (!r.url().startsWith("file:")) external.push(r.url()); });
+    // `data:` COUNTS AS LOCAL, and that is not a loosening. This list is here to
+    // catch bytes LEAVING THE MACHINE; a data URI carries its own payload inline
+    // and cannot contact anything, so it is self-contained by definition — the
+    // very property the test exists to defend. Chrome still raises a `request`
+    // event for one, which is why it has to be named.
+    //
+    // The chat panel's sky is a data-URI SVG (see CHATCSS in web/chat.js), so
+    // without this the test failed on the most self-contained thing on the page.
+    // http:, https: and ws: are deliberately NOT excused: those would be the
+    // real thing this is looking for.
+    const local = u => u.startsWith("file:") || u.startsWith("data:");
+    page.on("request", r => { if (!local(r.url())) external.push(r.url()); });
     await page.goto(PAGE + "#/c/orem", {waitUntil: "load"});
     await page.waitForFunction(
       () => !!document.querySelector("#railchat .chatlog"), {timeout: 20000});

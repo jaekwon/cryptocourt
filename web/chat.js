@@ -460,151 +460,64 @@ const CHATCSS = `
 .chatsend:active{transform:translateY(1px)}
 .chatsend:disabled{opacity:.4;cursor:default;transform:none}
 .chatnote{min-height:1.2em;opacity:.7;font-size:.85em;margin-top:.25rem}
-/* THE DEEP NIGHT SKY BEHIND THE CHAT — a window onto it, not a boxed widget.
-   Very dark royal purple fading top to bottom -- just the gradient of the sky,
-   no galactic band -- with 84 stars scattered across it, grading from crisp
-   pixels down to a hairline dust.
+/* THE SKY OVER LEO ON 23 SEPTEMBER 2017, with the planets where they actually
+   were. Not a texture and not a generated scatter: every star and every planet
+   in the plate behind this panel is a real position for that date.
 
-   PAINT ONLY, AND THAT IS THE POINT. This is a SECOND .chatpanel rule rather
-   than an edit of the first, so the two can be read side by side and this one
-   can be seen to set nothing but colour: no margin, no padding, no border, no
-   size, no position, no font. The layout above is untouched and nothing moves.
+   WHAT IS IN IT, and where each number came from:
 
-   THE ONE DELIBERATE DEPARTURE from this sheet's own rule. Everything else here
-   is neutral grey and inherited colour, because "this file cannot see the
-   page's colour tokens and a hardcoded brand colour would be wrong on one
-   theme or the other". A night sky is different in kind: it is a COMMITTED
-   look, dark in both themes on purpose, so it is the one place where hardcoding
-   is the correct answer instead of a shortcut.
+     277 stars  Hipparcos (VizieR I/239/hip_main), everything brighter than
+                V 6.3 in the frame RA 141-180 deg, Dec -20 to +50. Radius and
+                opacity fall together over six magnitude bins, 3.0px at .95
+                alpha for the brightest down to .55px at .30 for the faintest.
+     Leo's figure  the eleven standard lines over its ten named stars -- the
+                Sickle from Ras Elased through Adhafera and Algieba down to
+                Regulus, then the body out to Denebola and back by Chertan.
+     3 planets  JPL Horizons, geocentric astrometric, 2017-09-23 00:00 UT:
+                Venus 10h22m40.4s +11d14'07", Mars 10h51m24.3s +08d33'14",
+                Mercury 11h15m13.3s +06d46'26". Warm for Venus, orange for
+                Mars, pale for Mercury, each with a faint halo.
 
-   WHICH FORCES THE FOREGROUND. Every control in this panel takes
-   color:inherit, so a dark background alone would leave dark-on-dark text on a
-   light theme -- unreadable. The pale starlight colour here is not decoration,
-   it is what makes the background legal. The greys above ride on it correctly:
-   rgba(128,128,128,...) borders and the .chatstate wash read on a dark ground,
-   and the inputs stay transparent so the sky shows through them.
+   THE OTHER BODIES ARE ABSENT BECAUSE THEY WERE ELSEWHERE, not because they
+   were forgotten. At that instant Jupiter sat at 13h38m and the Sun at 11h59m,
+   both in Virgo, with the Moon at 14h10m below them -- all outside this frame.
+   Drawing them would have meant moving them.
 
-   HOW THE FIELD IS BUILT, since it looks arbitrary and is not. NOTHING TILES.
-   Each star is its own no-repeat layer placed at a percentage position, so the
-   field is one fixed scatter over the whole panel and cannot repeat -- which is
-   what the earlier version got wrong. That one used ten TILED gradients at
-   coprime sizes, one dot per tile, and at the rail's full height the repeat was
-   plainly visible.
+   CHECKED RATHER THAN TRUSTED, twice. The named-star coordinates were entered
+   by hand and then confirmed against the catalogue that filled the field:
+   Hipparcos gives Regulus as 152.0930 deg +11.9672 deg at V 1.36, which is the
+   value the figure uses, to four decimals. And the ephemeris reproduces the
+   configuration this date is known for without being asked to -- Venus 3.58
+   deg from Regulus, all three planets inside Leo, Jupiter and the Sun over in
+   Virgo. Two independent sources agreeing is what makes the plate worth
+   calling real.
 
-   The positions come from the R2 (Kronecker) low-discrepancy sequence, stepping
-   two irrational multiples of the plastic number. That buys two things a random
-   generator does not: an even spread with no clumps, and no point landing on a
-   tidy fraction, so nothing reads as a grid either. MEASURED on the 84 points
-   below -- quadrant counts 21/22/21/20, minimum separation 7.79% of the box.
-   They are written out literally rather than generated at runtime, so this stays
-   a static stylesheet.
+   EAST IS LEFT, which is why Denebola sits at the left edge and the Sickle at
+   the right: right ascension increases eastward, and this is drawn the way a
+   star map is, not the way a graph is.
 
-   Brightness rides in six tiers cycled by index, 1px at .95 alpha down to
-   .45px at .16, so size and alpha fall together and the tiers interleave
-   spatially instead of banding.
+   THE FRAME IS PORTRAIT ON PURPOSE (0.538 wide to tall). Leo is a wide
+   constellation and this panel is a tall column, so the declination window is
+   deliberately much taller than Leo -- it runs from Hydra up past Leo Minor.
+   That is what lets one plate fill the panel with real sky instead of leaving
+   two thirds of it bare, and the neighbours it pulls in are real stars, not
+   filler.
 
-   THE GRADIENT IS LAST, AND MUST BE. CSS paints the FIRST background-image on
-   top, so an opaque vertical fade listed first would bury every star. Listed
-   last it sits behind them, which is also why the stars are crisper here than
-   in the first version -- that one had its haze layers on top, veiling them.
-
-   ONE background-size AND ONE background-repeat now cover every layer, because
-   a single value propagates to all of them. That deletes a real hazard the
-   earlier version carried: three comma lists of fourteen that CSS pairs by
-   position and silently mismatches if they drift.
+   AN SVG DATA URI, base64, and both halves of that matter. The overlay's one
+   promise is that it is self-contained and deploy.sh refuses any src or href
+   pointing at a remote host, so the plate has to travel inside this file
+   rather than be fetched. base64 rather than percent-encoding because the
+   latter inflates an SVG full of quotes and angle brackets by about 60%.
 
    NO BACKTICK AND NO DOLLAR-BRACE ANYWHERE IN HERE. The whole block is one
    template literal; a stray pair closes it early and takes every page with it,
    not just the chat. */
 .chatpanel{color:#e9e5f8;background-color:#06020e;
-  background-image:
-    radial-gradient(circle at 25.49% 6.98%, rgba(232,224,255,0.7) 0, rgba(232,224,255,0.7) 0.85px, rgba(232,224,255,0) 1.25px),
-    radial-gradient(circle at 0.98% 63.97%, rgba(255,255,255,0.5) 0, rgba(255,255,255,0.5) 0.7px, rgba(255,255,255,0) 1.10px),
-    radial-gradient(circle at 76.46% 20.95%, rgba(204,186,255,0.35) 0, rgba(204,186,255,0.35) 0.6px, rgba(204,186,255,0) 1.00px),
-    radial-gradient(circle at 51.95% 77.94%, rgba(255,255,255,0.22) 0, rgba(255,255,255,0.22) 0.5px, rgba(255,255,255,0) 0.90px),
-    radial-gradient(circle at 27.44% 34.92%, rgba(214,204,255,0.16) 0, rgba(214,204,255,0.16) 0.45px, rgba(214,204,255,0) 0.85px),
-    radial-gradient(circle at 2.93% 91.90%, rgba(255,255,255,0.95) 0, rgba(255,255,255,0.95) 1.0px, rgba(255,255,255,0) 1.40px),
-    radial-gradient(circle at 78.41% 48.89%, rgba(232,224,255,0.7) 0, rgba(232,224,255,0.7) 0.85px, rgba(232,224,255,0) 1.25px),
-    radial-gradient(circle at 53.90% 5.87%, rgba(255,255,255,0.5) 0, rgba(255,255,255,0.5) 0.7px, rgba(255,255,255,0) 1.10px),
-    radial-gradient(circle at 29.39% 62.86%, rgba(204,186,255,0.35) 0, rgba(204,186,255,0.35) 0.6px, rgba(204,186,255,0) 1.00px),
-    radial-gradient(circle at 4.88% 19.84%, rgba(255,255,255,0.22) 0, rgba(255,255,255,0.22) 0.5px, rgba(255,255,255,0) 0.90px),
-    radial-gradient(circle at 80.37% 76.82%, rgba(214,204,255,0.16) 0, rgba(214,204,255,0.16) 0.45px, rgba(214,204,255,0) 0.85px),
-    radial-gradient(circle at 55.85% 33.81%, rgba(255,255,255,0.95) 0, rgba(255,255,255,0.95) 1.0px, rgba(255,255,255,0) 1.40px),
-    radial-gradient(circle at 31.34% 90.79%, rgba(232,224,255,0.7) 0, rgba(232,224,255,0.7) 0.85px, rgba(232,224,255,0) 1.25px),
-    radial-gradient(circle at 6.83% 47.78%, rgba(255,255,255,0.5) 0, rgba(255,255,255,0.5) 0.7px, rgba(255,255,255,0) 1.10px),
-    radial-gradient(circle at 82.32% 4.76%, rgba(204,186,255,0.35) 0, rgba(204,186,255,0.35) 0.6px, rgba(204,186,255,0) 1.00px),
-    radial-gradient(circle at 57.80% 61.74%, rgba(255,255,255,0.22) 0, rgba(255,255,255,0.22) 0.5px, rgba(255,255,255,0) 0.90px),
-    radial-gradient(circle at 33.29% 18.73%, rgba(214,204,255,0.16) 0, rgba(214,204,255,0.16) 0.45px, rgba(214,204,255,0) 0.85px),
-    radial-gradient(circle at 8.78% 75.71%, rgba(255,255,255,0.95) 0, rgba(255,255,255,0.95) 1.0px, rgba(255,255,255,0) 1.40px),
-    radial-gradient(circle at 84.27% 32.70%, rgba(232,224,255,0.7) 0, rgba(232,224,255,0.7) 0.85px, rgba(232,224,255,0) 1.25px),
-    radial-gradient(circle at 59.76% 89.68%, rgba(255,255,255,0.5) 0, rgba(255,255,255,0.5) 0.7px, rgba(255,255,255,0) 1.10px),
-    radial-gradient(circle at 35.24% 46.66%, rgba(204,186,255,0.35) 0, rgba(204,186,255,0.35) 0.6px, rgba(204,186,255,0) 1.00px),
-    radial-gradient(circle at 10.73% 3.65%, rgba(255,255,255,0.22) 0, rgba(255,255,255,0.22) 0.5px, rgba(255,255,255,0) 0.90px),
-    radial-gradient(circle at 86.22% 60.63%, rgba(214,204,255,0.16) 0, rgba(214,204,255,0.16) 0.45px, rgba(214,204,255,0) 0.85px),
-    radial-gradient(circle at 61.71% 17.62%, rgba(255,255,255,0.95) 0, rgba(255,255,255,0.95) 1.0px, rgba(255,255,255,0) 1.40px),
-    radial-gradient(circle at 37.19% 74.60%, rgba(232,224,255,0.7) 0, rgba(232,224,255,0.7) 0.85px, rgba(232,224,255,0) 1.25px),
-    radial-gradient(circle at 12.68% 31.58%, rgba(255,255,255,0.5) 0, rgba(255,255,255,0.5) 0.7px, rgba(255,255,255,0) 1.10px),
-    radial-gradient(circle at 88.17% 88.57%, rgba(204,186,255,0.35) 0, rgba(204,186,255,0.35) 0.6px, rgba(204,186,255,0) 1.00px),
-    radial-gradient(circle at 63.66% 45.55%, rgba(255,255,255,0.22) 0, rgba(255,255,255,0.22) 0.5px, rgba(255,255,255,0) 0.90px),
-    radial-gradient(circle at 39.15% 2.54%, rgba(214,204,255,0.16) 0, rgba(214,204,255,0.16) 0.45px, rgba(214,204,255,0) 0.85px),
-    radial-gradient(circle at 14.63% 59.52%, rgba(255,255,255,0.95) 0, rgba(255,255,255,0.95) 1.0px, rgba(255,255,255,0) 1.40px),
-    radial-gradient(circle at 90.12% 16.50%, rgba(232,224,255,0.7) 0, rgba(232,224,255,0.7) 0.85px, rgba(232,224,255,0) 1.25px),
-    radial-gradient(circle at 65.61% 73.49%, rgba(255,255,255,0.5) 0, rgba(255,255,255,0.5) 0.7px, rgba(255,255,255,0) 1.10px),
-    radial-gradient(circle at 41.10% 30.47%, rgba(204,186,255,0.35) 0, rgba(204,186,255,0.35) 0.6px, rgba(204,186,255,0) 1.00px),
-    radial-gradient(circle at 16.58% 87.46%, rgba(255,255,255,0.22) 0, rgba(255,255,255,0.22) 0.5px, rgba(255,255,255,0) 0.90px),
-    radial-gradient(circle at 92.07% 44.44%, rgba(214,204,255,0.16) 0, rgba(214,204,255,0.16) 0.45px, rgba(214,204,255,0) 0.85px),
-    radial-gradient(circle at 67.56% 1.43%, rgba(255,255,255,0.95) 0, rgba(255,255,255,0.95) 1.0px, rgba(255,255,255,0) 1.40px),
-    radial-gradient(circle at 43.05% 58.41%, rgba(232,224,255,0.7) 0, rgba(232,224,255,0.7) 0.85px, rgba(232,224,255,0) 1.25px),
-    radial-gradient(circle at 18.54% 15.39%, rgba(255,255,255,0.5) 0, rgba(255,255,255,0.5) 0.7px, rgba(255,255,255,0) 1.10px),
-    radial-gradient(circle at 94.02% 72.38%, rgba(204,186,255,0.35) 0, rgba(204,186,255,0.35) 0.6px, rgba(204,186,255,0) 1.00px),
-    radial-gradient(circle at 69.51% 29.36%, rgba(255,255,255,0.22) 0, rgba(255,255,255,0.22) 0.5px, rgba(255,255,255,0) 0.90px),
-    radial-gradient(circle at 45.00% 86.35%, rgba(214,204,255,0.16) 0, rgba(214,204,255,0.16) 0.45px, rgba(214,204,255,0) 0.85px),
-    radial-gradient(circle at 20.49% 43.33%, rgba(255,255,255,0.95) 0, rgba(255,255,255,0.95) 1.0px, rgba(255,255,255,0) 1.40px),
-    radial-gradient(circle at 95.97% 0.31%, rgba(232,224,255,0.7) 0, rgba(232,224,255,0.7) 0.85px, rgba(232,224,255,0) 1.25px),
-    radial-gradient(circle at 71.46% 57.30%, rgba(255,255,255,0.5) 0, rgba(255,255,255,0.5) 0.7px, rgba(255,255,255,0) 1.10px),
-    radial-gradient(circle at 46.95% 14.28%, rgba(204,186,255,0.35) 0, rgba(204,186,255,0.35) 0.6px, rgba(204,186,255,0) 1.00px),
-    radial-gradient(circle at 22.44% 71.27%, rgba(255,255,255,0.22) 0, rgba(255,255,255,0.22) 0.5px, rgba(255,255,255,0) 0.90px),
-    radial-gradient(circle at 97.93% 28.25%, rgba(214,204,255,0.16) 0, rgba(214,204,255,0.16) 0.45px, rgba(214,204,255,0) 0.85px),
-    radial-gradient(circle at 73.41% 85.23%, rgba(255,255,255,0.95) 0, rgba(255,255,255,0.95) 1.0px, rgba(255,255,255,0) 1.40px),
-    radial-gradient(circle at 48.90% 42.22%, rgba(232,224,255,0.7) 0, rgba(232,224,255,0.7) 0.85px, rgba(232,224,255,0) 1.25px),
-    radial-gradient(circle at 24.39% 99.20%, rgba(255,255,255,0.5) 0, rgba(255,255,255,0.5) 0.7px, rgba(255,255,255,0) 1.10px),
-    radial-gradient(circle at 99.88% 56.19%, rgba(204,186,255,0.35) 0, rgba(204,186,255,0.35) 0.6px, rgba(204,186,255,0) 1.00px),
-    radial-gradient(circle at 75.36% 13.17%, rgba(255,255,255,0.22) 0, rgba(255,255,255,0.22) 0.5px, rgba(255,255,255,0) 0.90px),
-    radial-gradient(circle at 50.85% 70.15%, rgba(214,204,255,0.16) 0, rgba(214,204,255,0.16) 0.45px, rgba(214,204,255,0) 0.85px),
-    radial-gradient(circle at 26.34% 27.14%, rgba(255,255,255,0.95) 0, rgba(255,255,255,0.95) 1.0px, rgba(255,255,255,0) 1.40px),
-    radial-gradient(circle at 1.83% 84.12%, rgba(232,224,255,0.7) 0, rgba(232,224,255,0.7) 0.85px, rgba(232,224,255,0) 1.25px),
-    radial-gradient(circle at 77.31% 41.11%, rgba(255,255,255,0.5) 0, rgba(255,255,255,0.5) 0.7px, rgba(255,255,255,0) 1.10px),
-    radial-gradient(circle at 52.80% 98.09%, rgba(204,186,255,0.35) 0, rgba(204,186,255,0.35) 0.6px, rgba(204,186,255,0) 1.00px),
-    radial-gradient(circle at 28.29% 55.07%, rgba(255,255,255,0.22) 0, rgba(255,255,255,0.22) 0.5px, rgba(255,255,255,0) 0.90px),
-    radial-gradient(circle at 3.78% 12.06%, rgba(214,204,255,0.16) 0, rgba(214,204,255,0.16) 0.45px, rgba(214,204,255,0) 0.85px),
-    radial-gradient(circle at 79.27% 69.04%, rgba(255,255,255,0.95) 0, rgba(255,255,255,0.95) 1.0px, rgba(255,255,255,0) 1.40px),
-    radial-gradient(circle at 54.75% 26.03%, rgba(232,224,255,0.7) 0, rgba(232,224,255,0.7) 0.85px, rgba(232,224,255,0) 1.25px),
-    radial-gradient(circle at 30.24% 83.01%, rgba(255,255,255,0.5) 0, rgba(255,255,255,0.5) 0.7px, rgba(255,255,255,0) 1.10px),
-    radial-gradient(circle at 5.73% 39.99%, rgba(204,186,255,0.35) 0, rgba(204,186,255,0.35) 0.6px, rgba(204,186,255,0) 1.00px),
-    radial-gradient(circle at 81.22% 96.98%, rgba(255,255,255,0.22) 0, rgba(255,255,255,0.22) 0.5px, rgba(255,255,255,0) 0.90px),
-    radial-gradient(circle at 56.70% 53.96%, rgba(214,204,255,0.16) 0, rgba(214,204,255,0.16) 0.45px, rgba(214,204,255,0) 0.85px),
-    radial-gradient(circle at 32.19% 10.95%, rgba(255,255,255,0.95) 0, rgba(255,255,255,0.95) 1.0px, rgba(255,255,255,0) 1.40px),
-    radial-gradient(circle at 7.68% 67.93%, rgba(232,224,255,0.7) 0, rgba(232,224,255,0.7) 0.85px, rgba(232,224,255,0) 1.25px),
-    radial-gradient(circle at 83.17% 24.91%, rgba(255,255,255,0.5) 0, rgba(255,255,255,0.5) 0.7px, rgba(255,255,255,0) 1.10px),
-    radial-gradient(circle at 58.66% 81.90%, rgba(204,186,255,0.35) 0, rgba(204,186,255,0.35) 0.6px, rgba(204,186,255,0) 1.00px),
-    radial-gradient(circle at 34.14% 38.88%, rgba(255,255,255,0.22) 0, rgba(255,255,255,0.22) 0.5px, rgba(255,255,255,0) 0.90px),
-    radial-gradient(circle at 9.63% 95.87%, rgba(214,204,255,0.16) 0, rgba(214,204,255,0.16) 0.45px, rgba(214,204,255,0) 0.85px),
-    radial-gradient(circle at 85.12% 52.85%, rgba(255,255,255,0.95) 0, rgba(255,255,255,0.95) 1.0px, rgba(255,255,255,0) 1.40px),
-    radial-gradient(circle at 60.61% 9.83%, rgba(232,224,255,0.7) 0, rgba(232,224,255,0.7) 0.85px, rgba(232,224,255,0) 1.25px),
-    radial-gradient(circle at 36.09% 66.82%, rgba(255,255,255,0.5) 0, rgba(255,255,255,0.5) 0.7px, rgba(255,255,255,0) 1.10px),
-    radial-gradient(circle at 11.58% 23.80%, rgba(204,186,255,0.35) 0, rgba(204,186,255,0.35) 0.6px, rgba(204,186,255,0) 1.00px),
-    radial-gradient(circle at 87.07% 80.79%, rgba(255,255,255,0.22) 0, rgba(255,255,255,0.22) 0.5px, rgba(255,255,255,0) 0.90px),
-    radial-gradient(circle at 62.56% 37.77%, rgba(214,204,255,0.16) 0, rgba(214,204,255,0.16) 0.45px, rgba(214,204,255,0) 0.85px),
-    radial-gradient(circle at 38.05% 94.75%, rgba(255,255,255,0.95) 0, rgba(255,255,255,0.95) 1.0px, rgba(255,255,255,0) 1.40px),
-    radial-gradient(circle at 13.53% 51.74%, rgba(232,224,255,0.7) 0, rgba(232,224,255,0.7) 0.85px, rgba(232,224,255,0) 1.25px),
-    radial-gradient(circle at 89.02% 8.72%, rgba(255,255,255,0.5) 0, rgba(255,255,255,0.5) 0.7px, rgba(255,255,255,0) 1.10px),
-    radial-gradient(circle at 64.51% 65.71%, rgba(204,186,255,0.35) 0, rgba(204,186,255,0.35) 0.6px, rgba(204,186,255,0) 1.00px),
-    radial-gradient(circle at 40.00% 22.69%, rgba(255,255,255,0.22) 0, rgba(255,255,255,0.22) 0.5px, rgba(255,255,255,0) 0.90px),
-    radial-gradient(circle at 15.48% 79.67%, rgba(214,204,255,0.16) 0, rgba(214,204,255,0.16) 0.45px, rgba(214,204,255,0) 0.85px),
-    radial-gradient(circle at 90.97% 36.66%, rgba(255,255,255,0.95) 0, rgba(255,255,255,0.95) 1.0px, rgba(255,255,255,0) 1.40px),
-    linear-gradient(to bottom, #1d1042 0, #150b31 34%, #0d0620 68%, #06020e 100%);
-  background-size:100% 100%;
-  background-repeat:no-repeat}
+  background-image:url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NDAgMTE5MCI+PGcgc3Ryb2tlPSIjYjNhMmZmIiBzdHJva2Utb3BhY2l0eT0iLjIyIiBzdHJva2Utd2lkdGg9IjEiIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCI+PGxpbmUgeDE9IjU1MSIgeTE9IjQ0NiIgeDI9IjUyMiIgeTI9IjQwOCIvPjxsaW5lIHgxPSI1MjIiIHkxPSI0MDgiIHgyPSI0MjQiIHkyPSI0NTIiLz48bGluZSB4MT0iNDI0IiB5MT0iNDUyIiB4Mj0iNDExIiB5Mj0iNTEzIi8+PGxpbmUgeDE9IjQxMSIgeTE9IjUxMyIgeDI9IjQ2MyIgeTI9IjU2NSIvPjxsaW5lIHgxPSI0NjMiIHkxPSI1NjUiIHgyPSI0NTgiIHkyPSI2NDciLz48bGluZSB4MT0iNDExIiB5MT0iNTEzIiB4Mj0iMTg4IiB5Mj0iNTAxIi8+PGxpbmUgeDE9IjE4OCIgeTE9IjUwMSIgeDI9IjQ1IiB5Mj0iNjAyIi8+PGxpbmUgeDE9IjQ1IiB5MT0iNjAyIiB4Mj0iMTg4IiB5Mj0iNTg4Ii8+PGxpbmUgeDE9IjE4OCIgeTE9IjU4OCIgeDI9IjQ1OCIgeTI9IjY0NyIvPjxsaW5lIHgxPSIxODgiIHkxPSI1MDEiIHgyPSIxODgiIHkyPSI1ODgiLz48bGluZSB4MT0iNjA5IiB5MT0iNDYwIiB4Mj0iNTUxIiB5Mj0iNDQ2Ii8+PC9nPjxnIGZpbGw9IiNmZmYiIG9wYWNpdHk9IjAuOTUiPjxjaXJjbGUgY3g9IjQ1OCIgY3k9IjY0NyIgcj0iMy4wIi8+PGNpcmNsZSBjeD0iNjI2IiBjeT0iOTk3IiByPSIzLjAiLz48Y2lyY2xlIGN4PSI0MTEiIGN5PSI1MTMiIHI9IjMuMCIvPjxjaXJjbGUgY3g9IjQ1IiBjeT0iNjAyIiByPSIzLjAiLz48L2c+PGcgZmlsbD0iI2ZmZiIgb3BhY2l0eT0iMC44OCI+PGNpcmNsZSBjeD0iMTg4IiBjeT0iNTAxIiByPSIyLjIiLz48Y2lyY2xlIGN4PSI1NTEiIGN5PSI0NDYiIHI9IjIuMiIvPjxjaXJjbGUgY3g9IjIwNyIgY3k9Ijk0IiByPSIyLjIiLz48Y2lyY2xlIGN4PSI0MDEiIGN5PSIxNDUiIHI9IjIuMiIvPjxjaXJjbGUgY3g9IjI4OSIgY3k9IjExMjUiIHI9IjIuMiIvPjxjaXJjbGUgY3g9IjE4OCIgY3k9IjU4OCIgcj0iMi4yIi8+PGNpcmNsZSBjeD0iNDI0IiBjeT0iNDUyIiByPSIyLjIiLz48Y2lyY2xlIGN4PSI0MjIiIGN5PSIxMjAiIHI9IjIuMiIvPjxjaXJjbGUgY3g9IjQ2MyIgY3k9IjU2NSIgcj0iMi4yIi8+PGNpcmNsZSBjeD0iMTcwIiBjeT0iMjg3IiByPSIyLjIiLz48L2c+PGcgZmlsbD0iI2ZmZiIgb3BhY2l0eT0iMC43NCI+PGNpcmNsZSBjeD0iNTcwIiBjeT0iNjgyIiByPSIxLjYiLz48Y2lyY2xlIGN4PSIxNjciIGN5PSIxMTAxIiByPSIxLjYiLz48Y2lyY2xlIGN4PSIzOCIgY3k9IjgyMCIgcj0iMS42Ii8+PGNpcmNsZSBjeD0iNDQ5IiBjeT0iMTA2MCIgcj0iMS42Ii8+PGNpcmNsZSBjeD0iNTciIGN5PSIzOCIgcj0iMS42Ii8+PGNpcmNsZSBjeD0iMjc0IiBjeT0iMjY4IiByPSIxLjYiLz48Y2lyY2xlIGN4PSIzODYiIGN5PSIxMTM2IiByPSIxLjYiLz48Y2lyY2xlIGN4PSIzNTgiIGN5PSI2OTIiIHI9IjEuNiIvPjxjaXJjbGUgY3g9IjUyMiIgY3k9IjQwOCIgcj0iMS42Ii8+PGNpcmNsZSBjeD0iNTc1IiBjeT0iODY5IiByPSIxLjYiLz48Y2lyY2xlIGN4PSIxNDgiIGN5PSI2NzEiIHI9IjEuNiIvPjxjaXJjbGUgY3g9IjU4IiBjeT0iNzM5IiByPSIxLjYiLz48Y2lyY2xlIGN4PSIxNjAiIGN5PSI3NDgiIHI9IjEuNiIvPjxjaXJjbGUgY3g9IjE0NCIgY3k9IjExNTEiIHI9IjEuNiIvPjxjaXJjbGUgY3g9IjI0NyIgY3k9IjExNjEiIHI9IjEuNiIvPjxjaXJjbGUgY3g9IjUyOCIgY3k9IjExMDIiIHI9IjEuNiIvPjxjaXJjbGUgY3g9IjM3OCIgY3k9IjIyNiIgcj0iMS42Ii8+PC9nPjxnIGZpbGw9IiNmZmYiIG9wYWNpdHk9IjAuNTgiPjxjaXJjbGUgY3g9IjI2NCIgY3k9IjQyOSIgcj0iMS4xNSIvPjxjaXJjbGUgY3g9Ijk1IiBjeT0iODY0IiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iNjA5IiBjeT0iNDYwIiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iNDYwIiBjeT0iNjgwIiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iMjM3IiBjeT0iNTA3IiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iMTc4IiBjeT0iOTEyIiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iNjM4IiBjeT0iNDA1IiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iNDYwIiBjeT0iODU2IiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iNDYyIiBjeT0iMjUxIiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iNDkiIGN5PSI1MDYiIHI9IjEuMTUiLz48Y2lyY2xlIGN4PSI2MDgiIGN5PSI4NzAiIHI9IjEuMTUiLz48Y2lyY2xlIGN4PSI1OTgiIGN5PSIyMzEiIHI9IjEuMTUiLz48Y2lyY2xlIGN4PSIxODQiIGN5PSI0NTciIHI9IjEuMTUiLz48Y2lyY2xlIGN4PSI2MTkiIGN5PSI4OTciIHI9IjEuMTUiLz48Y2lyY2xlIGN4PSI0NzIiIGN5PSIxMDcyIiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iMjI2IiBjeT0iNzI1IiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iMjcxIiBjeT0iMTE2IiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iNTgxIiBjeT0iNzcxIiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iNDkyIiBjeT0iNzEzIiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iMzM0IiBjeT0iMzA2IiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iOTYiIGN5PSIxMDE3IiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iNjMiIGN5PSIxMTYyIiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iMzg2IiBjeT0iMjc1IiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iMzU2IiBjeT0iMTYzIiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iMjM5IiBjeT0iODkyIiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iMTY4IiBjeT0iMjAxIiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iMTIyIiBjeT0iOTAxIiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iNDEyIiBjeT0iNTE5IiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iNTk1IiBjeT0iMTc2IiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iMTQ1IiBjeT0iMTAzNSIgcj0iMS4xNSIvPjxjaXJjbGUgY3g9IjI0NCIgY3k9Ijc4OSIgcj0iMS4xNSIvPjxjaXJjbGUgY3g9IjYwIiBjeT0iNzEwIiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iMzM4IiBjeT0iMTA3OCIgcj0iMS4xNSIvPjxjaXJjbGUgY3g9IjMzNCIgY3k9IjExMzciIHI9IjEuMTUiLz48Y2lyY2xlIGN4PSI1MTQiIGN5PSIxMTczIiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iMTMyIiBjeT0iODAxIiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iMjQzIiBjeT0iNzQ2IiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iNjA4IiBjeT0iNjU4IiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iMTUzIiBjeT0iMTExIiByPSIxLjE1Ii8+PC9nPjxnIGZpbGw9IiNmZmYiIG9wYWNpdHk9IjAuNDQiPjxjaXJjbGUgY3g9IjU4NiIgY3k9IjczNCIgcj0iMC44Ii8+PGNpcmNsZSBjeD0iMjY0IiBjeT0iMjgwIiByPSIwLjgiLz48Y2lyY2xlIGN4PSIyNDkiIGN5PSIxNjMiIHI9IjAuOCIvPjxjaXJjbGUgY3g9IjI0MyIgY3k9IjE4MyIgcj0iMC44Ii8+PGNpcmNsZSBjeD0iNjA4IiBjeT0iNjg1IiByPSIwLjgiLz48Y2lyY2xlIGN4PSI1NzMiIGN5PSIxMDk0IiByPSIwLjgiLz48Y2lyY2xlIGN4PSI1MjMiIGN5PSI5ODgiIHI9IjAuOCIvPjxjaXJjbGUgY3g9IjM1MCIgY3k9IjczMiIgcj0iMC44Ii8+PGNpcmNsZSBjeD0iNTM5IiBjeT0iNjgiIHI9IjAuOCIvPjxjaXJjbGUgY3g9IjM2OCIgY3k9Ijg2MSIgcj0iMC44Ii8+PGNpcmNsZSBjeD0iMzE0IiBjeT0iNDU2IiByPSIwLjgiLz48Y2lyY2xlIGN4PSIxNTAiIGN5PSIxMTY5IiByPSIwLjgiLz48Y2lyY2xlIGN4PSI1MDIiIGN5PSIxNTIiIHI9IjAuOCIvPjxjaXJjbGUgY3g9IjE2IiBjeT0iMTE0MiIgcj0iMC44Ii8+PGNpcmNsZSBjeD0iMzE0IiBjeT0iNjUiIHI9IjAuOCIvPjxjaXJjbGUgY3g9IjE3NSIgY3k9IjgxNiIgcj0iMC44Ii8+PGNpcmNsZSBjeD0iMzcyIiBjeT0iODk3IiByPSIwLjgiLz48Y2lyY2xlIGN4PSI4OCIgY3k9IjcxMiIgcj0iMC44Ii8+PGNpcmNsZSBjeD0iNDIwIiBjeT0iOTg3IiByPSIwLjgiLz48Y2lyY2xlIGN4PSI1MDAiIGN5PSI2MzgiIHI9IjAuOCIvPjxjaXJjbGUgY3g9Ijc5IiBjeT0iNDg3IiByPSIwLjgiLz48Y2lyY2xlIGN4PSI1MTAiIGN5PSIzIiByPSIwLjgiLz48Y2lyY2xlIGN4PSI1ODEiIGN5PSIxNjYiIHI9IjAuOCIvPjxjaXJjbGUgY3g9IjUyNiIgY3k9IjQzNSIgcj0iMC44Ii8+PGNpcmNsZSBjeD0iNDUxIiBjeT0iMTA2OCIgcj0iMC44Ii8+PGNpcmNsZSBjeD0iMTI3IiBjeT0iMTgxIiByPSIwLjgiLz48Y2lyY2xlIGN4PSIxODEiIGN5PSI2MjQiIHI9IjAuOCIvPjxjaXJjbGUgY3g9Ijc4IiBjeT0iMjY5IiByPSIwLjgiLz48Y2lyY2xlIGN4PSI1MCIgY3k9IjcxMCIgcj0iMC44Ii8+PGNpcmNsZSBjeD0iMjkwIiBjeT0iNjcxIiByPSIwLjgiLz48Y2lyY2xlIGN4PSI1NTkiIGN5PSI2MTIiIHI9IjAuOCIvPjxjaXJjbGUgY3g9IjMwNCIgY3k9IjMyOCIgcj0iMC44Ii8+PGNpcmNsZSBjeD0iMCIgY3k9Ijc4OCIgcj0iMC44Ii8+PGNpcmNsZSBjeD0iNDg4IiBjeT0iMzA3IiByPSIwLjgiLz48Y2lyY2xlIGN4PSI2MjUiIGN5PSI5NTMiIHI9IjAuOCIvPjxjaXJjbGUgY3g9IjYwOSIgY3k9IjI1MyIgcj0iMC44Ii8+PGNpcmNsZSBjeD0iMTQ4IiBjeT0iODI2IiByPSIwLjgiLz48Y2lyY2xlIGN4PSI2MjIiIGN5PSI2OTYiIHI9IjAuOCIvPjxjaXJjbGUgY3g9IjYyMSIgY3k9Ijc1IiByPSIwLjgiLz48Y2lyY2xlIGN4PSI1OTMiIGN5PSIyNDEiIHI9IjAuOCIvPjxjaXJjbGUgY3g9IjE5MCIgY3k9Ijg1MSIgcj0iMC44Ii8+PGNpcmNsZSBjeD0iNDI0IiBjeT0iNjE3IiByPSIwLjgiLz48Y2lyY2xlIGN4PSIzNjAiIGN5PSI2MTAiIHI9IjAuOCIvPjxjaXJjbGUgY3g9IjMwMCIgY3k9IjExNDQiIHI9IjAuOCIvPjxjaXJjbGUgY3g9IjI3MiIgY3k9Ijg4NiIgcj0iMC44Ii8+PGNpcmNsZSBjeD0iMjQ1IiBjeT0iNzYiIHI9IjAuOCIvPjxjaXJjbGUgY3g9Ijg4IiBjeT0iMTA3NCIgcj0iMC44Ii8+PGNpcmNsZSBjeD0iNDI2IiBjeT0iMzUyIiByPSIwLjgiLz48Y2lyY2xlIGN4PSIzMDIiIGN5PSI2MDkiIHI9IjAuOCIvPjxjaXJjbGUgY3g9IjMwMiIgY3k9IjUyOSIgcj0iMC44Ii8+PGNpcmNsZSBjeD0iMzE2IiBjeT0iNDAyIiByPSIwLjgiLz48Y2lyY2xlIGN4PSIyMzMiIGN5PSIxMDQyIiByPSIwLjgiLz48Y2lyY2xlIGN4PSIzOTQiIGN5PSIyNzciIHI9IjAuOCIvPjxjaXJjbGUgY3g9IjIxOCIgY3k9IjgxNyIgcj0iMC44Ii8+PGNpcmNsZSBjeD0iMTgiIGN5PSI1ODQiIHI9IjAuOCIvPjxjaXJjbGUgY3g9IjEyMSIgY3k9IjUzNyIgcj0iMC44Ii8+PGNpcmNsZSBjeD0iNTk3IiBjeT0iOTUxIiByPSIwLjgiLz48Y2lyY2xlIGN4PSI4OSIgY3k9IjEwOCIgcj0iMC44Ii8+PGNpcmNsZSBjeD0iNTg4IiBjeT0iMzIwIiByPSIwLjgiLz48Y2lyY2xlIGN4PSIzNTUiIGN5PSIyNTUiIHI9IjAuOCIvPjxjaXJjbGUgY3g9IjE0MSIgY3k9IjU3MCIgcj0iMC44Ii8+PGNpcmNsZSBjeD0iMjAiIGN5PSI3MDYiIHI9IjAuOCIvPjxjaXJjbGUgY3g9IjQ2MyIgY3k9IjExNDEiIHI9IjAuOCIvPjxjaXJjbGUgY3g9IjM2NSIgY3k9IjEwODEiIHI9IjAuOCIvPjxjaXJjbGUgY3g9IjYzNSIgY3k9IjkzNyIgcj0iMC44Ii8+PGNpcmNsZSBjeD0iMzg3IiBjeT0iOTcwIiByPSIwLjgiLz48Y2lyY2xlIGN4PSI1NjYiIGN5PSIxNzQiIHI9IjAuOCIvPjxjaXJjbGUgY3g9IjM4OSIgY3k9IjcwMSIgcj0iMC44Ii8+PGNpcmNsZSBjeD0iMzciIGN5PSI5NDEiIHI9IjAuOCIvPjxjaXJjbGUgY3g9IjU2MCIgY3k9IjM0MCIgcj0iMC44Ii8+PGNpcmNsZSBjeD0iNDQ4IiBjeT0iOTkzIiByPSIwLjgiLz48Y2lyY2xlIGN4PSI1NDgiIGN5PSI4MjAiIHI9IjAuOCIvPjxjaXJjbGUgY3g9IjI3MCIgY3k9IjEwODQiIHI9IjAuOCIvPjxjaXJjbGUgY3g9IjU0OCIgY3k9IjY0OSIgcj0iMC44Ii8+PGNpcmNsZSBjeD0iMzQ5IiBjeT0iNzAzIiByPSIwLjgiLz48Y2lyY2xlIGN4PSI0ODEiIGN5PSI0NzciIHI9IjAuOCIvPjwvZz48ZyBmaWxsPSIjZmZmIiBvcGFjaXR5PSIwLjMiPjxjaXJjbGUgY3g9IjIxMCIgY3k9IjQzMSIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjM0MyIgY3k9IjEwNTgiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSIyMDgiIGN5PSIyMzMiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSI2MjIiIGN5PSI3MTEiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSI1ODciIGN5PSI1NzEiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSI0MDIiIGN5PSIxNDkiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSIyNjciIGN5PSIyNzEiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSI3NiIgY3k9IjMxMCIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjQyIiBjeT0iMjU2IiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iNjA2IiBjeT0iMTE4MCIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjEyNCIgY3k9IjU4OCIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjQ5NCIgY3k9IjM0NiIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjEwNSIgY3k9Ijc5OCIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjQ0MCIgY3k9Ijc3MiIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjMxNSIgY3k9Ijc2OSIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjM2OSIgY3k9IjE4OCIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjE4OSIgY3k9IjcxMyIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjU0OSIgY3k9IjczNiIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjI4NiIgY3k9IjEwMDEiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSIxNDQiIGN5PSI2NTYiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSI5NyIgY3k9IjM3OCIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjQyMiIgY3k9IjQ1NyIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjQyNCIgY3k9IjQxOSIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjMzMiIgY3k9IjIwNiIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjUwNyIgY3k9IjY5OCIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjI4OCIgY3k9IjEwMTciIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSI2MTQiIGN5PSIxMTE1IiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iNDQ3IiBjeT0iMjE0IiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iMjQ2IiBjeT0iMTA4OSIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjYxMyIgY3k9IjI3OCIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjI0OCIgY3k9IjExMjgiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSIxNzgiIGN5PSI5IiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iMzk4IiBjeT0iMjc0IiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iMjA3IiBjeT0iMTE1IiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iNTY4IiBjeT0iMzE4IiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iNTE4IiBjeT0iNzQ5IiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iMzYyIiBjeT0iMzAwIiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iMTY5IiBjeT0iODIyIiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iNDciIGN5PSI2MDciIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSI0NTEiIGN5PSI5OTMiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSIyNjQiIGN5PSI4MzciIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSIyNjMiIGN5PSI3NDUiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSIyOTMiIGN5PSI4ODMiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSIzOTYiIGN5PSI5MTkiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSIxMzUiIGN5PSIxMDYwIiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iMTIxIiBjeT0iMTE2IiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iMTEyIiBjeT0iOTgzIiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iNjA0IiBjeT0iMTA4MCIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjQyNSIgY3k9IjQ1MCIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjI4MyIgY3k9IjkwMyIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjIzMSIgY3k9Ijg1MCIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjEwNCIgY3k9IjU2NCIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjMiIGN5PSIyODYiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSIyNDgiIGN5PSIyMzYiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSI0MTMiIGN5PSIyNyIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjM4MCIgY3k9IjE0MyIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjYzMSIgY3k9Ijg3NSIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjUyOSIgY3k9IjkyMiIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjQxMyIgY3k9IjEwNjMiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSIzNzkiIGN5PSI2ODQiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSIzNDQiIGN5PSIxMTI4IiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iMjI4IiBjeT0iMjAwIiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iNTI1IiBjeT0iODA4IiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iNDMzIiBjeT0iNDkwIiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iMzE5IiBjeT0iMzExIiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iNjUiIGN5PSI0MjEiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSIyNjIiIGN5PSIxMzYiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSIyNDUiIGN5PSIxMjEiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSIzMzMiIGN5PSIxMDYyIiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iNTAwIiBjeT0iNzA5IiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iNDM2IiBjeT0iMzg5IiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iMzc1IiBjeT0iOTE0IiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iMjg4IiBjeT0iMzc0IiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iMTUxIiBjeT0iODQ4IiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iMTEwIiBjeT0iMTEyNyIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjY2IiBjeT0iOTY0IiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iNDQiIGN5PSI1NzQiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSIzOTgiIGN5PSI3MzkiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSI1MjUiIGN5PSIxMTMxIiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iNDI2IiBjeT0iMTA0MCIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjQ3OCIgY3k9IjEwMTMiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSIyMjMiIGN5PSIxMDM5IiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iODgiIGN5PSI1NCIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjUzNCIgY3k9IjQ5MCIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjYwNSIgY3k9IjgxOCIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjE5NSIgY3k9IjExNjQiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSIxNzciIGN5PSI5NzEiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSI2MDgiIGN5PSIxMDI2IiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iNjAzIiBjeT0iOTk1IiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iNTY0IiBjeT0iMjUzIiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iNDAxIiBjeT0iMTE4OCIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjI3MyIgY3k9Ijg4OCIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjIzMyIgY3k9Ijg2MyIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjYwOSIgY3k9IjEwMjkiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSI0MCIgY3k9IjExMjAiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSI2MTgiIGN5PSI4ODciIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSIzODIiIGN5PSI1MjEiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSIyOTIiIGN5PSIzNTAiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSI0NSIgY3k9Ijg1NSIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjQwMyIgY3k9IjU5NSIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjI2MiIgY3k9IjQ3MCIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjgzIiBjeT0iMTEzMyIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjkwIiBjeT0iNjk5IiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iNCIgY3k9Ijg0MSIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjYwMSIgY3k9IjIzMCIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjI2OCIgY3k9IjQxNyIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjQ2NSIgY3k9Ijc1NSIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjM2NSIgY3k9Ijk4MCIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjgzIiBjeT0iMTA5NiIgcj0iMC41NSIvPjxjaXJjbGUgY3g9Ijg5IiBjeT0iODkxIiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iNDU5IiBjeT0iMzEzIiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iNDQ2IiBjeT0iOTc0IiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iMTMyIiBjeT0iODc5IiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iNTMyIiBjeT0iNzc2IiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iNDUyIiBjeT0iMTA1NiIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjMxOCIgY3k9IjEwODgiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSI0OCIgY3k9IjEwMjUiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSI2MTgiIGN5PSI5MjIiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSI2MDIiIGN5PSI5NzIiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSI0NTciIGN5PSIxMTE1IiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iMzIzIiBjeT0iODgwIiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iMzYiIGN5PSIyODMiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSI1OTkiIGN5PSI0NTEiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSI1NjgiIGN5PSI0MDkiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSI2MjAiIGN5PSI4NzEiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSIzMTEiIGN5PSI1MTQiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSIzMDciIGN5PSI4MDgiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSIxMTYiIGN5PSI2MDYiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSIzNDMiIGN5PSIyMzIiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSI4OCIgY3k9IjI3OCIgcj0iMC41NSIvPjxjaXJjbGUgY3g9Ijg3IiBjeT0iODMiIHI9IjAuNTUiLz48L2c+PGNpcmNsZSBjeD0iNDAwIiBjeT0iNjU5IiByPSIxMSIgZmlsbD0iI2ZmZTZhZCIgb3BhY2l0eT0iLjEzIi8+PGNpcmNsZSBjeD0iNDAwIiBjeT0iNjU5IiByPSIzLjQiIGZpbGw9IiNmZmU2YWQiIG9wYWNpdHk9Ii45NyIvPjxjaXJjbGUgY3g9IjI4MiIgY3k9IjcwNSIgcj0iMTEiIGZpbGw9IiNmZjkxNjYiIG9wYWNpdHk9Ii4xMyIvPjxjaXJjbGUgY3g9IjI4MiIgY3k9IjcwNSIgcj0iMy40IiBmaWxsPSIjZmY5MTY2IiBvcGFjaXR5PSIuOTciLz48Y2lyY2xlIGN4PSIxODQiIGN5PSI3MzUiIHI9IjExIiBmaWxsPSIjZTJlNmZmIiBvcGFjaXR5PSIuMTMiLz48Y2lyY2xlIGN4PSIxODQiIGN5PSI3MzUiIHI9IjMuNCIgZmlsbD0iI2UyZTZmZiIgb3BhY2l0eT0iLjk3Ii8+PC9zdmc+"),
+    linear-gradient(to bottom, #06020e 0, #0b041a 30%, #14092c 65%, #1d1042 100%);
+  background-size:100% auto,100% 100%;
+  background-position:center 6%,0 0;
+  background-repeat:no-repeat,no-repeat}
 `;
 function chatStyles(doc) {
   const d = doc || (typeof document !== "undefined" ? document : null);
