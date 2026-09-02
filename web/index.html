@@ -408,11 +408,20 @@ a.card:hover{border-color:var(--line-2)}
 .spark polyline{fill:none; stroke:var(--muted); stroke-width:1.5; stroke-linejoin:round}
 .docket a.crow:hover .spark polyline{stroke:var(--accent)}
 .spark .base{stroke:var(--line); stroke-width:1}
-/* The court's supply history. Scales to the column so it stays level with the
-   stat tiles above it at any width. */
-.supplychart{margin-top:10px; border-top:1px solid var(--line); padding-top:10px}
-.supplychart svg{width:100%; height:64px; display:block}
-.supplychart path{fill:none; stroke:var(--accent); stroke-width:1.5; stroke-linejoin:round; stroke-linecap:round}
+/* The court's livelihood chart. Scales to the column so it stays level with the
+   stat tiles above it at any width. Burn is the filled area (GNOT spent to get
+   in, which the curve never returns), supply the line over it. */
+.lifechart{margin-top:10px; border-top:1px solid var(--line); padding-top:10px}
+.lifechart svg{width:100%; height:84px; display:block}
+.lifechart .axis{stroke:var(--line); stroke-width:1}
+.lifechart path.burn{fill:var(--accent); fill-opacity:.16; stroke:var(--accent); stroke-width:1.25; stroke-linejoin:round}
+.lifechart path.supply{fill:none; stroke:var(--muted); stroke-width:1.25; stroke-dasharray:3 2; stroke-linejoin:round}
+.lifekey{display:flex; flex-wrap:wrap; gap:10px; margin-top:6px; font-size:10px; color:var(--muted); letter-spacing:.04em}
+.lifekey span::before{content:""; display:inline-block; width:8px; height:2px; margin-right:4px; vertical-align:middle}
+.lifekey .k-burn::before{background:var(--accent)}
+.lifekey .k-supply::before{background:var(--muted)}
+.lifekey .k-now::before{display:none}
+.lifekey .k-now{margin-left:auto; font-variant-numeric:tabular-nums}
 .lead-row{border-bottom:2px solid var(--ink); padding-bottom:16px; margin-bottom:16px}
 
 /* buttons / txlinks */
@@ -2528,15 +2537,16 @@ async function courtStats(slug){
   const s=gstr(slug);
   // Name comes from the court page's own "# heading" — courtNameFor is
   // purge-gated and tombstones removed courts; the raw CourtName qeval is not.
-  const [md,tier,price,supply,emitted,reservoir,seniorOwed,claims,minted,supplyHist] = await Promise.all([
+  const [md,tier,price,supply,emitted,reservoir,seniorOwed,claims,minted,supplyHist,burnHist] = await Promise.all([
     qrender(slug), one(`CourtTier(${s})`), one(`CoinPrice(${s})`), one(`CoinSupply(${s})`),
     one(`EmittedTotal(${s})`), one(`Reservoir(${s})`), one(`SeniorOwed(${s})`), one(`ClaimCount(${s})`),
     one(`CurvePosition(${s})`).catch(()=>null),
     // The chart is decoration next to the figures: a court that cannot answer
-    // this still renders every number, it just draws no line.
-    one(`SupplySeries(${s})`).catch(()=>null)]);
+    // these still renders every number, it just draws no line.
+    one(`SupplySeries(${s})`).catch(()=>null),
+    one(`BurnSeries(${s})`).catch(()=>null)]);
   const nm = (md.match(/^#\s+(.+)$/m)||[])[1];
-  return {name: nm? unesc(nm.trim()) : slug, tier,price,supply,emitted,reservoir,seniorOwed,claims,minted,supplyHist};
+  return {name: nm? unesc(nm.trim()) : slug, tier,price,supply,emitted,reservoir,seniorOwed,claims,minted,supplyHist,burnHist};
 }
 /* The chain's per-court policing lists, derived from the sample exactly as
    strips.gno defines membership: the review strip enters at PostAnswer and
@@ -7806,10 +7816,10 @@ document.addEventListener("change", ev=>{ if(ev.target && ev.target.id==="buyack
    tiles were a zero under a sentence of explanation the reader has no use for
    yet. They appear the moment they carry a number. Price and supply always show
    — those are the two a buyer came for. */
-/* "width,now,more;epoch:supply,..." from SupplySeries. Returns null on anything
-   it does not recognise — a court that cannot answer draws no chart, which is
-   the same posture as the per-claim spark: no invented history. */
-function parseSupplySeries(s){
+/* "width,now,more;epoch:value,..." — the grammar SupplySeries and BurnSeries
+   share. Returns null on anything it does not recognise: a court that cannot
+   answer draws no chart, the same posture as the per-claim spark. */
+function parseSeries(s){
   if(!s) return null;
   const [head, body=""] = String(s).split(";");
   const h = head.split(",");
@@ -7824,30 +7834,68 @@ function parseSupplySeries(s){
   }
   return {width, now, more:h[2]==="1", pts};
 }
-/* A STEP-AFTER line, not a straight one between points. Supply holds flat
-   between mints and jumps at one, so joining the points directly would draw a
-   gradual rise that never happened — the same reason ClaimSeries tells its
-   consumers to forward-fill. The last segment runs flat to `now`, because the
-   absence of a later point IS the statement that nothing has changed since. */
-function supplyChartSvg(ser){
-  if(!ser || !ser.pts.length) return "";
-  const W=260, H=64, P=4;
-  const pts = ser.pts;
-  const e0 = pts[0].e;
-  const eN = Math.max(ser.now, pts[pts.length-1].e);
+/* A STEP-AFTER path. Both series hold flat between events and jump at one, so
+   joining the change points directly would draw a gradual slope that never
+   happened. The last segment runs flat to `now`: the absence of a later point
+   IS the statement that nothing has changed since. */
+function stepPath(ser, X, Y){
+  const p = ser.pts;
+  let d = `M${X(p[0].e)},${Y(p[0].v)}`;
+  for(let i=1;i<p.length;i++) d += ` L${X(p[i].e)},${Y(p[i-1].v)} L${X(p[i].e)},${Y(p[i].v)}`;
+  return d + ` L${X(lastEpoch(ser))},${Y(p[p.length-1].v)}`;
+}
+function lastEpoch(ser){ return Math.max(ser.now, ser.pts[ser.pts.length-1].e); }
+/* THE COURT'S LIVELIHOOD, in one picture and two dimensions.
+ *
+ * WHY TWO SERIES AND NOT ONE. Supply alone cannot tell you whether a court is
+ * alive: it rises on reward emissions that nobody paid for, so a dormant court
+ * still grows a rising line. Burn only moves when somebody actually spent GNOT
+ * to get in, and the curve is one way, so it never falls. Read together they
+ * separate the two things that look identical on a single line:
+ *
+ *   both climbing        GNOT is arriving and the coin is growing with it
+ *   supply up, burn flat emissions diluting a court nobody is buying into
+ *   both flat            dormant
+ *
+ * SEPARATE SCALES, because the units are different — ugnot against CC base
+ * units — and a shared one would flatten whichever is smaller into the axis.
+ * That is why neither carries a y-label: the SHAPES are the statement, and the
+ * exact figures are in the tiles directly above.
+ *
+ * The x-axis is shared and needs no conversion: the ledger is built with the
+ * realm's own epochBlocks, so an epoch means the same span in both.
+ */
+function courtLifeChartSvg(burn, supply, slug, price){
+  const live = [burn, supply].filter(s => s && s.pts.length);
+  if(!live.length) return "";
+  const W=280, H=84, P=6, BASE=H-16;
+  const e0 = Math.min(...live.map(s => s.pts[0].e));
+  const eN = Math.max(...live.map(lastEpoch));
   const span = Math.max(1, eN - e0);
-  const max = Math.max(...pts.map(p=>p.v), 1);
   const X = e => (P + (e-e0)/span*(W-2*P)).toFixed(1);
-  const Y = v => (H-P - (v/max)*(H-2*P)).toFixed(1);
-  let d = `M${X(pts[0].e)},${Y(pts[0].v)}`;
-  for(let i=1;i<pts.length;i++){
-    d += ` L${X(pts[i].e)},${Y(pts[i-1].v)} L${X(pts[i].e)},${Y(pts[i].v)}`;
+  const scaleY = ser => {
+    const max = Math.max(...ser.pts.map(p=>p.v), 1);
+    return v => (BASE - (v/max)*(BASE-P)).toFixed(1);
+  };
+  let body = "";
+  if(burn && burn.pts.length){
+    const Y = scaleY(burn);
+    // Filled to the baseline: burn is GNOT spent and never returned, and
+    // an area reads as accumulation where a bare line reads as a rate.
+    body += `<path class="burn" d="${stepPath(burn,X,Y)} L${X(eN)},${BASE} L${X(e0)},${BASE} Z"></path>`;
   }
-  d += ` L${X(eN)},${Y(pts[pts.length-1].v)}`;
-  const note = ser.more? " Older points were dropped." : "";
-  return `<div class="supplychart"><svg viewBox="0 0 ${W} ${H}" role="img"`
-    + ` aria-label="Coin supply over time, ${pts.length} change point${pts.length===1?"":"s"}.${note}">`
-    + `<path d="${d}"></path></svg></div>`;
+  if(supply && supply.pts.length){
+    body += `<path class="supply" d="${stepPath(supply,X,scaleY(supply))}"></path>`;
+  }
+  const legend = `<div class="lifekey">`
+    + (burn && burn.pts.length? `<span class="k-burn">GNOT burned in</span>` : "")
+    + (supply && supply.pts.length? `<span class="k-supply">${ccSym(slug)} supply</span>` : "")
+    + (Number.isFinite(price)? `<span class="k-now">print now ${fmtN(price)} µGNOT/unit</span>` : "")
+    + `</div>`;
+  return `<div class="lifechart"><svg viewBox="0 0 ${W} ${H}" role="img"`
+    + ` aria-label="This court over time: GNOT burned in, and coin supply.">`
+    + `<line class="axis" x1="${P}" y1="${BASE}" x2="${W-P}" y2="${BASE}"></line>`
+    + body + `</svg>${legend}</div>`;
 }
 function statTile(k, v, sub){
   return `<div class="stat"><div class="k">${k}</div><div class="v tnum">${v}</div>`
@@ -7865,9 +7913,9 @@ function courtStatsHtml(slug, s){
     "available to claims settling and paying out"));
   if(s.seniorOwed>0) tiles.push(statTile("senior queue owed", cc(s.seniorOwed,slug),
     "earned payouts, paid as budget accrues"));
-  // Under the tiles, not beside them: the line is about the supply figure and
-  // reads as its history only when it sits below it.
-  const chart = supplyChartSvg(parseSupplySeries(s.supplyHist));
+  // Under the tiles, not beside them: the chart is the history of the figures
+  // above it and reads as such only when it sits below them.
+  const chart = courtLifeChartSvg(parseSeries(s.burnHist), parseSeries(s.supplyHist), slug, s.price);
   return `<section class="courtstats"><div class="grid stats">
        ${tiles.join("\n       ")}
        </div>${chart}</section>`;
