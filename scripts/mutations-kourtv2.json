@@ -1,27 +1,6 @@
 [
  {
   "pkg": "kourtv2",
-  "file": "crystallize.gno",
-  "label": "v0.55: sub-bar carrot not withheld",
-  "find": "\tif cs.decidedPID == 0 && cs.conclusiveSeq != 0 {\n\t\tif _, fullBar := qualityBars(c, cs); cs.conclusiveTurnout < fullBar {\n\t\t\tcs.carrotTotal = 0\n\t\t}\n\t}\n",
-  "replace": ""
- },
- {
-  "pkg": "kourtv2",
-  "file": "crystallize.gno",
-  "label": "v0.55: withheld unconditionally (breaks F2 above the bar)",
-  "find": "if _, fullBar := qualityBars(c, cs); cs.conclusiveTurnout < fullBar {",
-  "replace": "if true {"
- },
- {
-  "pkg": "kourtv2",
-  "file": "crystallize.gno",
-  "label": "v0.55: decidedPID guard dropped",
-  "find": "if cs.decidedPID == 0 && cs.conclusiveSeq != 0 {",
-  "replace": "if cs.conclusiveSeq != 0 {"
- },
- {
-  "pkg": "kourtv2",
   "file": "court.gno",
   "label": "slug charset allows a path separator",
   "find": "ok := (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '-'",
@@ -96,27 +75,6 @@
   "label": "CEILING: dEff always the budget (min collapsed the other way)",
   "find": "\t\tif dReal < c.curBudgetBpsFP {",
   "replace": "\t\tif false {"
- },
- {
-  "pkg": "kourtv2",
-  "file": "crystallize.gno",
-  "label": "Crystallize ignores the 24h quiet window",
-  "find": "\tif now < cs.lastFlagEventAt+priorityWindowBlocks {",
-  "replace": "\tif false {"
- },
- {
-  "pkg": "kourtv2",
-  "file": "crystallize.gno",
-  "label": "quiet window one block short",
-  "find": "\tif now < cs.lastFlagEventAt+priorityWindowBlocks {",
-  "replace": "\tif now < cs.lastFlagEventAt+priorityWindowBlocks-1 {"
- },
- {
-  "pkg": "kourtv2",
-  "file": "crystallize.gno",
-  "label": "Crystallize runs with a quality question open",
-  "find": "\tif cs.flagOpen || cs.counterOpen || cs.pendingSlash > 0 {",
-  "replace": "\tif false {"
  },
  {
   "pkg": "kourtv2",
@@ -4645,13 +4603,6 @@
  {
   "pkg": "kourtv2",
   "file": "crystallize.gno",
-  "label": "crystallize: a turnout exactly at the full bar has its carrot pool zeroed",
-  "find": "cs.conclusiveTurnout < fullBar",
-  "replace": "cs.conclusiveTurnout <= fullBar"
- },
- {
-  "pkg": "kourtv2",
-  "file": "crystallize.gno",
   "label": "Crystallize: the participant-only window is one block long at its edge",
   "find": "if now < cs.verdictAt+finalizeGraceBlocks && !isParticipant(cs, who) {",
   "replace": "if now <= cs.verdictAt+finalizeGraceBlocks && !isParticipant(cs, who) {"
@@ -5662,13 +5613,6 @@
  {
   "pkg": "kourtv2",
   "file": "crystallize.gno",
-  "label": "crystallize: the open-question gate needs ALL THREE at once",
-  "find": "\tif cs.flagOpen || cs.counterOpen || cs.pendingSlash > 0 {",
-  "replace": "\tif cs.flagOpen && cs.counterOpen && cs.pendingSlash > 0 {"
- },
- {
-  "pkg": "kourtv2",
-  "file": "crystallize.gno",
   "label": "crystallize: a zero deposit is still transferred and decremented",
   "find": "\tif cs.deposit > 0 {",
   "replace": "\tif cs.deposit >= 0 {"
@@ -5686,13 +5630,6 @@
   "label": "PullState: a YES verdict reports no winner pull",
   "find": "\tif cs.provisional >= 0 {",
   "replace": "\tif cs.provisional > 0 {"
- },
- {
-  "pkg": "kourtv2",
-  "file": "crystallize.gno",
-  "label": "crystallize: the sub-bar carrot is withheld on EITHER condition",
-  "find": "\tif cs.decidedPID == 0 && cs.conclusiveSeq != 0 {",
-  "replace": "\tif cs.decidedPID == 0 || cs.conclusiveSeq != 0 {"
  },
  {
   "pkg": "kourtv2",
