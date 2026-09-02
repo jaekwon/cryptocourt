@@ -215,28 +215,30 @@ type claimState struct {
 	// a court-local sealed 3-bucket tally rides flags AND dispute rounds.
 	flagger     address
 	flagVoteEnd int64
-	// slotConsumed is a one-way latch meaning "a CONCLUSIVE tally landed", written at
-	// exactly two sites (ResolveFlag, resolveQualityRide) and never cleared. It is far
-	// more load-bearing than its name suggests: SEVEN behavioural readers depend on it,
-	// and they do NOT all want the same predicate. Enumerated because three reviewers
-	// costing a change here each under-counted them, and because the cheapest-looking
-	// fix to any one of these silently breaks the others:
-	//   1. quality.gno OpenFlag  — one flag slot per claim (the name's own job)
-	//   2. quality.gno reaskQualityTally — v0.51's "before anything is adjudicated
-	//      every round asks fresh"; un-latching re-opens the tally re-roll
-	//   3. quality.gno resolveQualityRide — v0.54's mandate ratchet gate
-	//   4. session.gno SettleUndisputed — tier-clobber guard (do not overwrite a
-	//      conclusive tier with the default mid)
-	//   5. session.gno SettleUndisputed — the slash-reserve retention
-	//   6. dispute.gno Finalize — the same tier-clobber guard
-	//   7. dispute.gno Finalize — the same slash-reserve retention
-	// Plus two display readers (FlagState, render.gno) that must be changed IN STEP with
-	// (1) or the UI reports "consumed" while OpenFlag still accepts.
+	// slotConsumed IS GONE, and so is every reader that made it interesting. The
+	// field is not declared in this struct any more; what stood here was a
+	// twenty-two-line enumeration of SEVEN behavioural readers, written because
+	// three reviewers costing a change to it had each under-counted them, and
+	// warning that the cheapest-looking fix to any one silently broke the others.
 	//
-	// The known consequence of that overloading is PLAN §13 v0.56's open owner decision:
-	// jobs (1), (5) and (7) key slash-eligibility to a tally that may have been decided
-	// at the supply-floorLESS demotionBar, so a sub-bar low disarms the full-bar slash.
-	// Splitting the latch means splitting all seven readers, not editing one predicate.
+	// All seven went with the quality lane. Three were quality.gno itself
+	// (OpenFlag, reaskQualityTally, resolveQualityRide); two were
+	// SettleUndisputed's tier-clobber guard and slash-reserve retention, and two
+	// the same pair in Finalize — and stripped of comments neither of those
+	// functions now contains any tier or slot code at all (see 76b2941, daee87b).
+	// The two display readers, FlagState and render.gno's, went with them.
+	//
+	// It also carried PLAN §13 v0.56's open owner decision — that jobs (1), (5)
+	// and (7) keyed slash-eligibility to a tally possibly decided at the
+	// supply-floorLESS demotionBar, so a sub-bar low disarmed the full-bar slash.
+	// That decision is moot: there is no latch to split and no slash to disarm.
+	// Recorded rather than dropped, because "we decided nothing and the question
+	// went away with the code" is a different fact from "we forgot".
+	//
+	// The two fields BELOW are a different matter: flagger and flagVoteEnd are
+	// still declared and have zero non-comment readers anywhere in the realm.
+	// Dead persisted state, not a dead comment — removing them changes the stored
+	// shape and wants a reseed, so it is filed rather than done here.
 	voted          *bptree.BPTree // seq|addr -> true (one vote per tally)
 	// The slash escrow (Q5): reserved from the answer bond at a slash-low,
 	// disposed exactly once at the counter-flag window's close.
