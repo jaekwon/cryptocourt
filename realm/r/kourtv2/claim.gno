@@ -178,6 +178,13 @@ type claimState struct {
 	// between a decided round and Finalize (-1 = none); escrowUntil is the
 	// reopen window's end, set once at the first resolution.
 	disputeOpen   bool
+	// disputeOpenedTime is when the CURRENT round opened, in wall seconds.
+	// The height is already on chain — the governor records it and Timings
+	// returns it — but the height alone cannot be dated: the test clock moves
+	// heights and seconds by independent skews, so deriving one from the other
+	// puts the marker months from the events beside it. Overwritten by each
+	// round, like proposalID, because a chart marks the round that is running.
+	disputeOpenedTime int64
 	round         int64
 	failedRounds  int64
 	decidedRounds int64

@@ -132,6 +132,17 @@ func ClaimTimeline(courtSlug string, claimID uint64) string {
 	if cs.escrowUntil != 0 {
 		out += ";reopen:" + itoa(cs.escrowUntilAt) + ":" + itoa(cs.escrowUntil)
 	}
+	// THE DISPUTE, which the chart could not draw because nothing reported it.
+	// A reader could see an answer dated years ago and a vote still running with
+	// nothing between them. The height comes from the governor, which has had it
+	// all along — DisputeVoteCloses asks for the same four numbers and keeps
+	// only the deadline.
+	// Carried here rather than in a reader of its own so the chart gets it in
+	// the read it already makes, at no extra round trip.
+	if cs.disputeOpen && cs.proposalID != 0 {
+		opened, _, _, _ := c.gov.Timings(cs.proposalID)
+		out += ";dispute:" + itoa(cs.disputeOpenedTime) + ":" + itoa(opened)
+	}
 	out += ";now:" + itoa(nowTime()) + ":" + itoa(heightNow())
 	// Fabricated, not Active: the marker has to survive sealing, or a seeded
 	// chain's timeline goes quiet the moment it stops being drivable.

@@ -58,3 +58,55 @@ func TestTheTimelineDropsTheSettleLineOnceThereIsAVerdict(cur realm, t *testing.
 		t.Fatalf("a decided claim must not still advertise a settle deadline: %s", after)
 	}
 }
+
+// THE DISPUTE HAS TO APPEAR ON THE TIMELINE, because the chart draws its marks
+// from this string and nothing else. It drew the answer and the vote's deadline
+// with nothing between them, so a claim answered long ago with a vote still
+// running showed no mark for the event that explains the gap — and the honest
+// reason was that the chain never reported it.
+//
+// The height is the GOVERNOR'S, not this claim's: DisputeVoteCloses already
+// asks Timings for the same four numbers and keeps only the deadline, so the
+// opening was on chain the whole time and simply unexposed.
+//
+// The TIME is stored rather than derived, and that is the load-bearing half. A
+// height alone cannot be dated on a test-clock chain: heights and seconds move
+// by independent skews, so deriving one from the other puts this mark months
+// away from the events beside it.
+//
+// BOTH SIDES: absent before a dispute exists, present after. Without the first
+// half the second would pass on a timeline that always carried the line.
+func TestTheTimelineCarriesTheDisputeOpening(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("tl-d-alice")
+	bob := testutils.TestAddress("tl-d-bob")
+	c := testCourt(cur, "tld", alice, 10_000_000_000)
+	c.coin.Mint(bob, 10_000_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "tld", "Does the record hold?")
+	matureOI(cur, "tld", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "tld", id, sideYES)
+
+	if got := ClaimTimeline("tld", id); strings.Contains(got, ";dispute:") {
+		t.Fatalf("an undisputed claim must carry no dispute line: %s", got)
+	}
+
+	testing.SkipHeights(10)
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), "tld", id)
+
+	got := ClaimTimeline("tld", id)
+	if !strings.Contains(got, ";dispute:") {
+		t.Fatalf("a disputed claim must carry the dispute line: %s", got)
+	}
+	cs := mustClaim(mustCourt("tld"), id)
+	if cs.disputeOpenedTime == 0 {
+		t.Fatal("the opening time must be recorded, not left to be derived from a height")
+	}
+	opened, _, _, _ := mustCourt("tld").gov.Timings(cs.proposalID)
+	want := ";dispute:" + itoa(cs.disputeOpenedTime) + ":" + itoa(opened)
+	if !strings.Contains(got, want) {
+		t.Errorf("dispute line is not the governor's own opening:\n got %s\nwant %s", got, want)
+	}
+}

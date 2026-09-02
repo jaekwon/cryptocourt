@@ -10759,6 +10759,14 @@ function signalChart(slug,id,d,nowH,ser,tl){
      stopped meaning anything the moment somebody disputed, while the ladder
      under it had already dropped that row. Two surfaces, one claim, different
      answers about what its clock is. */
+  /* WHEN THE DISPUTE WAS RAISED. The chart drew the answer and the vote's
+     deadline and nothing between them, so a claim answered years ago with a
+     vote still running had no mark explaining the gap — asked directly, and the
+     honest answer was that the chain never reported it. It does now: the
+     governor has had the height all along and ClaimTimeline carries it.
+     Only when it falls inside the drawn window, like every other mark here. */
+  if(tl && tl.dispute && isFinite(tl.dispute.h) && tl.dispute.h>=d0 && tl.dispute.h<=now)
+    evts.push([tl.dispute.h,"disputed","The answer was disputed at ≈block "+fmtN(tl.dispute.h)+" ("+ago(tl.dispute.h)+"); the vote runs from here."]);
   if(d.settleAt && d.phase==="answered") evts.push([d.settleAt,"settle deadline","An undisputed answer settles at ≈block "+fmtN(d.settleAt)+" ("+ago(d.settleAt)+")."]);
   if(d.escrowUntil) evts.push([d.escrowUntil,"reopen closes","The reopen window closes at ≈block "+fmtN(d.escrowUntil)+" ("+ago(d.escrowUntil)+")."]);
   if(d.voteEndsAt) evts.push([d.voteEndsAt,"vote closes","The dispute vote's scheduled close at ≈block "+fmtN(d.voteEndsAt)+" ("+ago(d.voteEndsAt)+")."]);

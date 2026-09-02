@@ -119,6 +119,7 @@ func OpenDispute(cur realm, courtSlug string, claimID uint64) int64 {
 
 	cs.proposalID = pid
 	cs.disputeOpen = true
+	cs.disputeOpenedTime = nowTime()
 	cs.disputeBond = bond
 	cs.disputer = who
 	return pid
