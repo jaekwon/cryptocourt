@@ -5192,6 +5192,30 @@
  },
  {
   "pkg": "kourtv2",
+  "file": "votelock.gno",
+  "label": "voteLockOpen: a dispute lock is held by ANY open round, not the round it was written for",
+  "find": "\t\treturn cs.disputeOpen && cs.proposalID == int64(sub)",
+  "replace": "\t\treturn cs.disputeOpen && cs.proposalID >= int64(sub)",
+  "why": "Found SURVIVING the whole suite. No fixture had ever put TWO ROUNDS ON ONE CLAIM with a vote in the first: the pruning test builds six rows but each is a different claim with a single round, so sub and cs.proposalID are both 1 everywhere and == cannot be told from >=. Under the mutant the next round on a claim re-opens every dead row beneath it, holding a voter's coin against a ballot whose own round already resolved. Killed now by TestADeadRoundsRowStaysDeadWhenTheNextRoundOpens: VoteLockedOf=1000000, the voter's whole balance, on a row keyed to round 1 with the claim on round 2. Uses >= rather than dropping the comparison because deleting it leaves `sub` unused and the mutant does not compile -- a build error is not a kill."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "votelock.gno",
+  "label": "voteLockOpen: coin is held on a key this realm never wrote",
+  "find": "\t\treturn false // do not hold coin on a key this code did not write",
+  "replace": "\t\treturn true // do not hold coin on a key this code did not write",
+  "why": "The unknown-key guard. Covered, measured rather than assumed: killed by TestNoReadAnswersForANonAddress in junkinput_test.gno, which requires VoteLockedOf to answer 0 for four junk address shapes -- empty, \"g1\", one char short and one char over. The prefix is the shape that mattered; it is what the prune exploit used."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "votelock.gno",
+  "label": "voteLockOpen: an election lock survives the election being resolved",
+  "find": "\t\treturn e.seq == id && !e.resolved",
+  "replace": "\t\treturn e.seq == id",
+  "why": "Covered, and the kill names the consequence rather than a count: the voter's coin stays committed after the election resolves, so a later spend aborts with 'not enough uncommitted CC -- coin you voted with stays in your balance and keeps voting, but it is committed until that question resolves'."
+ },
+ {
+  "pkg": "kourtv2",
   "file": "dispute.gno",
   "label": "ResolveDispute: only a participant may resolve (a voter's coin is stranded)",
   "find": "\tif !cs.disputeOpen {\n\t\tpanic(\"kourtv2: no dispute to resolve\")\n\t}",

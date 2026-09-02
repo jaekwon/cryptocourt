@@ -756,3 +756,84 @@ func TestAStrangerCannotPruneAwayACommitment(cur realm, t *testing.T) {
 	uassert.Equal(t, int64(0), DisposableOf("sec", address("g1")))
 	uassert.Equal(t, "stake:0;vote:0;free:0", CommitmentsOf("sec", address("g1")))
 }
+
+// THE SAME ROUND, NOT MERELY AN OPEN ONE — found SURVIVING. Weaken
+// voteLockOpen's dispute arm from `cs.proposalID == int64(sub)` to `>=` and the
+// whole kourtv2 suite still passes, while a voter's coin stays committed to a
+// ballot whose own round resolved weeks ago: the next round on the same claim
+// re-opens every dead row under it.
+//
+// Nothing caught it because no fixture had ever put TWO ROUNDS ON ONE CLAIM with
+// a vote in the first. TestPruningDropsDeadRowsWithoutMovingTheCommitment builds
+// six rows, but each is a DIFFERENT claim with a single round, so `sub` and
+// cs.proposalID are both 1 everywhere and == and >= cannot be told apart. The
+// distinction only bites where a claim advances past the round a row was written
+// for, which is exactly what voteLockOpen's own comment says it is there for:
+// "A later round is a different question, and the ballot this row is holding coin
+// for was already applied when its own round resolved."
+//
+// The assertion that matters is the one taken WITH ROUND 2 OPEN. After round 1
+// resolves, cs.disputeOpen is false and the row reads shut whatever the round
+// comparison says, so a check there passes under the defect too.
+func TestADeadRoundsRowStaysDeadWhenTheNextRoundOpens(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("vlrnd-alice") // author + answerer
+	whale := testutils.TestAddress("vlrnd-whale") // disputer, twice
+	voter := testutils.TestAddress("vlrnd-voter") // votes in round 1 only
+	c := testCourt(cur, "vlrnd", alice, 40_000_000_000)
+	c.coin.Mint(whale, 60_000_000_000)
+	// SMALL ON PURPOSE: round 1 has to resolve WITHOUT settling the claim, or
+	// there is no round 2 to open. A vote far under the quorum floor is recorded
+	// and still leaves the round short.
+	c.coin.Mint(voter, 1_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "vlrnd", "a dead round's row must stay dead")
+	matureOI(cur, "vlrnd", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "vlrnd", id, sideYES)
+	c.params.escrowMinBlocks = 900_000
+	c.params.escrowMaxBlocks = 900_000
+
+	// ROUND 1, voted, then resolved short of quorum.
+	testing.SetRealm(testing.NewUserRealm(whale))
+	OpenDispute(cross(cur), "vlrnd", id)
+	cs := mustClaim(c, id)
+	round1 := cs.proposalID
+	testing.SetRealm(testing.NewUserRealm(voter))
+	VoteDispute(cross(cur), "vlrnd", id, "no")
+	if VoteLockedOf("vlrnd", voter) <= 0 {
+		t.Fatal("fixture: the round-1 vote must commit coin, or there is no row " +
+			"whose staleness this test can be about")
+	}
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	testing.SetRealm(testing.NewUserRealm(whale))
+	ResolveDispute(cross(cur), "vlrnd", id)
+
+	// THE ROW MUST STILL EXIST. It is filtered lazily by voteLockOpen rather than
+	// deleted on resolve — pruning happens on that voter's NEXT vote, and this
+	// voter does not vote again. If the row were gone there would be nothing left
+	// to misjudge and this test would pass for the wrong reason.
+	if rows := voteLockRows(c, voter); rows < 1 {
+		t.Fatalf("fixture is vacuous: the round-1 row was deleted, so nothing is "+
+			"being filtered (rows=%d)", rows)
+	}
+
+	// ROUND 2 OPENS on the SAME claim, so the claim is past the round that row
+	// was written for.
+	testing.SetRealm(testing.NewUserRealm(whale))
+	OpenDispute(cross(cur), "vlrnd", id)
+	cs = mustClaim(c, id)
+	if !cs.disputeOpen || cs.proposalID == round1 {
+		t.Fatalf("fixture: need a SECOND round open on this claim: open=%t "+
+			"round1=%d now=%d", cs.disputeOpen, round1, cs.proposalID)
+	}
+
+	// AND THE ROUND-1 VOTER IS FREE. They have not voted in round 2, so nothing
+	// commits their coin — an open round is not a licence to hold the previous
+	// round's ballots.
+	if got := VoteLockedOf("vlrnd", voter); got != 0 {
+		t.Fatalf("a resolved round's ballot must not be re-committed by the next "+
+			"round: VoteLockedOf=%d (row keyed on round %d, claim now on round %d)",
+			got, round1, cs.proposalID)
+	}
+}
