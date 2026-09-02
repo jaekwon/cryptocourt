@@ -19,11 +19,11 @@ seeded by scripts/seed-node.sh.
 It is deliberately NOT part of `make check` — that gate must not require a
 running chain.
 """
-import base64
-import json
 import re
 import sys
 import urllib.request
+
+import gnorpc
 
 REALM = "gno.land/r/kourt/kourtv2"
 
@@ -96,32 +96,21 @@ PROBES = [
 ]
 
 # The page's own parser: `(value type)` per line.
-TYPED = re.compile(r"^\((.*)\s+([A-Za-z0-9_./\[\]]+)\)$", re.S)
+TYPED = gnorpc.TYPED
 
 
 def qeval(remote, expr):
-    # The `data` field is base64, and so is the response's — same as the page's
-    # own abci() does. Sending it raw returns "illegal base64 data".
-    payload = base64.b64encode(f"{REALM}.{expr}".encode()).decode()
-    body = json.dumps({"jsonrpc": "2.0", "id": "clr", "method": "abci_query",
-                       "params": {"path": "vm/qeval", "data": payload,
-                                  "height": "0", "prove": False}}).encode()
-    req = urllib.request.Request(remote, data=body,
-                                 headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=20) as r:
-        j = json.loads(r.read())
-    if j.get("error"):
-        return None, str(j["error"].get("message") or j["error"])[:140]
-    r = (j.get("result") or {}).get("response") or {}
-    rb = r.get("ResponseBase") or {}
-    err = r.get("Error") or rb.get("Error")
-    if err:
-        log = r.get("Log") or rb.get("Log") or str(err)
-        return None, " ".join(str(log).split())[:140]
-    data = r.get("Data") if r.get("Data") is not None else rb.get("Data")
-    if data is None:
-        return None, "no Data in response"
-    return base64.b64decode(data).decode("utf-8", "replace"), None
+    """(text, None) or (None, message) -- a guard reports and keeps going.
+
+    The shared client raises, because raising is the shape that can be
+    adapted into this one; returning could not have been adapted into a
+    generator that must abort. So the adapting happens here.
+    """
+    try:
+        return gnorpc.qeval(remote, REALM, expr, req_id="clr"), None
+    except gnorpc.QevalError as e:
+        return None, str(e)
+
 
 
 def main():

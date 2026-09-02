@@ -29,12 +29,13 @@ SAFETY, in order of how much each is worth:
   4. --check writes nothing and exits 1 if the region would change;
   5. it refuses a partial dump: any failed read aborts the whole thing.
 """
-import base64
 import json
 import os
 import re
 import sys
 import urllib.request
+
+import gnorpc
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PAGE = os.path.join(ROOT, "web", "index.html")
@@ -44,33 +45,12 @@ END = "/* ===== END GENERATED DEMO DATA ===== */"
 
 
 def qeval(remote, expr):
-    payload = base64.b64encode(f"{REALM}.{expr}".encode()).decode()
-    body = json.dumps({"jsonrpc": "2.0", "id": "dd", "method": "abci_query",
-                       "params": {"path": "vm/qeval", "data": payload,
-                                  "height": "0", "prove": False}}).encode()
-    req = urllib.request.Request(remote, data=body,
-                                 headers={"Content-Type": "application/json"})
-    with urllib.request.urlopen(req, timeout=20) as r:
-        j = json.loads(r.read())
-    if j.get("error"):
-        raise RuntimeError(str(j["error"])[:120])
-    r = (j.get("result") or {}).get("response") or {}
-    rb = r.get("ResponseBase") or {}
-    if r.get("Error") or rb.get("Error"):
-        raise RuntimeError(" ".join(str(r.get("Log") or rb.get("Log")).split())[:140])
-    data = r.get("Data") if r.get("Data") is not None else rb.get("Data")
-    # NO Data AND NO Error is a real answer shape, and it has to be named here.
-    # Without this, b64decode(None) raises "TypeError: argument should be a
-    # bytes-like object or ASCII string, not 'NoneType'" -- a stack trace about
-    # base64 for what is actually "the node answered nothing". The twin of this
-    # function in check-live-reads.py has always had the branch; it was added
-    # there and not here, which is what two hand-rolled copies of one client do.
-    if data is None:
-        raise RuntimeError("no Data in response")
-    return base64.b64decode(data).decode("utf-8", "replace")
+    """gnorpc.qeval, bound to this realm. Raises QevalError; a generator
+    must abort rather than carry on with a hole in its output."""
+    return gnorpc.qeval(remote, REALM, expr, req_id="dd")
 
 
-TYPED = re.compile(r"^\((.*)\s+([A-Za-z0-9_./\[\]]+)\)$", re.S)
+TYPED = gnorpc.TYPED
 
 # The realm serves text through sanitize.InlineText, so "Nov 6, 2025." comes back
 # as "Nov 6, 2025\.". LIVE mode undoes that with unesc() at every call site; the
