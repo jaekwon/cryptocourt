@@ -86,7 +86,7 @@ func TestSetTierIsDAOOnlyAndRangeChecked(cur realm, t *testing.T) {
 	// An unknown slug is refused before any write.
 	testing.SetRealm(testing.NewUserRealm(owner))
 	uassert.AbortsContains(t, cur, "no such court", func() {
-		SetTier(cross(cur), "dir-nope", int(tierFeatured))
+		SetTier(cross(cur), "dirnope", int(tierFeatured))
 	})
 }
 
@@ -96,19 +96,19 @@ func TestSetTierIsDAOOnlyAndRangeChecked(cur realm, t *testing.T) {
 func TestDirectoryListsFilterAndOrder(cur realm, t *testing.T) {
 	admin := testutils.TestAddress("dir2-admin")
 	// Deliberately create out of lexicographic order to prove the ordering claim.
-	testCourt(cur, "dir2-z", admin, 1_000_000_000)
-	testCourt(cur, "dir2-a", admin, 1_000_000_000)
+	testCourt(cur, "dir2z", admin, 1_000_000_000)
+	testCourt(cur, "dir2a", admin, 1_000_000_000)
 	owner := DirectoryAdmin()
 
 	testing.SetRealm(testing.NewUserRealm(owner))
-	SetTier(cross(cur), "dir2-z", int(tierFeatured))
+	SetTier(cross(cur), "dir2z", int(tierFeatured))
 
 	var sawZ, sawA bool
 	for _, s := range ListByTier(int(tierFeatured)) {
-		if s == "dir2-z" {
+		if s == "dir2z" {
 			sawZ = true
 		}
-		if s == "dir2-a" {
+		if s == "dir2a" {
 			sawA = true
 		}
 	}
@@ -119,13 +119,13 @@ func TestDirectoryListsFilterAndOrder(cur realm, t *testing.T) {
 		t.Fatal("ListByTier must exclude a court at a different tier")
 	}
 
-	// Slug order: dir2-a must precede dir2-z despite being created second.
+	// Slug order: dir2a must precede dir2z despite being created second.
 	ia, iz := -1, -1
 	for i, s := range ListCourts() {
-		if s == "dir2-a" {
+		if s == "dir2a" {
 			ia = i
 		}
-		if s == "dir2-z" {
+		if s == "dir2z" {
 			iz = i
 		}
 	}

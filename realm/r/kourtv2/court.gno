@@ -1152,9 +1152,12 @@ var reservedSlugs = []string{
 	"btc", "eth", "usdc", "usdt",
 }
 
-// mustSlug: 1..maxSlugLen of [a-z0-9-] — URL- and markdown-safe by
-// construction, and short enough that courtSymbol always satisfies GRC20's
-// symbol-length bound.
+// mustSlug: 1..maxSlugLen of [a-z0-9] — URL- and markdown-safe by construction,
+// and short enough that courtSymbol always satisfies GRC20's symbol-length bound.
+// The hyphen was dropped: the coin symbol is the upper-cased slug, and KOURT:MY-COURT
+// reads a hyphen as a minus. Narrowing is the safe direction here — see
+// TestSlugCharsetIsWhatMakesTheRawRenderSafe, which exists because render.gno writes
+// the slug RAW into markdown link targets.
 func mustSlug(slug string) {
 	if len(slug) == 0 || len(slug) > maxSlugLen {
 		panic("kourtv2: a slug is 1..11 characters")
@@ -1166,9 +1169,9 @@ func mustSlug(slug string) {
 	}
 	for i := 0; i < len(slug); i++ {
 		ch := slug[i]
-		ok := (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '-'
+		ok := (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9')
 		if !ok {
-			panic("kourtv2: a slug is lowercase letters, digits, and hyphens only")
+			panic("kourtv2: a slug is lowercase letters and digits only")
 		}
 	}
 }

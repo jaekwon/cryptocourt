@@ -83,7 +83,7 @@ func shouldPanicV2(t *testing.T, name string, fn func()) {
 // notices. This pins the charset to the characters that would break it.
 func TestSlugCharsetIsWhatMakesTheRawRenderSafe(cur realm, t *testing.T) {
 	alice := testutils.TestAddress("slug-alice")
-	testCourt(cur, "slug-ok", alice, 1_000_000_000) // the happy path still works
+	testCourt(cur, "slugok", alice, 1_000_000_000) // the happy path still works
 
 	// Each of these would escape the link target, open a markdown construct, or
 	// traverse the path if it reached render.gno unsanitized.
@@ -103,9 +103,20 @@ func TestSlugCharsetIsWhatMakesTheRawRenderSafe(cur realm, t *testing.T) {
 		"has`tick",  // code span
 		"has*star",  // emphasis
 		"has<angle", // raw HTML
+		// THE HYPHEN JOINS THE LIST, at the owner's word rather than for safety.
+		// It was in the charset and it was safe there — it cannot close a link
+		// target or traverse a path, which is what the rest of this list is
+		// about. It came out because of where a slug ENDS UP: the court coin's
+		// symbol is the upper-cased slug, so a hyphenated court showed as
+		// KOURT:MY-COURT, and a hyphen in a ticker reads as a minus sign.
+		// Listed here anyway, because this test is the one place that states
+		// what the alphabet is, and an alphabet is defined by what it refuses.
+		"has-hyphen",
+		"-leading",
+		"trailing-",
 	} {
 		testing.SetRealm(testing.NewUserRealm(alice))
-		uassert.AbortsContains(t, cur, "lowercase letters, digits, and hyphens only",
+		uassert.AbortsContains(t, cur, "lowercase letters and digits only",
 			func() {
 				StartCourt(cross(cur), bad, "Bad Slug Court")
 			})
@@ -113,12 +124,18 @@ func TestSlugCharsetIsWhatMakesTheRawRenderSafe(cur realm, t *testing.T) {
 
 	// And the permitted set really is permitted, so the guard is not merely
 	// rejecting everything.
-	// "with-9-dig" not "with-9-digits": this asserts the CHARSET, and the length
+	// THE HYPHENATED ENTRIES MOVED TO THE REFUSAL LIST when the alphabet became
+	// alphanumeric. Three of the six cases here were "a-b-c", "-" and
+	// "with-9-dig", which is worth noticing: over half of what this loop
+	// asserted was permitted is now forbidden, and a list that says what is
+	// ALLOWED has to be edited in step with the rule or it quietly certifies the
+	// old one.
+	// "with9digit" not "with-9-digits": this asserts the CHARSET, and the length
 	// cap is a separate rule — slugs are at most maxSlugLen (11) so that
 	// uppercase(slug) fits GRC20's symbol bound, which is what stops a court
 	// coin from being unnamable in a wallet. A 13-char slug would fail on
 	// length and tell us nothing about the charset.
-	for _, good := range []string{"abc", "a-b-c", "a1", "9", "-", "with-9-dig"} {
+	for _, good := range []string{"abc", "a1", "9", "with9digit"} {
 		testing.SetRealm(testing.NewUserRealm(alice))
 		StartCourt(cross(cur), good, "Good Slug Court")
 		if CourtTier(good) != int(tierListed) {

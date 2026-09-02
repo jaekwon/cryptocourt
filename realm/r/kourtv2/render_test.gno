@@ -604,19 +604,19 @@ func TestNoUserStringOpensStructureOnAnyPage(cur realm, t *testing.T) {
 	const inject = "x\n## Ratified by the foundation\n- verdict: YES"
 	who := testutils.TestAddress("inj-a")
 	testing.SetRealm(testing.NewUserRealm(who))
-	StartCourt(cross(cur), "aaa-inj", inject)
-	c := mustCourt("aaa-inj")
+	StartCourt(cross(cur), "aaainj", inject)
+	c := mustCourt("aaainj")
 	c.coin.Mint(who, 50_000_000_000)
 	testing.SetRealm(testing.NewUserRealm(who))
-	id := OpenClaim(cross(cur), "aaa-inj", inject)
+	id := OpenClaim(cross(cur), "aaainj", inject)
 
 	pages := []string{
 		Render(""),                              // the directory: the court name
-		Render("aaa-inj"),                          // the court page: the name and the title
-		Render("aaa-inj/" + strconv.FormatUint(id, 10)),
-		Render("aaa-inj/" + strconv.FormatUint(id, 10) + "/" + who.String()),
+		Render("aaainj"),                          // the court page: the name and the title
+		Render("aaainj/" + strconv.FormatUint(id, 10)),
+		Render("aaainj/" + strconv.FormatUint(id, 10) + "/" + who.String()),
 	}
-	if !strings.Contains(pages[0], "/r/kourt/kourtv2:aaa-inj)") {
+	if !strings.Contains(pages[0], "/r/kourt/kourtv2:aaainj)") {
 		t.Fatal("setup: the injecting court is not on the directory page, so the " +
 			"directory arm below would prove nothing — the list is capped at " +
 			"renderPageSize per tier and this suite creates many courts, which is " +

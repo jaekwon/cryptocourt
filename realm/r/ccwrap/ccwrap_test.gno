@@ -418,18 +418,30 @@ func TestTheWrappableSlugBoundIsRealOnBothSides(cur realm, t *testing.T) {
 // Symbols stay injective across slugs, which matters more than it looks: the
 // registry keys on the symbol, so two slugs mapping to one symbol would mean the
 // second court's Enable is refused forever with a message about a token it never
-// registered. Hyphens are what keep it injective, so that is the pair tested.
-func TestHyphensKeepWrappedSymbolsInjective(cur realm, t *testing.T) {
+// registered.
+//
+// THIS TEST USED TO PROVE IT WITH A HYPHEN, and the pair it used no longer
+// exists. It was "ab-c" against "abc": under the old alphabet the wrap symbol
+// had to preserve the hyphen or the two collided into wABC. kourtv2's slug
+// alphabet is alphanumeric now, so that collision is unconstructible — and
+// injectivity stopped being something the symbol builder has to be careful
+// about, because uppercasing [a-z0-9] cannot fold two slugs together.
+//
+// Rewritten rather than deleted. The property is still worth pinning: what
+// changed is that it now follows from the alphabet instead of from remembering
+// to keep a character. Two slugs that differ only by length are the sharpest
+// pair the new alphabet allows.
+func TestWrappedSymbolsStayInjectiveAcrossSlugs(cur realm, t *testing.T) {
 	alice := testutils.TestAddress("cw-alice13")
-	fundAndBuy(cur, "ab-c", alice, 300_000_000)
 	fundAndBuy(cur, "abc", alice, 300_000_000)
+	fundAndBuy(cur, "abcd", alice, 300_000_000)
 
-	uassert.NotEqual(t, TokenKey("ab-c"), TokenKey("abc"))
+	uassert.NotEqual(t, TokenKey("abc"), TokenKey("abcd"))
 
-	testing.SetRealm(testing.NewUserRealm(alice))
-	uassert.Equal(t, ccwrapPath+".wAB-C", Enable(cross(cur), "ab-c"))
 	testing.SetRealm(testing.NewUserRealm(alice))
 	uassert.Equal(t, ccwrapPath+".wABC", Enable(cross(cur), "abc"))
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.Equal(t, ccwrapPath+".wABCD", Enable(cross(cur), "abcd"))
 }
 
 // THE WRAP CAP — liquidity may not strand the court's own governance.

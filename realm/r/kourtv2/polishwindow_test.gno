@@ -16,14 +16,14 @@ import (
 func TestStakeOpenDelayIsReadable(cur realm, t *testing.T) {
 	alice := testutils.TestAddress("pw-a")
 	testing.SetRealm(testing.NewUserRealm(alice))
-	StartCourt(cross(cur), "pw-zero", "No Window")
+	StartCourt(cross(cur), "pwzero", "No Window")
 	testing.SetRealm(testing.NewUserRealm(alice))
-	StartCourtP(cross(cur), "pw-open", "With Window", 600)
+	StartCourtP(cross(cur), "pwopen", "With Window", 600)
 
 	// The default is the one worth pinning: it is what every court started
 	// through StartCourt has, and it means "no window" rather than "unset".
-	uassert.Equal(t, int64(0), CourtStakeOpenDelay("pw-zero"))
-	uassert.Equal(t, int64(600), CourtStakeOpenDelay("pw-open"))
+	uassert.Equal(t, int64(0), CourtStakeOpenDelay("pwzero"))
+	uassert.Equal(t, int64(600), CourtStakeOpenDelay("pwopen"))
 }
 
 // A read on a court that is not there refuses rather than answering zero, which
@@ -34,7 +34,7 @@ func TestStakeOpenDelayIsReadable(cur realm, t *testing.T) {
 // panic it wanted did happen.
 func TestStakeOpenDelayRefusesAnUnknownCourt(cur realm, t *testing.T) {
 	uassert.PanicsContains(t, cur, "no such court", func() {
-		CourtStakeOpenDelay("pw-nobody")
+		CourtStakeOpenDelay("pwnobody")
 	})
 }
 
@@ -43,13 +43,13 @@ func TestStakeOpenDelayRefusesAnUnknownCourt(cur realm, t *testing.T) {
 // start; on a court with a window the author may still fix it.
 func TestTheDelayPredictsWhetherATitleCanBeFixed(cur realm, t *testing.T) {
 	alice := testutils.TestAddress("pw2-a")
-	testCourt(cur, "pw2-zero", alice, 200_000_000_000)
+	testCourt(cur, "pw2zero", alice, 200_000_000_000)
 	testing.SetRealm(testing.NewUserRealm(alice))
-	id := OpenClaim(cross(cur), "pw2-zero", "a claim with a typoo")
+	id := OpenClaim(cross(cur), "pw2zero", "a claim with a typoo")
 
-	uassert.Equal(t, int64(0), CourtStakeOpenDelay("pw2-zero"))
+	uassert.Equal(t, int64(0), CourtStakeOpenDelay("pw2zero"))
 	testing.SetRealm(testing.NewUserRealm(alice))
 	uassert.AbortsContains(t, cur, "polish window has closed", func() {
-		EditClaimTitle(cross(cur), "pw2-zero", id, "a claim with a typo")
+		EditClaimTitle(cross(cur), "pw2zero", id, "a claim with a typo")
 	})
 }

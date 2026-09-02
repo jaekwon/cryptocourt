@@ -56,16 +56,16 @@ func TestStartCourtPBoundsThePolishWindow(cur realm, t *testing.T) {
 
 	testing.SetRealm(testing.NewUserRealm(alice))
 	uassert.AbortsContains(t, cur, "polish window must be in", func() {
-		StartCourtP(cross(cur), "pwb-too", "Too Long", maxStakeOpenDelay+1)
+		StartCourtP(cross(cur), "pwbtoo", "Too Long", maxStakeOpenDelay+1)
 	})
 	testing.SetRealm(testing.NewUserRealm(alice))
 	uassert.AbortsContains(t, cur, "polish window must be in", func() {
-		StartCourtP(cross(cur), "pwb-neg", "Negative", -1)
+		StartCourtP(cross(cur), "pwbneg", "Negative", -1)
 	})
 
 	testing.SetRealm(testing.NewUserRealm(alice))
-	StartCourtP(cross(cur), "pwb-max", "At The Cap", maxStakeOpenDelay)
-	uassert.Equal(t, maxStakeOpenDelay, CourtStakeOpenDelay("pwb-max"))
+	StartCourtP(cross(cur), "pwbmax", "At The Cap", maxStakeOpenDelay)
+	uassert.Equal(t, maxStakeOpenDelay, CourtStakeOpenDelay("pwbmax"))
 }
 
 // And the court name, which every Start button on the front page carries.
@@ -74,14 +74,14 @@ func TestACourtNameIsBounded(cur realm, t *testing.T) {
 
 	testing.SetRealm(testing.NewUserRealm(alice))
 	uassert.AbortsContains(t, cur, "a court name is 1..100", func() {
-		StartCourt(cross(cur), "cnb-empty", "")
+		StartCourt(cross(cur), "cnbempty", "")
 	})
 	testing.SetRealm(testing.NewUserRealm(alice))
 	uassert.AbortsContains(t, cur, "a court name is 1..100", func() {
-		StartCourt(cross(cur), "cnb-long", strings.Repeat("x", maxCourtNameLen+1))
+		StartCourt(cross(cur), "cnblong", strings.Repeat("x", maxCourtNameLen+1))
 	})
 	// The cap itself is a legal name.
 	testing.SetRealm(testing.NewUserRealm(alice))
-	StartCourt(cross(cur), "cnb-ok", strings.Repeat("x", maxCourtNameLen))
-	uassert.Equal(t, maxCourtNameLen, len(CourtName("cnb-ok")))
+	StartCourt(cross(cur), "cnbok", strings.Repeat("x", maxCourtNameLen))
+	uassert.Equal(t, maxCourtNameLen, len(CourtName("cnbok")))
 }

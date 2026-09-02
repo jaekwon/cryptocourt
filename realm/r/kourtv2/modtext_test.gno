@@ -222,7 +222,7 @@ func TestEveryModerationTombstoneAndTheStrictBodyFilterAreSanitised(cur realm, t
 // true — which is the only way that row can be maintained honestly.
 func TestACourtSymbolsAlphabetIsWhatMakesItsSanitiserRedundant(cur realm, t *testing.T) {
 	alice := testutils.TestAddress("mdt5-alice")
-	for _, slug := range []string{"a", "z9", "with-hyph", "abcdefghijk"} {
+	for _, slug := range []string{"a", "z9", "withhyph", "abcdefghijk"} {
 		testCourt(cur, slug, alice, 1_000_000)
 		sym := CourtSymbol(slug)
 		if sym == "" {

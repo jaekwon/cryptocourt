@@ -146,18 +146,24 @@ func TestDirectoryRanksByBurn(cur realm, t *testing.T) {
 func TestCourtSymbolsAreUniquePerCourt(cur realm, t *testing.T) {
 	a := testutils.TestAddress("sym-a")
 	testCourt(cur, "symone", a, 1_000_000)
-	testCourt(cur, "sym-two", a, 1_000_000)
+	testCourt(cur, "symtwo", a, 1_000_000)
 
-	if CourtSymbol("symone") == CourtSymbol("sym-two") {
+	if CourtSymbol("symone") == CourtSymbol("symtwo") {
 		t.Fatal("two courts must not share a coin symbol")
 	}
 	if CourtSymbol("symone") != "SYMONE" {
 		t.Fatalf("symbol is the upper-cased slug, got %q", CourtSymbol("symone"))
 	}
-	// Hyphens are PRESERVED: stripping them would break injectivity, so "ab-c"
-	// and "abc" would collide and reintroduce the shared-symbol problem.
-	if CourtSymbol("sym-two") != "SYM-TWO" {
-		t.Fatalf("hyphens must survive, got %q", CourtSymbol("sym-two"))
+	// INJECTIVITY IS NOW FREE, and this assertion used to buy it. The slug
+	// alphabet included the hyphen, so uppercase() had to preserve it or "ab-c"
+	// and "abc" would collide into one symbol and two courts would share a coin
+	// name. With the alphabet alphanumeric, uppercase() on [a-z0-9] is injective
+	// by construction — there is no character left for it to fold away.
+	// Kept as the plain identity it now is, rather than deleted: two courts
+	// sharing a symbol is the property under test, and the line above still
+	// checks the pair. This one checks the mapping is exactly uppercase.
+	if CourtSymbol("symtwo") != "SYMTWO" {
+		t.Fatalf("symbol is the upper-cased slug, got %q", CourtSymbol("symtwo"))
 	}
 }
 
