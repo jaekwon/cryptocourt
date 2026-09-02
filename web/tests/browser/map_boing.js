@@ -33,22 +33,12 @@
 // already carries `*{transition:none!important}` under the same query, which
 // outranks it. The rule was dead on arrival and the ablation is what said so.
 // So the arm below is aimed at the global rule, which is what actually runs.
-const puppeteer = require('puppeteer');
-const path = require('path');
-const PAGE = 'file://' + path.join(__dirname, '..', '..', 'index.html');
+const {PAGE, demoPage} = require('./harness');
 
 (async () => {
-  const browser = await puppeteer.launch({headless: 'new'});
-  const page = await browser.newPage();
+  const {browser, page, errs} = await demoPage({width: 1440, height: 950});
   let fail = 0;
   const ok = (m, c, d) => { if (!c) { fail++; console.log("FAIL: " + m + (d ? "  " + d : "")); } else console.log("ok: " + m); };
-  const errs = [];
-  page.on('pageerror', e => errs.push(String(e).slice(0, 200)));
-  await page.evaluateOnNewDocument(() => {
-    localStorage.setItem("cc.cfg", JSON.stringify({mode: "demo"}));
-    localStorage.setItem("cc.intro", "1");
-  });
-  await page.setViewport({width: 1440, height: 950});
 
   const slug = await (async () => {
     await page.goto(PAGE + '#/', {waitUntil: 'networkidle2'});

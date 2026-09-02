@@ -28,22 +28,12 @@
 // Ablated on the paths demo mode DOES take: renaming .mapwrap fails the first
 // three assertions, and returning an empty <svg> from mapSvg fails the node and
 // label counts. Those are the two ways the frame can be there and the map not.
-const puppeteer = require('puppeteer');
-const path = require('path');
-const PAGE = 'file://' + path.join(__dirname, '..', '..', 'index.html');
+const {PAGE, demoPage} = require('./harness');
 
 (async () => {
-  const browser = await puppeteer.launch({headless: 'new'});
-  const page = await browser.newPage();
+  const {browser, page, errs} = await demoPage({width: 1400, height: 1100});
   let fail = 0;
   const ok = (m, c, d) => { if (!c) { fail++; console.log("FAIL: " + m + (d ? "  " + d : "")); } else console.log("ok: " + m); };
-  const errs = [];
-  page.on('pageerror', e => errs.push(String(e).slice(0, 200)));
-  await page.evaluateOnNewDocument(() => {
-    localStorage.setItem("cc.cfg", JSON.stringify({mode: "demo"}));
-    localStorage.setItem("cc.intro", "1");
-  });
-  await page.setViewport({width: 1400, height: 1100});
 
   // Find a court from the directory rather than hardcoding one: a slug written
   // into this file is the kind of thing that outlives the dataset it named.

@@ -39,22 +39,12 @@
 // removing the CSS face does NOT show up first as a face failure, because
 // mapSvg measures in the face it believes is set, so a face changed in only one
 // of the two places lands as distortion. Either way the check names the class.
-const puppeteer = require('puppeteer');
-const path = require('path');
-const PAGE = 'file://' + path.join(__dirname, '..', '..', 'index.html');
+const {PAGE, demoPage} = require('./harness');
 
 (async () => {
-  const browser = await puppeteer.launch({headless: 'new'});
-  const page = await browser.newPage();
+  const {browser, page, errs} = await demoPage({width: 1440, height: 950});
   let fail = 0;
   const ok = (m, c, d) => { if (!c) { fail++; console.log("FAIL: " + m + (d ? "  " + d : "")); } else console.log("ok: " + m); };
-  const errs = [];
-  page.on('pageerror', e => errs.push(String(e).slice(0, 200)));
-  await page.evaluateOnNewDocument(() => {
-    localStorage.setItem("cc.cfg", JSON.stringify({mode: "demo"}));
-    localStorage.setItem("cc.intro", "1");
-  });
-  await page.setViewport({width: 1440, height: 950});
 
   // The court comes from the directory, not from a slug written in this file —
   // a hardcoded one outlives the dataset that named it.
