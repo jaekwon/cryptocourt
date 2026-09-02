@@ -82,10 +82,14 @@ type claimState struct {
 	verdictAtTime  int64
 	escrowUntilAt  int64 // absolute: the reopen window's close, in unix seconds
 	closed         bool  // dead-claim close (unanswered past the timeout)
-	// dustBurns is what the deposit+fee ACTUALLY burned at a conclusive low —
-	// recorded because settleSlash must size its bounty top-up against real
-	// burns, not against params (a seeded claim burns nothing, and the params
-	// base would silently under-pay the flagger). See strips.gno / quality.gno.
+	// dustBurns IS DEAD STATE. It recorded what deposit+fee actually burned at a
+	// conclusive low, so settleSlash could size a bounty top-up against real
+	// burns rather than params — a seeded claim burns nothing, and the params
+	// base would have under-paid the flagger. settleSlash and the conclusive-low
+	// path both went with the quality lane, and this field now has exactly one
+	// non-comment line in the realm: the declaration below. Removing it changes
+	// claimState's stored shape, so it is filed with flagger and flagVoteEnd
+	// rather than dropped here.
 	dustBurns int64
 	// The board (board.gno). Four indexes, nil until the first comment: every
 	// read tests for nil rather than calling ensure*, because a query carries no
@@ -149,9 +153,6 @@ type claimState struct {
 	// on YES when it was answered" was recoverable from nowhere. Written once,
 	// beside frozenAt, never touched again.
 	yesStakeAtFreeze, noStakeAtFreeze int64
-	// Q1: the quality electorate's epoch — the last SEALED epoch at the
-	// answer, set before any flag can exist; every quality vote reads it.
-
 	// The answer (answer.gno). answerBond is the LIVE escrowed remainder
 	// (zeroed as disposed, exactly once); answerBond0 is the posted magnitude —
 	// the anchor the dispute-bond and comp formulas read across rounds.
@@ -240,40 +241,26 @@ type claimState struct {
 	// Dead persisted state, not a dead comment — removing them changes the stored
 	// shape and wants a reseed, so it is filed rather than done here.
 	voted          *bptree.BPTree // seq|addr -> true (one vote per tally)
-	// The slash escrow (Q5): reserved from the answer bond at a slash-low,
-	// disposed exactly once at the counter-flag window's close.
-	// slashLevied is the one-way EXACTLY-ONCE latch on ORIGINATION (v0.50). The
-	// flag lane is bounded by slotConsumed (one flag per claim); the dispute ride
-	// is not, so without this a reopen chain levies a fresh slashSizeFor out of the
-	// REMAINING bond every round — reachable inside a 3-week escrow (round 1 fails
-	// at 7d, the flag resolves at 14d, its window closes at 21d, a reopen lands at
-	// 21d < escrowUntil 28d). Never cleared.
-	// slashFlagger is the bounty beneficiary of the CURRENTLY reserved slash: the
-	// flagger whose flag levied it, or "" when a dispute RIDE levied it. settleSlash
-	// must NOT fall back to cs.flagger, which on a ride path is either the zero
-	// address — grc20votes.Mint calls mustBeValid and PANICS, so the entitlement is
-	// unpayable forever while reservedTail (monotone, never decremented) has already
-	// advanced, permanently shrinking the reservoir for every later junior draw — or
-	// a STALE flagger from an earlier inconclusive cycle whose bond already came back
-	// whole under T1, who would then mint a bounty for a slash the RIDE levied.
-	// qualityReasked is the one-way EXACTLY-ONCE latch on the DISPUTE RIDE's tally
-	// wipe — the dual of slashLevied, which bounds ORIGINATION. Once a conclusive
-	// tally has adjudicated quality, a ride resets the tally AT MOST ONCE more; every
-	// later round votes the same ACCUMULATING tally. CounterFlag is the field's OTHER
-	// writer: it does not READ this latch (its wipe is unconditional, because gating
-	// it let a stranger's round spend the answerer's guaranteed-fresh v0.31/Q5 ballot,
-	// the one thing the doctrine promises them) but it does SET it, which is what
-	// keeps the budget order-independent — otherwise the answerer could counter-flag,
-	// see the result, and then sock-dispute to spend the ride's still-unspent wipe.
-	// Post-adjudication total: 1 wipe if CounterFlag moves first, 2 if a ride does,
-	// and one party can hold both by sock-disputing (see PLAN §13 v0.52's correction).
-	// Without this latch the wipe was the re-roll:
-	// each reopen handed a sock a fresh coin flip at the price of a dispute bond,
-	// erasing the honest low weight that had already answered the question, so the
-	// slash (and, after it disposed, the whole tier and its draw) could be re-rolled
-	// ~3x inside a 3-week escrow. Keyed on slotConsumed rather than pendingSlash > 0
-	// because origination implies slotConsumed (both sites latch it first) but not
-	// conversely — the tier prize outlives the reserve. Never cleared.
+	// THE SLASH ESCROW (Q5) IS GONE, with the quality lane. What stood here was
+	// twenty-five lines on slashLevied, slashFlagger and qualityReasked -- three
+	// one-way exactly-once latches bounding, respectively, slash ORIGINATION, the
+	// bounty beneficiary, and the dispute ride's tally wipe. None of the three is
+	// declared any more, and slashSizeFor, settleSlash and CounterFlag, which the
+	// text reasoned through, have no non-comment line left in this realm either.
+	// Its closing worry -- that without the ride latch a sock could re-roll the
+	// slash and then the tier ~3x inside a 3-week escrow, at the price of a dispute
+	// bond each time -- describes an attack on machinery that no longer exists.
+	//
+	// ONE INVARIANT IN IT IS STILL LIVE AND IS KEPT. The old text explained why
+	// settleSlash must never fall back to cs.flagger: on a ride path that is either
+	// the zero address, so grc20votes.Mint's mustBeValid PANICS and the entitlement
+	// is unpayable forever, or a stale flagger from an earlier cycle. The part that
+	// outlives the slash path is the CONSEQUENCE -- reservedTail is monotone and
+	// never decremented (court.gno declares it; emission.gno advances it with
+	// mustAdd), so enqueueing a senior entitlement that can never be paid does not
+	// merely fail, it permanently shrinks the reservoir for every later junior
+	// draw. That hazard belongs to enqueueSenior and reservedTail, which are both
+	// live, and it is written here rather than deleted with the dead latches.
 	// Crystallize marker (Q6-Q8): after it, quality is immutable.
 	crystallized bool
 	// Carrot pull-claim anchors (set at the conclusive tally)
