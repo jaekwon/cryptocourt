@@ -65,6 +65,12 @@ PHRASES = {
     # chain page and the site over it end up introducing the same product with
     # two different sentences.
     "Let Truth be told.": "realm/r/kourtv2/render.gno",
+    # The leaderboard's caveat. TopHolders ranks coin HELD, and staked coin is in
+    # the court's custody rather than the holder's balance — so a committed
+    # staker can rank below somebody who never staked, and nothing in the number
+    # says why. The realm carries the sentence in TopHoldersNote so every client
+    # says the same thing; this is what notices when one of them is rewritten.
+    "Coin staked on a claim sits in the court's custody until the claim resolves": "realm/r/kourtv2/holders.gno",
 }
 
 # web symbol -> (the call the realm counts it with, the call the overlay does)

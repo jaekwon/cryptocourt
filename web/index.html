@@ -1192,6 +1192,11 @@ p.sub{font-size:13.5px; color:var(--ink-2); max-width:54ch; margin-top:6px}
    class selector and beats the user agent's [hidden]{display:none}, so the key
    would sit there explaining a line the map had not drawn. */
 .mlegend span[hidden]{display:none}
+/* THE READER'S OWN ROW on the holder leaderboard. A wash rather than a border:
+   the table already rules its rows, and a second line inside one cell reads as
+   a broken cell. --accent-wash is the same tint a selected map node uses. */
+tr.youare{background:var(--accent-wash)}
+tr.youare .mono{font-weight:600}
 /* THE MAP SETS TYPE THE WAY THE PAGE DOES. SVG text inherits font-family from
    body, so every label was --sans — including claim titles, which are --serif
    in the docket, on the claim page and in the rail. Same words, two faces, and
@@ -5676,7 +5681,7 @@ on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
           return `<p class="sub">${esc(cu.desc)}<span class="small muted"> · ${cu.source==="local"? CUR_LABEL : "demo copy — this court has none on chain"}</span></p>`; })()}
         <div class="tagrow">
           <span class="tfacts">${tierPill(s.tier)}<span class="tfact mono">/${esc(slug)}</span></span>
-          <span class="tacts"><a class="tlink" href="#/c/${esc(slug)}/map">map<span aria-hidden="true">→</span></a><a class="tlink" href="#/c/${esc(slug)}/curate">curate<span aria-hidden="true">→</span></a><a class="tlink" href="#/raw/${esc(slug)}/mod">moderation log<span aria-hidden="true">→</span></a>
+          <span class="tacts"><a class="tlink" href="#/c/${esc(slug)}/map">map<span aria-hidden="true">→</span></a><a class="tlink" href="#/c/${esc(slug)}/holders">holders<span aria-hidden="true">→</span></a><a class="tlink" href="#/c/${esc(slug)}/curate">curate<span aria-hidden="true">→</span></a><a class="tlink" href="#/raw/${esc(slug)}/mod">moderation log<span aria-hidden="true">→</span></a>
 <a class="tlink" href="#/raw/${esc(slug)}" title="What the realm itself serves for this court, unstyled">chain<span aria-hidden="true">→</span></a></span>
           ${s.tier===0? `<span class="tfact">unlisted — hidden from the directory by moderation; this page is reachable by direct link only.</span>`:""}</div>
        </div>
@@ -6749,6 +6754,44 @@ function curValidSet(slug, count){
    never styled from the prefix (user text could spoof it). No desc read
    exists (stored but unreadable — wishlisted). */
 const CHAIN_FOLDER_CAP = 100;
+/* THE HOLDER LEADERBOARD, read from the court's own ledger.
+   TopHolders returns "address:balance" rows separated by ";" — the same shape
+   StakedPage uses, parsed the same way. Balance is in the coin's smallest unit.
+   RANKED BY COIN HELD, WHICH IS NOT COIN COMMITTED, and the page has to say so:
+   staking moves coin into the court's custody, so it leaves the holder's balance
+   and a committed staker can sit below somebody who never staked. The sentence
+   is the realm's own TopHoldersNote, mirrored here and pinned by
+   check-web-constants — the chain page and the site over it must not describe
+   the same figure two different ways. */
+const HOLDERS_NOTE = "Ranked by coin held. Coin staked on a claim sits in the court's custody until the claim resolves, so it is not counted here.";
+function parseHolders(s){
+  if(!s) return [];
+  const out=[];
+  for(const rec of String(s).split(";")){
+    const i=rec.lastIndexOf(":");            // lastIndexOf: an address has no colon, but be exact
+    if(i<0) continue;
+    const who=rec.slice(0,i), raw=rec.slice(i+1), bal=Number(raw);
+    /* EMPTY IS NOT ZERO, and isFinite alone believes it is: Number("") is 0, so
+       a truncated row "g1aaa:" parsed as a holder of nothing — a person listed
+       on a leaderboard who holds none of the coin. The realm never emits a
+       zero (TopHolders skips them), so a zero here means the row is malformed
+       and the row is what should be dropped, not shown at nought. */
+    if(!who || raw==="" || !isFinite(bal) || bal<=0) continue;
+    out.push({who, bal});
+  }
+  return out;
+}
+async function chainHolders(slug, n){
+  const s2=gstr(slug);
+  // Count and page together: the count is the denominator a rank is out of, and
+  // asking for it after the page would put a second round trip in front of a
+  // table that is already rendered.
+  const [total, raw] = await Promise.all([
+    one(`HolderCount(${s2})`).catch(()=>null),
+    one(`TopHolders(${s2},${n|0})`).catch(()=>null),
+  ]);
+  return {total: (total==null? null : Number(total)), rows: parseHolders(raw)};
+}
 async function chainFolders(slug){
   const s2=gstr(slug);
   /* THE COUNT AND THE SHAPE TOGETHER. FolderTree does not need the count — it
@@ -8580,6 +8623,42 @@ on(/^\/c\/([a-z0-9-]+)\/curate$/, async (slug)=>{
   };
 });
 /* --- the map --- */
+/* THE LEADERBOARD. Who holds this court's coin, largest first.
+   A SHARE, NOT JUST A FIGURE. A balance on its own is unreadable — 19,533,968 of
+   what, out of what — so every row carries its percentage of supply, which is
+   the same quantity the Join panel calls voice share. That is what a holder came
+   to see after buying: not the number, the position.
+   YOUR OWN ROW IS MARKED. Without it the page is a list of strangers and a
+   reader has to compare a truncated address against their wallet by eye. */
+on(/^\/c\/([a-z0-9-]+)\/holders$/, async (slug)=>{
+  loading();
+  const s = await courtStats(slug).catch(()=>null);
+  if(!s){ notFound("No such court, or the chain could not be read."); return; }
+  const name = s.name || slug;
+  const h = await chainHolders(slug, 50).catch(()=>({total:null, rows:[]}));
+  const supply = Number(s.supply)||0;
+  const mine = (CFG.addr||"").toString();
+  const pct = b => supply>0? (100*b/supply) : 0;
+  const rows = h.rows.map((r,i)=>{
+    const you = r.who===mine;
+    return `<tr${you?' class="youare"':''}>`
+      + `<td class="tnum">${i+1}</td>`
+      + `<td class="mono">${esc(shortAddr(r.who))}${you?' <span class="pill">you</span>':''}</td>`
+      + `<td class="tnum">${cc(r.bal, slug)}</td>`
+      + `<td class="tnum">${pct(r.bal)>=0.1? pct(r.bal).toFixed(1) : "<0.1"}%</td></tr>`;
+  }).join("");
+  main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:slug,href:"#/c/"+slug},{label:"Holders"}])
+    + `<div class="lead-row"><div><h1 class="page-h">Holders <span class="seal">${esc(slug)}</span></h1>
+        <p class="sub">${safeInline(name)}</p></div></div>`
+    + `<p class="page-sub">${esc(HOLDERS_NOTE)}</p>`
+    + (h.rows.length
+        ? `<section><div class="sec-h">Largest first <span class="count">${
+             h.total!=null? `${fmtN(h.rows.length)} of ${fmtN(h.total)} holders` : `${fmtN(h.rows.length)} shown`}</span></div>`
+          + `<div class="scroll-x"><table class="data"><thead><tr><th>#</th><th>holder</th><th>held</th><th>share</th></tr></thead>`
+          + `<tbody>${rows}</tbody></table></div></section>`
+        : `<div class="empty"><div class="g">◌</div><p>Nobody holds this court's coin yet.</p>
+             <p class="small"><a href="#/c/${esc(slug)}">Get some</a>.</p></div>`);
+});
 on(/^\/c\/([a-z0-9-]+)\/map$/, async (slug)=>{
   loading();
   /* THREE READS, ONE WAIT. These were three awaits in a row and none of them

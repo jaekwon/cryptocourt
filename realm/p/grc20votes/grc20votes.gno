@@ -321,6 +321,30 @@ func (l *Ledger) WalkSupply(fn func(e uint32, v int64) bool) {
 	l.archive.WalkDesc(supplyKey, fn)
 }
 
+// WalkAccounts hands every account's address and balance to fn, ascending by
+// address, and stops early when fn returns true.
+//
+// NO NEW STATE. The accounts tree is the ledger's own index and has always held
+// exactly this; what was missing was a way to read it as a set rather than one
+// address at a time. A consumer wanting a holder ranking would otherwise have
+// had to maintain a second index alongside every mint, burn and transfer — a
+// duplicate that can only ever drift out of step with the first.
+//
+// ZERO BALANCES ARE HANDED OVER TOO, deliberately. An account can reach zero and
+// stay in the tree — Remove would drop the delegate and the vote history with
+// it, which is why the balance path never removes — so filtering here would
+// quietly hide accounts that still carry voting state. The caller knows which
+// question it is asking; this one answers "what does the ledger hold".
+func (l *Ledger) WalkAccounts(fn func(who address, bal int64) bool) {
+	l.accounts.Iterate("", "", func(k string, v any) bool {
+		a, ok := v.(*account)
+		if !ok {
+			return false
+		}
+		return fn(address(k), a.balance)
+	})
+}
+
 // Epoch is now. A proposal snapshots Epoch()-1 and stores it; nothing
 // re-derives it later.
 func (l *Ledger) Epoch() uint32 {
