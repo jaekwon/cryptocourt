@@ -66,6 +66,29 @@ async function courtPage(browser, opts) {
         text: log ? log.textContent : "",
       };
     });
+    /* THE LABEL SITS ON ITS PANEL. chat.js gives .chatpanel margin:1.5rem 0 0
+       plus a border-top, which is correct standalone — the space and the rule
+       are what separate it from the page content above. In the rail it is
+       double-counted: the "Chat" label is nav's last child and already carries
+       nav's 14px of bottom padding. Both applied, and the word sat 38px above
+       its own line. Measured here rather than asserted in CSS, because the
+       number is the sum of a margin, a padding and a border from two different
+       stylesheets — the only place it exists is on screen. */
+    {
+      const g = await page.evaluate(() => {
+        const h = document.getElementById("railchathead");
+        const c = document.getElementById("railchat");
+        if (!h || !c || h.hidden || c.hidden) return null;
+        return {gap: Math.round(c.getBoundingClientRect().top - h.getBoundingClientRect().bottom),
+                border: getComputedStyle(c).borderTopWidth};
+      });
+      ok("the rail's Chat label and its panel are both shown", g !== null);
+      if (g) {
+        ok(`...with no void between the label and its line (${g.gap}px)`, g.gap <= 16);
+        // Closing the gap must not close the rule: the line is the panel's edge.
+        ok("...and the line itself survives", parseFloat(g.border) >= 1);
+      }
+    }
     ok("a court page mounts the chat panel", r.mounted);
     ok("...in the rail, not in the court page body", r.inRail);
     ok("...with the demo sample rather than an empty box", r.lines === 4);

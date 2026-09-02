@@ -433,6 +433,18 @@ a.card:hover{border-color:var(--line-2)}
    bottom. */
 .railchat{flex:1 1 auto; min-height:0; display:flex; flex-direction:column;
   overflow:hidden; padding:0 12px 10px}
+/* THE PANEL'S OWN TOP MARGIN IS DOUBLE-COUNTED IN THE RAIL, so it is dropped
+   here. chat.js styles .chatpanel with margin:1.5rem 0 0 and a border-top,
+   which is right where the panel is embedded standalone under page content: the
+   rule and the space are what separate it from what came before.
+   In the rail it already has a separator — the "Chat" label, which is nav's last
+   child and carries nav's own 14px of bottom padding beneath it. Measured, the
+   two stacked: label bottom at 381, panel top at 419, a 38px void between the
+   word and the line. Now 14px, which is the label's own spacing.
+   Two classes beats chat.js's one, so this wins regardless of which stylesheet
+   is injected last — and the border-top stays, because the line is wanted; it
+   was only sitting too far from its heading. */
+.railchat.chatpanel{margin-top:0}
 .railchat[hidden]{display:none}
 .railchat > *{min-height:0}
 /* The court coin's name, everywhere it is written. One hardcoded purple rather
