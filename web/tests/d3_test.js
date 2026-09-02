@@ -225,7 +225,12 @@ ok("old per-route wiring gone", !src.includes('idm.onclick'));
 // without the class-restart plays nothing on a repeat route, and neither shows up
 // as a failure anywhere else. The reduced-motion opt-out is separate because the
 // global rule above it kills transitions, not animations.
-ok("render calls viewEnter at its paint point", /paintedSeq=seq; viewEnter\(\)/.test(src));
+// Same line as the paint, not the same characters: other things legitimately
+// happen at the paint point too (the rail chat is mounted there). What matters
+// is that viewEnter fires WHEN the page paints, which is what makes a repeat
+// route animate.
+ok("render calls viewEnter at its paint point",
+   /paintedSeq=seq;[^\n]*viewEnter\(\)/.test(src));
 ok("viewEnter restarts the animation", /classList\.remove\("vin"\)[\s\S]{0,80}offsetWidth/.test(src));
 ok("the enter animation exists", /#main\.vin\{animation:vin /.test(src));
 ok("reduced motion opts out of it", /prefers-reduced-motion:reduce\)\{#main\.vin\{animation:none\}/.test(src));
