@@ -10795,15 +10795,28 @@ function chartChips(d, slug){
        units under one label. */
     (() => {
       const cy = ccFigure(d.convYes), cn = ccFigure(d.convNo);
-      return cy.micro === cn.micro
+      const t = cy.micro === cn.micro
         ? `conviction ${cy.fig} / ${cc(d.convNo, slug)}`
         : `conviction ${cc(d.convYes, slug)} / ${cc(d.convNo, slug)}`;
+      return {t, title: "Conviction is stake multiplied by the time it was held"
+        + " — YES / NO. It is the weight the accuracy reward is shared out by,"
+        + " so it rewards backing the right answer early. The stake bar above"
+        + " shows the coin itself; this is that coin times how long it stayed."};
     })(),
     d.round? `${d.round} failed round${d.round>1?"s":""}`:null,
     d.disputeBondNext? `next dispute bond ${cc(d.disputeBondNext,slug)}`:null,
     d.phase==="settled"? `verdict ${sideName(d.verdict!=null?d.verdict:d.answer)}${d.route?" · "+esc(d.route):""}`:null,
     d.crystallized? "rewards open":null,
-  ].filter(Boolean).map(t=>`<span>${t}</span>`).join("");
+  /* A CHIP MAY CARRY A TOOLTIP, and one of them has to. "conviction 3,718 /
+     3,225" sits beside a stake bar reading "17.00 / 15.00" — two pairs, same
+     shape, different quantities, and the word that distinguishes them is jargon
+     defined three screens away under How it works. Asked directly: what is
+     conviction, and what is the 17:15.
+     A title rather than a sentence in the row: the answer costs no width, and
+     this line has already been trimmed twice for being busy. */
+  ].filter(Boolean).map(c => typeof c === "string"
+      ? `<span>${c}</span>`
+      : `<span title="${esc(c.title)}">${c.t}</span>`).join("");
   return `<div class="chartchips">${chips}</div>`;
 }
 
