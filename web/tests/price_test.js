@@ -76,15 +76,24 @@ const tile = slice('statTile("coin price"', '// The emitted split is a footnote'
 ok("the tile names this as the NEXT unit's price", /the next unit's price/.test(tile));
 ok("...and points at the average as what you actually pay",
    /average over what you buy/.test(tile));
-ok("the zero-supply branch says what sets the first price",
-   /the first buy sets the price/.test(tile));
+/* THE DASH IS THE WHOLE MESSAGE. A paragraph explaining the curve went here
+   first and was cut as too verbose — "just - is fine". So the assertion is that
+   the zero case carries NO sub-line at all: statTile drops an empty one, and an
+   em dash under "coin price" already says there is no price yet. Written as an
+   empty template rather than a sentence, so a future edit that starts
+   explaining again fails here. */
+ok("the zero-supply branch says nothing beyond the dash",
+   /s\.minted===0\s*\n?\s*\?\s*``/.test(tile));
 ok("...and does not print a unit suffix beside an em dash",
    /s\.minted===0\? priceText\(s\.price, s\.minted\)/.test(tile));
-/* "1 KOURT:X = 1,000,000 units" stated a conversion without ever saying what it
-   was for, which is the other half of the report — "what does 1 million units
-   even mean". The copy has to give the reason, not just the ratio. */
-ok("the units line explains why the quote is per unit",
-   /Quoted per unit because the curve moves per unit/.test(tile));
+/* THE CONVERSION STAYS, THE LECTURE GOES. A clause explaining why the quote is
+   per unit was added and then cut: "too verbose" was the standing feedback on
+   the sibling line, and it applies here. What survives is the ratio itself,
+   which is the part that answers "what does 1 million units even mean" — and
+   the symbol beside it is now a gold bar and a name rather than one long run of
+   text, which was the other half of that report. */
+ok("the units conversion is still stated", /= 1,000,000 units/.test(tile));
+ok("...without a clause explaining the curve", !/because the curve moves/.test(tile));
 
 console.log(fail ? `\n${fail} FAILURES` : "\nALL PASS");
 process.exit(fail ? 1 : 0);

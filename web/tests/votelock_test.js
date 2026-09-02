@@ -99,13 +99,19 @@ ok("a zero would-commit is omitted, not printed as 0", voteLockFigures("orem", 0
 // pinning "12.00" pinned the formatter rather than the disclosure.
 // Tags stripped: the symbol is wrapped for colour, the wording is unchanged.
 const bare = h => String(h).replace(/<[^>]*>/g, "");
+// CASE-INSENSITIVE ON THE MARK ONLY. The symbol's canonical spelling is the
+// realm's — court.gno renders KOURT:SYMBOL — and that is still what ccSym and
+// ccText return. What changed is the DISPLAY: the mark is a gold bar reading
+// "Kourt" beside the court's name, so tag-stripped output reads "Kourt:OREM".
+// The colon and the court name are still pinned exactly; only the mark's case
+// is allowed to be a presentation choice.
 ok("a would-commit is quoted in the court's own unit",
-  /this vote would commit [\d,.]+ KOURT:OREM/.test(bare(voteLockFigures("orem", 12_000_000, null, null))));
+  /this vote would commit [\d,.]+ kourt:OREM/i.test(bare(voteLockFigures("orem", 12_000_000, null, null))));
 ok("an existing commitment is named separately",
-  /already committed by voting: 5\.00 KOURT:OREM/.test(bare(voteLockFigures("orem", null, 5_000_000, null))));
+  /already committed by voting: 5\.00 kourt:OREM/i.test(bare(voteLockFigures("orem", null, 5_000_000, null))));
 // Zero FREE is meaningful and must show: "nothing is free" is the disclosure.
 ok("zero free-to-bond is shown rather than omitted",
-  /free to bond or deposit right now: 0\.00 KOURT:OREM/.test(bare(voteLockFigures("orem", null, null, 0))));
+  /free to bond or deposit right now: 0\.00 kourt:OREM/i.test(bare(voteLockFigures("orem", null, null, 0))));
 ok("all three figures can appear together",
   (f => /would commit/.test(f) && /already committed/.test(f) && /free to bond/.test(f))
     (voteLockFigures("orem", 1_000_000, 2_000_000, 3_000_000)));

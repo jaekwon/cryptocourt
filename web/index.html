@@ -466,7 +466,25 @@ a.card:hover{border-color:var(--line-2)}
    which is what this is: the symbol runs inline in sentences, at body size. The
    wordmark can take --gilt because 22px at 600 is large text, where the bar is
    3.0. Same gold family, two weights, chosen by where each one sits. */
-.ccsym{color:var(--mark); font-weight:500}
+.ccsym{color:var(--mark); font-weight:500; white-space:nowrap;
+  display:inline-flex; align-items:baseline; gap:4px}
+/* THE BAR. Small caps-height text in a gold hairline box, rounded just enough to
+   read as a bar rather than a table cell. Smaller than the name it sits beside,
+   because the mark is the constant and the court is the information — the eye
+   should land on COVID, not on Kourt.
+   BASELINE-ALIGNED, not centred: the bar and the name sit in running text, and
+   centring a bordered box against a text baseline lifts it off the line.
+   nowrap on the wrapper above is the other half of the report — the symbol used
+   to break between KOURT: and the slug in narrow cells. It cannot now. */
+.ccsym .ccbar{font-size:.72em; line-height:1.15; letter-spacing:.02em;
+  padding:1px 4px 2px; border:1px solid var(--mark); border-radius:3px;
+  font-variant-numeric:normal}
+.ccsym .ccname{font-size:1em; letter-spacing:.01em}
+/* Visually hidden, not display:none — the joining colon is meant to be absent
+   from the screen and present in the text. clip-path over `display:none`
+   because a screen reader skips the latter, and this IS the symbol. */
+.ccsym .ccsep{position:absolute; width:1px; height:1px; overflow:hidden;
+  clip-path:inset(50%); white-space:nowrap}
 /* A figure's own history, directly under it. Muted and small on purpose: the
    number is the statement and the shape is the context, never the other way. */
 .tspark{width:100%; height:44px; display:block; margin:6px 0 2px; overflow:visible}
@@ -3317,7 +3335,28 @@ function ccSym(slug){ return slug? "KOURT:"+String(slug).toUpperCase() : "court 
    cc() EMITS MARKUP, so its output must not be esc()'d and must not be sliced.
    Nine call sites did one or the other; they use ccText, which is the same
    figure without the span. */
-function ccSymHtml(slug){ return `<span class="ccsym">${esc(ccSym(slug))}</span>`; }
+/* THE MARK IS A GOLD BAR AND THE COURT'S NAME STANDS BESIDE IT.
+   It was one run of text, "KOURT:MY-COURT", which is long, reads as a single
+   word, and wrapped mid-symbol in narrow cells. Split in two: "Kourt" in a
+   bordered, slightly rounded bar — a literal gold bar — and the court's own
+   name outside it, unbordered.
+   The colon goes with it. It was doing the joining that adjacency now does, and
+   "Kourt: COVID" beside a bar is a punctuation mark with no job.
+   PLAIN TEXT IS UNCHANGED. ccSym still returns "KOURT:SLUG" for aria-labels and
+   anything that cannot take markup — a screen reader wants the symbol, not a
+   description of two boxes. */
+function ccSymHtml(slug){
+  const nm = slug? String(slug).toUpperCase() : "";
+  return nm
+    /* THE COLON IS STILL IN THE TEXT, just not on the screen. The bar and the
+       name are a PRESENTATION of a symbol whose canonical spelling is the
+       realm's — court.gno renders KOURT:SYMBOL and modrender_test pins it — so
+       the character that joins them has to survive copy-paste and any reader
+       that strips tags. Without it "0.00 Kourt COVID" copies as
+       "0.00 KourtCOVID", because the gap between bar and name is CSS. */
+    ? `<span class="ccsym"><span class="ccbar">Kourt</span><span class="ccsep">:</span><span class="ccname">${esc(nm)}</span></span>`
+    : `<span class="ccsym">${esc(ccSym(slug))}</span>`;
+}
 function ccFigure(n){ const u=n||0, v=u/1e6;
   if(u!==0 && Math.abs(v)<0.01) return {fig:fmtN(u), micro:true};
   return {fig:(v>=1000? fmtN(v): v.toFixed(v<10?2:1)), micro:false}; }
@@ -8269,7 +8308,7 @@ function courtStatsHtml(slug, s){
                   : `${priceText(s.price, s.minted)}<small> µGNOT/unit</small>`,
       s.minted===0
         ? ``   // the dash says it: no price yet. statTile omits an empty sub entirely.
-        : `the next unit's price — you pay the average over what you buy. One-way: the GNOT is burned. Quoted per unit because the curve moves per unit; 1 ${ccSymHtml(slug)} is 1,000,000 of them.`),
+        : `the next unit's price — you pay the average over what you buy. One-way: the GNOT is burned. 1 ${ccSymHtml(slug)} = 1,000,000 units.`),
     // The emitted split is a footnote on supply, and only once any exists.
     statTile("coin supply", cc(s.supply,slug),
       s.emitted>0? `${cc(s.emitted,slug)} of it earned as rewards` : ""),

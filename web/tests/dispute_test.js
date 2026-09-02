@@ -199,10 +199,16 @@ ok("clock: a known height with no clock to project it prints the height",
 // reader who wants the mechanism can find both — and the ballot no longer
 // spends a row on arithmetic nobody is being asked to do.
 ok("quorum is off the ballot", !html.includes("<span>required quorum</span>"));
+// CASE-INSENSITIVE ON THE MARK ONLY. The symbol's canonical spelling is the
+// realm's — court.gno renders KOURT:SYMBOL — and that is still what ccSym and
+// ccText return. What changed is the DISPLAY: the mark is a gold bar reading
+// "Kourt" beside the court's name, so tag-stripped output reads "Kourt:OREM".
+// The colon and the court name are still pinned exactly; only the mark's case
+// is allowed to be a presentation choice.
 ok("...and in the modal, rule first then figure",
    html.includes("If too little weight is cast, the round decides nothing at all")
    // Tags stripped: the symbol is wrapped for colour, the wording is unchanged.
-   && html.replace(/<[^>]*>/g, "").includes("5,925 KOURT:OREM"));
+   && /5,925 kourt:OREM/i.test(html.replace(/<[^>]*>/g, "")));
 ok("no bare jargon label left", !html.includes("turnout bar"));
 ok("threshold is off the ballot", !html.includes("<span>threshold</span>"));
 ok("...and stated in the modal in plain words",
