@@ -660,28 +660,29 @@ func Finalize(cur realm, courtSlug string, claimID uint64) {
 	// no later stake op will ride a trim past this point.
 	trimClaimHistory(c, cs, uint32(cs.frozenAt/epochBlocks)+1)
 	if cs.answerBond > 0 {
-		// The answer stood (an overturned bond was burned at its round). But if
-		// the claim is still slash-eligible — no DECIDED round ran, so a
-		// conclusive-low flag can still slashGrade (quality.gno gates it on
-		// decidedRounds==0), and no slash is yet reserved — retain a slash-sized
-		// reserve exactly as SettleUndisputed does (M3-HIGH-1). votingBlocks
-		// exceeds the dispute/escrow windows, so the flag typically resolves AFTER
-		// this Finalize; returning the whole bond here would let that later slash
-		// clamp to zero (zero deterrent). The reserve disposes exactly once later —
-		// burned by the slash, or returned at crystallize if none lands. A slash
-		// already pending (a flag that resolved first) is separate: return the rest.
-		// slotConsumed is a one-way latch and OpenFlag panics on it, so a consumed
-		// slot means no future flag and therefore no future slash — retaining then
-		// would withhold the answerer's coin until crystallize for nothing.
-		// v0.47 LOCKSTEP with slashGrade: a decided round no longer confers
-		// immunity, so it must no longer suppress the reserve either — otherwise
-		// the whole bond returns here and the later slash clamps to zero, which is
-		// exactly the M3-HIGH-1 shape, re-created on the path a mill now targets.
-		// Dropping the clause also makes this gate character-identical to
-		// SettleUndisputed's (session.gno): the two terminal paths finally share
-		// ONE predicate, which is the v0.44 symmetry goal. v0.43's proof that an
-		// overturn cannot retain now rests on one lock instead of two — the
-		// enclosing `answerBond > 0` (decidedRounds++ was the second).
+		// The answer stood — an overturned bond was burned at its round, so
+		// reaching here with a bond means it was never forfeited. It returns
+		// WHOLE; why whole rather than partly retained is settleAnswerBond's
+		// story (answerbond.gno), not repeated here.
+		//
+		// ONE PREDICATE, SHARED, and this part is live: the gate is
+		// character-identical to SettleUndisputed's, which is the v0.44 symmetry
+		// goal and the reason settleAnswerBond exists at all rather than the same
+		// two lines appearing on both terminal paths. v0.43's proof that an
+		// overturn cannot retain rests on the enclosing `answerBond > 0` alone.
+		//
+		// WHAT USED TO BE HERE, kept as a record because a bare deletion invites
+		// its return: twenty-four lines sizing a slash-sized reserve to hold past
+		// Finalize (M3-HIGH-1, v0.47), on the reasoning that votingBlocks exceeds
+		// the dispute and escrow windows so a conclusive-low flag would resolve
+		// after this point and find a bond already returned. It reasoned through
+		// quality.gno's gate, slotConsumed, OpenFlag and a pending slash — the
+		// lane those belong to is gone, and none of those symbols has a
+		// non-comment line left in this realm. It also claimed to "retain a
+		// slash-sized reserve exactly as SettleUndisputed does", which stopped
+		// being true when that path stopped retaining; its twin note was corrected
+		// in 76b2941. decidedRounds, which the old text also named, IS still live
+		// — it is the gate that went, not the counter.
 		settleAnswerBond(c, cs)
 	}
 	// The record moves once, from the final verdict (P13) — and "upheld"
