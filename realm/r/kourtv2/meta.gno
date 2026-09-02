@@ -577,6 +577,7 @@ func ClaimMetaFranchise(cur realm) int64 {
 		return 0 // the curve is at its cap: clamp silently, keep the entitlement
 	}
 	mc.minted += delta // ONE monotone position, shared with meta's own Buy
+	recordPrice(mc)    // a franchise mint moves the curve too
 	mc.coin.Mint(who, delta)
 	if used >= owed {
 		franchise.Remove(k)

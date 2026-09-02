@@ -16,9 +16,27 @@ import (
 	"strings"
 )
 
-// burnSeriesKey names the burn history in the court's shared archive. Not a
-// cs: key — those are per-claim and this is the whole court.
-const burnSeriesKey = "burn"
+// Names for the two court-wide histories in the court's shared archive. Not
+// cs: keys — those are per-claim and these are the whole court.
+const (
+	burnSeriesKey  = "burn"
+	priceSeriesKey = "price"
+)
+
+// recordPrice checkpoints the coin price. Called from the two places the curve
+// position moves — Buy and the meta franchise mint — after it moves.
+//
+// THE PRICE, NOT THE POSITION. Price is position/d in whole units, so it only
+// ticks when the position crosses a multiple of d. Recording the price is
+// therefore strictly cheaper than recording the position: a court can take many
+// buys and store no row, because change-only means no change is no write.
+//
+// Must not panic: Buy is the only GNOT on-ramp, and an index that degrades
+// beats buying that bricks.
+func recordPrice(c *Court) {
+	setIfChanged(ensureCSArch(c), &c.priceH, priceSeriesKey,
+		uint32(heightNow()/epochBlocks)+1, c.crv.Price(c.minted))
+}
 
 // recordBurn checkpoints the court's burn total. Called from reindexBurn, after
 // the total moves, and nowhere else.
@@ -96,5 +114,22 @@ func SupplySeries(courtSlug string) string {
 func BurnSeries(courtSlug string) string {
 	c := mustCourt(courtSlug)
 	pts, more := collectSeriesKeyed(c.csArch, &c.burnH, burnSeriesKey)
+	return formatSeries(epochBlocks, uint32(heightNow()/epochBlocks)+1, pts, more)
+}
+
+// PriceSeries is the coin price over time, in ugnot per unit, in the same
+// grammar as the other two. It never falls: the curve is one way and the
+// position is monotone.
+//
+// Rows are sparser than buys. Price is the position divided by the curve's
+// width, so a run of small buys that does not cross a boundary leaves no row —
+// the price genuinely did not change.
+//
+// A young court has NO rows, because its price is still zero and zero is where
+// the series already sits. Read the stretch before the first row as zero, the
+// same forward-fill the other two series ask for, run backwards.
+func PriceSeries(courtSlug string) string {
+	c := mustCourt(courtSlug)
+	pts, more := collectSeriesKeyed(c.csArch, &c.priceH, priceSeriesKey)
 	return formatSeries(epochBlocks, uint32(heightNow()/epochBlocks)+1, pts, more)
 }

@@ -155,6 +155,72 @@ func TestBurnSeriesIsEmptyBeforeAnyBuy(cur realm, t *testing.T) {
 	}
 }
 
+// The price history must agree with the live price, and must move only when the
+// price actually ticked — the curve divides, so buys that do not cross a
+// boundary leave no row.
+func TestPriceSeriesFollowsTheCurve(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("ps-alice")
+	// Big enough to move the price off zero: price is minted/curveDenom, and
+	// curveDenom is 1e9, so a small buy legitimately leaves it at 0 and stores
+	// no row. 5,000 GNOT mints about 3.2e9 units, which is a price of 3.
+	fundAndBuy(cur, "ps1", alice, 5_000_000_000)
+	live := CoinPrice("ps1")
+	if live <= 0 {
+		t.Fatalf("fixture did not move the price off zero: %d", live)
+	}
+
+	_, _, _, rows := splitSeries(t, PriceSeries("ps1"))
+	if len(rows) == 0 {
+		t.Fatal("a court that has been bought into has no price history")
+	}
+	if _, v, _ := strings.Cut(rows[len(rows)-1], ":"); v != strconv.FormatInt(live, 10) {
+		t.Errorf("newest row is %q, but CoinPrice is %d", v, live)
+	}
+
+	// Monotone: the curve is one way, so the price never falls.
+	prev := int64(-1)
+	for _, r := range rows {
+		_, v, _ := strings.Cut(r, ":")
+		n, err := strconv.ParseInt(v, 10, 64)
+		if err != nil {
+			t.Fatalf("row %q has an unparseable value", r)
+		}
+		if n < prev {
+			t.Errorf("price fell: %d after %d", n, prev)
+		}
+		prev = n
+	}
+
+	// A later, larger buy in a new epoch must add a higher row.
+	testing.SkipHeights(720 * 2)
+	fundAndBuy(cur, "ps1", alice, 20_000_000_000)
+	if after := CoinPrice("ps1"); after <= live {
+		t.Fatalf("a large second buy did not raise the price: %d -> %d", live, after)
+	}
+	_, _, _, rows = splitSeries(t, PriceSeries("ps1"))
+	if len(rows) < 2 {
+		t.Fatalf("two price ticks produced %d rows: %v", len(rows), rows)
+	}
+
+	// Quiet epochs add nothing.
+	before := len(rows)
+	testing.SkipHeights(720 * 4)
+	_, _, _, rows2 := splitSeries(t, PriceSeries("ps1"))
+	if len(rows2) != before {
+		t.Errorf("quiet epochs added rows: %d -> %d", before, len(rows2))
+	}
+}
+
+// A court nobody has bought into has no price history, and that is not an error.
+func TestPriceSeriesIsEmptyBeforeAnyBuy(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("ps2-alice")
+	testCourt(cur, "ps2", alice, 1_000_000)
+	_, _, _, rows := splitSeries(t, PriceSeries("ps2"))
+	if len(rows) != 0 {
+		t.Errorf("a court with no buys has price rows: %v", rows)
+	}
+}
+
 // A court that does not exist is refused, like every sibling read.
 func TestSupplySeriesRefusesAnUnknownCourt(cur realm, t *testing.T) {
 	defer func() {

@@ -54,6 +54,7 @@ func Buy(cur realm, slug string) int64 {
 		panic("kourtv2: payment too small to mint a coin")
 	}
 	c.minted += delta // monotonic curve position
+	recordPrice(c)     // the position moved, so the price may have ticked
 	c.coin.Mint(buyer, delta)
 	// Track cumulative GNOT burned into this court and keep the directory's
 	// burn-ordered index in step. Burned GNOT is the one un-sybil-able signal a

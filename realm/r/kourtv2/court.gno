@@ -696,6 +696,10 @@ type Court struct {
 	// value this court has absorbed over time. Render-layer state, like the
 	// per-claim pool series: no money path reads it.
 	burnH checkpoint.Series
+	// priceH checkpoints the coin price. Kept rather than derived because
+	// price is a function of `minted`, which is not `supply` — supply also
+	// moves on emissions and burns. Render-layer state, like burnH.
+	priceH checkpoint.Series
 
 	// absBudget: when > 0 this court's weekly emission is a FIXED ABSOLUTE
 	// amount (stepped down like every other budget) instead of S_live × bps.
