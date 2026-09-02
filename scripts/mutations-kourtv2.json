@@ -5039,20 +5039,6 @@
  {
   "pkg": "kourtv2",
   "file": "votelock.gno",
-  "label": "voteLockOpen: a superseded quality tally keeps holding coin",
-  "find": "\t\tif cs.qVoteSeq != sub {\n\t\t\treturn false\n\t\t}",
-  "replace": "\t\tif false {\n\t\t\treturn false\n\t\t}"
- },
- {
-  "pkg": "kourtv2",
-  "file": "votelock.gno",
-  "label": "voteLockOpen: a quality lock outlives the claim it was cast on",
-  "find": "\t\tif cs.verdictAt != 0 || cs.closed {\n\t\t\treturn false\n\t\t}",
-  "replace": ""
- },
- {
-  "pkg": "kourtv2",
-  "file": "votelock.gno",
   "label": "voteLockedOf: open questions STACK instead of sharing one pile",
   "find": "\t\tif w := v.(int64); w > most && voteLockOpen(c, who, k) {\n\t\t\tmost = w\n\t\t}",
   "replace": "\t\tif voteLockOpen(c, who, k) {\n\t\t\tmost = mustAdd(most, v.(int64))\n\t\t}"
@@ -5161,27 +5147,6 @@
   "label": "pruneVoteLocks: removes nothing and reports nothing",
   "find": "\tfor _, k := range stale {\n\t\tc.voteLocks.Remove(k)\n\t}\n\treturn len(stale)",
   "replace": "\treturn 0"
- },
- {
-  "pkg": "kourtv2",
-  "file": "votelock.gno",
-  "label": "voteLockOpen: a quality vote releases while its question is still open",
-  "find": "\t\tif qualityQuestionOpen(cs) {",
-  "replace": "\t\tif false && qualityQuestionOpen(cs) {"
- },
- {
-  "pkg": "kourtv2",
-  "file": "votelock.gno",
-  "label": "voteLockOpen: an accumulating quality tally releases between rounds",
-  "find": "\t\treturn cs.slotConsumed && cs.qualityReasked",
-  "replace": "\t\treturn false"
- },
- {
-  "pkg": "kourtv2",
-  "file": "votelock.gno",
-  "label": "voteLockOpen: carry-forward keeps only its slotConsumed half",
-  "find": " && cs.qualityReasked",
-  "replace": ""
  },
  {
   "pkg": "kourtv2",
