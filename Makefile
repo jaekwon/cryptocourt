@@ -289,6 +289,15 @@ chat:
 # failing package no longer hides the eleven behind it. What still hard-fails is
 # only what the rest cannot run without: the repo lock (do not stage into a tree
 # somebody else is rewriting), the shadow GNOROOT, and the staging copies.
+#
+# THE NINE AUDITS ARE SPELLED OUT, NOT LOOPED. They were briefly a `for chk in
+# citations docnumbers ...` loop building `scripts/check-$$chk.py`, which is
+# tidier and wrong here: it makes `grep -rn check-storage.py Makefile` find
+# nothing. This repo's guards are static readers of literal names --
+# check-guards-armed.py exists because guards landed unwired -- and an audit
+# asking "what runs check-storage?" is exactly the question that must not come
+# back empty. Nine explicit lines cost nine lines and stay greppable; the `||
+# rc=1` on each is the part that matters and is kept either way.
 realm-test:
 	@if ! command -v gno >/dev/null 2>&1; then \
 		if [ -n "$$REQUIRE_GNO" ]; then echo "gno not installed"; exit 1; fi; \
@@ -296,10 +305,15 @@ realm-test:
 	fi; \
 	python3 scripts/repolock.py check realm-test || exit 1; \
 	rc=0; \
-	for chk in citations docnumbers storage nontransferable epoch-coherence \
-	           membership-clears read-purity spend-paths abort-assertions; do \
-		python3 scripts/check-$$chk.py || rc=1; \
-	done; \
+	python3 scripts/check-citations.py         || rc=1; \
+	python3 scripts/check-docnumbers.py        || rc=1; \
+	python3 scripts/check-storage.py           || rc=1; \
+	python3 scripts/check-nontransferable.py   || rc=1; \
+	python3 scripts/check-epoch-coherence.py   || rc=1; \
+	python3 scripts/check-membership-clears.py || rc=1; \
+	python3 scripts/check-read-purity.py       || rc=1; \
+	python3 scripts/check-spend-paths.py       || rc=1; \
+	python3 scripts/check-abort-assertions.py  || rc=1; \
 	root=$$(python3 scripts/gnoroot.py build --label realm-test --pid $$$$) || exit 1; \
 	trap 'python3 scripts/gnoroot.py remove --path "$$root"' EXIT; \
 	export GNOROOT="$$root"; \
