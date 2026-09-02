@@ -3277,7 +3277,14 @@ function fmtN(n){ return (n==null?0:Math.round(n)).toLocaleString("en-US"); }
    inventing a number. */
 function priceText(price, minted){
   if(price>0) return fmtN(price);
-  if(minted===0) return "0";   // nothing minted yet: the marginal price really is zero
+  /* NOTHING MINTED YET IS NOT A PRICE OF ZERO. The curve is Price(s)=s/d, so at
+     supply 0 the MARGINAL price of the next unit really is 0 — but printing "0"
+     under a heading that says "coin price" tells a reader the coin is free, and
+     it is not: buying n units costs the integral under the curve, n²/2d, which
+     is only zero for n=0. Reported as "it says the price is 0 for a new kourt,
+     can't be true". An em dash says there is no price yet, which is the true
+     thing; the sub-line beside it says what sets one. */
+  if(minted===0) return "—";
   if(minted!=null && minted>0){
     const p = minted/1e9;
     return p>=0.001? p.toFixed(4).replace(/0+$/,"").replace(/\.$/,"") : "<0.001";
@@ -5369,6 +5376,18 @@ function errorView(e){
     Check the node is reachable and is running a Kourt court, or switch the Source back to Demo in the left rail.</span></div></div>`;
 }
 function notFound(msg){ return `<div class="empty"><div class="g">◌</div><p class="page-h" style="font-size:15px;font-weight:600;margin:0 0 6px">${esc(msg)}</p><p><a class="btn" href="#/">Back to the directory</a></p></div>`; }
+/* A COURT'S CRUMB CARRIES BOTH ITS NAMES. The long title alone does not say
+   which coin the page is denominated in, and the slug alone does not say what
+   the court is about — so the trail read "Directory / COVID-19 Origins &
+   Response Court" on one page and "Directory / covid" on another, for the same
+   court. Short name first, because that is the part a reader is matching
+   against the coin and the URL.
+   Degrades to whichever half it has: no name yields the slug alone. */
+const courtCrumb = (slug, name) => {
+  const short = slug ? String(slug).toUpperCase() : "";
+  const long = name && String(name) !== String(slug) ? String(name) : "";
+  return short && long ? short + " : " + long : (short || long);
+};
 const crumbs = parts => {
   // The HREF is escaped as well as the label, and that is not symmetry for its
   // own sake. It used to be raw, which was safe only because of two invariants
@@ -5562,7 +5581,7 @@ on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
         one(`CourtDesc(${gstr(slug)})`).then(unesc).catch(()=>""),
       ])
     : [null, ""];
-  main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:s.name}])
+  main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:courtCrumb(slug, s.name)}])
     + `<div class="lead-row leadface">${courtFaceHtml(slug, s.name)}<div>
         <h1 class="page-h">${safeInline(s.name)} <span class="seal">${esc(slug)}</span></h1>
         ${(()=>{
@@ -8231,8 +8250,21 @@ function courtStatsHtml(slug, s){
   // number are read together rather than the reader matching a line in a
   // combined chart back to the tile it belongs to.
   const tiles = [
-    statTile("coin price", `${priceText(s.price, s.minted)}<small> µGNOT/unit</small>`,
-      `one-way — the GNOT is burned. 1 ${ccSymHtml(slug)} = 1,000,000 units`),
+    /* TWO PRICES EXIST AND THEY ARE DIFFERENT NUMBERS. This tile shows the
+       curve's position — what the NEXT unit costs. The Join panel shows the
+       average over the units a buyer is actually taking, which on a rising
+       curve is always higher. Saying only "coin price" invited the reader to
+       treat one as the other, so the sub-line now names which this is.
+       AND WHY UNITS AT ALL: the curve moves per unit, and a coin is a million
+       of them, so a per-coin quote would round every young court to the same
+       figure. "1 KOURT:X = 1,000,000 units" stated the conversion without ever
+       saying what it was for. */
+    statTile("coin price",
+      s.minted===0? priceText(s.price, s.minted)
+                  : `${priceText(s.price, s.minted)}<small> µGNOT/unit</small>`,
+      s.minted===0
+        ? `no coin minted yet — the first buy sets the price. The curve starts at zero and rises with supply, so what you pay is the average over what you take, quoted in Join this court.`
+        : `the next unit's price — you pay the average over what you buy. One-way: the GNOT is burned. Quoted per unit because the curve moves per unit; 1 ${ccSymHtml(slug)} is 1,000,000 of them.`),
     // The emitted split is a footnote on supply, and only once any exists.
     statTile("coin supply", cc(s.supply,slug),
       s.emitted>0? `${cc(s.emitted,slug)} of it earned as rewards` : ""),
@@ -8343,7 +8375,7 @@ on(/^\/c\/([a-z0-9-]+)\/curate$/, async (slug)=>{
         ? `source: ${CUR_LABEL} · ${cur.folders.length} folder${cur.folders.length===1?"":"s"} · ${cur.relations.length} relation${cur.relations.length===1?"":"s"} · desc ${cur.desc? "set":"empty"}`
         : `source: sample (demo) · ${cur.folders.length} folders · ${cur.relations.length} relations`)
     : "source: none — export the empty skeleton to begin";
-  main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:cs.name,href:"#/c/"+slug},{label:"Curate"}])
+  main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:courtCrumb(slug, cs.name),href:"#/c/"+slug},{label:"Curate"}])
     + `<h1 class="page-h">Curate — ${safeInline(cs.name)} <span class="seal">${esc(slug)}</span></h1>
        <div class="tagrow"><span class="tfacts"><span class="pill void">local tool — writes nothing to any chain</span></span>
          <span class="tacts"><a class="tlink" href="#/c/${esc(slug)}">docket<span aria-hidden="true">→</span></a><a class="tlink" href="#/c/${esc(slug)}/map">map<span aria-hidden="true">→</span></a><a class="tlink" href="#/raw/${esc(slug)}/mod">moderation log<span aria-hidden="true">→</span></a></span></div>
@@ -8485,7 +8517,7 @@ on(/^\/c\/([a-z0-9-]+)\/map$/, async (slug)=>{
   const chainF = chainF0;
   const cur = foldersFor(slug, chainF);
   if(!parsed.length){
-    main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:cs.name,href:"#/c/"+slug},{label:"Map"}])
+    main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:courtCrumb(slug, cs.name),href:"#/c/"+slug},{label:"Map"}])
       + `<h1 class="page-h">${safeInline(cs.name)} — map <span class="seal">${esc(slug)}</span></h1>
          <div class="empty"><div class="g">◌</div><p>No claims yet — the map draws the docket, and this docket is empty.</p></div>`;
     return;
@@ -9065,13 +9097,13 @@ on(/^\/c\/([a-z0-9-]+)\/f\/([0-9.]+)$/, async (slug,fpath)=>{
     }
   }
   if(!curF || !curF.folders.length){
-    main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:slug,href:"#/c/"+slug}])
+    main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:courtCrumb(slug),href:"#/c/"+slug}])
       + notFound(isLive()? "This court's moderators have filed no folders, and no local curation is present — the docket is the whole record." : "No folders in this court.");
     return;
   }
   const hit = resolveFolderPath(curF, fpath);
   if(!hit){
-    main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:slug,href:"#/c/"+slug}])
+    main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:courtCrumb(slug),href:"#/c/"+slug}])
       + notFound(curF.source==="chain"? "No such folder on this court." : "No such folder.");
     return;
   }
@@ -9124,7 +9156,7 @@ on(/^\/c\/([a-z0-9-]+)\/f\/([0-9.]+)$/, async (slug,fpath)=>{
   const fwin = resolved.filter(m=>!m.drop && !m.pending);
   omitted += resolved.filter(m=>m.drop).length;
   const fpager = pagerHtml(`/c/${slug}/f/${fpath}`, fpage, fwin.length, (f.claims||[]).length, "claims", "curated order");
-  main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:slug,href:"#/c/"+slug},...trail])
+  main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:courtCrumb(slug),href:"#/c/"+slug},...trail])
     /* THE JUMP RIDES THE HEADING. It was a paragraph of its own underneath, which
        put a whole line between the folder's name and the one action that name
        affords — and on a folder with a picture and a description it ended up
@@ -9209,7 +9241,7 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
     ccount = n;
     const idn = parseInt(id,10);
     if(n===null){ main.innerHTML = crumbs([{label:"Directory",href:"#/"}]) + notFound("No such court on this node (or the node did not answer)."); return; }
-    if(idn<1 || idn>n){ main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:slug,href:"#/c/"+slug}]) + notFound("No claim by that id."); return; }
+    if(idn<1 || idn>n){ main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:courtCrumb(slug),href:"#/c/"+slug}]) + notFound("No claim by that id."); return; }
   }
   /* THE COURT, THE CLAIM, THE HEIGHT AND THE AUTHOR, ALL AT ONCE. These were four
      sequential awaits. Only one dependency is real — claimDetail's own later
@@ -9240,7 +9272,7 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
       }catch(_){ assocLookup = ()=>null; }
     }
   }
-  if(!d){ main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:slug,href:"#/c/"+slug}]) + notFound("No claim by that id."); return; }
+  if(!d){ main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:courtCrumb(slug),href:"#/c/"+slug}]) + notFound("No claim by that id."); return; }
   // opened-by: a file names who opened it — one read, claim page only
   const author = isLive()? authorRead
                          : ((DEMO.claims[slug+"/"+id]||{}).author||null);
@@ -9316,7 +9348,7 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
   // live maps draw only the newest window — do not offer a link that dead-ends
   const mapLink = (mHidden!==true && (!isLive() || (ccount!=null && id>ccount-50)))? `<a class="tlink" href="#/c/${esc(slug)}/map?focus=${id}">on the map<span aria-hidden="true">→</span></a>` : "";
   const polish = polishLink(slug, id, d, mPurged, mRedacted, polishBlocks);
-  main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:cs?cs.name:slug,href:"#/c/"+slug},{label:"Claim #"+id}])
+  main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:courtCrumb(slug, cs&&cs.name),href:"#/c/"+slug},{label:"Claim #"+id}])
     + `<h1 class="page-h">${safeInline(d.title)}</h1>`
     + claimBody(d)
     /* THE EVIDENCE, ON THE PAGE THE CLAIM ACTUALLY LIVES ON. claimDetail has
@@ -9719,7 +9751,7 @@ const BOARD_PAGE = 25;
 async function boardView(slug, idS, ranked){
   const id = parseInt(idS, 10);
   const title = await claimTitleOf(slug, id);
-  const crumb = crumbs([{label:"Directory",href:"#/"},{label:slug,href:"#/c/"+slug},
+  const crumb = crumbs([{label:"Directory",href:"#/"},{label:courtCrumb(slug),href:"#/c/"+slug},
     {label:"Claim #"+id, href:"#/c/"+slug+"/"+id},{label:"Comments"}]);
   if(title == null){ main.innerHTML = crumb + notFound("No claim by that id."); return; }
 
@@ -11433,7 +11465,7 @@ on(/^\/raw\/([a-z0-9-]+)(?:\/(\d+|mod))?$/, async (slug,id)=>{
   loading();
   const path = id!=null? slug+"/"+id : slug;
   const md = await rawRender(path);
-  main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:slug,href:"#/c/"+slug},{label:id==="mod"? "Moderation log":"Chain render"}])
+  main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:courtCrumb(slug),href:"#/c/"+slug},{label:id==="mod"? "Moderation log":"Chain render"}])
     + `<h1 class="page-h">As the chain serves it</h1>
        <p class="page-sub">Plain markdown for <code>${esc(path)}</code>, with nothing added and nothing left out. The ordinary pages show these same facts in a friendlier layout — this view is here so you can check them against the source.</p>
        <div class="rawblock">${esc(md||"(empty)")}</div>`;
