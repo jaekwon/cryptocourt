@@ -1,19 +1,20 @@
-// Court livelihood chart: the grammar it parses, and the shape it draws.
+// The court page's three histories: price, supply, and GNOT burned.
 //
-// WHY THIS EXISTS. The chart reads a wire format the realm defines (SupplySeries
-// and BurnSeries in realm/r/kourtv2/supplyseries.gno) and turns it into two
-// paths. Both halves drift silently: a grammar change makes the parser return
-// null and the chart just disappears, and a maths slip draws a line that is
-// wrong rather than absent. Neither shows up as an error in a browser.
+// WHY THIS EXISTS. All three read a wire format the realm defines (SupplySeries,
+// BurnSeries and PriceSeries in realm/r/kourtv2/supplyseries.gno) and turn it
+// into a path. Both halves drift silently: a grammar change makes the parser
+// return null and the graph just disappears, and a maths slip draws a line that
+// is wrong rather than absent. Neither shows up as an error in a browser.
 //
-// THE STEP IS THE POINT. Both series hold flat between events and jump at one,
-// so the path must be hold-then-jump. Joining the change points directly would
-// draw a gradual slope that never happened — the chart would be claiming a
-// history the chain does not have.
+// THE STEP IS THE POINT. Every series holds flat between events and jumps at
+// one, so the path must be hold-then-jump. Joining the change points directly
+// would draw a gradual slope that never happened — the graph would be claiming
+// a history the chain does not have.
 //
-// TWO SERIES, NOT ONE, and separate scales. Supply rises on emissions nobody
-// paid for; burn moves only when somebody spent. Read together they tell a
-// dormant court apart from a growing one, which neither does alone.
+// NOTHING RATHER THAN A FLAT LINE. A court with no history draws no spark at
+// all, because an empty box reads as "no growth" when the truth is "nothing has
+// happened yet". Burn says so in words instead, since that is the figure a
+// reader is actually asking about.
 const fs = require('fs');
 const src = fs.readFileSync(require('path').join(__dirname, '..', 'index.html'), 'utf8');
 
@@ -27,71 +28,74 @@ function grab(name){
   }
   throw new Error("unbalanced " + name);
 }
-global.ccSym = () => "KOURT:X";
 global.fmtN = n => String(n);
+global.ugnot = n => fmtN(n) + " µGNOT";
 eval(grab("parseSeries"));
 eval(grab("lastEpoch"));
 eval(grab("stepPath"));
-eval(grab("courtLifeChartSvg"));
+eval(grab("seriesScales"));
+eval(grab("tileSpark"));
+eval(grab("burnSectionHtml"));
 
 let fail = 0;
 function ok(what, cond){ if(cond){ console.log("ok: " + what); } else { fail++; console.log("FAIL: " + what); } }
 
-// ---- the grammar ----
-const burn = parseSeries("720,40,0;10:1000,20:3000");
-ok("header fields are read", burn.width === 720 && burn.now === 40 && burn.more === false);
-ok("change points are read in order", burn.pts.length === 2 && burn.pts[0].e === 10 && burn.pts[1].v === 3000);
+// ---- the grammar, shared by all three reads ----
+const two = parseSeries("720,40,0;10:1000,20:3000");
+ok("header fields are read", two.width === 720 && two.now === 40 && two.more === false);
+ok("change points are read in order", two.pts.length === 2 && two.pts[0].e === 10 && two.pts[1].v === 3000);
 ok("more=1 is read", parseSeries("720,5,1;1:2").more === true);
-// A malformed answer must produce no chart rather than a wrong one.
 ok("garbage is refused", parseSeries("nonsense") === null);
 ok("an empty answer is refused", parseSeries("") === null);
 ok("a court with no history parses to no points", parseSeries("720,5,0;").pts.length === 0);
 
 // ---- the step ----
-const X = e => e.toFixed(1), Y = v => v.toFixed(1);
-const d = stepPath(burn, X, Y).split(" ");
+const d = stepPath(two, e => e.toFixed(1), v => v.toFixed(1)).split(" ");
 const xy = t => t.replace(/^[ML]/, "").split(",").map(Number);
 ok("one hold and one jump per later point, plus the tail", d.length === 4);
 ok("the jump is vertical — this is what makes it a step", xy(d[1])[0] === xy(d[2])[0]);
 ok("the hold is horizontal", xy(d[0])[1] === xy(d[1])[1]);
 ok("the tail runs flat to now", xy(d[3])[1] === xy(d[2])[1]);
 
-// ---- the drawing ----
-ok("no series at all draws nothing", courtLifeChartSvg(null, null, "x", 4) === "");
-ok("empty series draw nothing", courtLifeChartSvg(parseSeries("720,5,0;"), null, "x", 4) === "");
+// ---- the tile sparks (price and supply) ----
+ok("no series draws no spark", tileSpark(null) === "");
+ok("an empty series draws no spark", tileSpark(parseSeries("720,5,0;")) === "");
+const spark = tileSpark(two);
+ok("a spark is an svg path", spark.includes("<svg") && spark.includes("<path"));
+ok("a spark is decorative, not announced twice", spark.includes('aria-hidden="true"'));
+ok("a spark has no axis or label at tile size", !spark.includes("axis") && !spark.includes("<text"));
+ok("a spark renders no NaN", !spark.includes("NaN"));
+ok("a single point still draws", !tileSpark(parseSeries("720,9,0;3:500")).includes("NaN"));
+// A rise must go up: screen y grows downward, so a bigger value is a smaller y.
+const sp = spark.match(/ d="([^"]+)"/)[1].split(" ");
+ok("a rising series draws upward", xy(sp[2])[1] < xy(sp[0])[1]);
 
-const supply = parseSeries("720,40,0;12:500,30:900");
-const svg = courtLifeChartSvg(burn, supply, "x", 4);
-ok("burn is a filled area, closed to the baseline", /class="burn"[^>]*d="[^"]*Z"/.test(svg));
-ok("supply is a line, not closed", /class="supply"[^>]*d="[^"]*"/.test(svg) && !/class="supply"[^>]*d="[^"]*Z"/.test(svg));
-ok("both series are drawn", svg.includes('class="burn"') && svg.includes('class="supply"'));
-ok("there is a baseline axis", svg.includes('class="axis"'));
-ok("nothing renders NaN", !svg.includes("NaN"));
-// Separate scales: each series must reach its own top, or the smaller one
-// flattens into the axis and says nothing.
-const burnD = svg.match(/class="burn" d="([^"]+)"/)[1];
-const supD  = svg.match(/class="supply" d="([^"]+)"/)[1];
-const ys = p => p.split(" ").map(t=>xy(t)[1]).filter(Number.isFinite);
-ok("each series is scaled to its own maximum", Math.min(...ys(burnD)) === Math.min(...ys(supD)));
+// ---- the burn section ----
+const none = burnSectionHtml(parseSeries("720,5,0;"), "x", 0);
+ok("a court with no burn says so in words", none.includes("nothing yet") && !none.includes("<path"));
+ok("the empty state still carries the heading", none.includes("GNOT burned since inception"));
 
-// The legend has to name what is what, and carry the current print.
-ok("the legend names burn", svg.includes("GNOT burned in"));
-ok("the legend names supply with the court's symbol", svg.includes("KOURT:X supply"));
-ok("the current print is shown", svg.includes("print now 4"));
-// A missing price prints nothing rather than a wrong number.
-ok("an unknown print is omitted", !courtLifeChartSvg(burn, supply, "x", null).includes("print now"));
-
-// One series alone must still draw — a court can burn without minting yet.
-ok("burn alone draws", courtLifeChartSvg(burn, null, "x", 4).includes('class="burn"'));
-ok("supply alone draws", courtLifeChartSvg(null, supply, "x", 4).includes('class="supply"'));
-// A single change point has no span; it must not divide by zero.
-ok("a single point draws", !courtLifeChartSvg(parseSeries("720,9,0;3:500"), null, "x", 4).includes("NaN"));
+const burn = burnSectionHtml(two, "x", 3000);
+ok("burn draws a filled area closed to the baseline", /class="burn" d="[^"]*Z"/.test(burn));
+ok("burn has a baseline axis", burn.includes('class="axis"'));
+ok("burn is announced to a screen reader", burn.includes('role="img"') && burn.includes("aria-label"));
+ok("the running total is shown", burn.includes("3000 µGNOT"));
+ok("burn renders no NaN", !burn.includes("NaN"));
+ok("a capped history says older points were dropped",
+  burnSectionHtml(parseSeries("720,40,1;10:5"), "x", 5).includes("older points dropped"));
+ok("an uncapped history does not", !burn.includes("older points dropped"));
+// A missing total prints nothing rather than a wrong number.
+ok("an unknown total is omitted", !burnSectionHtml(two, "x", null).includes("µGNOT"));
 
 // ---- the wiring ----
+ok("the court stats read PriceSeries", src.includes('one(`PriceSeries(${s})`).catch(()=>null)'));
 ok("the court stats read SupplySeries", src.includes('one(`SupplySeries(${s})`).catch(()=>null)'));
 ok("the court stats read BurnSeries", src.includes('one(`BurnSeries(${s})`).catch(()=>null)'));
-ok("the chart is drawn from both reads",
-  src.includes("courtLifeChartSvg(parseSeries(s.burnHist), parseSeries(s.supplyHist), slug, s.price)"));
+ok("the court stats read the burn total", src.includes('one(`CourtBurnedGNOT(${s})`).catch(()=>null)'));
+ok("the price tile carries its own spark", src.includes("tileSpark(parseSeries(s.priceHist))"));
+ok("the supply tile carries its own spark", src.includes("tileSpark(parseSeries(s.supplyHist))"));
+ok("the burn section is drawn from the burn read",
+  src.includes("burnSectionHtml(parseSeries(s.burnHist), slug, s.burned)"));
 
 console.log(fail ? "\n" + fail + " FAILURES" : "\nALL PASS");
 process.exit(fail ? 1 : 0);
