@@ -1,10 +1,13 @@
-// The court page's three histories: price, supply, and GNOT burned.
+// The court page's one graph: GNOT burned into this court over time.
 //
-// WHY THIS EXISTS. All three read a wire format the realm defines (SupplySeries,
-// BurnSeries and PriceSeries in realm/r/kourtv2/supplyseries.gno) and turn it
-// into a path. Both halves drift silently: a grammar change makes the parser
-// return null and the graph just disappears, and a maths slip draws a line that
-// is wrong rather than absent. Neither shows up as an error in a browser.
+// WHY THIS EXISTS. It reads a wire format the realm defines (BurnSeries in
+// realm/r/kourtv2/supplyseries.gno) and turns it into a path. Both halves drift
+// silently: a grammar change makes the parser return null and the graph just
+// disappears, and a maths slip draws a line that is wrong rather than absent.
+// Neither shows up as an error in a browser.
+//
+// ONE GRAPH, NOT THREE. Price and supply are figures; burn is the one worth a
+// shape, because it is the one nobody can fake.
 //
 // THE STEP IS THE POINT. Every series holds flat between events and jumps at
 // one, so the path must be hold-then-jump. Joining the change points directly
@@ -91,13 +94,14 @@ ok("no data still occupies the row", blank.includes("tspark-none"));
 ok("a null series behaves the same", tileSpark(null).includes("tspark-none"));
 
 // ---- the wiring ----
-ok("the court stats read PriceSeries", src.includes('one(`PriceSeries(${s})`).catch(()=>null)'));
-ok("the court stats read SupplySeries", src.includes('one(`SupplySeries(${s})`).catch(()=>null)'));
 ok("the court stats read BurnSeries", src.includes('one(`BurnSeries(${s})`).catch(()=>null)'));
+// Only the graph that is drawn is fetched. Reading a series nothing renders is
+// a query per court page paid for nothing.
+ok("no series is fetched that nothing draws",
+   !src.includes("PriceSeries(${s})") && !src.includes("SupplySeries(${s})"));
 ok("the court stats read the burn total", src.includes('one(`CourtBurnedGNOT(${s})`).catch(()=>null)'));
-ok("the price tile carries its own spark", src.includes("tileSpark(parseSeries(s.priceHist))"));
-ok("the supply tile carries its own spark", src.includes("tileSpark(parseSeries(s.supplyHist))"));
-ok("burn is a tile carrying its own spark", src.includes("tileSpark(parseSeries(s.burnHist))"));
+ok("burn is the tile carrying the graph", src.includes("tileSpark(parseSeries(s.burnHist))"));
+ok("price and supply are figures only", (src.match(/tileSpark\(parseSeries/g)||[]).length === 1);
 // GNOT, not µGNOT: three cells share the left column and the raw figure does
 // not fit. Reuses the helper that already handles the sub-0.01 dust case.
 ok("burn is shown in GNOT, not raw micro-units", src.includes("gnotAmt(s.burned)"));

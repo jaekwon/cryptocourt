@@ -2536,18 +2536,16 @@ async function courtStats(slug){
   const s=gstr(slug);
   // Name comes from the court page's own "# heading" — courtNameFor is
   // purge-gated and tombstones removed courts; the raw CourtName qeval is not.
-  const [md,tier,price,supply,emitted,reservoir,seniorOwed,claims,minted,supplyHist,burnHist,priceHist,burned] = await Promise.all([
+  const [md,tier,price,supply,emitted,reservoir,seniorOwed,claims,minted,burnHist,burned] = await Promise.all([
     qrender(slug), one(`CourtTier(${s})`), one(`CoinPrice(${s})`), one(`CoinSupply(${s})`),
     one(`EmittedTotal(${s})`), one(`Reservoir(${s})`), one(`SeniorOwed(${s})`), one(`ClaimCount(${s})`),
     one(`CurvePosition(${s})`).catch(()=>null),
-    // The chart is decoration next to the figures: a court that cannot answer
-    // these still renders every number, it just draws no line.
-    one(`SupplySeries(${s})`).catch(()=>null),
+    // The graph is decoration next to the figures: a court that cannot answer
+    // this still renders every number, it just draws no line.
     one(`BurnSeries(${s})`).catch(()=>null),
-    one(`PriceSeries(${s})`).catch(()=>null),
     one(`CourtBurnedGNOT(${s})`).catch(()=>null)]);
   const nm = (md.match(/^#\s+(.+)$/m)||[])[1];
-  return {name: nm? unesc(nm.trim()) : slug, tier,price,supply,emitted,reservoir,seniorOwed,claims,minted,supplyHist,burnHist,priceHist,burned};
+  return {name: nm? unesc(nm.trim()) : slug, tier,price,supply,emitted,reservoir,seniorOwed,claims,minted,burnHist,burned};
 }
 /* The chain's per-court policing lists, derived from the sample exactly as
    strips.gno defines membership: the review strip enters at PostAnswer and
@@ -7895,17 +7893,17 @@ function courtStatsHtml(slug, s){
   // combined chart back to the tile it belongs to.
   const tiles = [
     statTile("coin price", `${priceText(s.price, s.minted)}<small> µGNOT/unit</small>`,
-      `one-way — the GNOT is burned. 1 ${ccSym(slug)} = 1,000,000 units`,
-      tileSpark(parseSeries(s.priceHist))),
+      `one-way — the GNOT is burned. 1 ${ccSym(slug)} = 1,000,000 units`),
     // The emitted split is a footnote on supply, and only once any exists.
     statTile("coin supply", cc(s.supply,slug),
-      s.emitted>0? `${cc(s.emitted,slug)} of it earned as rewards` : "",
-      tileSpark(parseSeries(s.supplyHist))),
-    // THE THIRD COLUMN, and the one that cannot be faked: supply grows on
-    // emissions nobody paid for and price is the curve position restated, but
-    // burn moves only when somebody actually spent, and the curve never gives
-    // it back. Always shown, even at zero — "nobody has bought in" is the most
-    // useful thing this row can tell you about a young court.
+      s.emitted>0? `${cc(s.emitted,slug)} of it earned as rewards` : ""),
+    // THE THIRD COLUMN, and the only graph on the strip. Price and supply are
+    // figures; this is the one worth a shape, because it is the one that cannot
+    // be faked — supply grows on emissions nobody paid for and price is the
+    // curve position restated, but burn moves only when somebody actually
+    // spent, and the curve never gives it back. Always shown, even at zero:
+    // "nobody has bought in" is the most useful thing this row can say about a
+    // young court.
     // gnotAmt, not ugnot: three cells share the left column, so "13053599975
     // µGNOT" does not fit and reads worse than "13,054 GNOT" anyway. That
     // helper already handles the dust case where GNOT rounds to a bare 0.
