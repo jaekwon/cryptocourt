@@ -122,9 +122,20 @@ ok("the coin's mark is the darker gold token, not a literal",
    comment beside the fix that records what the value used to be, which is the
    one place the hex is genuinely worth keeping. */
 ok("...and no purple literal survives in the stylesheet", !/#a855f7/i.test(bare_css));
-ok("the wordmark and its seat are the leaf gold",
-   /\.brand h1\{[^}]*color:var\(--gilt\)/.test(bare_css)
-   && /\.brand \.seat\{[^}]*color:var\(--gilt\)/.test(bare_css));
+ok("the wordmark is the leaf gold", /\.brand h1\{[^}]*color:var\(--gilt\)/.test(bare_css));
+/* THE THRONE IS TWO-TONE, and `color` drives only its body. It is a
+   currentColor silhouette with a gold group laid over it — caps on the finials,
+   the seat edge, the plinth. Painting .seat gold made body and highlight the
+   same colour and the throne went flat, which is what "its original white and
+   gold combo" was asking to undo.
+   Both halves are asserted: the body follows --ink so the gold has something to
+   read against in either theme, AND the gold overlay still exists. Either alone
+   passes on a flattened icon — a gold group over a gold body is still a gold
+   group. */
+ok("the throne's body follows the ink, not the gold",
+   /\.brand \.seat\{[^}]*color:var\(--ink\)/.test(bare_css)
+   && !/\.brand \.seat\{[^}]*color:var\(--gilt\)/.test(bare_css));
+ok("...and it still carries its gold overlay", /<g fill="var\(--gilt\)">/.test(src));
 ok("...and the symbol does not borrow the wordmark's brighter gold",
    !/\.ccsym\{color:var\(--gilt\)/.test(bare_css));
 
