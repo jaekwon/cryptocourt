@@ -3449,6 +3449,24 @@ function ccFigure(n){ const u=n||0, v=u/1e6;
   return {fig:(v>=1000? fmtN(v): v.toFixed(v<10?2:1)), micro:false}; }
 function cc(n, slug){ const {fig,micro}=ccFigure(n);
   return fig+" "+(micro?"µ":"")+ccSymHtml(slug); }
+/* ONE UNIT FOR A ROW OF FIGURES. Four amounts each carrying "µKourt:COVID"
+   spent four times the width to say the same thing once, and the repetition
+   crowded out the numbers, which are the point. The unit goes after all of
+   them and governs all of them — the same move the stake meter already makes
+   with "0 / 201.7 KOURT:COVID".
+   MIXED SCALES FALL BACK. cc() drops to a µ prefix for small amounts, so a
+   shared trailing unit is only true when every figure is on the same side of
+   that line. When they are not, each carries its own and the row is busy — but
+   busy and right beats tidy and wrong. */
+function ccRow(parts, slug){
+  const fs = parts.map(([label, n]) => [label, ccFigure(n)]);
+  const allMicro  = fs.every(([, f]) => f.micro);
+  const noneMicro = fs.every(([, f]) => !f.micro);
+  if(!allMicro && !noneMicro)
+    return parts.map(([l, n]) => `${l} ${cc(n, slug)}`).join(" · ");
+  return fs.map(([l, f]) => `${l} ${f.fig}`).join(" · ")
+       + " " + (allMicro ? "µ" : "") + ccSymHtml(slug);
+}
 /* The same figure as plain text, for what genuinely cannot take markup: an
    aria-label, a button face that btn() escapes, or a caller that slices the
    symbol back off.
@@ -3469,10 +3487,22 @@ function gnotAmt(micro){ const u=micro||0, v=u/1e6;
   if(u!==0 && Math.abs(v)<0.01) return fmtN(u)+" µGNOT";
   return (v>=1000? fmtN(v): v.toFixed(v<10?2:1))+" GNOT"; }
 function shortAddr(a){ a=String(a||""); return esc(a.length>12? a.slice(0,7)+"…"+a.slice(-4): a); }
+/* TWO UNITS WHILE THE FIRST ONE IS SMALL. This kept only the largest unit, so
+   1 day 23 hours read "about 1 day" — it threw away almost a whole day at
+   exactly the scale where a reader is deciding whether they have time to act.
+   The complaint was precise: if it says about a day, say how many hours.
+   The second unit is dropped past a week, where it IS noise: nobody reading
+   "9 days" is choosing between that and 9 days 4 hours. And "about" stays,
+   because this is a projection from a block time, not a countdown. */
 function wall(nowH, targetH){
   const secs=(targetH-nowH)*BLOCK_SECS, past=secs<0, s=Math.abs(secs);
   const d=Math.floor(s/86400), h=Math.floor(s%86400/3600), m=Math.floor(s%3600/60);
-  let t = d? d+(d===1?" day":" days") : h? h+(h===1?" hour":" hours") : Math.max(1,m)+" min";
+  const u=(n,w)=>n+" "+w+(n===1?"":"s");
+  let t;
+  if(d>=7)     t = u(d,"day");
+  else if(d)   t = u(d,"day")  + (h? " "+u(h,"hour") : "");
+  else if(h)   t = u(h,"hour") + (m? " "+m+" min"    : "");
+  else         t = Math.max(1,m)+" min";
   return past? t+" ago" : "about "+t;
 }
 /* Moderation provenance on the claim page: one banner, precedence mirroring
@@ -5113,6 +5143,39 @@ async function sourceNote(){
   if(!isLive()) return "sample data — these courts exist on no chain";
   return null;
 }
+/* THE CHAT FOLLOWS THE COURT, NOT ONE PAGE OF IT. The court route used to mount
+   it, so a claim, a board, the map and curate all dropped it — the same court,
+   the same room, and it vanished on the way in. Driven from the hash here, so a
+   route added later inherits it without knowing this exists.
+   REMOUNTED ONLY WHEN THE COURT CHANGES. Rebuilding it on every navigation
+   would throw away the transcript and whatever somebody was halfway through
+   typing, which is the bug chatPanelHtml was written to avoid inside a poll. */
+let RAILCHATSLUG = null;
+function railChatFor(hash){
+  const rc = document.getElementById("railchat");
+  const rh = document.getElementById("railchathead");
+  if(!rc) return;
+  const m = /^\/(?:c|raw)\/([a-z0-9-]+)/.exec(hash || "");
+  const slug = m ? m[1] : null;
+  if(slug === RAILCHATSLUG) return;
+  if(CHATSTOP){ CHATSTOP(); CHATSTOP = null; }
+  RAILCHATSLUG = slug;
+  if(!slug || typeof mountChat !== "function"){
+    rc.hidden = true; rc.innerHTML = "";
+    if(rh) rh.hidden = true;
+    return;
+  }
+  rc.hidden = false;
+  if(rh) rh.hidden = false;
+  // heading:false — the rail's own "Chat" title is directly above, and the
+  // court is the page being read, so the panel printing "Chat covid" under a
+  // heading saying "Chat" said it twice.
+  // chatBase() resolved here rather than stored in CFG: persisting the origin
+  // would freeze the page to whichever host it was first opened from.
+  CHATSTOP = mountChat(rc,
+    {cfg: {...CFG, chat: chatBase()}, chain: CFG.chainid || "dev", court: slug,
+     heading: false});
+}
 async function render(){
   const seq = ++renderSeq;
   const raw = location.hash.replace(/^#/,"") || "/";
@@ -5127,7 +5190,7 @@ async function render(){
   for(const [re,fn] of routes){
     const m = hash.match(re);
     if(m){ try{ await fn(...m.slice(1)); }catch(e){ errorView(e); }
-      if(seq===renderSeq){ paintedSeq=seq; viewEnter(); return; }
+      if(seq===renderSeq){ paintedSeq=seq; railChatFor(hash); viewEnter(); return; }
       // Stale. If the newer render is still in flight it will paint over us —
       // do nothing. Only if it already painted (we clobbered it) redraw once.
       if(paintedSeq>seq) return render();
@@ -5135,6 +5198,7 @@ async function render(){
   }
   main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:"No such page"}]) + notFound("No such page.");
   paintedSeq = seq;
+  railChatFor(hash);
   viewEnter();
 }
 function setNav(hash){
@@ -5299,14 +5363,6 @@ function rpcProgress(){
   if(n) n.textContent = `${done} of ${started} answers`;
 }
 function loading(){
-  // THE CHAT IS PER-COURT, so leaving a court must close it rather than leave
-  // the last court's room open in the rail on a page it has nothing to do with.
-  // Every route calls loading() first, and the court route re-opens it after.
-  if(CHATSTOP){ CHATSTOP(); CHATSTOP = null; }
-  const rc0 = document.getElementById("railchat");
-  if(rc0){ rc0.hidden = true; rc0.innerHTML = ""; }
-  const rh0 = document.getElementById("railchathead");
-  if(rh0) rh0.hidden = true;
   RPCQ.started = 0; RPCQ.done = 0;
   main.innerHTML = `<div class="empty"><div class="g">⚖︎</div><p>Reading the chain…</p>
     <div class="rpcwrap"><div id="rpcbar" class="rpcbar"></div></div>
@@ -5764,23 +5820,6 @@ on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
   // "Open a claim" link above still works — it just cannot carry evidence.
   if(typeof mediaMount === "function" && CFG.mode !== "demo"){
     mountCompose(document.getElementById("courtcompose"), slug);
-  }
-  if(typeof mountChat === "function"){
-    if(CHATSTOP) CHATSTOP();
-    // Resolved here rather than written into CFG: persisting the origin would
-    // freeze the page to whichever host it was first opened from.
-    const rc = document.getElementById("railchat");
-    const rh = document.getElementById("railchathead");
-    if(rc){
-      rc.hidden = false;
-      if(rh) rh.hidden = false;
-      // heading:false — the rail's own "Chat" section title is directly above
-      // this, and the court is the page being looked at, so the panel printing
-      // "Chat covid" under a heading that says "Chat" said it twice.
-      CHATSTOP = mountChat(rc,
-        {cfg: {...CFG, chat: chatBase()}, chain: CFG.chainid || "dev", court: slug,
-         heading: false});
-    }
   }
   QCTX = {kind:"claim titles", demo:!isLive(), loaded:allRows.length,
     total:totalClaims, slug, totalClaims, orderTail:" · newest first"};
@@ -11203,7 +11242,7 @@ function resolutionSection(slug,id,d,nowH,tl){
 function rewardsSection(slug,id,d){
   if(!d.crystallized || !d.draw) return "";
   return `<section><div class="sec-h">Rewards</div>
-    <div class="panel"><div class="qrows"><div class="line"><span class="l">Reward pools</span><span class="r">accuracy ${cc(d.draw.w,slug)} · author ${cc(d.draw.a,slug)} · answerer ${cc(d.draw.ans,slug)} · voters ${cc(d.draw.carrot,slug)}</span></div></div></div></section>`;
+    <div class="panel"><div class="qrows"><div class="line"><span class="l">Reward pools</span><span class="r">${ccRow([["accuracy",d.draw.w],["author",d.draw.a],["answerer",d.draw.ans],["voters",d.draw.carrot]], slug)}</span></div></div></div></section>`;
 }
 
 /* The four things every participant must understand — nothing hidden here changes
