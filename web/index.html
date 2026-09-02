@@ -8321,7 +8321,7 @@ function courtStatsHtml(slug, s){
     // the reader divide two figures to learn the one thing the line is for:
     // how much of this supply nobody paid for.
     statTile("coin supply", cc(s.supply,slug),
-      s.emitted>0? `${pctText(s.emitted, s.supply)} of it earned as rewards` : ""),
+      s.emitted>0? `${pctText(s.emitted, s.supply)} earned as rewards` : ""),
     // THE THIRD COLUMN, and the only graph on the strip. Price and supply are
     // figures; this is the one worth a shape, because it is the one that cannot
     // be faked — supply grows on emissions nobody paid for and price is the
