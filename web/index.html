@@ -205,9 +205,15 @@ code,.mono{font-family:var(--mono)}
 .brand{padding:22px 22px 16px; border-bottom:1px solid var(--line)}
 .brand .mark{display:flex; align-items:center; gap:10px; text-decoration:none}
 .brand .scale{font-size:26px; filter:grayscale(.2)}
-.brand .seat{display:flex; flex:none; color:var(--ink)}
+.brand .seat{display:flex; flex:none; color:var(--gilt)}
 .brand .mark:hover .seat{color:var(--accent)}
-.brand h1{font-family:var(--serif); font-size:22px; font-weight:600; letter-spacing:-.01em; line-height:1.05}
+/* THE WORDMARK IN LEAF GOLD, with the seat beside it. --gilt rather than
+   --mark: this is 22px at 600, which WCAG counts as large text and holds at
+   3.87:1 in light and 9.43:1 in dark, so it can carry the brighter gold that
+   inline body text could not. The seat follows the word — a gold name beside a
+   black icon reads as a colour applied to half a logo. */
+.brand h1{font-family:var(--serif); font-size:22px; font-weight:600; letter-spacing:-.01em; line-height:1.05;
+  color:var(--gilt)}
 .brand .tag{color:var(--muted); font-size:12.5px; margin-top:6px; letter-spacing:.02em}
 .nav{padding:14px 12px; display:flex; flex-direction:column; gap:2px}
 .nav a{
@@ -424,7 +430,18 @@ a.card:hover{border-color:var(--line-2)}
 /* The court coin's name, everywhere it is written. One hardcoded purple rather
    than a theme token: the token IS the colour, and it must read the same in
    light and dark. */
-.ccsym{color:#a855f7; font-weight:500}
+/* THE COIN'S MARK IS GOLD. It was #a855f7, a purple, and the owner asked for
+   gold — "a court of gold". Two things changed with the colour:
+   A TOKEN, NOT A HEX. The purple was one literal serving both themes, so it sat
+   at 3.75:1 on the light page and 4.56:1 on the dark one — the same ink asked to
+   work on opposite grounds. --mark is per-theme (#7d5c0f light, #d7b264 dark)
+   and measures 5.83:1 and 8.28:1 against the surfaces it actually lands on.
+   AND THE DARKER GOLD, not --gilt. --gilt is the brighter leaf used for the
+   wordmark, and at #9a6f12 it is 4.27:1 in light — under AA's 4.5 for body text,
+   which is what this is: the symbol runs inline in sentences, at body size. The
+   wordmark can take --gilt because 22px at 600 is large text, where the bar is
+   3.0. Same gold family, two weights, chosen by where each one sits. */
+.ccsym{color:var(--mark); font-weight:500}
 /* A figure's own history, directly under it. Muted and small on purpose: the
    number is the statement and the shape is the context, never the other way. */
 .tspark{width:100%; height:44px; display:block; margin:6px 0 2px; overflow:visible}

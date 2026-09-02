@@ -105,6 +105,29 @@ const mediaDark = (() => {
   const body = bare_css.slice(i, bare_css.indexOf("\n  }", i));
   return new Set([...body.matchAll(/(--[a-z0-9-]+)\s*:/g)].map(m => m[1]));
 })();
+/* GOLD, AND FROM A TOKEN. The coin's mark was #a855f7 — one literal purple
+   serving both themes, which is why it measured 3.75:1 on the light page and
+   4.56:1 on the dark one: the same ink asked to work on opposite grounds. The
+   golds are per-theme, so the symbol lands at 5.83:1 and 8.28:1 instead.
+   TWO GOLDS, BY SIZE. --mark is the darker one and carries the symbol, which
+   runs inline in sentences at body size where AA wants 4.5; --gilt is the
+   brighter leaf and carries the wordmark, which at 22px/600 is large text where
+   the bar is 3.0 and --gilt's 3.87 clears it. Swapping them would put a 4.27:1
+   gold on body copy, so the pairing is asserted, not just the presence of gold. */
+ok("the coin's mark is the darker gold token, not a literal",
+   /\.ccsym\{color:var\(--mark\)/.test(bare_css));
+/* Checked against bare_css, which has the comments stripped, and not against
+   the raw source — the rule is "no purple in the stylesheet", not "never name
+   the old colour in prose". Written against src first, this failed on the
+   comment beside the fix that records what the value used to be, which is the
+   one place the hex is genuinely worth keeping. */
+ok("...and no purple literal survives in the stylesheet", !/#a855f7/i.test(bare_css));
+ok("the wordmark and its seat are the leaf gold",
+   /\.brand h1\{[^}]*color:var\(--gilt\)/.test(bare_css)
+   && /\.brand \.seat\{[^}]*color:var\(--gilt\)/.test(bare_css));
+ok("...and the symbol does not borrow the wordmark's brighter gold",
+   !/\.ccsym\{color:var\(--gilt\)/.test(bare_css));
+
 const themeLight = propsIn(":root[data-theme=light]{");
 const themeDark = propsIn(":root[data-theme=dark]{");
 ok("the four palette blocks are all present",
