@@ -8294,21 +8294,17 @@ function courtStatsHtml(slug, s){
   // number are read together rather than the reader matching a line in a
   // combined chart back to the tile it belongs to.
   const tiles = [
-    /* TWO PRICES EXIST AND THEY ARE DIFFERENT NUMBERS. This tile shows the
-       curve's position — what the NEXT unit costs. The Join panel shows the
-       average over the units a buyer is actually taking, which on a rising
-       curve is always higher. Saying only "coin price" invited the reader to
-       treat one as the other, so the sub-line now names which this is.
-       AND WHY UNITS AT ALL: the curve moves per unit, and a coin is a million
-       of them, so a per-coin quote would round every young court to the same
-       figure. "1 KOURT:X = 1,000,000 units" stated the conversion without ever
-       saying what it was for. */
+    /* NO SUB-LINE. It ran to three sentences trying to pre-empt every
+       misreading of the figure: which price this is, that the GNOT is burned,
+       and that a coin is a million units. Three answers to questions a reader
+       standing on a court page has not asked yet, and the unit conversion in
+       particular meant nothing without the arithmetic it was for.
+       The Join panel is where those questions actually arise, and it answers
+       them there — beside the amount, with the numbers in hand. The unit is on
+       the figure itself. */
     statTile("coin price",
       s.minted===0? priceText(s.price, s.minted)
-                  : `${priceText(s.price, s.minted)}<small> µGNOT/unit</small>`,
-      s.minted===0
-        ? ``   // the dash says it: no price yet. statTile omits an empty sub entirely.
-        : `the next unit's price — you pay the average over what you buy. One-way: the GNOT is burned. 1 ${ccSymHtml(slug)} = 1,000,000 units.`),
+                  : `${priceText(s.price, s.minted)}<small> µGNOT/unit</small>`),
     // The emitted split is a footnote on supply, and only once any exists.
     statTile("coin supply", cc(s.supply,slug),
       s.emitted>0? `${cc(s.emitted,slug)} of it earned as rewards` : ""),

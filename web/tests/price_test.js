@@ -69,31 +69,38 @@ ok("...and a price too small even for that says so",
    priceText(0, 1e5) === "<0.001");
 
 // ------------------------------------------------------------------- the copy
-/* The tile must SAY which price it is showing. Both numbers are correct and
-   they differ, so a reader comparing the tile against the Join panel needs the
-   distinction on the page, not inferred. */
+/* THE TILE CARRIES NO PROSE, by decision. It used to explain three things at
+   once — which of the two prices this is, that the GNOT is burned, and that a
+   coin is a million units — none of which a reader standing on a court page has
+   asked yet, and the unit conversion meant nothing without the arithmetic it
+   was for.
+   WHAT IS GIVEN UP: the tile shows the NEXT unit's price and the Join panel
+   shows the AVERAGE over the units actually taken, which on a rising curve is
+   higher. Both are right and they differ. The Join panel names its own figure
+   ("Average price you pay") and states the burn beside the button, so the
+   distinction is made where the two numbers are compared rather than on a page
+   that shows only one of them. Asserted so that re-adding a sentence here is a
+   decision and not a drift back. */
 const tile = slice('statTile("coin price"', '// The emitted split is a footnote');
-ok("the tile names this as the NEXT unit's price", /the next unit's price/.test(tile));
-ok("...and points at the average as what you actually pay",
-   /average over what you buy/.test(tile));
-/* THE DASH IS THE WHOLE MESSAGE. A paragraph explaining the curve went here
-   first and was cut as too verbose — "just - is fine". So the assertion is that
-   the zero case carries NO sub-line at all: statTile drops an empty one, and an
-   em dash under "coin price" already says there is no price yet. Written as an
-   empty template rather than a sentence, so a future edit that starts
-   explaining again fails here. */
-ok("the zero-supply branch says nothing beyond the dash",
-   /s\.minted===0\s*\n?\s*\?\s*``/.test(tile));
-ok("...and does not print a unit suffix beside an em dash",
+ok("the price tile carries no explanatory sub-line",
+   !/the next unit's price|1,000,000 units|GNOT is burned/.test(tile));
+ok("...and the Join panel still names its own figure as an average",
+   src.includes("Average price you pay"));
+ok("...and still states that the GNOT does not come back",
+   src.includes("cannot be sold back to the court"));
+/* THE TILE IS A FIGURE, FULL STOP — no sub-line in either branch.
+   The copy here was trimmed three times, each on the same feedback, and this is
+   the end of it: a clause explaining the curve went, then the reason the quote
+   is per unit, then the remaining three sentences and the 1,000,000-unit
+   conversion. The last of those was the clearest signal — "i still don't know
+   what this means" — a ratio with no arithmetic beside it to use it on.
+   The zero branch has no sub either; an em dash under "coin price" already says
+   there is no price yet. */
+ok("no sub-line in either branch", !/\.\s*`\)/.test(tile) && !tile.includes("units."));
+ok("...and no unit suffix beside an em dash",
    /s\.minted===0\? priceText\(s\.price, s\.minted\)/.test(tile));
-/* THE CONVERSION STAYS, THE LECTURE GOES. A clause explaining why the quote is
-   per unit was added and then cut: "too verbose" was the standing feedback on
-   the sibling line, and it applies here. What survives is the ratio itself,
-   which is the part that answers "what does 1 million units even mean" — and
-   the symbol beside it is now a gold bar and a name rather than one long run of
-   text, which was the other half of that report. */
-ok("the units conversion is still stated", /= 1,000,000 units/.test(tile));
-ok("...without a clause explaining the curve", !/because the curve moves/.test(tile));
+ok("...and the µGNOT/unit suffix stays on a real figure",
+   /µGNOT\/unit/.test(tile));
 
 console.log(fail ? `\n${fail} FAILURES` : "\nALL PASS");
 process.exit(fail ? 1 : 0);
