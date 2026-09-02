@@ -36,10 +36,14 @@ function grab(name){
 }
 global.fmtN = n => String(n);
 global.ugnot = n => fmtN(n) + " µGNOT";
+global.BLOCK_SECS = 5;
+global.MON = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 eval(grab("parseSeries"));
 eval(grab("lastEpoch"));
 eval(grab("stepPath"));
 eval(grab("seriesScales"));
+eval(grab("anchorNow"));
+eval(grab("sinceLabel"));
 eval(grab("dot"));
 eval(grab("tileSpark"));
 
@@ -94,6 +98,27 @@ ok("no data says nothing in words", !/[a-z]{4}/.test(blank.replace(/class="[^"]*
 ok("no data still occupies the row", blank.includes("tspark-none"));
 ok("a null series behaves the same", tileSpark(null).includes("tspark-none"));
 
+// ---- the date under the graph ----
+// The anchor is the realm's wall-clock reading; without one there must be no
+// date at all, because a wrong date looks exactly like a right one.
+ok("the anchor is read out of a timeline", anchorNow("opened:1000:5;now:1786036800:4800") === 1786036800);
+ok("a timeline without a now entry yields nothing", anchorNow("opened:1000:5") === null);
+ok("junk yields nothing", anchorNow("") === null && anchorNow(null) === null);
+ok("a zero reading is not an anchor", anchorNow("now:0:1") === null);
+
+// AN EPOCH IS AN HOUR: 720 blocks at 5s. So a month back is ~720 epochs, not
+// 30 — the arithmetic this test got wrong the first time.
+const anchor = Date.UTC(2026, 5, 15) / 1000;              // 15 Jun 2026
+const ser30d = parseSeries("720,800,0;80:5,800:9");       // first point 720 epochs = 30 days ago
+ok("within the year it names the day", sinceLabel(ser30d, anchor) === "since 16 May");
+ok("a series starting now dates to today", sinceLabel(parseSeries("720,40,0;40:1"), anchor) === "since 15 Jun");
+// Across a year boundary the year is the useful half, and the day is not.
+const serOld = parseSeries("720,9000,0;40:5,9000:9");   // ~1 year back
+ok("across a year it names the month and year", /^since [A-Z][a-z]{2} 2025$/.test(sinceLabel(serOld, anchor)));
+// No anchor, no date — the graph still says the same thing without one.
+ok("no anchor means no date", sinceLabel(ser30d, null) === "" && sinceLabel(ser30d, 0) === "");
+ok("no data means no date", sinceLabel(parseSeries("720,5,0;"), anchor) === "");
+
 // ---- the wiring ----
 ok("the court stats read BurnSeries", src.includes('one(`BurnSeries(${s})`).catch(()=>null)'));
 // Only the graph that is drawn is fetched. Reading a series nothing renders is
@@ -101,15 +126,19 @@ ok("the court stats read BurnSeries", src.includes('one(`BurnSeries(${s})`).catc
 ok("no series is fetched that nothing draws",
    !src.includes("PriceSeries(${s})") && !src.includes("SupplySeries(${s})"));
 ok("the court stats read the burn total", src.includes('one(`CourtBurnedGNOT(${s})`).catch(()=>null)'));
-ok("burn is the tile carrying the graph", src.includes("tileSpark(parseSeries(s.burnHist))"));
+ok("burn is the tile carrying the graph", src.includes("tileSpark(burnSer)"));
 // The graph fills the cell it is in rather than sitting in a fixed box.
 ok("the graph stretches to the cell", src.includes('preserveAspectRatio="none"')
    && src.includes(".tspark{width:100%"));
 ok("the stroke stays one weight while the box stretches",
    src.includes("vector-effect:non-scaling-stroke"));
-ok("the caption is short", src.includes('"since inception"')
-   && !src.includes("spent to mint the coin, never returned"));
-ok("price and supply are figures only", (src.match(/tileSpark\(parseSeries/g)||[]).length === 1);
+ok("the caption is a date, not a lecture",
+   src.includes("sinceLabel(burnSer, s.nowUnix)")
+   && !src.includes("spent to mint the coin, never returned")
+   && !src.includes('"since inception"'));
+ok("the anchor is the realm's own clock, not the browser's",
+   src.includes("one(`ClaimTimeline(${s},1)`).catch(()=>null)"));
+ok("price and supply are figures only", (src.match(/tileSpark\(/g)||[]).length === 2);
 // Dust does not earn a cell. Both extra figures are unminted claims on future
 // supply, so they show only once they could move the supply figure above them.
 ok("the extra figures are gated on size, not on being non-zero",

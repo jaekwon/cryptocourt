@@ -2595,16 +2595,24 @@ async function courtStats(slug){
   const s=gstr(slug);
   // Name comes from the court page's own "# heading" — courtNameFor is
   // purge-gated and tombstones removed courts; the raw CourtName qeval is not.
-  const [md,tier,price,supply,emitted,reservoir,seniorOwed,claims,minted,burnHist,burned] = await Promise.all([
+  const [md,tier,price,supply,emitted,reservoir,seniorOwed,claims,minted,burnHist,burned,tlAnchor] = await Promise.all([
     qrender(slug), one(`CourtTier(${s})`), one(`CoinPrice(${s})`), one(`CoinSupply(${s})`),
     one(`EmittedTotal(${s})`), one(`Reservoir(${s})`), one(`SeniorOwed(${s})`), one(`ClaimCount(${s})`),
     one(`CurvePosition(${s})`).catch(()=>null),
     // The graph is decoration next to the figures: a court that cannot answer
     // this still renders every number, it just draws no line.
     one(`BurnSeries(${s})`).catch(()=>null),
-    one(`CourtBurnedGNOT(${s})`).catch(()=>null)]);
+    one(`CourtBurnedGNOT(${s})`).catch(()=>null),
+    // A CLOCK ANCHOR, and it has to be the REALM'S clock. Every other date on
+    // this page comes from the chain's own record, which the test clock can
+    // shift; dating the burn graph off the browser or off block timestamps
+    // would put it years away from the claims beside it. ClaimTimeline's `now:`
+    // entry is "now:<unix>:<height>" — the only place the realm hands out a
+    // wall-clock reading. Claim 1 because a court's ids start there; a court
+    // with no claims simply gets no date, which is the right answer anyway.
+    one(`ClaimTimeline(${s},1)`).catch(()=>null)]);
   const nm = (md.match(/^#\s+(.+)$/m)||[])[1];
-  return {name: nm? unesc(nm.trim()) : slug, tier,price,supply,emitted,reservoir,seniorOwed,claims,minted,burnHist,burned};
+  return {name: nm? unesc(nm.trim()) : slug, tier,price,supply,emitted,reservoir,seniorOwed,claims,minted,burnHist,burned,nowUnix:anchorNow(tlAnchor)};
 }
 /* The chain's per-court policing lists, derived from the sample exactly as
    strips.gno defines membership: the review strip enters at PostAnswer and
@@ -7935,6 +7943,37 @@ function seriesScales(ser, W, H, P){
    NO DATA IS BLANK — the box keeps its height so the three cells stay level,
    and says nothing it cannot support. Words there would be a claim; a zero line
    would be a wrong one. */
+/* "now:<unix>:<height>" out of a ClaimTimeline. Null unless the reading is
+   actually there — a made-up anchor would date every burn graph wrongly and
+   look no different from a real one. */
+function anchorNow(tl){
+  if(!tl) return null;
+  for(const part of String(tl).split(";")){
+    const f = part.split(":");
+    if(f[0] === "now" && f.length >= 2 && Number.isFinite(+f[1]) && +f[1] > 0) return +f[1];
+  }
+  return null;
+}
+/* WHEN THE FIRST POINT HAPPENED, as a short month and year.
+   
+   Walked back from `now` rather than forward from a birth date, because the
+   series header already says which epoch is current and every epoch is the same
+   width. Returns "" without an anchor: no date at all beats a wrong one, and
+   the graph still says the same thing without it. */
+function sinceLabel(ser, nowUnix){
+  if(!ser || !ser.pts.length || !Number.isFinite(nowUnix) || nowUnix <= 0) return "";
+  const back = (ser.now - ser.pts[0].e) * ser.width * BLOCK_SECS;
+  const d = new Date((nowUnix - back) * 1000);
+  if(!Number.isFinite(d.getTime())) return "";
+  // WITHIN THIS YEAR, NAME THE DAY. A court whose whole history is a week old
+  // reads "since Dec 2026" while today is also Dec 2026 — true, and it tells
+  // the reader nothing. The year is the useful half only once there is a year
+  // between them.
+  const now = new Date(nowUnix * 1000);
+  return d.getUTCFullYear() === now.getUTCFullYear()
+    ? `since ${d.getUTCDate()} ${MON[d.getUTCMonth()]}`
+    : `since ${MON[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+}
 /* A ZERO-LENGTH LINE, not a circle. The box is stretched on both axes, which
    turns any circle into an ellipse; a round stroke cap stays round because
    non-scaling-stroke exempts it from the transform. (Setting r:0 on a circle
@@ -7959,6 +7998,7 @@ function statTile(k, v, sub, spark){
     + (sub? `<div class="sub">${sub}</div>` : "") + `</div>`;
 }
 function courtStatsHtml(slug, s){
+  const burnSer = parseSeries(s.burnHist);
   // Each figure carries its own history directly under it, so the shape and the
   // number are read together rather than the reader matching a line in a
   // combined chart back to the tile it belongs to.
@@ -7979,8 +8019,8 @@ function courtStatsHtml(slug, s){
     // µGNOT" does not fit and reads worse than "13,054 GNOT" anyway. That
     // helper already handles the dust case where GNOT rounds to a bare 0.
     statTile("GNOT burned", Number.isFinite(s.burned)? gnotAmt(s.burned) : "—",
-      "since inception",
-      tileSpark(parseSeries(s.burnHist))),
+      sinceLabel(burnSer, s.nowUnix),
+      tileSpark(burnSer)),
   ];
   // MATERIAL, NOT MERELY NON-ZERO. Both of these are unminted claims on future
   // supply, so what a reader can do with them depends entirely on their size
