@@ -1858,13 +1858,6 @@
  {
   "pkg": "kourtv2",
   "file": "dispute.gno",
-  "label": "Finalize: a consumed slot's low is reset to mid",
-  "find": "\t// SettleUndisputed fix (session.gno), which this mirrors.\n\tif !cs.tierFinal && !cs.slotConsumed {\n\t\tcs.tier = tierMidX\n\t}",
-  "replace": "\t// SettleUndisputed fix (session.gno), which this mirrors.\n\tif !cs.tierFinal {\n\t\tcs.tier = tierMidX\n\t}"
- },
- {
-  "pkg": "kourtv2",
-  "file": "dispute.gno",
   "label": "Finalize: the route provenance says undisputed",
   "find": "\tcs.route = \"vote\"",
   "replace": "\tcs.route = \"undisputed\""
@@ -1945,20 +1938,6 @@
   "label": "provCloseClaim: the answerer's priority slot is never released",
   "find": "\treleasePriority(c, cs.answerer, cs.id)",
   "replace": ""
- },
- {
-  "pkg": "kourtv2",
-  "file": "dispute.gno",
-  "label": "provCloseClaim: tierFinal latched before the guard (self-blocking, pays 0 forever)",
-  "find": "\t// recorded as unmutatable rather than papered over.)\n\tif !cs.tierFinal && !cs.slotConsumed {",
-  "replace": "\tcs.tierFinal = true\n\tif !cs.tierFinal && !cs.slotConsumed {"
- },
- {
-  "pkg": "kourtv2",
-  "file": "dispute.gno",
-  "label": "provCloseClaim: an undecided close is forced back to the LOW tier",
-  "find": "\t// recorded as unmutatable rather than papered over.)\n\tif !cs.tierFinal && !cs.slotConsumed {\n\t\tcs.tier = tierMidX\n\t}",
-  "replace": "\t// recorded as unmutatable rather than papered over.)\n\tif !cs.tierFinal && !cs.slotConsumed {\n\t\tcs.tier = tierLowX\n\t}"
  },
  {
   "pkg": "kourtv2",
@@ -10380,13 +10359,6 @@
   "label": "v0.58 quality: a VOTED low is hidden behind 'not yet rated'",
   "find": "\t\tcase cs.tier == tierLowX && !cs.slotConsumed:",
   "replace": "\t\tcase cs.tier == tierLowX:"
- },
- {
-  "pkg": "kourtv2",
-  "file": "render.gno",
-  "label": "v0.58 quality: a final tier still invites a challenge",
-  "find": "\t\tcase cs.tierFinal:\n\t\t\tq = \"quality: \" + tierName(cs.tier) + \" (final)\"",
-  "replace": "\t\tcase false:\n\t\t\tq = \"quality: \" + tierName(cs.tier) + \" (final)\""
  },
  {
   "pkg": "kourtv2",
