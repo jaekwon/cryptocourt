@@ -429,8 +429,8 @@ const CHATCSS = `
    and left the message box too narrow to read what you were typing. It needs
    room for a moniker and no more; the message takes everything else and drops
    to its own line when the two cannot share one. */
-.chatmoniker{flex:0 1 5.5rem;min-width:4rem}
-.chatinput{flex:5 1 8rem;min-width:0}
+.chatmoniker{flex:0 1 4rem;min-width:3rem}
+.chatinput{flex:9 1 8rem;min-width:0}
 /* THEME-FOLLOWING, NOT WHITE. These were unstyled inputs, so a browser painted
    them its default white and they glared out of a dark page. Inheriting is what
    makes one rule right in both themes: this file has no access to the page's
