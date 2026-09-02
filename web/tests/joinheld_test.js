@@ -52,7 +52,10 @@ eval(slice('async function fillJoinHeld(slug){', '\nfunction recomputeBuy('));
   // yet" answers the same question a number does, and answers it better.
   d = await run(0);
   ok("holding nothing is stated, not hidden", d.joinheld.hidden === false);
-  ok("...in words rather than a bare 0", d.joinheldv.textContent === "none yet");
+  // A FIGURE, NOT A PHRASE. Every other row in the Join panel is a number and a
+// unit; "none yet" made this one read as a different kind of thing.
+ok("...as a figure in the same shape as the rows under it",
+   d.joinheldv.textContent === "0.00 KOURT:META");
 
   // A FAILED READ LEAVES THE ROW HIDDEN. Showing 0 here would tell somebody their
   // purchase vanished.

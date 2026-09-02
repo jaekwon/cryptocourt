@@ -5889,7 +5889,11 @@ function buyRowsHtml(q, price, slug, after){
     + (q.refund>0n? `<div class="line"><span class="l">Returned to you</span><span class="r tnum">${q.refund.toLocaleString("en-US")} <small>µGNOT, sent back in the same transaction</small></span></div>` : "")
     + `<div class="line"><span class="l">Price after this</span><span class="r tnum">${fmtN(q.priceAfter)} <small>µGNOT/unit · now ${fmtN(price)}</small></span></div>`
     + `<div class="line"><span class="l">Your voice share</span><span class="r tnum">${pctText(pct, 100)}</span></div>`;
-  return `<div class="line"><span class="l">You receive</span><span class="r tnum">${cc(Number(q.units),slug)} <small>${fmtN(Number(q.units))} units</small></span></div>`;
+  /* NO RAW UNIT COUNT. "19,533,968 units" is the same figure in base units, and
+     a reader has no use for it: the coin amount beside it already says what they
+     get, and the conversion that would make the number mean anything was itself
+     cut from the price tile for being meaningless without arithmetic. */
+  return `<div class="line"><span class="l">You receive</span><span class="r tnum">${cc(Number(q.units),slug)}</span></div>`;
 }
 let BUYQ=null, BUYCTX=null;
 /* THE FORM SURVIVES A RE-RENDER, and this is a bug fix rather than a nicety.
@@ -8127,7 +8131,7 @@ function joinPanel(slug, s){
      wait on it. Hidden until it has an answer: a row reading "—" where a balance
      should be is worse than no row. */
   return `<div class="panel" id="join" tabindex="-1"><h4>Join this court</h4>
-        <div class="kv" id="joinheld" hidden><div class="k">You hold</div><div class="v tnum" id="joinheldv"></div></div>
+        <div class="kv" id="joinheld" hidden><div class="k">You have</div><div class="v tnum" id="joinheldv"></div></div>
         ${body}
         <p class="small muted" style="margin:10px 0 0">The only way out is a private buyer, and there may not be one. Treat this as GNOT spent for a voice, not GNOT moved.</p>
        </div>`;
@@ -8142,10 +8146,12 @@ async function fillJoinHeld(slug){
   try{ held = await balanceOf(slug, CFG.addr); }catch(_){ return; }
   if(held == null || !isFinite(+held)) return;
   const n = +held;
-  /* ZERO IS SHOWN TOO, and deliberately. "You hold none of this court's coin" is
-     the answer to the same question as a number, and on a court somebody has just
-     failed to buy into it is the more useful of the two. */
-  val.textContent = n > 0 ? ccText(n, slug) : "none yet";
+  /* ZERO IS A FIGURE, NOT A PHRASE. Shown either way — on a court somebody has
+     just failed to buy into, "you have none" is exactly the answer they need —
+     but every other row in this panel is a number and a unit, and "none yet"
+     made this one read as a different kind of thing. "0.00 KOURT:COVID" answers
+     the same question in the same shape as the rows under it. */
+  val.textContent = ccText(n, slug);
   row.hidden = false;
 }
 function recomputeBuy(){
