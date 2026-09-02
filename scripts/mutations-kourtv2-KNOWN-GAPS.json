@@ -215,14 +215,6 @@
  },
  {
   "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "HOOK: the flag credit escapes the slashFlagger guard (a ride-levied slash credits the zero address)",
-  "find": "\t\tcreditFlagSlash(c, cs.slashFlagger, cs.dustBurns+slash)\n\t}\n",
-  "replace": "\t}\n\tcreditFlagSlash(c, cs.slashFlagger, cs.dustBurns+slash)\n",
-  "why": "A DELIBERATE SURVIVOR: absorbed downstream: on a ride-levied slash cs.slashFlagger is the zero address, and creditStanding already refuses `who == \"\"`. Moving the call outside the guard therefore changes nothing observable. The outer guard is kept as defence in depth \u2014 if the inner one were ever removed, this still stops an unpayable credit \u2014 but no test can kill it."
- },
- {
-  "pkg": "kourtv2",
   "file": "crystallize.gno",
   "label": "HOOK: the conviction credit moves BELOW the zero-pay early return, so a rounded-to-zero winner earns nothing",
   "find": "\tcreditWinConviction(c, cs, who, p)\n\tif convCC <= 0 || cs.winPoolConvCC <= 0 {\n\t\treturn 0\n\t}\n",

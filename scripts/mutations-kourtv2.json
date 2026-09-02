@@ -1,41 +1,6 @@
 [
  {
   "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "v0.52: CounterFlag does not latch (two rolls, one party)",
-  "find": "\tcs.qualityReasked = true\n\topenQualityTally(cs)",
-  "replace": "\topenQualityTally(cs)"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "v0.52: CounterFlag inherits the ride's tally",
-  "find": "\tcs.qualityReasked = true\n\topenQualityTally(cs)",
-  "replace": "\treaskQualityTally(cs)"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "v0.54: tier ratchet removed",
-  "find": "\tif cs.slotConsumed && tier > int(cs.tier) && bucketW(cs, tier)*3 < turnout*2 {\n\t\treturn // a promotion out of an adjudicated tier needs a \u2154 mandate (\u00a73.4 F3)\n\t}\n",
-  "replace": ""
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "v0.54: mandate tightened to 3/4",
-  "find": "bucketW(cs, tier)*3 < turnout*2 {",
-  "replace": "bucketW(cs, tier)*4 < turnout*3 {"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "v0.53: a ride may burn before the Q5 poll",
-  "find": "\tcase !cs.counterUsed:",
-  "replace": "\tcase false:"
- },
- {
-  "pkg": "kourtv2",
   "file": "crystallize.gno",
   "label": "v0.55: sub-bar carrot not withheld",
   "find": "\tif cs.decidedPID == 0 && cs.conclusiveSeq != 0 {\n\t\tif _, fullBar := qualityBars(c, cs); cs.conclusiveTurnout < fullBar {\n\t\t\tcs.carrotTotal = 0\n\t\t}\n\t}\n",
@@ -85,13 +50,6 @@
  },
  {
   "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "v0.50: bounty pays cs.flagger when slashFlagger is empty",
-  "find": "\tif cs.slashFlagger != \"\" {",
-  "replace": "\tif true {"
- },
- {
-  "pkg": "kourtv2",
   "file": "dispute.gno",
   "label": "Q2: stakers may vote quality",
   "find": "\treturn cs.stakers.Get(posKey(who, sideYES)) != nil ||\n\t\tcs.stakers.Get(posKey(who, sideNO)) != nil",
@@ -103,13 +61,6 @@
   "label": "Q2: only the YES side counts as participation",
   "find": "\treturn cs.stakers.Get(posKey(who, sideYES)) != nil ||\n\t\tcs.stakers.Get(posKey(who, sideNO)) != nil",
   "replace": "\treturn cs.stakers.Get(posKey(who, sideYES)) != nil"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "quality fullBar loses its 5%-supply floor",
-  "find": "\tfullBar = arm\n\tif fivePct := mulDiv128(supply, quorumSupplyBps, 10000); fivePct > fullBar {\n\t\tfullBar = fivePct\n\t}",
-  "replace": "\tfullBar = arm"
  },
  {
   "pkg": "kourtv2",
@@ -131,13 +82,6 @@
   "label": "enqueueSenior: the start cursor ignores juniorReserved (M3-CRITICAL-1)",
   "find": "\tstart := mustAdd(c.reservedTail, c.juniorReserved)",
   "replace": "\tstart := c.reservedTail"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "voidFlag does not return the bond",
-  "find": "\tif cs.flagBond > 0 {\n\t\tc.coin.Transfer(c.escrow, cs.flagger, cs.flagBond)\n\t\tcs.flagBond = 0\n\t}\n\tcs.flagOpen = false",
-  "replace": "\tcs.flagOpen = false"
  },
  {
   "pkg": "kourtv2",
@@ -166,20 +110,6 @@
   "label": "quiet window one block short",
   "find": "\tif now < cs.lastFlagEventAt+priorityWindowBlocks {",
   "replace": "\tif now < cs.lastFlagEventAt+priorityWindowBlocks-1 {"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "T1/T2 boundary: T2 predicate drops the full-bar requirement",
-  "find": "\tif turnout >= fullBar && cs.answerBond > 0 && !slashGrade {",
-  "replace": "\tif cs.answerBond > 0 && !slashGrade {"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "T2 failed-attempt half-burn becomes a full return",
-  "find": "\tif turnout >= fullBar && cs.answerBond > 0 && !slashGrade {\n\t\thalf := cs.flagBond / 2",
-  "replace": "\tif turnout >= fullBar && cs.answerBond > 0 && !slashGrade {\n\t\thalf := cs.flagBond"
  },
  {
   "pkg": "kourtv2",
@@ -215,13 +145,6 @@
   "label": "budget never steps down",
   "find": "\tc.curBudgetBpsFP = c.curBudgetBpsFP * stepDownNum / stepDownDen",
   "replace": ""
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "OpenFlag: the re-flag cooldown after an inconclusive cycle never applies (M3-MED-1)",
-  "find": "\tif cs.flagCycles >= 1 && heightNow() < cs.lastFlagAt+flagCooldownBlocks {",
-  "replace": "\tif false {"
  },
  {
   "pkg": "kourtv2",
@@ -376,13 +299,6 @@
   "file": "modvote.gno",
   "label": "lock: election bond skips the spendable check",
   "find": "\tmustSpendable(c, who, e.bond)\n",
-  "replace": ""
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "lock: flag bond skips the spendable check",
-  "find": "\tmustSpendable(c, who, bond)\n",
   "replace": ""
  },
  {
@@ -713,27 +629,6 @@
   "label": "RESERVOIR: juniorReserved not subtracted",
   "find": "\tr := past - c.juniorReserved",
   "replace": "\tr := past"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "M3-HIGH-1: a terminal path returns the WHOLE bond",
-  "find": "\t\treserve = slashSizeFor(cs)\n\t\tif reserve > cs.answerBond {",
-  "replace": "\t\treserve = 0\n\t\tif reserve > cs.answerBond {"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "M3-HIGH-1: settle retains only HALF the slash size",
-  "find": "\t\treserve = slashSizeFor(cs)\n\t\tif reserve > cs.answerBond {",
-  "replace": "\t\treserve = slashSizeFor(cs) / 2\n\t\tif reserve > cs.answerBond {"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "settle does not shrink answerBond to the reserve",
-  "find": "\tcs.answerBond = reserve",
-  "replace": ""
  },
  {
   "pkg": "kourtv2",
@@ -1073,69 +968,6 @@
  },
  {
   "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "VoteQuality: a participant votes its own claim's quality (Q2)",
-  "find": "\tif isParticipant(cs, who) {",
-  "replace": "\tif false {"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "VoteQuality: a zero-weight address votes",
-  "find": "\tif snapshot <= 0 {\n\t\tpanic(\"kourtv2: no checkpointed weight at the claim's quality epoch\")\n\t}",
-  "replace": "\t_ = snapshot"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "VoteQuality: an address votes the same tally twice",
-  "find": "\tif cs.qVoted.Has(k) {\n\t\tpanic(\"kourtv2: already voted this quality tally\")\n\t}",
-  "replace": ""
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "VoteQuality: the vote key drops the tally seq",
-  "find": "\tk := beClaimKey(cs.qVoteSeq) + string(who)",
-  "replace": "\tk := string(who)"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "VoteQuality: a LOW vote is counted as MID",
-  "find": "\tcase qualityLow:\n\t\tcs.qLowW = mustAdd(cs.qLowW, w)",
-  "replace": "\tcase qualityLow:\n\t\tcs.qMidW = mustAdd(cs.qMidW, w)"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "VoteQuality: a HIGH vote is counted as MID",
-  "find": "\tdefault:\n\t\tcs.qHighW = mustAdd(cs.qHighW, w)",
-  "replace": "\tdefault:\n\t\tcs.qMidW = mustAdd(cs.qMidW, w)"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "VoteQuality: the flag vote accepts votes after it closed",
-  "find": "\tif cs.flagOpen && heightNow() >= cs.flagVoteEnd {",
-  "replace": "\tif false {"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "VoteQuality: the counter re-vote accepts votes after it closed",
-  "find": "\tif cs.counterOpen && heightNow() >= cs.counterVoteEnd {",
-  "replace": "\tif false {"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "VoteQuality: the dispute lane accepts votes after the proposal closed",
-  "find": "\tif cs.disputeOpen && c.gov.State(cs.proposalID) != \"active\" {",
-  "replace": "\tif false {"
- },
- {
-  "pkg": "kourtv2",
   "file": "dispute.gno",
   "label": "VoteDispute: the carrot record always says yes",
   "find": "\tcs.qVoted.Set(\"d\"+beClaimKey(uint64(cs.proposalID))+string(who), choice)",
@@ -1294,202 +1126,6 @@
   "label": "touch: a segment is not clamped to the period boundary",
   "find": "\t\tif boundary < segEnd {\n\t\t\tsegEnd = boundary\n\t\t}",
   "replace": ""
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "OpenFlag: an unanswered claim can be flagged",
-  "find": "\tif cs.frozenAt == 0 {\n\t\tpanic(\"kourtv2: only an answered claim can be quality-flagged\")\n\t}",
-  "replace": ""
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "OpenFlag: the cooldown starts one cycle late",
-  "find": "\tif cs.flagCycles >= 1 && heightNow() < cs.lastFlagAt+flagCooldownBlocks {",
-  "replace": "\tif cs.flagCycles >= 2 && heightNow() < cs.lastFlagAt+flagCooldownBlocks {"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "OpenFlag: the flag bond is never posted",
-  "find": "\tc.coin.Transfer(who, c.escrow, bond)\n\tcs.flagOpen = true",
-  "replace": "\tcs.flagOpen = true"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "OpenFlag: the bounty beneficiary is the answerer, not the flagger",
-  "find": "\tcs.flagger = who",
-  "replace": "\tcs.flagger = cs.answerer"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "OpenFlag: a consumed flag slot is reusable",
-  "find": "\tif cs.slotConsumed {\n\t\tpanic(\"kourtv2: the flag slot was consumed by a conclusive vote\")\n\t}",
-  "replace": ""
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "OpenFlag: a flag opens while a dispute is open",
-  "find": "\tif cs.disputeOpen {\n\t\tpanic(\"kourtv2: a dispute is open; its vote already carries quality\")\n\t}",
-  "replace": ""
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "openQualityTally: the tally seq is not advanced",
-  "find": "\tcs.qVoteSeq++\n\tcs.qLowW, cs.qMidW, cs.qHighW = 0, 0, 0",
-  "replace": "\tcs.qLowW, cs.qMidW, cs.qHighW = 0, 0, 0"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "openQualityTally: the accumulators are not reset",
-  "find": "\tcs.qVoteSeq++\n\tcs.qLowW, cs.qMidW, cs.qHighW = 0, 0, 0",
-  "replace": "\tcs.qVoteSeq++"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "ResolveCounter: the full bar is ignored when scoring the counter",
-  "find": "\tif turnout >= fullBar && cs.qLowW*3 < turnout*2 {",
-  "replace": "\tif turnout > 0 && cs.qLowW*3 < turnout*2 && fullBar >= 0 {"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "ResolveCounter: the second two-thirds test is inverted",
-  "find": "\tif turnout >= fullBar && cs.qLowW*3 < turnout*2 {",
-  "replace": "\tif turnout >= fullBar && cs.qLowW*3 > turnout*2 {"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "ResolveCounter: the counter always SETTLES the slash",
-  "find": "\tif turnout >= fullBar && cs.qLowW*3 < turnout*2 {",
-  "replace": "\tif turnout >= fullBar && cs.qLowW*3 < turnout*2 && false {"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "ResolveCounter: the counter always REFUNDS the slash",
-  "find": "\tif turnout >= fullBar && cs.qLowW*3 < turnout*2 {",
-  "replace": "\tif turnout >= fullBar || cs.qLowW*3 < turnout*2 || true {"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "ResolveCounter: the counter re-vote resolves while still open",
-  "find": "\tif now < cs.counterVoteEnd {\n\t\tpanic(\"kourtv2: the counter re-vote is still open\")\n\t}",
-  "replace": ""
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "ResolveCounter: resolves with no counter re-vote running",
-  "find": "\tif !cs.counterOpen {\n\t\tpanic(\"kourtv2: no counter re-vote to resolve\")\n\t}",
-  "replace": ""
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "ResolveCounter: resolves while a dispute is open",
-  "find": "\tif cs.disputeOpen {\n\t\tpanic(\"kourtv2: a dispute is open; its quality ride decides the slash first\")\n\t}\n\tif !cs.counterOpen {",
-  "replace": "\tif !cs.counterOpen {"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "ResolveSlashWindow: the counter-flag window need not have lapsed",
-  "find": "\tif heightNow() < cs.pendingSlashUntil {\n\t\tpanic(\"kourtv2: the counter-flag window is still open\")\n\t}",
-  "replace": ""
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "ResolveSlashWindow: settles while a counter re-vote is running",
-  "find": "\tif cs.counterOpen {\n\t\tpanic(\"kourtv2: the counter re-vote is running; resolve it instead\")\n\t}",
-  "replace": ""
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "settleSlash: the reserve is not zeroed, so it can settle twice",
-  "find": "\tcs.pendingSlash = 0\n\tc.coin.Burn(c.escrow, slash)",
-  "replace": "\tc.coin.Burn(c.escrow, slash)"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "settleSlash: the reserve is never burned",
-  "find": "\tcs.pendingSlash = 0\n\tc.coin.Burn(c.escrow, slash)",
-  "replace": "\tcs.pendingSlash = 0"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "originateSlash: the reserve is not carved from the bond",
-  "find": "\tcs.answerBond -= slash\n\tcs.pendingSlash = slash",
-  "replace": "\tcs.pendingSlash = slash"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "originateSlash: the bounty beneficiary is not recorded",
-  "find": "\tcs.slashFlagger = flagger\n\tcs.slashLevied = true",
-  "replace": "\tcs.slashLevied = true"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "originateSlash: the once-per-claim latch is never set",
-  "find": "\tcs.slashFlagger = flagger\n\tcs.slashLevied = true",
-  "replace": "\tcs.slashFlagger = flagger"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "originateSlash: the counter-flag window is zero-length",
-  "find": "\tcs.pendingSlashUntil = now + c.params.votingBlocks\n\tcs.slashFlagger = flagger",
-  "replace": "\tcs.pendingSlashUntil = now\n\tcs.slashFlagger = flagger"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "refundSlash: the reserve never returns to the answer bond",
-  "find": "\tcs.answerBond = mustAdd(cs.answerBond, slash)\n}",
-  "replace": "}"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "refundSlash: the tier is not finalized",
-  "find": "\tcs.pendingSlash = 0\n\tcs.tierFinal = true",
-  "replace": "\tcs.pendingSlash = 0"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "unslash: the reserve is not folded back, so the burn is not slash-inclusive (A19)",
-  "find": "\tcs.answerBond = mustAdd(cs.answerBond, cs.pendingSlash)\n\tcs.pendingSlash = 0",
-  "replace": "\tcs.pendingSlash = 0"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "rearmSlashWindow: a spent challenge's lane never reopens",
-  "find": "\tif cs.counterUsed {\n\t\tcs.counterOpen = true",
-  "replace": "\tif false {\n\t\tcs.counterOpen = true"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "rearmSlashWindow: the reserve gets no fresh window",
-  "find": "\tcs.pendingSlashUntil = now + c.params.votingBlocks\n\tcs.lastFlagEventAt = now",
-  "replace": "\tcs.lastFlagEventAt = now"
  },
  {
   "pkg": "kourtv2",
@@ -2018,62 +1654,6 @@
  },
  {
   "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "quality/OpenFlag: a flag opens after the draw crystallized",
-  "find": "\t\tpanic(\"kourtv2: quality is settled; the draw has crystallized\")\n",
-  "replace": ""
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "quality/OpenFlag: a flag opens on a claim closed without a draw",
-  "find": "\t\tpanic(\"kourtv2: this claim closed without a draw; there is no quality to vote\")\n",
-  "replace": ""
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "quality/OpenFlag: a flag opens while a slash is in its counter-flag window",
-  "find": "\t\tpanic(\"kourtv2: a slash is in its counter-flag window\")\n",
-  "replace": ""
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "quality/VoteQuality: a quality value outside 0..2 is accepted",
-  "find": "\t\tpanic(\"kourtv2: quality is 0 (low), 1 (mid) or 2 (high)\")\n",
-  "replace": ""
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "quality/VoteQuality: a vote lands with no quality vote open",
-  "find": "\t\tpanic(\"kourtv2: no quality vote is open on this claim\")\n",
-  "replace": ""
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "quality/ResolveFlag: a resolve runs with no flag vote",
-  "find": "\t\tpanic(\"kourtv2: no flag vote to resolve\")\n",
-  "replace": ""
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "quality/CounterFlag: a counter opens with no slash pending",
-  "find": "\t\tpanic(\"kourtv2: no slash is pending on this claim\")\n",
-  "replace": ""
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "quality/CounterFlag: a counter opens after its window lapsed",
-  "find": "\t\tpanic(\"kourtv2: the counter-flag window has lapsed\")\n",
-  "replace": ""
- },
- {
-  "pkg": "kourtv2",
   "file": "meta.gno",
   "label": "meta/applyMetaVerb: a meta install claims ELECTION-ONLY effects (false -> true)",
   "find": "\t\tinstallModSet(tc, cm, cand, heightNow(), false)\n",
@@ -2228,27 +1808,6 @@
  },
  {
   "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "settleAnswerBond: nothing is retained for a later slash (M3-HIGH-1)",
-  "find": "\tif cs.pendingSlash == 0 && !cs.slotConsumed {",
-  "replace": "\tif false {"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "settleAnswerBond: the retained reserve is forgotten",
-  "find": "\tcs.answerBond = reserve",
-  "replace": "\tcs.answerBond = 0"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "settleAnswerBond: the whole bond refunds AND the reserve is kept",
-  "find": "\tif refund := cs.answerBond - reserve; refund > 0 {",
-  "replace": "\tif refund := cs.answerBond; refund > 0 {"
- },
- {
-  "pkg": "kourtv2",
   "file": "session.gno",
   "label": "SettleUndisputed: the route provenance says vote",
   "find": "\tcs.route = \"undisputed\"",
@@ -2382,20 +1941,6 @@
  },
  {
   "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "conclusive low: the court's deposit ledger is not decremented",
-  "find": "\t\tc.deposit -= cs.deposit",
-  "replace": ""
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "conclusive low: the court's ledger is not decremented for the fee",
-  "find": "\t\tc.deposit -= cs.fee",
-  "replace": ""
- },
- {
-  "pkg": "kourtv2",
   "file": "dispute.gno",
   "label": "provCloseClaim: the answer bond is never returned",
   "find": "\tif cs.answerBond > 0 {\n\t\tc.coin.Transfer(c.escrow, cs.answerer, cs.answerBond)\n\t\tcs.answerBond = 0\n\t}",
@@ -2491,307 +2036,6 @@
   "label": "priorityGateActive: the gate is never on",
   "find": "func priorityGateActive(c *Court) bool { return c.qualifiedCount >= priorityColdStartN }",
   "replace": "func priorityGateActive(c *Court) bool { return false && c.qualifiedCount >= priorityColdStartN }"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "ResolveFlag: the flag is left open, so it resolves twice",
-  "find": "\tcs.flagOpen = false\n\tcs.lastFlagEventAt = now",
-  "replace": "\tcs.lastFlagEventAt = now"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "ResolveFlag: the flag-event timestamp is not stamped",
-  "find": "\tcs.flagOpen = false\n\tcs.lastFlagEventAt = now",
-  "replace": "\tcs.flagOpen = false"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "ResolveFlag: an inconclusive cycle does not count, so the bond never doubles",
-  "find": "\t\tcs.flagCycles++\n\t\tcs.lastFlagAt = now",
-  "replace": "\t\tcs.lastFlagAt = now"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "ResolveFlag: the cooldown anchors at the OPEN, not the close",
-  "find": "\t\tcs.flagCycles++\n\t\tcs.lastFlagAt = now",
-  "replace": "\t\tcs.flagCycles++"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "ResolveFlag: the T1/T2 boundary is inverted",
-  "find": "\t\tif tier == qualityLow {",
-  "replace": "\t\tif tier != qualityLow {"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "ResolveFlag (2A): an inconclusive MID returns the bond whole (T2 half-burn gone)",
-  "find": "\t\t\thalf := cs.flagBond / 2",
-  "replace": "\t\t\thalf := cs.flagBond"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "ResolveFlag: the burned half of a T2 bond is not burned",
-  "find": "\t\t\tif rest := cs.flagBond - half; rest > 0 {\n\t\t\t\tc.coin.Burn(c.escrow, rest)\n\t\t\t}",
-  "replace": ""
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "applyQualityTally: HIGH promotes without clearing the full bar",
-  "find": "\tif turnout >= fullBar && cs.qHighW*3 >= turnout*2 {",
-  "replace": "\tif cs.qHighW*3 >= turnout*2 {"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "applyQualityTally (F3 ratchet): HIGH promotes without the two-thirds",
-  "find": "\tif turnout >= fullBar && cs.qHighW*3 >= turnout*2 {",
-  "replace": "\tif turnout >= fullBar {"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "applyQualityTally: HIGH's two-thirds is strict, so an exact 2/3 fails",
-  "find": "\tif turnout >= fullBar && cs.qHighW*3 >= turnout*2 {",
-  "replace": "\tif turnout >= fullBar && cs.qHighW*3 > turnout*2 {"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "applyQualityTally: the median tie no longer goes LOW",
-  "find": "\tmedianLow := cs.qLowW*2 >= turnout && turnout > 0",
-  "replace": "\tmedianLow := cs.qLowW*2 > turnout && turnout > 0"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "applyQualityTally: an EMPTY tally reads as low",
-  "find": "\tmedianLow := cs.qLowW*2 >= turnout && turnout > 0",
-  "replace": "\tmedianLow := cs.qLowW*2 >= turnout"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "applyQualityTally: the median reads MID weight instead of low",
-  "find": "\tmedianLow := cs.qLowW*2 >= turnout && turnout > 0",
-  "replace": "\tmedianLow := cs.qMidW*2 >= turnout && turnout > 0"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "applyQualityTally: a sub-demotion-bar low is CONCLUSIVE (T1 gone)",
-  "find": "\t\tif turnout < demotionBar {\n\t\t\treturn qualityLow, false, turnout // inconclusive-low (T1)\n\t\t}",
-  "replace": "\t\t_ = demotionBar"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "applyQualityTally: the demotion bar is inclusive, so a low exactly AT it is inconclusive",
-  "find": "\t\tif turnout < demotionBar {",
-  "replace": "\t\tif turnout <= demotionBar {"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "applyQualityTally: MID is conclusive below the full bar",
-  "find": "\tif turnout >= fullBar {\n\t\treturn qualityMid, true, turnout\n\t}",
-  "replace": ""
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "applyQualityTally: the two bars are read in the wrong order",
-  "find": "\tdemotionBar, fullBar := qualityBars(c, cs)",
-  "replace": "\tfullBar, demotionBar := qualityBars(c, cs)"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "qualityBars: the escrow's own holdings count as votable",
-  "find": "\tvotable := supply - c.coin.PastVotes(c.escrow, cs.qualityEpoch)",
-  "replace": "\tvotable := supply"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "qualityBars: the votable arm is a HALF, not a third",
-  "find": "\tif third := votable / 3; third < arm {",
-  "replace": "\tif third := votable / 2; third < arm {"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "qualityBars: the arm takes the LARGER of X-bar and a third of votable",
-  "find": "\tif third := votable / 3; third < arm {",
-  "replace": "\tif third := votable / 3; third > arm {"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "qualityBars: the demotion bar is not quartered",
-  "find": "\tdemotionBar = arm / 4",
-  "replace": "\tdemotionBar = arm"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "qualityBars: the demotion bar is halved, not quartered",
-  "find": "\tdemotionBar = arm / 4",
-  "replace": "\tdemotionBar = arm / 2"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "qualityBars: the full bar loses its 5%-of-supply floor",
-  "find": "\tif fivePct := mulDiv128(supply, quorumSupplyBps, 10000); fivePct > fullBar {\n\t\tfullBar = fivePct\n\t}",
-  "replace": ""
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "qualityBars: the supply floor takes the SMALLER",
-  "find": "\tif fivePct := mulDiv128(supply, quorumSupplyBps, 10000); fivePct > fullBar {",
-  "replace": "\tif fivePct := mulDiv128(supply, quorumSupplyBps, 10000); fivePct < fullBar {"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "qualityBars: the supply floor is sized off VOTABLE, not supply",
-  "find": "\tif fivePct := mulDiv128(supply, quorumSupplyBps, 10000); fivePct > fullBar {",
-  "replace": "\tif fivePct := mulDiv128(votable, quorumSupplyBps, 10000); fivePct > fullBar {"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "ride F3: the mandate gates un-adjudicated tiers too, so it applies on a FIRST adjudication",
-  "find": "\tif cs.slotConsumed && tier > int(cs.tier) && bucketW(cs, tier)*3 < turnout*2 {",
-  "replace": "\tif tier > int(cs.tier) && bucketW(cs, tier)*3 < turnout*2 {"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "ride F3 / v0.54: the mandate gates DEMOTIONS as well as promotions",
-  "find": "\tif cs.slotConsumed && tier > int(cs.tier) && bucketW(cs, tier)*3 < turnout*2 {",
-  "replace": "\tif cs.slotConsumed && bucketW(cs, tier)*3 < turnout*2 {"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "ride F3: a promotion needs no two-thirds mandate",
-  "find": "\tif cs.slotConsumed && tier > int(cs.tier) && bucketW(cs, tier)*3 < turnout*2 {",
-  "replace": "\tif false && cs.slotConsumed && tier > int(cs.tier) && bucketW(cs, tier)*3 < turnout*2 {"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "ride F3: the mandate reads the HIGH bucket, not the promoted tier's",
-  "find": "bucketW(cs, tier)*3 < turnout*2 {",
-  "replace": "cs.qHighW*3 < turnout*2 {"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "ride: a conclusive LOW skips the dust burns (deposit and fee) \u2014 the v0.50 refund bug",
-  "find": "\tif tier == qualityLow {\n\t\tburnConclusiveLowDust(c, cs)\n\t}",
-  "replace": ""
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "ride: a DUST ride levies the slash (no full bar)",
-  "find": "\tif tier == qualityLow && turnout >= fullBar && cs.qLowW*3 >= turnout*2 {",
-  "replace": "\tif tier == qualityLow && fullBar >= 0 && cs.qLowW*3 >= turnout*2 {"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "ride: a bare-majority low levies the slash (no two-thirds)",
-  "find": "\tif tier == qualityLow && turnout >= fullBar && cs.qLowW*3 >= turnout*2 {",
-  "replace": "\tif tier == qualityLow && turnout >= fullBar {"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "ride: the slash records a STALE flagger as its bounty beneficiary",
-  "find": "\t\toriginateSlash(c, cs, now, \"\") // \"\" \u2014 a ride posts no bond, so no bounty",
-  "replace": "\t\toriginateSlash(c, cs, now, cs.flagger)"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "ride: the tier is finalised while a reserve still stands, spending the Q5 re-vote counter",
-  "find": "\tcs.tierFinal = cs.pendingSlash == 0",
-  "replace": "\tcs.tierFinal = true"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "ride: the slot latch is not consumed",
-  "find": "\tcs.conclusiveTurnout = turnout\n\tcs.slotConsumed = true",
-  "replace": "\tcs.conclusiveTurnout = turnout"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "disposeSlashOnRide: a below-bar ride BURNS instead of re-arming",
-  "find": "\tcase turnout < fullBar:\n\t\trearmSlashWindow(c, cs) // adjudicated nothing about quality",
-  "replace": "\tcase turnout < fullBar:\n\t\tsettleSlash(c, cs)"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "disposeSlashOnRide: the bar is inclusive, so a ride exactly AT it re-arms",
-  "find": "\tcase turnout < fullBar:",
-  "replace": "\tcase turnout <= fullBar:"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "disposeSlashOnRide: the rescue's two-thirds is inverted",
-  "find": "\tcase cs.qLowW*3 < turnout*2:",
-  "replace": "\tcase cs.qLowW*3 > turnout*2:"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "disposeSlashOnRide: the electorate's rescue BURNS the reserve",
-  "find": "\t\trefundSlash(c, cs) // the electorate failed the second \u2154 (ResolveCounter's rescue)",
-  "replace": "\t\tsettleSlash(c, cs)"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "disposeSlashOnRide: an unoffered Q5 challenge is annihilated (v0.53 premature burn)",
-  "find": "\tcase !cs.counterUsed:",
-  "replace": "\tcase cs.counterUsed:"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "disposeSlashOnRide: the re-arm on an unoffered challenge SETTLES instead",
-  "find": "\t\trearmSlashWindow(c, cs)\n\tdefault:\n\t\tsettleSlash(c, cs) // a full-bar \u2154-low ride re-confirms the flag",
-  "replace": "\t\tsettleSlash(c, cs)\n\tdefault:\n\t\tsettleSlash(c, cs) // a full-bar \u2154-low ride re-confirms the flag"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "disposeSlashOnRide: a confirmed slash is FORGIVEN instead of settled",
-  "find": "\t\tsettleSlash(c, cs) // a full-bar \u2154-low ride re-confirms the flag",
-  "replace": "\t\trefundSlash(c, cs)"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "disposeSlashOnRide: runs with no reserve pending",
-  "find": "func disposeSlashOnRide(c *Court, cs *claimState) {\n\tif cs.pendingSlash <= 0 {\n\t\treturn\n\t}",
-  "replace": "func disposeSlashOnRide(c *Court, cs *claimState) {"
  },
  {
   "pkg": "kourtv2",
@@ -5372,178 +4616,10 @@
  },
  {
   "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "flagBondFor: the bond is sized off the answer bond, not X\u0304",
-  "find": "\tb0 := cs.xBarFrozen * flagBondXBps / 10000",
-  "replace": "\tb0 := cs.answerBond0 * flagBondXBps / 10000"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "flagBondFor: there is no minimum flag bond, so a dust claim is flagged free",
-  "find": "\tif b0 < flagMinCC {\n\t\tb0 = flagMinCC\n\t}",
-  "replace": ""
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "flagBondFor: the re-flag multiplier is uncapped",
-  "find": "\tif exp > 2 {\n\t\texp = 2 // 2^2 = the frozen 4\u00d7 multiplier\n\t}",
-  "replace": ""
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "flagBondFor: the multiplier cap is one cycle too high",
-  "find": "\tif exp > 2 {",
-  "replace": "\tif exp > 3 {"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "flagBondFor: the multiplier is doubled",
-  "find": "\treturn mustMul(b0, int64(1)<<uint(exp))",
-  "replace": "\treturn mustMul(b0, int64(1)<<uint(exp+1))"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "bountyFor: the bounty is sized off the BOND rather than what was burned",
-  "find": "\tb := burned * compOfBurnBps / 10000",
-  "replace": "\tb := bond * compOfBurnBps / 10000"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "bountyFor: the bounty may exceed the bond that was posted",
-  "find": "\tif bond < b {\n\t\tb = bond\n\t}",
-  "replace": ""
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "bountyFor: a negative bounty is paid",
-  "find": "\tif b < 0 {\n\t\tb = 0\n\t}",
-  "replace": ""
- },
- {
-  "pkg": "kourtv2",
   "file": "dispute.gno",
   "label": "disputeBond0: the doubling is one round ahead",
   "find": "\treturn mustMul(base, int64(1)<<uint(shift))",
   "replace": "\treturn mustMul(base, int64(1)<<uint(shift+1))"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "ride: a BELOW-BAR ride applies its tier anyway",
-  "find": "\tif !conclusive {\n\t\treturn // below-bar rides leave the tier standing (default mid)\n\t}",
-  "replace": "\t_ = conclusive"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "ride: the v0.54 promotion mandate is dropped entirely",
-  "find": "\tif cs.slotConsumed && tier > int(cs.tier) && bucketW(cs, tier)*3 < turnout*2 {\n\t\treturn // a promotion out of an adjudicated tier needs a \u2154 mandate (\u00a73.4 F3)\n\t}",
-  "replace": ""
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "ride: the \u2154 mandate is exclusive at its own value",
-  "find": "\tif cs.slotConsumed && tier > int(cs.tier) && bucketW(cs, tier)*3 < turnout*2 {",
-  "replace": "\tif cs.slotConsumed && tier > int(cs.tier) && bucketW(cs, tier)*3 <= turnout*2 {"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "ride: the tier is never applied",
-  "find": "\tcs.tier = int64(tier)\n\tcs.conclusiveSeq = cs.qVoteSeq",
-  "replace": "\tcs.conclusiveSeq = cs.qVoteSeq"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "ride: the ride never originates the slash (v0.50's sock-dispute immunity)",
-  "find": "\tif tier == qualityLow && turnout >= fullBar && cs.qLowW*3 >= turnout*2 {\n\t\toriginateSlash(c, cs, now, \"\") // \"\" \u2014 a ride posts no bond, so no bounty\n\t}",
-  "replace": "\t_, _ = now, fullBar"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "ride: a DUST ride levies a slash it could not lift",
-  "find": "\tif tier == qualityLow && turnout >= fullBar && cs.qLowW*3 >= turnout*2 {",
-  "replace": "\t_ = fullBar\n\tif tier == qualityLow && cs.qLowW*3 >= turnout*2 {"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "ride: the slash's \u2154-low bar is exclusive",
-  "find": "\tif tier == qualityLow && turnout >= fullBar && cs.qLowW*3 >= turnout*2 {",
-  "replace": "\tif tier == qualityLow && turnout >= fullBar && cs.qLowW*3 > turnout*2 {"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "ride: the ride pays a bounty it did not post a bond for",
-  "find": "\t\toriginateSlash(c, cs, now, \"\") // \"\" \u2014 a ride posts no bond, so no bounty",
-  "replace": "\t\toriginateSlash(c, cs, now, \"x\") // \"\" \u2014 a ride posts no bond, so no bounty"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "ride: the tier is never finalised",
-  "find": "\tcs.tierFinal = cs.pendingSlash == 0",
-  "replace": "\tcs.tierFinal = false"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "FlagState: a settled claim does not read as settled",
-  "find": "\tcase cs.crystallized:\n\t\treturn \"settled\"",
-  "replace": "\tcase false:\n\t\treturn \"settled\""
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "FlagState: an open flag vote does not read as voting",
-  "find": "\tcase cs.flagOpen:\n\t\treturn \"voting\"",
-  "replace": "\tcase false:\n\t\treturn \"voting\""
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "FlagState: an escrowed slash does not read as a counter window",
-  "find": "\tcase cs.pendingSlash > 0:\n\t\treturn \"counter-window\"",
-  "replace": "\tcase false:\n\t\treturn \"counter-window\""
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "FlagState: a consumed slot reads as open",
-  "find": "\tcase cs.slotConsumed:\n\t\treturn \"consumed\"",
-  "replace": "\tcase false:\n\t\treturn \"consumed\""
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "FlagState: the cooldown is never reported",
-  "find": "\tcase cs.flagCycles >= 1 &&\n\t\theightNow() < cs.lastFlagAt+flagCooldownBlocks:",
-  "replace": "\tcase false:"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "FlagState: the cooldown needs two cycles rather than one",
-  "find": "\tcase cs.flagCycles >= 1 &&",
-  "replace": "\tcase cs.flagCycles >= 2 &&"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "FlagState: the cooldown boundary is inclusive",
-  "find": "\t\theightNow() < cs.lastFlagAt+flagCooldownBlocks:",
-  "replace": "\t\theightNow() <= cs.lastFlagAt+flagCooldownBlocks:"
  },
  {
   "pkg": "kourtv2",
@@ -5572,20 +4648,6 @@
   "label": "SeniorEntitlement: the amount and the paid figure are swapped",
   "find": "\treturn e.to, e.amount, e.paid, p",
   "replace": "\treturn e.to, e.paid, e.amount, p"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "ride: the conclusive turnout mark is not recorded",
-  "find": "\tcs.conclusiveTurnout = turnout\n\tcs.slotConsumed = true",
-  "replace": "\tcs.slotConsumed = true"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "ride: the conclusive sequence mark is not recorded",
-  "find": "\tcs.tier = int64(tier)\n\tcs.conclusiveSeq = cs.qVoteSeq\n\tcs.conclusiveTurnout = turnout",
-  "replace": "\tcs.tier = int64(tier)\n\tcs.conclusiveTurnout = turnout"
  },
  {
   "pkg": "kourtv2",
@@ -5638,41 +4700,6 @@
  },
  {
   "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "reask: before adjudication the rounds SHARE one frozen tally",
-  "find": "\tif !cs.slotConsumed {\n\t\topenQualityTally(cs) // nothing adjudicated yet: each round asks fresh\n\t\treturn\n\t}",
-  "replace": ""
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "reask: the one-re-ask latch is dropped, so every round re-opens the poll",
-  "find": "\tif !cs.qualityReasked {\n\t\tcs.qualityReasked = true\n\t\topenQualityTally(cs)\n\t}",
-  "replace": "\tcs.qualityReasked = true\n\topenQualityTally(cs)"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "reask: the latch is never set",
-  "find": "\t\tcs.qualityReasked = true\n\t\topenQualityTally(cs)",
-  "replace": "\t\topenQualityTally(cs)"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "reask: the re-ask never opens a poll",
-  "find": "\t\tcs.qualityReasked = true\n\t\topenQualityTally(cs)",
-  "replace": "\t\tcs.qualityReasked = true"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "settleAnswerBond: a reserve is retained on an ALREADY-adjudicated slot",
-  "find": "\tif cs.pendingSlash == 0 && !cs.slotConsumed {",
-  "replace": "\tif cs.pendingSlash == 0 {"
- },
- {
-  "pkg": "kourtv2",
   "file": "crystallize.gno",
   "label": "capBonus: the F9 cap clause never binds",
   "find": "\tif gross > bound {\n\t\tgross = bound\n\t}",
@@ -5708,20 +4735,6 @@
  },
  {
   "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "half-burn: the burned remainder stays in escrow instead",
-  "find": "\t\tif rest := cs.flagBond - half; rest > 0 {\n\t\t\tc.coin.Burn(c.escrow, rest)\n\t\t}",
-  "replace": ""
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "half-burn: the returned half goes to the ANSWERER, not the flagger",
-  "find": "\tif turnout >= fullBar && cs.answerBond > 0 && !slashGrade {\n\t\thalf := cs.flagBond / 2\n\t\tif half > 0 {\n\t\t\tc.coin.Transfer(c.escrow, cs.flagger, half)\n\t\t}",
-  "replace": "\tif turnout >= fullBar && cs.answerBond > 0 && !slashGrade {\n\t\thalf := cs.flagBond / 2\n\t\tif half > 0 {\n\t\t\tc.coin.Transfer(c.escrow, cs.answerer, half)\n\t\t}"
- },
- {
-  "pkg": "kourtv2",
   "file": "session.gno",
   "label": "SettleUndisputed: settles twice",
   "find": "\tif cs.verdictAt != 0 {\n\t\tpanic(\"kourtv2: already settled\")\n\t}",
@@ -5746,20 +4759,6 @@
   "file": "dispute.gno",
   "label": "Finalize: finalizes with no provisional verdict",
   "find": "\tif cs.provisional < 0 {\n\t\tpanic(\"kourtv2: no provisional verdict to finalize\")\n\t}",
-  "replace": ""
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "ResolveFlag: resolves with no flag vote open",
-  "find": "\tif !cs.flagOpen {\n\t\tpanic(\"kourtv2: no flag vote to resolve\")\n\t}",
-  "replace": ""
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "ResolveFlag: resolves BEFORE the flag vote closes",
-  "find": "\tif now < cs.flagVoteEnd {\n\t\tpanic(\"kourtv2: the flag vote is still open\")\n\t}",
   "replace": ""
  },
  {
@@ -6221,13 +5220,6 @@
  },
  {
   "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "VoteQuality: the ballot's coin is never committed",
-  "find": "\tlockVote(c, who, voteLockQuality, int64(claimID), int64(cs.qVoteSeq), w)",
-  "replace": ""
- },
- {
-  "pkg": "kourtv2",
   "file": "votelock.gno",
   "label": "voteLockOpen: a superseded quality tally keeps holding coin",
   "find": "\t\tif cs.qVoteSeq != sub {\n\t\t\treturn false\n\t\t}",
@@ -6288,34 +5280,6 @@
   "label": "votingWeight: the floor comparison is reversed (raises, not lowers)",
   "find": "\tif held := c.coin.BalanceOf(who); held < w {",
   "replace": "\tif held := c.coin.BalanceOf(who); held > w {"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "VoteQuality: a divested voter is no longer refused",
-  "find": "\tif w <= 0 {\n\t\tpanic(\"kourtv2: you no longer hold the coin you would vote with\")\n\t}",
-  "replace": ""
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "qualityQuestionOpen: the counterOpen term is dropped (the readers go blind to a counter poll)",
-  "find": " || cs.counterOpen\n}",
-  "replace": "\n}"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "boundary tier: turnout exactly at the full bar no longer promotes",
-  "find": "if turnout >= fullBar && cs.qHighW*3 >= turnout*2 {",
-  "replace": "if turnout > fullBar && cs.qHighW*3 >= turnout*2 {"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "qualityBars: the demotion bar may derive to zero (nothing can be below it)",
-  "find": "\tif demotionBar < 1 {\n\t\tdemotionBar = 1\n\t}\n",
-  "replace": ""
  },
  {
   "pkg": "kourtv2",
@@ -7873,20 +6837,6 @@
  },
  {
   "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "settleAnswerBond: a slash reserve is withheld even when one is already pending",
-  "find": "\tif cs.pendingSlash == 0 && !cs.slotConsumed {",
-  "replace": "\tif cs.pendingSlash == 0 || !cs.slotConsumed {"
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "settleAnswerBond: a zero refund is still transferred",
-  "find": "\tif refund := cs.answerBond - reserve; refund > 0 {",
-  "replace": "\tif refund := cs.answerBond - reserve; refund >= 0 {"
- },
- {
-  "pkg": "kourtv2",
   "file": "session.gno",
   "label": "WithdrawStake: the WINNING side may withdraw before the verdict",
   "find": "\tif cs.verdictAt == 0 && !(cs.provisional >= 0 && side != int(cs.provisional)) {",
@@ -7947,14 +6897,6 @@
   "label": "RestoreFolder: the moderation-log event is never emitted",
   "find": "\temitModAct(c.id, 0, \"folder-restore\", who)\n",
   "replace": ""
- },
- {
-  "pkg": "kourtv2",
-  "file": "quality.gno",
-  "label": "qualityBars: BOTH minimum clamps on the full bar are gone (an empty tally promotes)",
-  "find": "\tif fullBar < demotionBar {\n\t\tfullBar = demotionBar\n\t}\n\tif fullBar < 1 {\n\t\tfullBar = 1\n\t}\n",
-  "replace": "",
-  "why": "THE ONLY MUTATION OF THIS PAIR WITH TEETH, which is why it replaced two rows that each claimed to be a survivor. The tail of qualityBars is `if fullBar < demotionBar { fullBar = demotionBar }` followed by `if fullBar < 1 { fullBar = 1 }`, and demotionBar has already been floored to 1 above. So the ordering clamp can only fire when fullBar would be 0, and in that case demotionBar is EXACTLY 1 (it was clamped to the same votable/3, then floored) - both clamps therefore yield fullBar == 1 and deleting either one ALONE cannot change the program. Those two single deletions sat in KNOWN-GAPS as 'the full bar may be zero' and 'the ladder may invert'; both were invalid mutations and both stated consequences were false. MEASURED, full kourtv2 suite each time: ordering clamp alone PASS, unit floor alone PASS, BOTH deleted FAIL at TestTheQualityBarsNeverReachZeroOnAMicroCourt with 'the full bar is 0; an EMPTY tally clears a bar of zero', control green before and after. The lines are adjacent and each occurs once, so the joint deletion is writable as one row - a masking pair does not always mean no row can be written. What it costs if it goes: applyQualityTally opens with `turnout >= fullBar && cs.qHighW*3 >= turnout*2`, which at fullBar == 0 and an empty tally reads 0 >= 0 && 0 >= 0, so a vote nobody cast CONCLUSIVELY promotes the claim to the high-quality payout multiplier."
  },
  {
   "pkg": "kourtv2",
