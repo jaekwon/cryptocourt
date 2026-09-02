@@ -313,9 +313,29 @@ control("a second writer of the proposal state", f"{GOVERNORDIR}/governor.gno",
 # is exactly how a one-way coupling stops being one: it looks harmless at the call
 # site and is invisible from the other side. If a payout could read a level or a
 # vote, a flooded board would move money and S5 would be false.
+#
+# RE-POINTED, because this arm was BROKEN CONTROL (anchor matched 0x) and therefore
+# testing nothing. It used to plant into `creditAuthorHigh(c, cs, cs.tier)`, and
+# creditAuthorHigh is GONE — standing_test.gno now carries three comments saying so.
+# A plant whose anchor has been deleted reports as a passing suite in every
+# implementation that does not check its own controls, which is the reason that
+# check exists and the reason this was found.
+#
+# The rule itself is untouched and live: arm 17 fires on a file that is not in
+# BOARD_LANE, contains a coin.Transfer/Mint/Burn, and reads board state.
+# crystallize.gno still satisfies all three preconditions — measured: 2 money
+# moves (lines 222 and 227), not in BOARD_LANE, and 0 board reads today.
+#
+# The new plant is a STRICTER reading of the arm's own sentence than the old one:
+# it guards the author's OWN refund on the level the author holds, so it is
+# literally "a settlement asking what level the author has" and the money it
+# gates is a coin.Transfer to that same address. Anchored on the deposit refund
+# rather than the fee refund on line 227, which is the same shape — cs.deposit
+# makes it unique.
 control("a money path reading board state", f"{KOURTV2}/crystallize.gno",
-        "\tcreditAuthorHigh(c, cs, cs.tier)",
-        "\tif postLevel(c, cs.author) > 0 {\n\t\tcreditAuthorHigh(c, cs, cs.tier)\n\t}",
+        "\t\tc.coin.Transfer(c.escrow, cs.author, cs.deposit)",
+        "\t\tif postLevel(c, cs.author) > 0 {\n"
+        "\t\t\tc.coin.Transfer(c.escrow, cs.author, cs.deposit)\n\t\t}",
         "money-reads-board",
         argv=["python3", EPOCHCOH])
 # ARM 16, and its plant is the failure the arm exists for. courtIsPurged used to
