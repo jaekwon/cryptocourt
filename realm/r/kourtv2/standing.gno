@@ -650,9 +650,14 @@ func creditDisputeResolved(c *Court, cs *claimState) {
 // crystallize says it plainly — "provClose now DRAWS. Only a dead claim has no
 // draw" — so an earlier comment here, that provClose has "no draw and no
 // verdict", was false in every clause and withheld a credit on a path that pays
-// MID emission. It resolves without being named: a provClose carries whatever
-// tier and slotConsumed it ended up with, and is rated on those like anything
-// else.
+// MID emission. It resolves without being named: a provClose is rated like any
+// other claim on the adjudicated rate.
+//
+// THAT SENTENCE USED TO SAY "carries whatever tier and slotConsumed it ended up
+// with, and is rated on those", which contradicted the function immediately
+// below it — creditWinConviction opens "The tier arm is gone with the tier."
+// slotConsumed is not declared anywhere any more either. The conclusion held;
+// only its stated reason had stopped being the reason.
 func creditWinConviction(c *Court, cs *claimState, who address, p *stakePos) {
 	// The tier arm is gone with the tier. It refused a conclusive LOW, which
 	// drew nothing — "the record follows the money" — and with no tier there is

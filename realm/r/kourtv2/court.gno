@@ -409,9 +409,14 @@ func mustInvariants() {
 	// X̄ standing in for the pool) is falsified AT RUNTIME two ways: by a DRAIN —
 	// Unstake is free and keeps conviction by design (F9), measured at a 224×
 	// shortfall — and by an over-aged claim, since nothing forced CloseDeadClaim.
-	// The real guarantee is the runtime floor in PostAnswer, which prices the slash
-	// with the SAME sizer ResolveFlag later draws with; the ≤12-week premise is now
-	// enforced there by the dead-claim answerability gate.
+	// The real guarantee is the runtime floor in PostAnswer, and that part is
+	// still true: bondFloorAt prices the bond against BOTH sides' conviction and
+	// PostAnswer takes the larger, with the ≤12-week premise enforced there by the
+	// dead-claim answerability gate. What is no longer true is the clause about
+	// pricing "with the SAME sizer ResolveFlag later draws with" — the answer-bond
+	// slash went with the quality lane, and ResolveFlag, slashGrade and settleSlash
+	// have no non-comment line left in this realm. (SlashStanding is a DIFFERENT
+	// mechanism and is very much alive: it slashes standing, not a bond.)
 	maxRateBpsFP := 255 * (r0WeeklyBps*1_000_000 + budgetBpsFPStart) / 100
 	maxTcWeeks := deadClaimTimeout / periodBlocks
 	maxMidGrossBps := maxRateBpsFP * maxTcWeeks / 1_000_000
