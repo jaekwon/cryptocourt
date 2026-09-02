@@ -4207,7 +4207,13 @@ async function adenaSign(func, args, el){
          + ". If it is locked, unlock it; otherwise reconnect with the wallet button in the left rail.");
       return;
     }
-    if(net.data && net.data.chainId && net.data.chainId!==want){
+    /* NO chainId IS ALSO NOT THE RIGHT CHAIN. This used to require Adena to
+       NAME a chain before it would try to change it, so a wallet that answered
+       with a blank one skipped the switch entirely and went straight to signing
+       — where it failed with "unknown chain", the error this whole block exists
+       to prevent. Anything that is not `want` gets the same treatment. */
+    const wchain = (net.data && net.data.chainId) || "";
+    if(wchain !== want){
       let sw = await a.SwitchNetwork(want);
       /* "unknown chain kourt-1" — AND IT IS RIGHT, IT HAS NEVER HEARD OF IT.
          SwitchNetwork only picks among networks Adena already holds, and a
@@ -4229,7 +4235,7 @@ async function adenaSign(func, args, el){
         if(add && (add.code===0 || add.code===4001)) sw = await a.SwitchNetwork(want);
       }
       if(sw.code!==0){
-        note("Adena is on "+net.data.chainId+" and would not move to "+want
+        note("Adena is on "+(wchain || "an unnamed chain")+" and would not move to "+want
            +". Add it by hand in Adena — chain id "+want+", RPC "+(CFG.rpc||"?")
            +" — then try again."); return; }
     }
@@ -4358,9 +4364,31 @@ async function adenaSign(func, args, el){
       vals = keys.map(k => k==="amount"? String(micro) : String(args[k]));
     }
     note("Waiting for Adena…");
-    const res = await a.DoContract({messages:[{type:"/vm.m_call", value:{
+    const doIt = () => a.DoContract({messages:[{type:"/vm.m_call", value:{
       caller: CFG.addr, send, pkg_path: PKG, func, args: vals
     }}], gasFee: GAS_FEE_UGNOT, gasWanted: GAS_WANTED});
+    let res = await doIt();
+    /* LAST CHANCE TO REGISTER THE CHAIN. Everything above can pass — Adena
+       answers, reports the chain we want, points at the right node — and the
+       signature still comes back "unknown chain", because what the wallet
+       REPORTS and what it can actually sign for are two different lists. So the
+       error itself is the trigger: register, then sign again, once. */
+    if(res && res.code!==0 && /unknown chain/i.test(String(res.message||""))
+       && typeof a.AddNetwork === "function"){
+      const add = await a.AddNetwork({
+        chainId: want, chainName: (CHAIN_LABEL || want),
+        rpcUrl: (CFG.rpc || "").replace(/\/+$/, ""),
+      }).catch(()=>null);
+      if(add && (add.code===0 || add.code===4001)){
+        await a.SwitchNetwork(want).catch(()=>null);
+        res = await doIt();
+      }
+    }
+    if(res && res.code!==0 && /unknown chain/i.test(String(res.message||""))){
+      note("Adena does not know the chain "+want+". Add it in Adena's network "
+         + "settings — chain id "+want+", RPC "+(CFG.rpc||"?")+" — then try again.");
+      return;
+    }
     if(res.code===0){
       /* WHAT CHANGED, NOT WHAT IT WAS CALLED. This said "Sent. tx kI749HHATQkl…"
          — a hash truncated to twelve characters, which cannot be looked up, is
