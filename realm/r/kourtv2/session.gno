@@ -41,27 +41,24 @@ func SettleUndisputed(cur realm, courtSlug string, claimID uint64) {
 	// now — no later stake op will ever ride a trim past this point.
 	trimClaimHistory(c, cs, uint32(cs.frozenAt/epochBlocks)+1)
 	cs.provisional = cs.answer
-	// The bond returns — but a SLASH-SIZED reserve stays collateralized
-	// through the quality slot (audit M3-HIGH-1). A conclusive-low flag can
-	// still land after settle (flags run until crystallize), and its slash is
-	// drawn from the answer bond; returning the whole bond here let the slash
-	// clamp to zero (votingBlocks > settleDelay, so the flag never resolved
-	// first). The reserve is the draw-proportional slash size (v0.40) computed
-	// from the frozen conviction — identical to what ResolveFlag will draw, so
-	// the retained amount exactly covers it (no clamp-from-under-retention).
-	// Disposed exactly once later: burned by a slash, or returned to the
-	// answerer at crystallize if no slash lands.
-	// Retain only while a slash can still land (v0.44, symmetric with Finalize):
-	// slotConsumed is a one-way latch and OpenFlag panics on it, so a consumed
-	// slot admits no future flag and therefore no future slash; and a slash
-	// already pending was carved out of the bond at ResolveFlag, so what remains
-	// here is owed back. Retaining in either case only withholds the answerer's
-	// coin until crystallize for nothing. (No decidedRounds clause: this path
-	// panics on round > 0, so it is always 0 here.) NOTE pendingSlash > 0 implies
-	// slotConsumed — the carve follows the latch on one straight-line path — so
-	// !slotConsumed is the load-bearing clause and pendingSlash == 0 is
-	// defence-in-depth. TestSettleRetainsNothingAfterDustLowNoSlash is the fixture
-	// that isolates the former (a consumed slot with no slash reserved).
+	// The bond returns WHOLE. Why it is whole rather than partly retained is
+	// settleAnswerBond's own story (answerbond.gno) and is not repeated here.
+	//
+	// WHAT USED TO BE HERE, because deleting it outright would invite somebody to
+	// reintroduce it: twenty-one lines sizing a slash-sized reserve to keep
+	// collateralized past settle (audit M3-HIGH-1, v0.40, v0.44), because a
+	// conclusive-low flag could still land while flags ran until crystallize.
+	// Every mechanism that paragraph reasoned about — the quality slot,
+	// slotConsumed, OpenFlag, ResolveFlag, pendingSlash — went with the quality
+	// lane, and none of them has a single non-comment line left in this realm.
+	// It also cited TestSettleRetainsNothingAfterDustLowNoSlash as the fixture
+	// isolating its load-bearing clause; that test is gone too, surviving only as
+	// a mention in audit_m3_test.gno's own header.
+	//
+	// So it justified a retention this code no longer performs, through symbols a
+	// reader cannot find, against a fixture that does not run. Two mutation rows
+	// anchored on its `if !cs.tierFinal && !cs.slotConsumed {` and were retired in
+	// 4cb3969 for the same reason.
 	if cs.answerBond > 0 {
 		settleAnswerBond(c, cs)
 	}
