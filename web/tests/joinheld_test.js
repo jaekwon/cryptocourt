@@ -19,6 +19,14 @@ function slice(from, to){
   return src.slice(a, b);
 }
 
+// The coin name is markup now (the gold bar), so compare the TEXT of it. That
+// text is "Kourt:META", not "KOURT:META": the bar carries the word as written
+// and the colon is present but visually hidden, which is the whole point of
+// rendering it as elements rather than a string.
+const strip = h => String(h||"").replace(/<[^>]*>/g, "");
+// ccSymHtml escapes the slug it renders, so esc has to exist here too.
+global.esc = t => String(t).replace(/[&<>"']/g, c =>
+  ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else console.log("ok:",n); };
 
 function node(){ return {textContent:"", hidden:true}; }
@@ -46,7 +54,7 @@ eval(slice('async function fillJoinHeld(slug){', '\nfunction recomputeBuy('));
   // THE EXACT BUY THAT PROMPTED THIS: 447,213,595 units of KOURT:META.
   let d = await run(447_213_595);
   ok("a real holding is shown", d.joinheld.hidden === false);
-  ok("...as coin, not raw units", d.joinheldv.textContent === "447.2 KOURT:META");
+  ok("...as coin, not raw units", strip(d.joinheldv.innerHTML) === "447.2 Kourt:META");
 
   // Zero is shown too: on a court somebody has just failed to buy into, "none
   // yet" answers the same question a number does, and answers it better.
@@ -55,7 +63,7 @@ eval(slice('async function fillJoinHeld(slug){', '\nfunction recomputeBuy('));
   // A FIGURE, NOT A PHRASE. Every other row in the Join panel is a number and a
 // unit; "none yet" made this one read as a different kind of thing.
 ok("...as a figure in the same shape as the rows under it",
-   d.joinheldv.textContent === "0.00 KOURT:META");
+   strip(d.joinheldv.innerHTML) === "0.00 Kourt:META");
 
   // A FAILED READ LEAVES THE ROW HIDDEN. Showing 0 here would tell somebody their
   // purchase vanished.

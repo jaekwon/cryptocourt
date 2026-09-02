@@ -3144,7 +3144,7 @@ async function fillStakeBalance(slug){
      then of what. "0 / 201.7 KOURT:COVID" — one glance, and the unit governs
      both numbers because it sits after both. */
   const fig = ccText(micro, slug).replace(" " + ccSym(slug), "");
-  out.textContent = "/ " + (micro>0? fig : "0") + " " + ccSym(slug);
+  out.innerHTML = "/ " + (micro>0? fig : "0") + " " + ccSymHtml(slug);
   // Left where the click handler can read it: whether the reader holds any coin
   // decides what a refused amount should SAY, and that is decided at the press.
   const w = document.getElementById("stakeamtwrap");
@@ -3192,7 +3192,7 @@ async function fillTicketPulls(slug, id, d, p){
     // The author's and the answerer's slices are the WHOLE slice, so they can be
     // stated. Accuracy and the carrot are shared out, so they name the pool.
     const sm = document.createElement("small");
-    sm.textContent = (k==="author"||k==="answerer")? ccText(pool, slug) : "of "+ccText(pool, slug);
+    sm.innerHTML = (k==="author"||k==="answerer")? cc(pool, slug) : "of "+cc(pool, slug);
     el.appendChild(document.createTextNode(" "));
     el.appendChild(sm);
   }
@@ -3243,7 +3243,7 @@ async function fillWithdrawSides(slug, id, d, nowH, vAt){
     const lab = w.querySelector(".btn");
     if(lab && !lab.querySelector("small")){
       const sm = document.createElement("small");
-      sm.textContent = ccText(amt, slug);
+      sm.innerHTML = cc(amt, slug);
       lab.appendChild(document.createTextNode(" "));
       lab.appendChild(sm);
     }
@@ -3377,8 +3377,13 @@ function ccFigure(n){ const u=n||0, v=u/1e6;
   return {fig:(v>=1000? fmtN(v): v.toFixed(v<10?2:1)), micro:false}; }
 function cc(n, slug){ const {fig,micro}=ccFigure(n);
   return fig+" "+(micro?"µ":"")+ccSymHtml(slug); }
-/* The same figure as plain text, for what cannot take markup: an aria-label, a
-   textContent, or a caller that slices the symbol back off. */
+/* The same figure as plain text, for what genuinely cannot take markup: an
+   aria-label, a button face that btn() escapes, or a caller that slices the
+   symbol back off.
+   NOT for anything merely written with textContent — four display sites used
+   that and so printed a bare "KOURT:COVID" beside tiles showing the gold bar.
+   They set innerHTML now, which is safe because every part of cc() is generated
+   here: digits from a number, and the slug through ccSymHtml, which escapes. */
 function ccText(n, slug){ const {fig,micro}=ccFigure(n);
   return fig+" "+(micro?"µ":"")+ccSym(slug); }
 function ugnot(n){ return fmtN(n)+" µGNOT"; }
@@ -8151,7 +8156,7 @@ async function fillJoinHeld(slug){
      but every other row in this panel is a number and a unit, and "none yet"
      made this one read as a different kind of thing. "0.00 KOURT:COVID" answers
      the same question in the same shape as the rows under it. */
-  val.textContent = ccText(n, slug);
+  val.innerHTML = cc(n, slug);
   row.hidden = false;
 }
 function recomputeBuy(){
