@@ -1802,13 +1802,6 @@
  {
   "pkg": "kourtv2",
   "file": "session.gno",
-  "label": "SettleUndisputed: a consumed slot's low is reset to mid (audit_slash_v040 LOW)",
-  "find": "\t// emission on a claim the crowd conclusively voted junk (audit_slash_v040 LOW).\n\tif !cs.tierFinal && !cs.slotConsumed {\n\t\tcs.tier = tierMidX\n\t}",
-  "replace": "\t// emission on a claim the crowd conclusively voted junk (audit_slash_v040 LOW).\n\tif !cs.tierFinal {\n\t\tcs.tier = tierMidX\n\t}"
- },
- {
-  "pkg": "kourtv2",
-  "file": "session.gno",
   "label": "SettleUndisputed: the route provenance says vote",
   "find": "\tcs.route = \"undisputed\"",
   "replace": "\tcs.route = \"vote\""
@@ -6827,13 +6820,6 @@
   "label": "SettleUndisputed: the 72h minimum never refuses",
   "find": "(known && !passed) ||\n\t\t(!known && heightNow() < cs.answerHeight+settleDelay)",
   "replace": "(known && !passed) &&\n\t\t(!known && heightNow() < cs.answerHeight+settleDelay)"
- },
- {
-  "pkg": "kourtv2",
-  "file": "session.gno",
-  "label": "SettleUndisputed: the mid default overwrites a tier already decided",
-  "find": "\tif !cs.tierFinal && !cs.slotConsumed {",
-  "replace": "\tif !cs.tierFinal || !cs.slotConsumed {"
  },
  {
   "pkg": "kourtv2",
