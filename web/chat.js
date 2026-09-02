@@ -234,10 +234,15 @@ function chatLogHtml(msgs, nowSec) {
 // The obvious implementation re-renders the whole panel on every poll, which deletes
 // whatever the user was halfway through typing every few seconds. The shell is built
 // once and only .chatlog and .chatstate are written afterwards.
-function chatPanelHtml(slug, moniker, note) {
+// heading=false drops the panel's own "Chat <court>" line. The host supplies it
+// when it already has one: in the rail the section is titled Chat and the court
+// is the page you are looking at, so the panel repeating both read as
+// "Chat / Chat covid".
+function chatPanelHtml(slug, moniker, note, heading) {
   return ""
     + '<div class="chathead">'
-    +   "<b>Chat</b> <span class=\"chatslug\">" + chatEsc(slug) + "</span>"
+    +   (heading === false ? ""
+        : "<b>Chat</b> <span class=\"chatslug\">" + chatEsc(slug) + "</span>")
     +   '<span class="chatwarn">names are unverified &mdash; nobody here is staff,'
     +     " and nobody can move funds for you</span>"
     +   '<span class="chatdemo" hidden></span>'
@@ -441,6 +446,19 @@ const CHATCSS = `
   border:1px solid rgba(128,128,128,.35);border-radius:4px;padding:.3rem .4rem}
 .chatmoniker:focus,.chatinput:focus{outline:none;border-color:rgba(128,128,128,.7)}
 .chatmoniker::placeholder,.chatinput::placeholder{color:inherit;opacity:.4}
+/* SEND IS A BUTTON AND SHOULD LOOK LIKE ONE. It carried no styling at all, so
+   a browser drew its own — flat and grey beside two inputs that had just been
+   given borders and a radius, which made the one control that DOES something
+   the least visible thing in the row.
+   Neutral rather than accent-coloured: this file cannot see the page's colour
+   tokens, and a hardcoded brand colour would be wrong on one theme or the
+   other. A translucent grey reads as raised on both. */
+.chatsend{flex:0 0 auto;font:inherit;font-weight:600;cursor:pointer;
+  padding:.32rem .8rem;border-radius:4px;line-height:1.35;color:inherit;
+  border:1px solid rgba(128,128,128,.45);background:rgba(128,128,128,.18)}
+.chatsend:hover{background:rgba(128,128,128,.32);border-color:rgba(128,128,128,.7)}
+.chatsend:active{transform:translateY(1px)}
+.chatsend:disabled{opacity:.4;cursor:default;transform:none}
 .chatnote{min-height:1.2em;opacity:.7;font-size:.85em;margin-top:.25rem}
 `;
 function chatStyles(doc) {
@@ -475,7 +493,7 @@ function mountChat(el, opts) {
   try { moniker = window.localStorage.getItem("kourt.chat.moniker") || ""; } catch (e) {}
 
   el.innerHTML = chatPanelHtml(court, moniker,
-    base ? "" : "Chat is not configured for this page.");
+    base ? "" : "Chat is not configured for this page.", o.heading);
   const logEl = el.querySelector(".chatlog");
   const stateEl = el.querySelector(".chatstate");
   const noteEl = el.querySelector(".chatnote");

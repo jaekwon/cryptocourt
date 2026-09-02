@@ -205,7 +205,15 @@ code,.mono{font-family:var(--mono)}
 .brand{padding:22px 22px 16px; border-bottom:1px solid var(--line)}
 .brand .mark{display:flex; align-items:center; gap:10px; text-decoration:none}
 .brand .scale{font-size:26px; filter:grayscale(.2)}
-.brand .seat{display:flex; flex:none; color:var(--gilt)}
+/* THE THRONE IS TWO-TONE, AND colour ONLY DRIVES ITS BODY. The icon is drawn as
+   a currentColor silhouette with a <g fill="var(--gilt)"> laid over it — gold
+   caps on the finials, the seat's front edge, the plinth. So --ink here is not
+   "black", it is the tone the gold has to read against: near-white on the dark
+   page, near-black on the light one, gold catching the edges in both.
+   SETTING THIS TO --gilt FLATTENED IT. Body and highlight became one colour and
+   the throne lost its edges — a gold rectangle where there had been a lit one.
+   The wordmark beside it stays --gilt; the throne is where the two-tone lives. */
+.brand .seat{display:flex; flex:none; color:var(--ink)}
 .brand .mark:hover .seat{color:var(--accent)}
 /* THE WORDMARK IN LEAF GOLD, with the seat beside it. --gilt rather than
    --mark: this is 22px at 600, which WCAG counts as large text and holds at
@@ -1740,13 +1748,12 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
     <a href="#/needs" data-k="needs"><span class="g">!</span> What needs you</a>
     <div class="sec">Reference</div>
     <a href="#/about" data-k="about"><span class="g">?</span> How it works</a>
+    <!-- CHAT IS A SECTION HEADING LIKE THE OTHERS, and it has to sit INSIDE the
+         nav to look like one: the rule is `.nav .sec`, so the same div as a
+         sibling of the nav got no styling at all and read as body text.
+         Per-court, so heading and panel hide together everywhere else. -->
+    <div class="sec" id="railchathead" hidden>Chat</div>
   </nav>
-  <!-- CHAT IS A SECTION OF THE RAIL, labelled like You and Reference rather
-       than an unnamed box wedged under them. It used to hang at the foot of the
-       court page, below the docket, where a reader had to scroll past every
-       claim to discover anyone was talking.
-       Per-court, so the heading and the panel are both hidden anywhere else. -->
-  <div class="sec" id="railchathead" hidden>Chat</div>
   <div class="railchat" id="railchat" hidden></div>
   <div class="foot">
     <div class="node">
@@ -5567,8 +5574,12 @@ on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
     if(rc){
       rc.hidden = false;
       if(rh) rh.hidden = false;
+      // heading:false — the rail's own "Chat" section title is directly above
+      // this, and the court is the page being looked at, so the panel printing
+      // "Chat covid" under a heading that says "Chat" said it twice.
       CHATSTOP = mountChat(rc,
-        {cfg: {...CFG, chat: chatBase()}, chain: CFG.chainid || "dev", court: slug});
+        {cfg: {...CFG, chat: chatBase()}, chain: CFG.chainid || "dev", court: slug,
+         heading: false});
     }
   }
   QCTX = {kind:"claim titles", demo:!isLive(), loaded:allRows.length,
