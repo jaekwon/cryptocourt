@@ -99,7 +99,30 @@ TARGETS = [
             # next act added here needs either a deliberate ceiling raise, with a
             # reason, or a second events filetest. Do not raise it to make room
             # without saying which.
-            "z_events_filetest.gno": 60_000,
+            #
+            # RAISED TO 61,000, AND THE REASON IS THE ONE THAT NOTE ASKED FOR —
+            # but it is NOT "an act was added here". The filetest has not changed
+            # since 58,874b was measured at f4a1d4f. A COURT GOT MORE EXPENSIVE TO
+            # START, which is the exact thing the note above kept the margin tight
+            # to catch, and it caught it: 60,119b, up 1,245b.
+            #
+            # The cause is two per-court checkpoint series added to the Court
+            # struct after that measurement — burnH (6ba34c5, BurnSeries) and
+            # priceH (fd5b86b, PriceSeries), about 620b each. Both are shipped,
+            # intended, and paid at StartCourt, which is why a filetest that
+            # starts one court pays them twice over.
+            #
+            # STILL TIGHT ON PURPOSE: 881b of room, not the 14% that
+            # z_sitedomain below carries. A loose ceiling here would have hidden
+            # this growth, and the growth is the signal. The next court field
+            # needs its own line in this note.
+            #
+            # MEASURED, NOT ASSUMED, and one plausible cause was ruled out: the
+            # three dead claimState fields in #68 (flagger, flagVoteEnd,
+            # dustBurns) account for ZERO of it. Removing all three from a copy
+            # of the realm still writes exactly 60,119b, and `gno test .` passes,
+            # so they are dead but they are not these bytes.
+            "z_events_filetest.gno": 61_000,
             # THE SECOND EVENTS FILETEST, which is what the note above said to
             # do rather than widen the ceiling. The site-domain verbs point every
             # rendered page in the realm at an outside website and take the
