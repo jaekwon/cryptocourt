@@ -10923,7 +10923,26 @@ function claimTitleHtml(d){
 }
 function verdictBanner(d){
   if(d.phase==="provClose") return `<span class="pill void">closed · no decision</span>`;
-  if(d.phase==="settled"){ const v=(d.verdict!=null?d.verdict:d.answer); return `<span class="pill good">✓ settled ${sideName(v)}${d.route?" · "+esc(d.route):""}</span>`; }
+  /* THE SETTLED PILL TAKES THE VERDICT'S COLOUR. phaseClass already worked this
+     out for the docket and the map — --good and --yes are the SAME green
+     (#1c6551) and .pill.good is drawn with --yes-wash and the YES glow, so a
+     settled NO was announced in the palette of the side that lost it. This
+     surface was simply left behind when that was fixed, and it is the largest
+     one: the claim's own page. Same three classes, so there is one convention
+     rather than two, and an unknown side still gets neither colour.
+     NO TICK. The glyph asserts a valence a court does not have: a NO verdict is
+     not a failure and a YES is not a success, they are answers. Beside "settled
+     NO" a tick reads as approval of the opposite of the record.
+     AND NO SIDE WORD HERE. The title two lines above is struck through and
+     carries the side in its own oval, so what is left for this pill is the
+     phase and the ROUTE — "undisputed", "by vote" — which is the part that
+     appears nowhere else on the page. The docket and map pills keep their side,
+     because there is no title beside them to carry it. */
+  if(d.phase==="settled"){
+    const v = (d.verdict!=null? d.verdict : d.answer);
+    const cls = v===0? "good" : v===1? "verdict-no" : "decided";
+    return `<span class="pill ${cls}">settled${d.route? " · "+esc(d.route) : ""}</span>`;
+  }
   /* NO "tally sealed". The pill asserted a property the chain does not have: the
      ballots are on chain and anyone can add them up, so the only thing that is
      true is that THIS PAGE does not sum them mid-vote. A status chip is the

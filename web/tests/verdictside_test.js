@@ -37,6 +37,8 @@ eval(slice('async function nameTheSide(', '/* A deeper docket window'));
 // the real function goes in rather than a stub.
 eval(slice('function safeInline(', '\n'));
 eval(slice('function claimTitleHtml(', '\nfunction verdictBanner('));
+// slice() is exclusive of its terminator, so the closing brace goes back on.
+eval(slice('function verdictBanner(', '\n}') + '\n}');
 
 // ---- stubs: the chain, and the batcher that talks to it ----
 let asked = [], verdicts = {};
@@ -251,6 +253,48 @@ const run = async (rows, v, mode) => {
   const eviltitled = claimTitleHtml({phase:"settled", verdict:1, title:'<img src=x onerror=1>'});
   ok("a hostile title is escaped inside the strike",
      eviltitled.includes("&lt;img") && !eviltitled.includes("<img"));
+
+  // -------------------------------------------- and the pill below it agrees
+  /* WHY. phaseClass fixed this for the docket and the map — "the interface was
+     announcing a NO verdict in the colour of YES" — and verdictBanner, the
+     claim's OWN page, was left behind: a green pill with a tick reading
+     "✓ settled NO · undisputed". --good and --yes are the same green, so a
+     settled NO wore the palette of the side that lost it. */
+  const banner = (over) => verdictBanner(Object.assign({phase:"settled"}, over));
+  ok("a settled NO is not painted in the winning side's green",
+     /class="pill verdict-no"/.test(banner({verdict:1}))
+     && !/pill good/.test(banner({verdict:1})));
+  ok("...a settled YES still is", /class="pill good"/.test(banner({verdict:0})));
+  ok("...and a side that did not read gets neither colour",
+     /class="pill decided"/.test(banner({})));
+  /* ONE CONVENTION, NOT TWO. The docket pill and the claim pill pick their class
+     from the same three names; asserted against phaseClass so the two cannot
+     drift into disagreeing about what colour a verdict is. */
+  ok("the claim pill and the docket pill agree on every side",
+     phaseClass("settled YES — x").cls === "good"
+     && phaseClass("settled NO — x").cls === "verdict-no"
+     && phaseClass("settled — x").cls === "decided");
+
+  /* NO TICK. It asserts a valence a court does not have: a NO verdict is not a
+     failure and a YES is not a success, they are answers. */
+  ok("no branch of the pill ticks a verdict",
+     !["settled","provClose","closed","disputed","provisional","answered","open"]
+       .some(ph => verdictBanner({phase:ph, verdict:1, answer:1, provisional:1}).includes("✓")));
+
+  /* THE SIDE WORD IS GONE FROM THIS PILL, because the struck title two lines
+     above carries it in its own oval. What is left is the phase and the ROUTE,
+     which appears nowhere else on the page. */
+  ok("the claim pill no longer repeats the side",
+     !/settled (YES|NO)/.test(banner({verdict:1})) && !/settled (YES|NO)/.test(banner({verdict:0})));
+  ok("...but the route survives, since nothing else prints it",
+     banner({verdict:1, route:"undisputed"}).includes("settled · undisputed"));
+  ok("...and a claim with no route says only that it settled",
+     />settled<\/span>/.test(banner({verdict:1})));
+  /* THE DOCKET KEEPS ITS SIDE. There is no title beside those rows, so dropping
+     the word there would leave a coloured pill as the only clue — and colour
+     alone is not a reading. Pinned so the two surfaces are not "unified". */
+  ok("the docket pill still names the side",
+     statusPill("settled NO — every stake withdraws 1×").includes("NO"));
 
   /* THE OVAL IS SIZED AGAINST THE VIEWPORT, NOT THE HEADING. .page-h is
      clamp(26px,3.4vw,36px), so the shared rule's .86em would set the side in
