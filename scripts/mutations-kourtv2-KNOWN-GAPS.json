@@ -1,22 +1,6 @@
 [
  {
   "pkg": "kourtv2",
-  "file": "votelock.gno",
-  "label": "voteLockOpen: the cs.closed half of the quality terminal test is dropped",
-  "find": " || cs.closed {",
-  "replace": " {",
-  "why": "A DELIBERATE SURVIVOR: closed and a live quality row cannot coexist, so no test can catch this. cs.closed is written only by CloseDeadClaim, which refuses a claim with an answer ('it settles, it does not die'), and every route into the quality lane needs an answered claim. That refusal is pinned by TestQualityLockReleasesWhenItsVoteCanNoLongerDecideAnything, which asserts exactly that message. The term stays because it is the terminal test and a terminal test that only half-checks terminality is a trap for the next lane that ends a claim a new way \u2014 which is what arm 5 of check-epoch-coherence counts writers for. IF THIS COMES BACK CAUGHT, some path now closes an answered claim: promote it and delete this note."
- },
- {
-  "pkg": "kourtv2",
-  "file": "votelock.gno",
-  "label": "voteLockOpen: carry-forward keeps only its qualityReasked half",
-  "find": "cs.slotConsumed && ",
-  "replace": "",
-  "why": "A DELIBERATE SURVIVOR, redundant by implication: qualityReasked implies slotConsumed, so dropping the slotConsumed half changes nothing. reaskQualityTally sets qualityReasked only AFTER its `if !cs.slotConsumed` early return, and CounterFlag sets it behind a pending slash, which only a conclusive flag creates. Both tests that build a carry-forward state assert the two flags together (TestQualityLockHoldsWhenTheTallyCarriesIntoLaterRounds and TestTheCounterLaneHoldsCoinAndItsRedundancyIsTheReasonWhy), so the implication is pinned even though the term is not. Kept because the predicate should say what it means \u2014 the condition IS reaskQualityTally's, and writing half of it would make the two drift silently. IF THIS COMES BACK CAUGHT, qualityReasked is now reachable without slotConsumed: promote it and delete this note."
- },
- {
-  "pkg": "kourtv2",
   "file": "voteweight.gno",
   "label": "votingWeight: the negative clamp is dropped",
   "find": "\tif w < 0 {\n\t\tw = 0\n\t}\n",
@@ -188,14 +172,6 @@
   "find": "\tif budgetWeeklyBps*52 > 2000 {",
   "replace": "\tif budgetWeeklyBps*52 > 2000000 {",
   "why": "UNPINNABLE BY CONSTRUCTION, IN BOTH DIRECTIONS, and this row stands for the whole class rather than thirteen copies of it. mustInvariants and the tier loop beside it compare CONSTANTS ONLY, at init. Measured: loosening this gate so it can never fire leaves the suite at exit 0 with ZERO failing tests, because the constants satisfy the tighter bound anyway and the gate never fired in the first place. Tightening it instead panics at init, so the realm does not load and the run exits 1 with zero NAMED failures - every test dies and none discriminates, which is a broken measurement rather than a catch. The same argument covers court.gno's other twelve constant gates (the curveCap bounds, the slash-multiple and dispute-arm checks, the 93-way split, the maxBondBps and slashXBps relations, the maxAnswerBondBps drift check, and the meta/ordinary floor loop). Their value is that a future constant change cannot ship silently - which is exactly what a deploy gate is for, and exactly what mutation testing cannot see. It also explains court.gno's low row density: 43 operator lines read as uncovered and most of them are these."
- },
- {
-  "pkg": "kourtv2",
-  "file": "dispute.gno",
-  "label": "dispute: the ride's slash capture moves AFTER the ride (lastFlagEventAt restamp)",
-  "find": "\t\thadSlash := cs.pendingSlash > 0\n\t\tresolveQualityRide(c, cs)",
-  "replace": "\t\tresolveQualityRide(c, cs)\n\t\thadSlash := cs.pendingSlash > 0",
-  "why": "SURVIVES, and the comment's stated harm is NOT what happens. dispute.gno captures hadSlash before resolveQualityRide and says running both on one tally \"would settle the slash in the very call that levied it - burned with no window and no Q5 challenge\". It would not: on a JUST-LEVIED slash counterUsed is false, so disposeSlashOnRide takes its !cs.counterUsed case and REARMS rather than settles. The only state that differs is lastFlagEventAt, which originateSlash does not set and rearmSlashWindow does - read by crystallize.gno as the 24h quiet window after the last flag event, so the mutation delays Crystallize by up to a day on the levying-ride path. NOT PROMOTED TO A CAUGHT ROW because Crystallize also requires pendingSlash == 0, and every route to that restamps lastFlagEventAt again, so the difference is plausibly masked before it can be observed - which leaves it undecided between survivor and INVALID, and that is stated rather than guessed. A first attempt replaced `if hadSlash` with a fresh read instead of reordering; that leaves hadSlash declared-and-unused, which gno reports as a TEST error not a build error, so an ad-hoc probe scored it CAUGHT while mutate correctly called it INVALID. For an ordering claim the mutation must reorder."
  },
  {
   "pkg": "kourtv2",

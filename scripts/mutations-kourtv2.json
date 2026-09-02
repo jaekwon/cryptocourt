@@ -1162,8 +1162,8 @@
   "pkg": "kourtv2",
   "file": "folders.gno",
   "label": "folders: a purged folder's text can be re-set",
-  "find": "\t\tpanic(\"kourtv2: this folder's text was purged and cannot be re-set\")\n",
-  "replace": ""
+  "find": "\t}\n\tf := cm.mustFolder(folderID)\n\tif f.purged {\n\t\tpanic(\"kourtv2: this folder's text was purged and cannot be re-set\")\n",
+  "replace": "\t}\n\tf := cm.mustFolder(folderID)\n\tif f.purged {\n"
  },
  {
   "pkg": "kourtv2",
@@ -4387,8 +4387,8 @@
   "pkg": "kourtv2",
   "file": "stake.gno",
   "label": "Unstake: conviction for the interval before the exit is lost (F9)",
-  "find": "\taccrue(c, cs, p, side)\n\tp.stake -= amount",
-  "replace": "\tp.stake -= amount"
+  "find": "\tif p.stake < amount {\n\t\tpanic(\"kourtv2: unstaking more than is staked\")\n\t}\n\taccrue(c, cs, p, side)",
+  "replace": "\tif p.stake < amount {\n\t\tpanic(\"kourtv2: unstaking more than is staked\")\n\t}"
  },
  {
   "pkg": "kourtv2",
@@ -5280,13 +5280,6 @@
   "label": "TransferFromCC: gated on the stake-only check, so an allowance outruns a vote",
   "find": "\tmustSpendable(c, from, amount)\n\tc.coin.TransferFrom(cur.Previous().Address(), from, to, amount)",
   "replace": "\tmustStakable(c, from, amount)\n\tc.coin.TransferFrom(cur.Previous().Address(), from, to, amount)"
- },
- {
-  "pkg": "kourtv2",
-  "file": "voteweight.gno",
-  "label": "VoteWeightWhy: the quality lane reuses the verdict lane's epoch",
-  "find": "\t\tquality = whyWeighed(c, who, cs.qualityEpoch)",
-  "replace": "\t\tquality = whyWeighed(c, who, c.gov.EpochOf(cs.proposalID))"
  },
  {
   "pkg": "kourtv2",
@@ -8585,43 +8578,8 @@
  {
   "pkg": "kourtv2",
   "file": "standing.gno",
-  "label": "creditAuthorHigh: a seeded claim earns its author nothing (I5)",
-  "find": "\tif cs.seeded || tier != tierHighX {",
-  "replace": "\tif tier != tierHighX {"
- },
- {
-  "pkg": "kourtv2",
-  "file": "standing.gno",
-  "label": "creditAuthorHigh: HIGH only, not any adjudicated tier",
-  "find": "\tif cs.seeded || tier != tierHighX {",
-  "replace": "\tif cs.seeded || tier < tierMidX {"
- },
- {
-  "pkg": "kourtv2",
-  "file": "standing.gno",
-  "label": "creditAuthorHigh: an author with no winning position earns nothing",
-  "find": "\tif v == nil {\n\t\treturn\n\t}\n\tp := v.(*stakePos)",
-  "replace": "\tp := v.(*stakePos)"
- },
- {
-  "pkg": "kourtv2",
-  "file": "standing.gno",
-  "label": "creditAuthorHigh: accrue first, or the figure is ~7.9x understated",
-  "find": "\taccrue(c, cs, p, int(cs.provisional))\n",
-  "replace": ""
- },
- {
-  "pkg": "kourtv2",
-  "file": "standing.gno",
-  "label": "creditWinConviction: the LOW tier pays nothing",
-  "find": "\tif cs.tier < tierMidX {\n\t\treturn\n\t}\n",
-  "replace": ""
- },
- {
-  "pkg": "kourtv2",
-  "file": "standing.gno",
   "label": "creditWinConviction: an unadjudicated claim pays the half rate",
-  "find": "\tif !cs.slotConsumed {\n\t\tbps = bps * r.unadjudicated / 10_000\n\t}\n",
+  "find": "\tif !adjudicated(cs) {\n\t\tbps = bps * r.unadjudicated / 10_000\n\t}\n",
   "replace": ""
  },
  {
