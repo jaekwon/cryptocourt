@@ -239,6 +239,24 @@ code,.mono{font-family:var(--mono)}
 .nav a.on{background:transparent; color:var(--accent-2); font-weight:600;
   box-shadow:inset 2px 0 0 var(--edge)}
 .nav .sec{padding:14px 12px 5px; font-size:11px; text-transform:uppercase; letter-spacing:.09em; color:var(--muted)}
+/* THE TRAIL UNDER DIRECTORY (navTrail). Indented to 40px, which is not a round
+   number picked by eye: the parent row is 12px of padding plus an 18px glyph
+   plus the 10px gap, so a child starts exactly where the parent's LABEL starts
+   rather than under its icon. The claim sits one step deeper again.
+   Smaller and quieter than a section link, because it is a location and not a
+   destination — except the row you are actually on, which takes the same accent
+   the lit nav item does. */
+.nav a.trail{padding:5px 12px 5px 40px; font-size:13px; font-weight:500; gap:6px}
+.nav a.trail.deep{padding-left:56px}
+.nav a.trail .b{opacity:.45; font-size:11px}
+/* AND THE LIT EDGE COMES WITH IT, by wearing `on` rather than by copying it.
+   The inset rule sat on Directory from the front page all the way into a claim;
+   with a trail below it the marker belongs on the row you are actually on. So
+   navTrail moves the `on` CLASS down to that row and `.nav a.on` above supplies
+   the edge, the accent and the weight. Declaring a second box-shadow here would
+   be two rules owning one signal -- and tagrow_layout reads exactly
+   `.nav a.on` for it, so a parallel rule would also have left that check with
+   nothing to find. */
 .rail .foot{margin-top:auto; padding:14px; border-top:1px solid var(--line); display:flex; flex-direction:column; gap:10px}
 
 /* ---- node + theme controls --------------------------------------------- */
@@ -1715,6 +1733,9 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
   .docket a.courtrow{grid-template-columns:30px minmax(44px,auto) minmax(0,1fr) auto}
   .rail{position:static; height:auto; flex-direction:column}
   .nav{flex-direction:row; flex-wrap:wrap; gap:4px} .nav .sec{width:100%}
+  /* The trail's indent is meaningless once the nav is a wrapping ROW: there is
+     no parent above a child to line up under. It stays as two ordinary chips. */
+  .nav a.trail, .nav a.trail.deep{padding-left:12px}
   .rail .foot{border-top:1px solid var(--line)}
   .main{padding:24px 18px 80px}
   .stakewrap{grid-template-columns:1fr}
@@ -5236,6 +5257,50 @@ function setNav(hash){
   const k = hash==="/"||hash.startsWith("/c")||hash.startsWith("/raw")?"dir": hash.startsWith("/me")?"me":
             hash.startsWith("/needs")?"needs": hash.startsWith("/about")?"about":"";
   document.querySelectorAll("#nav a").forEach(a=>a.classList.toggle("on", a.dataset.k===k));
+  navTrail(hash);
+}
+/* WHERE YOU ARE, hung under Directory. On a court or claim route the rail said
+   only which SECTION you were in — Directory stayed lit from the front page all
+   the way into a claim, so the one nav element on the page could not tell those
+   three places apart. The crumbs at the top of the main column knew; the rail
+   did not.
+
+   THE LABELS ARE THE CRUMBS', not new ones. The court reads as the uppercased
+   slug, which is exactly courtCrumb's short half (it returns "COVID : long name"
+   and the rail has no room for the long half), and the claim reads "Claim #10"
+   the way crumbs() writes it. Two places naming one thing differently is how
+   they drift.
+
+   REBUILT FROM SCRATCH EVERY TIME, because setNav runs on every render and this
+   has to be idempotent: the previous route's rows are removed before the new
+   ones go in, or navigating court to court would stack them up.
+
+   The slug is taken from the route by a pattern that admits only [a-z0-9-], so
+   it cannot carry markup, and the label is escaped anyway — the rail is one
+   innerHTML away from the same hazard the crumbs' own comment describes. */
+function navTrail(hash){
+  const nav = document.getElementById("nav");
+  const dir = nav && nav.querySelector('[data-k="dir"]');
+  if(!dir) return;
+  nav.querySelectorAll("a.trail").forEach(a=>a.remove());
+  const m = /^\/c\/([a-z0-9-]+)(?:\/(\d+))?/.exec(hash);
+  if(!m) return;
+  const slug = m[1], id = m[2];
+  const rows = [{cls:"trail" + (id? "" : " on"), href:"#/c/"+slug, label:slug.toUpperCase()}];
+  if(id) rows.push({cls:"trail deep on", href:"#/c/"+slug+"/"+id,
+                    label:"Claim #"+id, branch:"↳"});
+  // The lit edge moves DOWN to the row you are on: keeping it on Directory as
+  // well would claim two places at once.
+  dir.classList.remove("on");
+  let after = dir;
+  for(const r of rows){
+    const a = document.createElement("a");
+    a.className = r.cls;
+    a.href = r.href;
+    a.innerHTML = (r.branch? `<span class="b">${r.branch}</span>` : "") + esc(r.label);
+    after.insertAdjacentElement("afterend", a);
+    after = a;
+  }
 }
 const AT_OK = new Set(["timeline","join"]); // ?at= allowlist — QP is user text, never a selector
 const atTarget = () => (QP.at && AT_OK.has(QP.at))? document.getElementById(QP.at) : null;
