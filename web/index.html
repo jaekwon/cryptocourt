@@ -412,11 +412,13 @@ a.card:hover{border-color:var(--line-2)}
 .spark .base{stroke:var(--line); stroke-width:1}
 /* A figure's own history, directly under it. Muted and small on purpose: the
    number is the statement and the shape is the context, never the other way. */
-.tspark{width:72px; height:18px; display:block; margin:3px 0 1px}
-.tspark path{fill:none; stroke:var(--muted); stroke-width:1.25; stroke-linejoin:round; stroke-linecap:round}
-.tspark circle{fill:var(--muted)}
+.tspark{width:100%; height:44px; display:block; margin:6px 0 2px; overflow:visible}
+.tspark path{fill:none; stroke:var(--muted); stroke-width:1.5; stroke-linejoin:round; stroke-linecap:round;
+  vector-effect:non-scaling-stroke}
+.tspark line.end{stroke:var(--muted); stroke-width:5; stroke-linecap:round;
+  vector-effect:non-scaling-stroke}
 .stat:hover .tspark path{stroke:var(--accent)}
-.stat:hover .tspark circle{fill:var(--accent)}
+.stat:hover .tspark line.end{stroke:var(--accent)}
 /* No history: the box holds its height so the three tiles stay level, and
    draws nothing at all. */
 .tspark-none{visibility:hidden}
@@ -7917,26 +7919,38 @@ function seriesScales(ser, W, H, P){
     e0, eN,
   };
 }
-/* A tile-sized squiggle, for the figure it sits under. No axis and no labels:
-   at this size the SHAPE is the statement and the number is right above it.
+/* The cell's own history, drawn as large as the cell already allows.
    
-   ENDPOINTS ARE DRAWN, because a flat run is the common case here and without
-   them it reads as a stray rule across the tile rather than as a history with a
-   start and a finish. A single change point is still a span: it says the value
-   has held since then, which is a fact worth showing.
+   IT STRETCHES rather than sitting in a fixed 72px box. The cell is whatever
+   width a third of the column is, and a small graph parked in the corner of it
+   wasted the rest — so the viewBox is wide, the CSS width is 100%, and
+   preserveAspectRatio is off so it fills both axes. non-scaling-stroke keeps
+   the line one weight while the box stretches, which is the whole reason the
+   distortion is safe here.
    
-   NO DATA IS BLANK — the box keeps its height so the row stays level, and says
-   nothing it cannot support. Words there would be a claim; a zero line would be
-   a wrong one. */
+   ENDPOINTS ARE DRAWN, because a flat run is the common case and without them
+   it reads as a stray rule across the cell rather than as a value that has held
+   since a known point. A single change point is still a span.
+   
+   NO DATA IS BLANK — the box keeps its height so the three cells stay level,
+   and says nothing it cannot support. Words there would be a claim; a zero line
+   would be a wrong one. */
+/* A ZERO-LENGTH LINE, not a circle. The box is stretched on both axes, which
+   turns any circle into an ellipse; a round stroke cap stays round because
+   non-scaling-stroke exempts it from the transform. (Setting r:0 on a circle
+   does not work either way — SVG disables a zero-radius circle outright.) */
+function dot(x, y){
+  return `<line class="end" x1="${x}" y1="${y}" x2="${x}" y2="${y}"></line>`;
+}
 function tileSpark(ser){
-  const W=72, H=18, P=2;
+  const W = 200, H = 44, P = 3;
   if(!ser || !ser.pts.length) return `<div class="tspark tspark-none"></div>`;
   const sc = seriesScales(ser, W, H, P);
-  const last = ser.pts[ser.pts.length-1].v;
-  return `<svg class="tspark" viewBox="0 0 ${W} ${H}" aria-hidden="true">`
+  const last = ser.pts[ser.pts.length - 1].v;
+  return `<svg class="tspark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">`
     + `<path d="${stepPath(ser, sc.X, sc.Y)}"></path>`
-    + `<circle cx="${sc.X(sc.e0)}" cy="${sc.Y(ser.pts[0].v)}" r="1.5"></circle>`
-    + `<circle cx="${sc.X(sc.eN)}" cy="${sc.Y(last)}" r="1.5"></circle>`
+    + dot(sc.X(sc.e0), sc.Y(ser.pts[0].v))
+    + dot(sc.X(sc.eN), sc.Y(last))
     + `</svg>`;
 }
 function statTile(k, v, sub, spark){
@@ -7965,7 +7979,7 @@ function courtStatsHtml(slug, s){
     // µGNOT" does not fit and reads worse than "13,054 GNOT" anyway. That
     // helper already handles the dust case where GNOT rounds to a bare 0.
     statTile("GNOT burned", Number.isFinite(s.burned)? gnotAmt(s.burned) : "—",
-      "spent to mint the coin, never returned",
+      "since inception",
       tileSpark(parseSeries(s.burnHist))),
   ];
   // MATERIAL, NOT MERELY NON-ZERO. Both of these are unminted claims on future

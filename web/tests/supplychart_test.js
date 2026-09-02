@@ -40,6 +40,7 @@ eval(grab("parseSeries"));
 eval(grab("lastEpoch"));
 eval(grab("stepPath"));
 eval(grab("seriesScales"));
+eval(grab("dot"));
 eval(grab("tileSpark"));
 
 let fail = 0;
@@ -77,18 +78,18 @@ ok("a rising series draws upward", xy(sp[2])[1] < xy(sp[0])[1]);
 // A flat run is the common case, so both ends must be marked or it reads as a
 // stray rule rather than a history.
 const flat = tileSpark(parseSeries("720,166,0;1:13053599975"));
-ok("a single change point still draws two endpoints", (flat.match(/<circle/g)||[]).length === 2);
-const cx = [...flat.matchAll(/cx="([\d.]+)"/g)].map(m=>+m[1]);
+ok("a single change point still draws two endpoints", (flat.match(/<line class="end"/g)||[]).length === 2);
+const cx = [...flat.matchAll(/x1="([\d.]+)"/g)].map(m=>+m[1]);
 ok("a single change point spans the box, not one edge", cx.length===2 && cx[1] > cx[0]);
-ok("the span reaches the right edge", cx[1] >= 68);
+ok("the span reaches the right edge", cx[1] >= 190);
 // Two points: the ends sit at the extremes too.
-const cx2 = [...tileSpark(two).matchAll(/cx="([\d.]+)"/g)].map(m=>+m[1]);
+const cx2 = [...tileSpark(two).matchAll(/x1="([\d.]+)"/g)].map(m=>+m[1]);
 ok("two points also span the box", cx2[0] < cx2[1]);
 
 // No data draws nothing at all — not words, not a zero line — but keeps its
 // height so the three tiles stay level.
 const blank = tileSpark(parseSeries("720,5,0;"));
-ok("no data draws no path and no dots", !blank.includes("<path") && !blank.includes("<circle"));
+ok("no data draws no path and no dots", !blank.includes("<path") && !blank.includes("<line"));
 ok("no data says nothing in words", !/[a-z]{4}/.test(blank.replace(/class="[^"]*"/g,"")));
 ok("no data still occupies the row", blank.includes("tspark-none"));
 ok("a null series behaves the same", tileSpark(null).includes("tspark-none"));
@@ -101,6 +102,13 @@ ok("no series is fetched that nothing draws",
    !src.includes("PriceSeries(${s})") && !src.includes("SupplySeries(${s})"));
 ok("the court stats read the burn total", src.includes('one(`CourtBurnedGNOT(${s})`).catch(()=>null)'));
 ok("burn is the tile carrying the graph", src.includes("tileSpark(parseSeries(s.burnHist))"));
+// The graph fills the cell it is in rather than sitting in a fixed box.
+ok("the graph stretches to the cell", src.includes('preserveAspectRatio="none"')
+   && src.includes(".tspark{width:100%"));
+ok("the stroke stays one weight while the box stretches",
+   src.includes("vector-effect:non-scaling-stroke"));
+ok("the caption is short", src.includes('"since inception"')
+   && !src.includes("spent to mint the coin, never returned"));
 ok("price and supply are figures only", (src.match(/tileSpark\(parseSeries/g)||[]).length === 1);
 // Dust does not earn a cell. Both extra figures are unminted claims on future
 // supply, so they show only once they could move the supply figure above them.
