@@ -407,7 +407,10 @@ const CHATCSS = `
 .chathead{display:flex;align-items:baseline;gap:.5rem;flex-wrap:wrap;margin-bottom:.4rem}
 .chatslug{opacity:.6}
 .chatwarn{opacity:.6;font-size:.85em}
-.chatlog{list-style:none;margin:0;padding:0;max-height:15rem;overflow-y:auto}
+/* max-height, not height: outside the rail this is still a panel on a page and
+   must not grow without bound. Inside it, the rail's own flexing wins. */
+.chatlog{list-style:none;margin:0;padding:0;max-height:15rem;overflow-y:auto;
+  flex:1 1 auto;min-height:0}
 .chatmsg{display:flex;gap:.5rem;align-items:baseline;padding:.15rem 0;
   border-bottom:1px solid rgba(128,128,128,.12)}
 .chatwho{flex:0 0 auto;max-width:11rem;overflow:hidden;text-overflow:ellipsis;
@@ -421,9 +424,23 @@ const CHATCSS = `
 .chatstate{margin:.4rem 0;padding:.35rem .5rem;border-radius:4px;
   background:rgba(128,128,128,.15)}
 .chatdemo{display:block;margin-top:.25rem;font-size:.85em;font-weight:600}
-.chatform{display:flex;gap:.4rem;margin-top:.5rem}
-.chatmoniker{flex:0 0 8rem;min-width:0}
-.chatinput{flex:1 1 auto;min-width:0}
+.chatform{display:flex;gap:.4rem;margin-top:.5rem;flex-wrap:wrap}
+/* THE NAME IS A LABEL, NOT A MESSAGE. At 8rem it took a third of a 230px rail
+   and left the message box too narrow to read what you were typing. It needs
+   room for a moniker and no more; the message takes everything else and drops
+   to its own line when the two cannot share one. */
+.chatmoniker{flex:0 1 5.5rem;min-width:4rem}
+.chatinput{flex:5 1 8rem;min-width:0}
+/* THEME-FOLLOWING, NOT WHITE. These were unstyled inputs, so a browser painted
+   them its default white and they glared out of a dark page. Inheriting is what
+   makes one rule right in both themes: this file has no access to the page's
+   colour tokens and must not grow a copy of them.
+   NO BACKTICKS IN HERE -- the whole block is one template literal, and a stray
+   pair closes it early. That is what broke every page, not just the chat. */
+.chatmoniker,.chatinput{background:transparent;color:inherit;font:inherit;
+  border:1px solid rgba(128,128,128,.35);border-radius:4px;padding:.3rem .4rem}
+.chatmoniker:focus,.chatinput:focus{outline:none;border-color:rgba(128,128,128,.7)}
+.chatmoniker::placeholder,.chatinput::placeholder{color:inherit;opacity:.4}
 .chatnote{min-height:1.2em;opacity:.7;font-size:.85em;margin-top:.25rem}
 `;
 function chatStyles(doc) {

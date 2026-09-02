@@ -418,7 +418,7 @@ a.card:hover{border-color:var(--line-2)}
    its content and scroll inside instead of pushing the account block off the
    bottom. */
 .railchat{flex:1 1 auto; min-height:0; display:flex; flex-direction:column;
-  overflow:hidden; border-top:1px solid var(--line)}
+  overflow:hidden; padding:0 12px 10px}
 .railchat[hidden]{display:none}
 .railchat > *{min-height:0}
 /* The court coin's name, everywhere it is written. One hardcoded purple rather
@@ -1106,7 +1106,7 @@ p.sub{font-size:13.5px; color:var(--ink-2); max-width:54ch; margin-top:6px}
 .mtitle,.mcourt-t{font-family:var(--serif)}
 .mid{font-family:var(--mono); font-variant-numeric:tabular-nums}
 .mhdr-t,.mverdict{font-family:var(--sans)}
-.mnode{fill:var(--surface); stroke:var(--ink-2); stroke-width:1}
+.mnode{fill:var(--surface); stroke:var(--ink-2); stroke-width:1; vector-effect:non-scaling-stroke}
 .mnode-a{cursor:pointer}
 /* THE PICKED NODE GROWS, so its label is readable without leaving the map.
    Scaled on the <a> that wraps the box AND its text, so the words grow with the
@@ -1259,7 +1259,7 @@ p.sub{font-size:13.5px; color:var(--ink-2); max-width:54ch; margin-top:6px}
 /* A folder is a NODE now, not a box drawn round its contents — the radial map
    hangs claims off it instead of nesting them inside. The court is the same
    shape one step up: filled, heavier, at the centre. */
-.mfold{fill:var(--accent-wash); stroke:var(--accent); stroke-width:1}
+.mfold{fill:var(--accent-wash); stroke:var(--accent); stroke-width:1; vector-effect:non-scaling-stroke}
 /* HELD BACK ON PURPOSE. The heading has to stay the loudest thing in its own
    box — a reader is looking for a name, and a picture that wins that contest has
    made the map worse. So the face is a tint at rest, lifts when the box is the
@@ -1287,9 +1287,21 @@ p.sub{font-size:13.5px; color:var(--ink-2); max-width:54ch; margin-top:6px}
   border:1px solid var(--line); border-radius:8px; margin:10px 0 2px; background:var(--surface-2)}
 .mfold.pseudo{fill:none; stroke-dasharray:4 3; stroke:var(--muted)}
 .mhdr-t{fill:var(--accent-2); font-weight:600}
-.mcourt{fill:var(--accent); stroke:var(--accent-2); stroke-width:1.5}
+.mcourt{fill:var(--accent); stroke:var(--accent-2); stroke-width:1.2; vector-effect:non-scaling-stroke}
 .mcourt-t{fill:var(--surface); font-weight:700}
-.medge{fill:none; stroke:var(--ink-2); stroke-width:1.2}
+/* A WIREFRAME STAR CHART: fine, and exact at every zoom.
+   vector-effect:non-scaling-stroke is what makes it exact — without it a stroke
+   is measured in viewBox units, so zooming in fattens every line and the chart
+   turns into a diagram of pipes. With it, a 1px line is 1px on screen whether
+   the map is showing the whole court or four nodes.
+   The weights came down with it: a 3.2-unit spoke rendered about 4 screen
+   pixels at the opening zoom, which is a cable rather than a sight line.
+   THE NODES KEEP THEIR FILLS. Wireframing the boxes too would drop the titles
+   onto the canvas, and the map's text contrast was just fixed — 15.6:1 in light
+   against its own filled box, 1.17:1 against the canvas. Lines and points are
+   the wireframe; the labels stay legible. */
+.medge{fill:none; stroke:var(--ink-2); stroke-width:0.9; vector-effect:non-scaling-stroke}
+.mdot{shape-rendering:crispEdges}
 /* CONTAINMENT IS THE SKELETON, AND IT IS DRAWN LIKE ONE. It used to be the
    faintest thing on the map — hairlines in --line-2 — while a "part of" relation
    was the boldest, 2px of near-black. That was backwards, and it showed: the
@@ -1310,19 +1322,19 @@ p.sub{font-size:13.5px; color:var(--ink-2); max-width:54ch; margin-top:6px}
    Trunk, then branch, by weight within that one hue: two widths of one colour
    read as one structure at two depths, where two colours would read as two
    different kinds of line. */
-.medge.spoke{stroke:var(--accent); stroke-width:3.2}
-.medge.spoke.toclaim{stroke-width:2.2}
+.medge.spoke{stroke:var(--accent); stroke-width:1.5}
+.medge.spoke.toclaim{stroke-width:1.1}
 /* Filed here as well as somewhere else. Same blue, because it IS containment,
    and dashed and thin because it is the second place rather than the first —
    the claim is drawn once, at its other folder. */
-.medge.spoke.also{stroke:var(--accent); stroke-width:1.4; stroke-dasharray:3 4}
+.medge.spoke.also{stroke:var(--accent); stroke-width:0.9; stroke-dasharray:3 4}
 /* A relation, not the skeleton. Solid — it is the structural one of the four —
    but no longer the heaviest line in the drawing, and it inherits --ink-2 from
    .medge rather than reaching for the near-black nothing else uses. */
-.medge.part{stroke-width:1.4}
-.medge.bears.yes{stroke:var(--yes); stroke-dasharray:5 4; stroke-width:1.6}
-.medge.bears.no{stroke:var(--contra); stroke-dasharray:5 4; stroke-width:1.6}
-.medge.sup{stroke:var(--muted); stroke-dasharray:2 3; stroke-width:1.6}
+.medge.part{stroke-width:0.9}
+.medge.bears.yes{stroke:var(--yes); stroke-dasharray:5 4; stroke-width:1.1}
+.medge.bears.no{stroke:var(--contra); stroke-dasharray:5 4; stroke-width:1.1}
+.medge.sup{stroke:var(--muted); stroke-dasharray:2 3; stroke-width:1.1}
 .medge.dim,.marrow.dim{opacity:.35}
 /* The head matches its line. "part" used to be the one relation drawn in
    near-black, and its arrow was given --ink to match; now that the line is
@@ -1712,6 +1724,13 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
     <div class="sec">Reference</div>
     <a href="#/about" data-k="about"><span class="g">?</span> How it works</a>
   </nav>
+  <!-- CHAT IS A SECTION OF THE RAIL, labelled like You and Reference rather
+       than an unnamed box wedged under them. It used to hang at the foot of the
+       court page, below the docket, where a reader had to scroll past every
+       claim to discover anyone was talking.
+       Per-court, so the heading and the panel are both hidden anywhere else. -->
+  <div class="sec" id="railchathead" hidden>Chat</div>
+  <div class="railchat" id="railchat" hidden></div>
   <div class="foot">
     <div class="node">
       <div class="row"><span class="dot" id="dot"></span> <b id="nodelab">Demo data</b></div>
@@ -1742,15 +1761,6 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
     <div class="small muted" id="wallethint" role="status" hidden></div>
     <button class="themebtn" id="themebtn"><span class="g">◐</span> <span id="themelab">Theme</span></button>
   </div>
-<!-- THE COURT CHAT LIVES IN THE RAIL, not at the foot of the court page.
-     Below the docket it was a room nobody walked into: a reader had to scroll
-     past every claim to find out anyone was talking, and it pushed the page
-     longer for people who never used it. In the rail it is visible the whole
-     time and costs the court page no height at all.
-     Empty except on a court page — it is per-court, so there is nothing for it
-     to show anywhere else. -->
-<div class="railchat" id="railchat" hidden></div>
-
 </aside>
 
 
@@ -5038,6 +5048,8 @@ function loading(){
   if(CHATSTOP){ CHATSTOP(); CHATSTOP = null; }
   const rc0 = document.getElementById("railchat");
   if(rc0){ rc0.hidden = true; rc0.innerHTML = ""; }
+  const rh0 = document.getElementById("railchathead");
+  if(rh0) rh0.hidden = true;
   RPCQ.started = 0; RPCQ.done = 0;
   main.innerHTML = `<div class="empty"><div class="g">⚖︎</div><p>Reading the chain…</p>
     <div class="rpcwrap"><div id="rpcbar" class="rpcbar"></div></div>
@@ -5481,8 +5493,10 @@ on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
     // Resolved here rather than written into CFG: persisting the origin would
     // freeze the page to whichever host it was first opened from.
     const rc = document.getElementById("railchat");
+    const rh = document.getElementById("railchathead");
     if(rc){
       rc.hidden = false;
+      if(rh) rh.hidden = false;
       CHATSTOP = mountChat(rc,
         {cfg: {...CFG, chat: chatBase()}, chain: CFG.chainid || "dev", court: slug});
     }
@@ -7764,7 +7778,12 @@ function mapSvg(L, data, slug){
   for(const n of L.nodes){
     const cl=data.claims[n.id]; if(!cl) continue;
     const pc=phaseClass(cl.statusText);
-    const dot=(cx,cy)=>`<circle class="mdot ${mapDotClass(pc.short, pc.side)}" cx="${cx}" cy="${cy}" r="4" data-owner="c${n.id}"/>`;
+    /* A PIXEL STAR, not a disc. Squares are how a star chart plots a point —
+       exact, aligned to the grid, no anti-aliased rim — and shape-rendering:
+       crispEdges keeps the four sides on whole pixels at any zoom. The legend
+       draws the identical shape; a key that shows a circle for a square is a
+       key that lies. */
+    const dot=(cx,cy)=>`<rect class="mdot ${mapDotClass(pc.short, pc.side)}" x="${(cx-3).toFixed(1)}" y="${(cy-3).toFixed(1)}" width="6" height="6" data-owner="c${n.id}"/>`;
     out.push(`<a href="#/c/${esc(slug)}/${n.id}" class="mnode-a" data-id="${n.id}">`);
     out.push(`<rect class="mnode" x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" data-id="${n.id}" rx="3"/>`);
     /* THE EXHIBITS AS A STRIP UNDER THE TITLE, drawn below with the rest of the
@@ -8414,8 +8433,8 @@ on(/^\/c\/([a-z0-9-]+)\/map$/, async (slug)=>{
     : chainRels.length
     ? `this court's moderators have filed no folders; ${chainRelNote}, drawn over the flat docket`
     : "this court's moderators have filed no folders and no relations are on chain — the map shows the docket alone";
-  const legendDots = `<span><svg width="12" height="12"><circle cx="6" cy="6" r="4" class="mdot g"/></svg> settled YES</span>
-      <span><svg width="12" height="12"><circle cx="6" cy="6" r="4" class="mdot gn"/></svg> settled NO</span>
+  const legendDots = `<span><svg width="12" height="12"><rect x="3" y="3" width="6" height="6" class="mdot g"/></svg> settled YES</span>
+      <span><svg width="12" height="12"><rect x="3" y="3" width="6" height="6" class="mdot gn"/></svg> settled NO</span>
       <span><svg width="12" height="12"><circle cx="6" cy="6" r="4" class="mdot e"/></svg> in dispute</span>
       <span><svg width="12" height="12"><circle cx="6" cy="6" r="4" class="mdot ed"/></svg> provisional</span>
       <span><svg width="12" height="12"><circle cx="6" cy="6" r="4" class="mdot o"/></svg> answered</span>
