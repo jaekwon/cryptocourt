@@ -5278,7 +5278,7 @@ function setNav(hash){
    The slug is taken from the route by a pattern that admits only [a-z0-9-], so
    it cannot carry markup, and the label is escaped anyway — the rail is one
    innerHTML away from the same hazard the crumbs' own comment describes. */
-function navTrail(hash){
+function navTrail(hash, folders){
   const nav = document.getElementById("nav");
   const dir = nav && nav.querySelector('[data-k="dir"]');
   if(!dir) return;
@@ -5286,8 +5286,21 @@ function navTrail(hash){
   const m = /^\/c\/([a-z0-9-]+)(?:\/(\d+))?/.exec(hash);
   if(!m) return;
   const slug = m[1], id = m[2];
-  const rows = [{cls:"trail" + (id? "" : " on"), href:"#/c/"+slug, label:slug.toUpperCase()}];
-  if(id) rows.push({cls:"trail deep on", href:"#/c/"+slug+"/"+id,
+  const fs = (folders && folders.length)? folders : null;
+  const rows = [{cls:"trail" + (id || fs? "" : " on"), href:"#/c/"+slug,
+                 label:slug.toUpperCase()}];
+  // A FOLDER'S NAME IS NOT IN THE ROUTE, only its id -- /c/covid/f/2 says
+  // nothing about "fauci" -- and resolving it needs the court's folder tree,
+  // which on a chain court arrives asynchronously. So setNav cannot know it and
+  // does not try: it hangs the court alone, and the folder view calls back with
+  // the path it just resolved. Rebuilding from scratch is what makes that safe.
+  if(fs) fs.forEach((f,i)=>rows.push({
+    cls:"trail deep" + (i===fs.length-1? " on" : ""),
+    href:f.href || ("#/c/"+slug), label:f.label, branch:"↳",
+    // The two CSS steps cover a folder at the top level; deeper nesting keeps
+    // stepping in by the same 16px rather than piling up more classes.
+    pad: i? 56 + i*16 : 0}));
+  else if(id) rows.push({cls:"trail deep on", href:"#/c/"+slug+"/"+id,
                     label:"Claim #"+id, branch:"↳"});
   // The lit edge moves DOWN to the row you are on: keeping it on Directory as
   // well would claim two places at once.
@@ -5298,6 +5311,7 @@ function navTrail(hash){
     a.className = r.cls;
     a.href = r.href;
     a.innerHTML = (r.branch? `<span class="b">${r.branch}</span>` : "") + esc(r.label);
+    if(r.pad) a.style.paddingLeft = r.pad + "px";
     after.insertAdjacentElement("afterend", a);
     after = a;
   }
@@ -9525,6 +9539,10 @@ on(/^\/c\/([a-z0-9-]+)\/f\/([0-9.]+)$/, async (slug,fpath)=>{
   }
   const f = hit.folder;
   const trail = hit.trail.map(t=>({label:t.label, href:t.href.replace("__SLUG__", esc(slug))}));
+  // The rail wants this too, and it wants it BEFORE the last href is dropped
+  // below: in the crumbs the current page is not a link, but in the rail every
+  // row stays clickable so a reader can get back to a parent folder.
+  navTrail("/c/" + slug + "/f/" + fpath, trail.map(t=>({label:t.label, href:t.href})));
   delete trail[trail.length-1].href;
   const claims = await listClaims(slug);
   const byId = Object.fromEntries(claims.map(cl=>[cl.id,cl]));
