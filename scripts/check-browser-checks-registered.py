@@ -92,15 +92,39 @@ CHECKS = re.compile(
 NAME = re.compile(r"['\"]([^'\"]+\.js)['\"]")
 
 
+# A WRAPPER BY MECHANISM, so an EMPTY one is still recognisable. CHECKS needs a
+# `.js` name inside the brackets to match at all, which means a list emptied to
+# `[]` matches nothing, listed() answers None, and the file is filed as a leaf —
+# "it asserts, it does not delegate". That made the empty-list branch below
+# unreachable and its arm unfirable: the branch existed for "a green line for no
+# work done" and could never say it.
+#
+# Loosening CHECKS to accept `[]` is not the fix. `const x = []` is ordinary
+# code, and any file holding one would be read as an empty wrapper.
+#
+# So a wrapper is identified by what a wrapper DOES: it runs its children as
+# child processes. MEASURED across all 18 files in web/tests/browser — the two
+# markers agree exactly, on chat_all.js and run.js, with no file matching one and
+# not the other. Nothing else was: `module.exports` appears only in harness.js,
+# which declares itself not-a-check, and an assertion-shaped grep fires for both
+# wrappers AND misses three leaves (compose_upload, route_crawl, stripped_boot),
+# so it discriminates in neither direction.
+DELEGATES = re.compile(
+    r"(?:spawnSync|spawn|execFile\w*)\s*\(\s*process\.execPath")
+
+
 def listed(path):
     """The .js names a file registers, or None if it registers nothing."""
     src = io.open(path, encoding="utf-8").read()
     # EVERY assignment, not the first. Taking the first would make a file with
     # two lists silently half-walked, which is this guard's own failure mode.
     ms = CHECKS.findall(src)
-    if not ms:
-        return None
-    return [n for m in ms for n in NAME.findall(m)]
+    if ms:
+        return [n for m in ms for n in NAME.findall(m)]
+    if DELEGATES.search(src):
+        # It spawns siblings and names none of them: a wrapper that runs nothing.
+        return []
+    return None
 
 
 if not os.path.isdir(BROWSER):
