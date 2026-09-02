@@ -5669,9 +5669,17 @@ on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
         one(`CourtDesc(${gstr(slug)})`).then(unesc).catch(()=>""),
       ])
     : [null, ""];
-  main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:courtCrumb(slug, s.name)}])
+  /* THE CRUMB IS THE COURT'S IDENTITY, and it is a link even here. Normally the
+     last crumb is the page you are on and is not clickable — but this one is
+     also the only place the court's short name is now written, and a reader who
+     has scrolled a long docket wants a way back to its top. The title stops
+     repeating the slug: "COVID-19 Origins & Response Court covid" said the same
+     thing twice, and the tagrow below already carries "/covid" for anyone who
+     needs the exact identifier. */
+  main.innerHTML = crumbs([{label:"Directory",href:"#/"},
+                           {label:courtCrumb(slug, s.name),href:"#/c/"+slug}])
     + `<div class="lead-row leadface">${courtFaceHtml(slug, s.name)}<div>
-        <h1 class="page-h">${safeInline(s.name)} <span class="seal">${esc(slug)}</span></h1>
+        <h1 class="page-h">${safeInline(s.name)}</h1>
         ${(()=>{
           // The chain first: it stores a description now, so copy saying it
           // "stores only a name" was true of the sample and wrong of the realm.
@@ -8507,7 +8515,7 @@ on(/^\/c\/([a-z0-9-]+)\/curate$/, async (slug)=>{
         : `source: sample (demo) · ${cur.folders.length} folders · ${cur.relations.length} relations`)
     : "source: none — export the empty skeleton to begin";
   main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:courtCrumb(slug, cs.name),href:"#/c/"+slug},{label:"Curate"}])
-    + `<h1 class="page-h">Curate — ${safeInline(cs.name)} <span class="seal">${esc(slug)}</span></h1>
+    + `<h1 class="page-h">Curate — ${safeInline(cs.name)}</h1>
        <div class="tagrow"><span class="tfacts"><span class="pill void">local tool — writes nothing to any chain</span></span>
          <span class="tacts"><a class="tlink" href="#/c/${esc(slug)}">docket<span aria-hidden="true">→</span></a><a class="tlink" href="#/c/${esc(slug)}/map">map<span aria-hidden="true">→</span></a><a class="tlink" href="#/raw/${esc(slug)}/mod">moderation log<span aria-hidden="true">→</span></a></span></div>
        <p class="small mono" style="margin:10px 0 14px">${esc(srcLine)}</p>`
@@ -8647,8 +8655,8 @@ on(/^\/c\/([a-z0-9-]+)\/holders$/, async (slug)=>{
       + `<td class="tnum">${cc(r.bal, slug)}</td>`
       + `<td class="tnum">${pct(r.bal)>=0.1? pct(r.bal).toFixed(1) : "<0.1"}%</td></tr>`;
   }).join("");
-  main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:slug,href:"#/c/"+slug},{label:"Holders"}])
-    + `<div class="lead-row"><div><h1 class="page-h">Holders <span class="seal">${esc(slug)}</span></h1>
+  main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:courtCrumb(slug),href:"#/c/"+slug},{label:"Holders"}])
+    + `<div class="lead-row"><div><h1 class="page-h">Holders</h1>
         <p class="sub">${safeInline(name)}</p></div></div>`
     + `<p class="page-sub">${esc(HOLDERS_NOTE)}</p>`
     + (h.rows.length
@@ -8685,7 +8693,7 @@ on(/^\/c\/([a-z0-9-]+)\/map$/, async (slug)=>{
   const cur = foldersFor(slug, chainF);
   if(!parsed.length){
     main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:courtCrumb(slug, cs.name),href:"#/c/"+slug},{label:"Map"}])
-      + `<h1 class="page-h">${safeInline(cs.name)} — map <span class="seal">${esc(slug)}</span></h1>
+      + `<h1 class="page-h">${safeInline(cs.name)} — map</h1>
          <div class="empty"><div class="g">◌</div><p>No claims yet — the map draws the docket, and this docket is empty.</p></div>`;
     return;
   }
