@@ -383,6 +383,7 @@ scenarios-check:
 			{ echo "$$t was generated from $$src, which is now CI = False — delete the txtar"; rc=1; }; \
 	done; \
 	[ $$rc -eq 0 ] && echo "scenarios-check: every generated txtar matches its scenario."; \
+	python3 scripts/check-seed-emitters.py || rc=1; \
 	exit $$rc
 
 # Every `elsewhere` row's named harness must OBJECT to that row's mutation — level 3 of

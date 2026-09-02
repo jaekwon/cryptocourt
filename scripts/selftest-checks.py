@@ -195,6 +195,8 @@ WEBCONST = "scripts/check-web-constants.py"
 MEDIAHOSTS = "scripts/check-media-hosts.py"
 MEDIAGNO = "realm/r/kourtv2/media.gno"
 NGINXCONF = "deploy/nginx.conf"
+SEEDEMIT = "scripts/check-seed-emitters.py"
+SCENARIO = "scripts/scenario.py"
 SELF = "scripts/selftest-checks.py"
 ARMED = "scripts/check-guards-armed.py"
 STALEG = "scripts/check-stale-guards.py"
@@ -1271,6 +1273,50 @@ control("a pkg map this guard can no longer find", ANCHORS,
 control("a verdict the guard no longer produces", ANCHORS,
         '"UNKNOWN PKG"),', '"UNKNOWN PKG THAT IS NEVER PRINTED"),',
         "SELFTEST no row verdict contains", argv=["python3", ANCHORS])
+
+print("\ncheck-seed-emitters")
+# THE HEADLINE ARM REPRODUCES THE DEFECT THE GUARD WAS WRITTEN FOR. emit_txs
+# walks scenario STEPS and the clock seal is not one, so the genesis path used to
+# end with the test clock still ARMED where the broadcast path ends sealed — two
+# different chains from one scenario, differing in the single piece of state that
+# decides whether later transactions can still move every date on the chain.
+# Measured on kourt-1 before the fix: TestClockActive() answered true after a
+# genesis seed. Invisible in the docket, which is why it survived until the
+# genesis path was pointed at a chain somebody reads.
+#
+# WANTS "SealTestClock", NOT the generic mismatch line, and the arm below is why:
+# both plants produce "the two seeds do not agree", so sharing that string would
+# leave two arms each able to pass on the other's complaint. The guard prints the
+# differing transaction as a tuple, so the seal's own name is available and pins
+# this arm to the defect it was written for.
+control("a genesis seed that forgets to seal the clock", SCENARIO,
+        '    if scn._clock_armed:\n        out.append(tx_line(DEPLOYER, "SealTestClock", []))',
+        '    if False:\n        out.append(tx_line(DEPLOYER, "SealTestClock", []))',
+        "'SealTestClock'", argv=["python3", SEEDEMIT])
+# The same class from the other direction: a step kind that reaches one emitter
+# and not the other. Refusals are skipped by BOTH today, each saying so at its
+# own site, so letting them into the genesis file is the mirror of the seal.
+# Keeps the generic mismatch line, which is all this plant can promise: which
+# transaction differs first depends on where the scenario's first refusal sits.
+control("a step kind that reaches only one emitter", SCENARIO,
+        '        if st["kind"] != "call":\n            continue',
+        '        if st["kind"] not in ("call", "refuse"):\n            continue',
+        "the two seeds do not agree", argv=["python3", SEEDEMIT])
+# THE REFUSAL IS PART OF THE CONTRACT. A scenario that mines cannot become a
+# genesis file, because every genesis transaction lands in the same block — an
+# emitter that quietly accepted one would seed a chain at the wrong height. This
+# plants exactly that acceptance, and wants the height complaint rather than the
+# sequence one, so it cannot pass on the arms above.
+control("a mining scenario accepted as a genesis file", SCENARIO,
+        '    mined = sum(st["n"] for st in scn.steps if st["kind"] == "mine")\n    if mined:',
+        '    mined = sum(st["n"] for st in scn.steps if st["kind"] == "mine")\n    if False:',
+        "still produced a file", argv=["python3", SEEDEMIT])
+# And the tripwire, because a guard that finds no scenarios reports a clean tree
+# forever — the same shape as check-browser-checks-registered's "too few to be a
+# real scan".
+control("a scan that finds no scenarios", SEEDEMIT,
+        '"scenarios" / "*.py"', '"scenarios" / "*.nope"',
+        "nothing to compare", argv=["python3", SEEDEMIT])
 
 print("\ncheck-demo-physics")
 # Arms written for the E2E workstream's guard, which arrived without any. The
