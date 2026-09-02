@@ -167,6 +167,22 @@ Seeded $CHAINID at $REMOTE from $SCN.
   deployer $DEP
            owns the realm and is the only address that may drive the test clock.
            It lives in $KEYDIR — back that up; losing it is unrecoverable.
+
+  Conformance-check the overlay's live reads against this chain:
+
+      python3 scripts/check-live-reads.py --remote $REMOTE --court <slug>
+
+  This is the only check that walks the reads the page actually issues against
+  a real node, and the class of defect it finds is one the demo dataset cannot
+  surface: the sample's courts are mature and its numbers were chosen by hand,
+  while a freshly seeded chain is young, poor and sparse. It is deliberately
+  not in \`make check\`, which must not require a running chain, so the seed is
+  the place that points at it — as seed-node.sh already does for a local node.
+
+  NAME THE COURT. The flag defaults to "orem", which is the court smoke.py
+  seeds, and this path defaults to $SCN instead. Pointing it at a court the
+  chain does not carry reports EVERY read as "no such court" — a wall of
+  failures that looks like a broken realm rather than a wrong argument.
 EOF
 [ -n "$OWNER_ADDR" ] && echo "  premined $OWNER_ADDR so you can try it from a wallet."
 exit 0

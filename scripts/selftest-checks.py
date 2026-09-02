@@ -2257,6 +2257,34 @@ def vacuity_audit():
                                errors="replace", cwd=REPO,
                                stdin=subprocess.DEVNULL, timeout=600)
             cache[key] = r.stdout + r.stderr
+        # THE RETURN CODE IS DELIBERATELY IGNORED, and this was tried the other way
+        # round and REVERTED, so do not "fix" it again.
+        #
+        # The question here is only ever "does this guard print `want` WITHOUT the
+        # plant", and the output answers that whatever the exit status. Gating on
+        # rc == 0 looks like an improvement because a RED guard prints its findings,
+        # and an arm whose want names the defect the guard is currently reporting
+        # gets flagged — which feels like a false accusation. It is not. That arm
+        # genuinely cannot tell its plant from the standing failure while the repo
+        # is in that state, so "wants what the clean run prints" is the precise and
+        # actionable truth, and the remedy is to FIX THE GUARD'S FINDING rather than
+        # to touch the arm.
+        #
+        # Two cases proved it. "a control arm whose plant no longer applies" wants
+        # 'anchor matches 0x'; with the eight broken arms still in this file
+        # check-control-anchors exited 1 saying that three times, the arm was flagged,
+        # and fixing the eight cleared the flag with no change to the arm. And "an
+        # entrypoint the product cannot ask for" is flagged today because
+        # check-curation-reachable is red over four image verbs the product cannot
+        # invoke — correct, and it stays flagged until that is decided.
+        #
+        # Gating on rc costs more than it buys: FOUR of the five guards that exit
+        # non-zero here are red BY DESIGN, because the arm's own argv names a
+        # deliberately failing subject — mutate.py's "a suite that is already
+        # failing", check-isolation's two --only TestSelfTest* tests, and
+        # check-live-reads pointed at 127.0.0.1:1 to exercise its refusal. Skipping
+        # those turned one exact verdict into five vague ones and took the
+        # did-not-fire list from 4 to 6. Measured, then reverted.
         if want in cache[key]:
             bad.append((label, want, " ".join(cmd)))
     print(f"  {parsed} control(s) parsed, {len(cache)} guard(s) run clean, "
