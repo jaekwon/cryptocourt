@@ -440,14 +440,25 @@ a.card:hover{border-color:var(--line-2)}
 .rpcwrap{width:min(260px,60%); height:3px; margin:14px auto 6px; background:var(--line); border-radius:2px; overflow:hidden}
 .rpcbar{height:100%; width:0; background:var(--accent); transition:width .18s linear}
 .rpcnum{font-size:11px; color:var(--muted); font-variant-numeric:tabular-nums}
-/* The folded timeline. A summary is a control, so it says so — and the marker
-   is the only affordance it has, which is why it keeps the default triangle
-   rather than being styled into a heading. */
-.tlfold{margin-top:12px; border-top:1px solid var(--line); padding-top:8px}
+/* The folded timeline, tucked into the corner of the signal box.
+   NO RULE ABOVE IT. A border-top drew a line across the panel to separate one
+   small control from the chart, which is more furniture than the control is
+   worth — the panel's own edge already contains it.
+   FLOATED, SO IT SITS BOTTOM-RIGHT when shut: a closed disclosure is an offer,
+   and an offer belongs out of the way of the chart it sits under.
+   flow-root, not overflow:hidden, to contain that float. Hiding overflow would
+   also clip the ladder sideways once it opens, and the ladder is the widest
+   thing in the panel.
+   UNFLOATED WHEN OPEN, because then it is a heading over content and wants the
+   full width. The default triangle stays: it is the only affordance the control
+   has, and list-style-position:inside keeps it with the word rather than
+   hanging outside the floated box. */
+.tlfold{margin-top:4px; display:flow-root}
 .tlfold > summary{cursor:pointer; font-size:11px; text-transform:uppercase;
-  letter-spacing:.09em; color:var(--muted); list-style-position:outside}
+  letter-spacing:.09em; color:var(--muted); float:right; padding:2px 0;
+  list-style-position:inside}
 .tlfold > summary:hover{color:var(--accent)}
-.tlfold[open] > summary{margin-bottom:8px}
+.tlfold[open] > summary{float:none; margin-bottom:8px}
 /* The chat's slot in the rail. It TAKES THE LEFTOVER HEIGHT rather than a fixed
    one — the rail is a flex column, so min-height:0 is what lets it shrink below
    its content and scroll inside instead of pushing the account block off the
