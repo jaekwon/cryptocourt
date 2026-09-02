@@ -942,15 +942,8 @@
   "pkg": "kourtv2",
   "file": "crystallize.gno",
   "label": "PullCarrot: an against-verdict voter draws the carrot",
-  "find": "\t\tif v == nil || v.(string) != cs.carrotChoice {",
-  "replace": "\t\tif v == nil {"
- },
- {
-  "pkg": "kourtv2",
-  "file": "crystallize.gno",
-  "label": "PullCarrot: a non-voter draws the standalone carrot",
-  "find": "\t\tv := cs.qVoted.Get(beClaimKey(cs.conclusiveSeq) + string(who))\n\t\tif v == nil {\n\t\t\tpanic(\"kourtv2: the carrot pays the conclusive quality tally's voters\")\n\t\t}\n\t\tw = v.(int64)",
-  "replace": "\t\tv := cs.qVoted.Get(beClaimKey(cs.conclusiveSeq) + string(who))\n\t\t_ = v\n\t\tw = int64(1)"
+  "find": "\tif v == nil || v.(string) != cs.carrotChoice {",
+  "replace": "\tif v == nil {"
  },
  {
   "pkg": "kourtv2",
@@ -5726,8 +5719,8 @@
   "pkg": "kourtv2",
   "file": "crystallize.gno",
   "label": "PullCarrot: a with-verdict voter is one who EITHER voted or agreed",
-  "find": "\t\tif v == nil || v.(string) != cs.carrotChoice {",
-  "replace": "\t\tif v == nil && v.(string) != cs.carrotChoice {"
+  "find": "\tif v == nil || v.(string) != cs.carrotChoice {",
+  "replace": "\tif v == nil && v.(string) != cs.carrotChoice {"
  },
  {
   "pkg": "kourtv2",
