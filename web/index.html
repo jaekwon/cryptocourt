@@ -858,7 +858,12 @@ html.embed .main{grid-column:1; grid-row:1; max-width:none; padding:0;
 .bigchart .seamL{font:9.5px var(--mono); fill:var(--muted); letter-spacing:.04em}
 .srcnote{font-size:10.5px; color:var(--muted); margin:6px 0 0}
 .chartchips{display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 12px; font-family:var(--mono); font-size:11.5px; color:var(--ink-2)}
-.chartchips span{border:1px solid var(--line-2); border-radius:2px; padding:3px 7px; background:var(--surface)}
+/* DIRECT CHILDREN ONLY. This was `.chartchips span`, a descendant selector, so
+   it drew a chip around EVERY nested span — and once the coin's mark became two
+   spans, each chip grew a box around "Kourt" and a second around "COVID", plus
+   7px of padding on each, which pushed the row out past its own container.
+   The chips are the row's children; nothing inside one is a chip. */
+.chartchips > span{border:1px solid var(--line-2); border-radius:2px; padding:3px 7px; background:var(--surface)}
 
 /* stake ticket */
 .ticket{background:transparent; border:1px solid var(--rule); border-radius:0; padding:18px;
@@ -10628,7 +10633,23 @@ function stakeBar(d, slug){
 }
 function chartChips(d, slug){
   const chips=[
-    `conviction ${ccText(d.convYes,slug).replace(/ [A-Z:]+$/,"")} / ${cc(d.convNo,slug)}`,
+    /* ONE UNIT FOR THE PAIR, and taken from the figure rather than sliced off
+       rendered text. This read ccText(...).replace(/ [A-Z:]+$/, "") to drop the
+       first symbol so the chip could carry it once at the end — and the strip
+       silently failed in MICRO units, where the text is "3,718 µKOURT:COVID":
+       the space sits before the µ, and µ is not [A-Z:], so the regex matched
+       nothing and the symbol stayed. The chip then showed the unit twice, once
+       as plain text and once as the gold bar, in the same line.
+       ccFigure gives the bare figure, so there is nothing to strip. The unit is
+       shared only when BOTH figures are in it; a micro figure beside a whole
+       one gets its own, because "3,718 / 0.32 µKOURT:COVID" is two different
+       units under one label. */
+    (() => {
+      const cy = ccFigure(d.convYes), cn = ccFigure(d.convNo);
+      return cy.micro === cn.micro
+        ? `conviction ${cy.fig} / ${cc(d.convNo, slug)}`
+        : `conviction ${cc(d.convYes, slug)} / ${cc(d.convNo, slug)}`;
+    })(),
     d.round? `${d.round} failed round${d.round>1?"s":""}`:null,
     d.disputeBondNext? `next dispute bond ${cc(d.disputeBondNext,slug)}`:null,
     d.phase==="settled"? `verdict ${sideName(d.verdict!=null?d.verdict:d.answer)}${d.route?" · "+esc(d.route):""}`:null,

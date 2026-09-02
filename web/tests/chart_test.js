@@ -42,6 +42,9 @@ code+=slice('function chartHoverAt(','document.addEventListener("mousemove"');
 code+=slice('function parseTimeline(','function resolutionLadder(');  // + MON, stampDate, sinceWords
 code+=slice('function resolutionLadder(','function resolutionSection(');
 code+=slice('function signalChart(','function chartChips(');
+// chartChips too: the chip row is where the coin's mark meets a container that
+// styles spans, and both faults below were invisible until they were rendered.
+code+=slice('function chartChips(','\n/* DOES THE TICKET HOLD');
 let code2='';
 eval(code);
 
@@ -502,5 +505,51 @@ ok("every demo claim with a timeline parses", Object.entries(DEMO.claims).filter
   const t=parseTimeline(d.timeline); return t && t.now && t.opened && t.opened.t>0;}));
 ok("no claim is stamped in the future", Object.values(DEMO.claims).filter(d=>d.timeline).every(d=>{
   const t=parseTimeline(d.timeline); return t.opened.t<=t.now.t && (!t.answered||t.answered.t<=t.now.t) && (!t.verdict||t.verdict.t<=t.now.t);}));
+/* THE CONVICTION CHIP CARRIES ITS UNIT ONCE. It read
+   ccText(...).replace(/ [A-Z:]+$/, "") to drop the first symbol so the pair
+   could share one at the end — and in MICRO units the text is
+   "3,718 µKOURT:COVID", where the space sits before the µ and µ is not [A-Z:],
+   so the regex matched nothing and the symbol stayed. The chip then printed the
+   unit TWICE in one line, once as plain text and once as the gold bar, which is
+   how it was spotted. Taken from ccFigure now, so there is nothing to strip. */
+{
+  const bare = h => String(h).replace(/<[^>]*>/g, "");
+  const chip = (a, b) => bare(chartChips({convYes:a, convNo:b}, "covid"));
+
+  const micro = chip(3718, 3225);
+  ok("both figures in micro share one unit", /conviction 3,718 \/ 3,225 µ/.test(micro));
+  ok("...and the unit is not printed twice", (micro.match(/OURT:COVID|Kourt:COVID/gi) || []).length === 1);
+
+  const whole = chip(17_000_000, 15_000_000);
+  ok("both figures whole share one unit", /conviction 17\.0 \/ 15\.0 /.test(whole));
+  ok("...once", (whole.match(/OURT:COVID|Kourt:COVID/gi) || []).length === 1);
+
+  /* MIXED UNITS GET TWO SYMBOLS, deliberately. "3,718 / 15.0 µKOURT:COVID"
+     would put a micro figure and a whole one under one micro label — a wrong
+     number rather than a terse one. */
+  const mixed = chip(3718, 15_000_000);
+  ok("a micro figure beside a whole one keeps its own unit",
+     (mixed.match(/OURT:COVID|Kourt:COVID/gi) || []).length === 2);
+  /* ASSERTED AGAINST CODE, NOT PROSE. Written against the raw source first, and
+     it failed on the COMMENT beside the fix, which quotes the regex it replaced
+     — the one place that pattern is worth keeping. The repo's own stripper is
+     what tells the two apart. */
+  {
+    const { stripHtml } = require("../../scripts/strip-comments.js");
+    const code = stripHtml(src).out;   // stripHtml, not stripJs: this is the page, not a script file
+    ok("...and no regex strip survives in the code",
+       !/replace\(\/ \[A-Z:\]\+\$\//.test(code));
+    ok("...the figure comes from ccFigure instead", /ccFigure\(d\.convYes\)/.test(code));
+  }
+}
+
+/* THE CHIP BORDER IS A DIRECT-CHILD RULE. `.chartchips span` styled every
+   nested span, so once the mark became two spans each chip drew a box around
+   "Kourt" and another around the court's name, with 7px of padding on each —
+   which pushed the row out past its own container. Measured before the fix:
+   nested bordered spans, chips wider than the row. */
+ok("only a chip itself is boxed, not the spans inside it",
+   /\.chartchips > span\{/.test(src) && !/\.chartchips span\{/.test(src));
+
 console.log(fail? fail+" FAILURES":"ok all "+"chart pins");
 DONE = true;
