@@ -124,22 +124,27 @@ if (mediaDark && themeLight && themeDark) {
      onlyLight.length === 0 && onlyDark.length === 0);
 }
 
-// THE COURT'S FIGURE STRIP: two columns, and the edges follow from that count.
+// THE COURT'S FIGURE STRIP: three columns, and the edges follow from that count.
 // The strip is drawn as one ruled instrument — vertical rules between cells, no
 // outer edges — which only works if CSS knows which cell starts a row. It moved
 // from full width into the left column, where four cells no longer fit, and the
 // first two attempts to rule the wrapped grid were both wrong: at 820 the third
-// cell lost its left edge, at 420 the second row lost its top one. A fixed two
-// columns is the fact these three rules depend on, so assert it is not overridden
+// cell lost its left edge, at 420 the second row lost its top one. A FIXED count
+// is the fact these three rules depend on, so assert it is not overridden
 // anywhere below — a breakpoint that re-wraps the strip silently un-rules it.
+//
+// THREE, not two, since burn joined price and supply. The three figures a reader
+// compares belong on one line, and the nth-child rules moved with the count:
+// 2n+1/n+3 became 3n+1/n+4. Four still does not fit, so the optional reservoir
+// and senior-queue cells wrap to a second row, which is what n+4 rules.
 {
   const stat = src.match(/\.courtstats \.grid\.stats\{([^}]*)\}/g) || [];
   ok("court stats: exactly one grid-template-columns for the in-column strip", stat.length === 1);
-  ok("court stats: two columns", /repeat\(2,\s*minmax\(0,1fr\)\)/.test(stat[0] || ""));
+  ok("court stats: three columns", /repeat\(3,\s*minmax\(0,1fr\)\)/.test(stat[0] || ""));
   ok("court stats: row-start cells drop the left rule",
-     /\.courtstats \.grid\.stats>div:nth-child\(2n\+1\)\{border-left:0\}/.test(src));
+     /\.courtstats \.grid\.stats>div:nth-child\(3n\+1\)\{border-left:0\}/.test(src));
   ok("court stats: the second row gains a top rule",
-     /\.courtstats \.grid\.stats>div:nth-child\(n\+3\)\{border-top:1px solid var\(--rule\)\}/.test(src));
+     /\.courtstats \.grid\.stats>div:nth-child\(n\+4\)\{border-top:1px solid var\(--rule\)\}/.test(src));
   // and the strip is inside the left column, which is what puts the Join panel
   // at the top of the page instead of 200px below the header rule.
   const cols = src.indexOf('return `<div class="cols"><div id="qscope">`');

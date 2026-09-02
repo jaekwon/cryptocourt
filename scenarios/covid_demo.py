@@ -569,7 +569,18 @@ s.expect("SiteDomain", [], r"kourt\.xyz", final=True)
 
 s.note("the court, and real GNOT burned into its coin by sixteen participants")
 s.court(DEPLOYER, SLUG, "COVID-19 Origins & Response Court")
-for name, funds, _ in ACTORS:
+# ONE BUY PER EPOCH, SMALLEST FIRST.
+#
+# These buys used to land in a single epoch. That is correct on chain and
+# useless to look at: the court page charts burn, price and supply as CHANGE
+# POINTS, and one epoch is one point, so sixteen purchases drew a flat line.
+#
+# Spreading them changes no balance and no total — the same actors spend the
+# same 35% — and costs 11,520 blocks of a clock budget that is ten weeks wide
+# and barely a tenth used. Smallest first, so cumulative burn comes out convex
+# rather than a straight ramp.
+for name, funds, _ in sorted(ACTORS, key=lambda a: a[1]):
+    s.advance_height(EPOCH_BLOCKS, why="a buying epoch, so the curve has a point")
     s.buy(accounts[name], SLUG, int(funds * 0.35))
 s.expect("CoinSupply", [SLUG], r"int64")
 

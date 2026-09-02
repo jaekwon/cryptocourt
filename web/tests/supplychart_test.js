@@ -11,10 +11,13 @@
 // would draw a gradual slope that never happened — the graph would be claiming
 // a history the chain does not have.
 //
-// NOTHING RATHER THAN A FLAT LINE. A court with no history draws no spark at
-// all, because an empty box reads as "no growth" when the truth is "nothing has
-// happened yet". Burn says so in words instead, since that is the figure a
-// reader is actually asking about.
+// BLANK RATHER THAN A FLAT LINE. A court with no history draws nothing, because
+// a zero line reads as "no growth" when the truth is "nothing has happened
+// yet". The box keeps its height so the three tiles stay level.
+//
+// ENDPOINTS ARE DRAWN. A flat run is the common case, and without both ends
+// marked it reads as a stray rule across the tile rather than as a value that
+// has held since a known point.
 const fs = require('fs');
 const src = fs.readFileSync(require('path').join(__dirname, '..', 'index.html'), 'utf8');
 
@@ -35,7 +38,6 @@ eval(grab("lastEpoch"));
 eval(grab("stepPath"));
 eval(grab("seriesScales"));
 eval(grab("tileSpark"));
-eval(grab("burnSectionHtml"));
 
 let fail = 0;
 function ok(what, cond){ if(cond){ console.log("ok: " + what); } else { fail++; console.log("FAIL: " + what); } }
@@ -57,9 +59,7 @@ ok("the jump is vertical — this is what makes it a step", xy(d[1])[0] === xy(d
 ok("the hold is horizontal", xy(d[0])[1] === xy(d[1])[1]);
 ok("the tail runs flat to now", xy(d[3])[1] === xy(d[2])[1]);
 
-// ---- the tile sparks (price and supply) ----
-ok("no series draws no spark", tileSpark(null) === "");
-ok("an empty series draws no spark", tileSpark(parseSeries("720,5,0;")) === "");
+// ---- the tile sparks ----
 const spark = tileSpark(two);
 ok("a spark is an svg path", spark.includes("<svg") && spark.includes("<path"));
 ok("a spark is decorative, not announced twice", spark.includes('aria-hidden="true"'));
@@ -70,22 +70,25 @@ ok("a single point still draws", !tileSpark(parseSeries("720,9,0;3:500")).includ
 const sp = spark.match(/ d="([^"]+)"/)[1].split(" ");
 ok("a rising series draws upward", xy(sp[2])[1] < xy(sp[0])[1]);
 
-// ---- the burn section ----
-const none = burnSectionHtml(parseSeries("720,5,0;"), "x", 0);
-ok("a court with no burn says so in words", none.includes("nothing yet") && !none.includes("<path"));
-ok("the empty state still carries the heading", none.includes("GNOT burned since inception"));
+// ---- endpoints and the empty state ----
+// A flat run is the common case, so both ends must be marked or it reads as a
+// stray rule rather than a history.
+const flat = tileSpark(parseSeries("720,166,0;1:13053599975"));
+ok("a single change point still draws two endpoints", (flat.match(/<circle/g)||[]).length === 2);
+const cx = [...flat.matchAll(/cx="([\d.]+)"/g)].map(m=>+m[1]);
+ok("a single change point spans the box, not one edge", cx.length===2 && cx[1] > cx[0]);
+ok("the span reaches the right edge", cx[1] >= 68);
+// Two points: the ends sit at the extremes too.
+const cx2 = [...tileSpark(two).matchAll(/cx="([\d.]+)"/g)].map(m=>+m[1]);
+ok("two points also span the box", cx2[0] < cx2[1]);
 
-const burn = burnSectionHtml(two, "x", 3000);
-ok("burn draws a filled area closed to the baseline", /class="burn" d="[^"]*Z"/.test(burn));
-ok("burn has a baseline axis", burn.includes('class="axis"'));
-ok("burn is announced to a screen reader", burn.includes('role="img"') && burn.includes("aria-label"));
-ok("the running total is shown", burn.includes("3000 µGNOT"));
-ok("burn renders no NaN", !burn.includes("NaN"));
-ok("a capped history says older points were dropped",
-  burnSectionHtml(parseSeries("720,40,1;10:5"), "x", 5).includes("older points dropped"));
-ok("an uncapped history does not", !burn.includes("older points dropped"));
-// A missing total prints nothing rather than a wrong number.
-ok("an unknown total is omitted", !burnSectionHtml(two, "x", null).includes("µGNOT"));
+// No data draws nothing at all — not words, not a zero line — but keeps its
+// height so the three tiles stay level.
+const blank = tileSpark(parseSeries("720,5,0;"));
+ok("no data draws no path and no dots", !blank.includes("<path") && !blank.includes("<circle"));
+ok("no data says nothing in words", !/[a-z]{4}/.test(blank.replace(/class="[^"]*"/g,"")));
+ok("no data still occupies the row", blank.includes("tspark-none"));
+ok("a null series behaves the same", tileSpark(null).includes("tspark-none"));
 
 // ---- the wiring ----
 ok("the court stats read PriceSeries", src.includes('one(`PriceSeries(${s})`).catch(()=>null)'));
@@ -94,8 +97,14 @@ ok("the court stats read BurnSeries", src.includes('one(`BurnSeries(${s})`).catc
 ok("the court stats read the burn total", src.includes('one(`CourtBurnedGNOT(${s})`).catch(()=>null)'));
 ok("the price tile carries its own spark", src.includes("tileSpark(parseSeries(s.priceHist))"));
 ok("the supply tile carries its own spark", src.includes("tileSpark(parseSeries(s.supplyHist))"));
-ok("the burn section is drawn from the burn read",
-  src.includes("burnSectionHtml(parseSeries(s.burnHist), slug, s.burned)"));
+ok("burn is a tile carrying its own spark", src.includes("tileSpark(parseSeries(s.burnHist))"));
+// GNOT, not µGNOT: three cells share the left column and the raw figure does
+// not fit. Reuses the helper that already handles the sub-0.01 dust case.
+ok("burn is shown in GNOT, not raw micro-units", src.includes("gnotAmt(s.burned)"));
+ok("burn sits beside price and supply, three across",
+  src.includes(".courtstats .grid.stats{grid-template-columns:repeat(3,minmax(0,1fr))}"));
+ok("the third column's borders are keyed to three, not two",
+  src.includes("nth-child(3n+1)") && src.includes("nth-child(n+4)"));
 
 console.log(fail ? "\n" + fail + " FAILURES" : "\nALL PASS");
 process.exit(fail ? 1 : 0);

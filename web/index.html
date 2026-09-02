@@ -320,9 +320,11 @@ section{margin-top:34px}
    what auto-fit will not tell CSS: at 820 the third cell lost its left edge, at
    420 the second row lost its top one. Two columns always, and the edges follow
    from the count. */
-.courtstats .grid.stats{grid-template-columns:repeat(2,minmax(0,1fr))}
-.courtstats .grid.stats>div:nth-child(2n+1){border-left:0}
-.courtstats .grid.stats>div:nth-child(n+3){border-top:1px solid var(--rule)}
+/* THREE ACROSS: price, supply, burn. The three figures a reader is comparing,
+   so they belong on one line — and the burn history costs no extra row. */
+.courtstats .grid.stats{grid-template-columns:repeat(3,minmax(0,1fr))}
+.courtstats .grid.stats>div:nth-child(3n+1){border-left:0}
+.courtstats .grid.stats>div:nth-child(n+4){border-top:1px solid var(--rule)}
 .card{
   background:var(--surface); border:1px solid var(--line); border-radius:var(--r);
   padding:18px; box-shadow:var(--shadow-sm); text-decoration:none; color:inherit; display:block;
@@ -412,17 +414,13 @@ a.card:hover{border-color:var(--line-2)}
    number is the statement and the shape is the context, never the other way. */
 .tspark{width:72px; height:18px; display:block; margin:3px 0 1px}
 .tspark path{fill:none; stroke:var(--muted); stroke-width:1.25; stroke-linejoin:round; stroke-linecap:round}
+.tspark circle{fill:var(--muted)}
 .stat:hover .tspark path{stroke:var(--accent)}
-/* The burn block: its own section under the tiles, full column width. */
-.burnsec{margin-top:12px; border-top:1px solid var(--line); padding-top:10px}
-.burnhead{display:flex; justify-content:space-between; align-items:baseline; gap:8px;
-  font-size:10px; color:var(--muted); letter-spacing:.05em; margin-bottom:4px}
-.burnhead b{font-family:var(--mono); font-size:12px; color:var(--ink); font-variant-numeric:tabular-nums}
-.burnsvg{width:100%; height:56px; display:block}
-.burnsvg .axis{stroke:var(--line); stroke-width:1}
-.burnsvg path.burn{fill:var(--accent); fill-opacity:.16; stroke:var(--accent); stroke-width:1.25; stroke-linejoin:round}
-.burnnone{font-size:11px; color:var(--muted); padding:6px 0}
-.burnnote{font-size:10px; color:var(--muted); margin-top:3px}
+.stat:hover .tspark circle{fill:var(--accent)}
+/* No history: the box holds its height so the three tiles stay level, and
+   draws nothing at all. */
+.tspark-none{visibility:hidden}
+
 .lead-row{border-bottom:2px solid var(--ink); padding-bottom:16px; margin-bottom:16px}
 
 /* buttons / txlinks */
@@ -7852,8 +7850,11 @@ function lastEpoch(ser){ return Math.max(ser.now, ser.pts[ser.pts.length-1].e); 
    units differ (ugnot, CC base units, ugnot-per-unit) and one shared scale
    would flatten whichever is smaller into the axis. */
 function seriesScales(ser, W, H, P){
-  const e0 = ser.pts[0].e, eN = lastEpoch(ser);
-  const span = Math.max(1, eN - e0);
+  const e0 = ser.pts[0].e;
+  // At least one epoch wide, so a lone change point draws a span with two ends
+  // instead of collapsing both onto the left edge.
+  const eN = Math.max(lastEpoch(ser), e0 + 1);
+  const span = eN - e0;
   const max = Math.max(...ser.pts.map(p=>p.v), 1);
   return {
     X: e => (P + (e-e0)/span*(W-2*P)).toFixed(1),
@@ -7862,48 +7863,26 @@ function seriesScales(ser, W, H, P){
   };
 }
 /* A tile-sized squiggle, for the figure it sits under. No axis and no labels:
-   at this size the SHAPE is the whole statement and the number is right above
-   it. Draws nothing at all rather than a flat line for a court with no
-   history — an empty box would read as "no growth" when the truth is "nothing
-   has happened yet". */
+   at this size the SHAPE is the statement and the number is right above it.
+   
+   ENDPOINTS ARE DRAWN, because a flat run is the common case here and without
+   them it reads as a stray rule across the tile rather than as a history with a
+   start and a finish. A single change point is still a span: it says the value
+   has held since then, which is a fact worth showing.
+   
+   NO DATA IS BLANK — the box keeps its height so the row stays level, and says
+   nothing it cannot support. Words there would be a claim; a zero line would be
+   a wrong one. */
 function tileSpark(ser){
-  if(!ser || !ser.pts.length) return "";
   const W=72, H=18, P=2;
+  if(!ser || !ser.pts.length) return `<div class="tspark tspark-none"></div>`;
   const sc = seriesScales(ser, W, H, P);
+  const last = ser.pts[ser.pts.length-1].v;
   return `<svg class="tspark" viewBox="0 0 ${W} ${H}" aria-hidden="true">`
-    + `<path d="${stepPath(ser, sc.X, sc.Y)}"></path></svg>`;
-}
-/* THE BURN SECTION, its own block and wider than the tiles.
- *
- * WHY IT IS SEPARATE AND NOT A THIRD TILE. Burn is the one figure here that
- * cannot be gamed: supply grows on emissions nobody paid for and price is just
- * the curve position restated, but GNOT burned only moves when somebody spent,
- * and the curve never gives it back. It answers a different question from the
- * two above it — not "how big is this court" but "has anyone actually backed
- * it" — so it gets the room to be read as a history rather than a number.
- *
- * Filled to the baseline because an area reads as accumulation where a bare
- * line reads as a rate.
- */
-function burnSectionHtml(ser, slug, total){
-  if(!ser || !ser.pts.length){
-    // Say so plainly. A court nobody has bought into is a fact worth stating,
-    // and an empty chart frame would state it worse.
-    return `<div class="burnsec"><div class="burnhead"><span>GNOT burned since inception</span></div>`
-      + `<div class="burnnone">nothing yet — no one has bought into this court</div></div>`;
-  }
-  const W=280, H=56, P=4;
-  const sc = seriesScales(ser, W, H, P);
-  const area = `${stepPath(ser, sc.X, sc.Y)} L${sc.X(sc.eN)},${H-P} L${sc.X(sc.e0)},${H-P} Z`;
-  const now = Number.isFinite(total)? `<b>${ugnot(total)}</b>` : "";
-  return `<div class="burnsec">`
-    + `<div class="burnhead"><span>GNOT burned since inception</span>${now}</div>`
-    + `<svg class="burnsvg" viewBox="0 0 ${W} ${H}" role="img"`
-    + ` aria-label="GNOT burned into this court from inception to now.">`
-    + `<line class="axis" x1="${P}" y1="${H-P}" x2="${W-P}" y2="${H-P}"></line>`
-    + `<path class="burn" d="${area}"></path></svg>`
-    + (ser.more? `<div class="burnnote">older points dropped</div>` : "")
-    + `</div>`;
+    + `<path d="${stepPath(ser, sc.X, sc.Y)}"></path>`
+    + `<circle cx="${sc.X(sc.e0)}" cy="${sc.Y(ser.pts[0].v)}" r="1.5"></circle>`
+    + `<circle cx="${sc.X(sc.eN)}" cy="${sc.Y(last)}" r="1.5"></circle>`
+    + `</svg>`;
 }
 function statTile(k, v, sub, spark){
   return `<div class="stat"><div class="k">${k}</div><div class="v tnum">${v}</div>`
@@ -7922,17 +7901,25 @@ function courtStatsHtml(slug, s){
     statTile("coin supply", cc(s.supply,slug),
       s.emitted>0? `${cc(s.emitted,slug)} of it earned as rewards` : "",
       tileSpark(parseSeries(s.supplyHist))),
+    // THE THIRD COLUMN, and the one that cannot be faked: supply grows on
+    // emissions nobody paid for and price is the curve position restated, but
+    // burn moves only when somebody actually spent, and the curve never gives
+    // it back. Always shown, even at zero — "nobody has bought in" is the most
+    // useful thing this row can tell you about a young court.
+    // gnotAmt, not ugnot: three cells share the left column, so "13053599975
+    // µGNOT" does not fit and reads worse than "13,054 GNOT" anyway. That
+    // helper already handles the dust case where GNOT rounds to a bare 0.
+    statTile("GNOT burned", Number.isFinite(s.burned)? gnotAmt(s.burned) : "—",
+      "spent to mint the coin, never returned",
+      tileSpark(parseSeries(s.burnHist))),
   ];
   if(s.reservoir>0) tiles.push(statTile("reward reservoir", cc(s.reservoir,slug),
     "available to claims settling and paying out"));
   if(s.seniorOwed>0) tiles.push(statTile("senior queue owed", cc(s.seniorOwed,slug),
     "earned payouts, paid as budget accrues"));
-  // Burn gets its own block under the tiles: a different question from the two
-  // above, and the only one nobody can fake.
-  const chart = burnSectionHtml(parseSeries(s.burnHist), slug, s.burned);
   return `<section class="courtstats"><div class="grid stats">
        ${tiles.join("\n       ")}
-       </div>${chart}</section>`;
+       </div></section>`;
 }
 function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pendQ){
   const cur0 = foldersFor(slug, chainF);
