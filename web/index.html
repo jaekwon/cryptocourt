@@ -413,6 +413,14 @@ a.card:hover{border-color:var(--line-2)}
 .rpcwrap{width:min(260px,60%); height:3px; margin:14px auto 6px; background:var(--line); border-radius:2px; overflow:hidden}
 .rpcbar{height:100%; width:0; background:var(--accent); transition:width .18s linear}
 .rpcnum{font-size:11px; color:var(--muted); font-variant-numeric:tabular-nums}
+/* The chat's slot in the rail. It TAKES THE LEFTOVER HEIGHT rather than a fixed
+   one — the rail is a flex column, so min-height:0 is what lets it shrink below
+   its content and scroll inside instead of pushing the account block off the
+   bottom. */
+.railchat{flex:1 1 auto; min-height:0; display:flex; flex-direction:column;
+  overflow:hidden; border-top:1px solid var(--line)}
+.railchat[hidden]{display:none}
+.railchat > *{min-height:0}
 /* The court coin's name, everywhere it is written. One hardcoded purple rather
    than a theme token: the token IS the colour, and it must read the same in
    light and dark. */
@@ -1734,6 +1742,15 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
     <div class="small muted" id="wallethint" role="status" hidden></div>
     <button class="themebtn" id="themebtn"><span class="g">◐</span> <span id="themelab">Theme</span></button>
   </div>
+<!-- THE COURT CHAT LIVES IN THE RAIL, not at the foot of the court page.
+     Below the docket it was a room nobody walked into: a reader had to scroll
+     past every claim to find out anyone was talking, and it pushed the page
+     longer for people who never used it. In the rail it is visible the whole
+     time and costs the court page no height at all.
+     Empty except on a court page — it is per-court, so there is nothing for it
+     to show anywhere else. -->
+<div class="railchat" id="railchat" hidden></div>
+
 </aside>
 
 
@@ -5015,6 +5032,12 @@ function rpcProgress(){
   if(n) n.textContent = `${done} of ${started} answers`;
 }
 function loading(){
+  // THE CHAT IS PER-COURT, so leaving a court must close it rather than leave
+  // the last court's room open in the rail on a page it has nothing to do with.
+  // Every route calls loading() first, and the court route re-opens it after.
+  if(CHATSTOP){ CHATSTOP(); CHATSTOP = null; }
+  const rc0 = document.getElementById("railchat");
+  if(rc0){ rc0.hidden = true; rc0.innerHTML = ""; }
   RPCQ.started = 0; RPCQ.done = 0;
   main.innerHTML = `<div class="empty"><div class="g">⚖︎</div><p>Reading the chain…</p>
     <div class="rpcwrap"><div id="rpcbar" class="rpcbar"></div></div>
@@ -5442,11 +5465,10 @@ on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
        </div>
        </div>`
     + courtBody(slug, s, claims, docketPager, chainF, allRows, docketPagerBot,
-        {rows:parsed.strip||[], more:parsed.stripMore||0}, {rows:parsed.pending||[], more:parsed.pendingMore||0})
-    + `<div id="courtchat"></div>`;
-  // Chat sits at the foot of the court, below the docket. Guarded on typeof so a
-  // missing chat.js leaves the court page whole instead of throwing halfway
-  // through a paint, which would take the docket with it.
+        {rows:parsed.strip||[], more:parsed.stripMore||0}, {rows:parsed.pending||[], more:parsed.pendingMore||0});
+  // Chat lives in the rail; see #railchat. Guarded on typeof so a missing
+  // chat.js leaves the court page whole instead of throwing halfway through a
+  // paint, which would take the docket with it.
   // The claim composer, beside the docket. Guarded on typeof for the reason
   // chat is: a missing media.js must leave the court page whole rather than
   // throw halfway through a paint and take the docket with it. Without it the
@@ -5458,8 +5480,12 @@ on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
     if(CHATSTOP) CHATSTOP();
     // Resolved here rather than written into CFG: persisting the origin would
     // freeze the page to whichever host it was first opened from.
-    CHATSTOP = mountChat(document.getElementById("courtchat"),
-      {cfg: {...CFG, chat: chatBase()}, chain: CFG.chainid || "dev", court: slug});
+    const rc = document.getElementById("railchat");
+    if(rc){
+      rc.hidden = false;
+      CHATSTOP = mountChat(rc,
+        {cfg: {...CFG, chat: chatBase()}, chain: CFG.chainid || "dev", court: slug});
+    }
   }
   QCTX = {kind:"claim titles", demo:!isLive(), loaded:allRows.length,
     total:totalClaims, slug, totalClaims, orderTail:" · newest first"};

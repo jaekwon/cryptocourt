@@ -47,25 +47,27 @@ async function courtPage(browser, opts) {
   {
     const {page, errors} = await courtPage(browser);
     const r = await page.evaluate(() => {
-      const slot = document.getElementById("courtchat");
+      const slot = document.getElementById("railchat");
       const log = slot && slot.querySelector(".chatlog");
       const main = document.getElementById("main");
-      // Where it sits matters: the request was "the bottom of each court page", and a
-      // panel above the docket would push the court's own content down.
-      const docket = main.querySelector("table, .docket, section");
-      const below = slot && docket &&
-        slot.getBoundingClientRect().top >= docket.getBoundingClientRect().top;
+      // WHERE IT SITS MATTERS, and it moved. It used to hang below the docket,
+      // where a reader had to scroll past every claim to find out anyone was
+      // talking and it made the page longer for everyone who never used it. It
+      // is in the rail now: visible the whole time, and costing the court page
+      // no height at all. So the check is that it is OUTSIDE main, in the rail.
+      const rail = document.querySelector("aside.rail");
+      const inRail = !!(slot && rail && rail.contains(slot) && !main.contains(slot));
       return {
         mounted: !!log,
         lines: log ? log.querySelectorAll(".chatmsg").length : 0,
         styled: !!document.getElementById("chatcss"),
         tagged: slot ? slot.classList.contains("chatpanel") : false,
-        below: !!below,
+        inRail,
         text: log ? log.textContent : "",
       };
     });
     ok("a court page mounts the chat panel", r.mounted);
-    ok("...at the foot of the court, below its own content", r.below);
+    ok("...in the rail, not in the court page body", r.inRail);
     ok("...with the demo sample rather than an empty box", r.lines === 4);
     ok("...and the sample is legible", /ellery/.test(r.text));
     ok("...with the panel's stylesheet installed", r.styled);
@@ -88,7 +90,7 @@ async function courtPage(browser, opts) {
         stats: /coin price/.test(main.textContent),
         docketRows: main.querySelectorAll("a[href*='#/c/orem/']").length,
         // The slot may exist; what must NOT exist is a mounted panel.
-        panel: !!document.querySelector("#courtchat .chatlog"),
+        panel: !!document.querySelector("#railchat .chatlog"),
         mountFn: typeof window.mountChat,
       };
     });
@@ -117,8 +119,8 @@ async function courtPage(browser, opts) {
     }
     const r = await page.evaluate(() => ({
       panels: document.querySelectorAll(".chatlog").length,
-      slots: document.querySelectorAll("#courtchat").length,
-      mounted: !!document.querySelector("#courtchat .chatlog"),
+      slots: document.querySelectorAll("#railchat").length,
+      mounted: !!document.querySelector("#railchat .chatlog"),
       // One id, one panel: a leak would show as several.
       styles: document.querySelectorAll("#chatcss").length,
     }));
@@ -139,7 +141,7 @@ async function courtPage(browser, opts) {
     page.on("request", r => { if (!r.url().startsWith("file:")) external.push(r.url()); });
     await page.goto(PAGE + "#/c/orem", {waitUntil: "load"});
     await page.waitForFunction(
-      () => !!document.querySelector("#courtchat .chatlog"), {timeout: 20000});
+      () => !!document.querySelector("#railchat .chatlog"), {timeout: 20000});
     // Give a poller a chance to fire if one were wrongly running.
     await new Promise(r => setTimeout(r, 1500));
     ok("demo mode makes no network call at all: " + (external[0] || "none"),
@@ -158,7 +160,7 @@ async function courtPage(browser, opts) {
     const page = await browser.newPage();
     await page.goto(PAGE + "#/c/orem", {waitUntil: "load"});
     await page.waitForFunction(
-      () => !!document.querySelector("#courtchat .chatlog"), {timeout: 20000});
+      () => !!document.querySelector("#railchat .chatlog"), {timeout: 20000});
     const saved = await page.evaluate(() => {
       const el = document.getElementById("chat");
       if (!el) return {missing: true};
@@ -213,8 +215,8 @@ async function courtPage(browser, opts) {
   {
     const {page, errors} = await courtPage(browser);
     const r = await page.evaluate(() => ({
-      dry: !!document.querySelector("#courtchat .chatdry"),
-      log: !!document.querySelector("#courtchat .chatlog"),
+      dry: !!document.querySelector("#railchat .chatdry"),
+      log: !!document.querySelector("#railchat .chatlog"),
     }));
     ok("the panel carries no dry-run notice", r.dry === false);
     ok("...and this is not vacuous — the panel really mounted", r.log === true);
