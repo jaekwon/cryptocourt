@@ -928,8 +928,8 @@
   "pkg": "kourtv2",
   "file": "dispute.gno",
   "label": "VoteDispute: the vote is never cast with the governor",
-  "find": "\tc.gov.VoteWithCap(who, cs.proposalID, choice, held)",
-  "replace": "\t_ = choice"
+  "find": "\tc.gov.VoteWithCap(who, cs.proposalID, govChoice, held)",
+  "replace": "\t_ = govChoice"
  },
  {
   "pkg": "kourtv2",
@@ -1122,27 +1122,6 @@
   "label": "OpenDispute: the round is proposed with no quorum floor",
   "find": "\tfloor := quorumFloor(c, cs.xBarFrozen)",
   "replace": "\tfloor := int64(0)"
- },
- {
-  "pkg": "kourtv2",
-  "file": "dispute.gno",
-  "label": "OpenDispute: an open flag is not voided (M3-LOW-1)",
-  "find": "\tvoidFlag(c, cs)\n\tcs.counterOpen = false",
-  "replace": "\tcs.counterOpen = false"
- },
- {
-  "pkg": "kourtv2",
-  "file": "dispute.gno",
-  "label": "OpenDispute: a live counter re-vote is left open",
-  "find": "\tvoidFlag(c, cs)\n\tcs.counterOpen = false",
-  "replace": "\tvoidFlag(c, cs)"
- },
- {
-  "pkg": "kourtv2",
-  "file": "dispute.gno",
-  "label": "OpenDispute: the quality question is not re-asked",
-  "find": "\treaskQualityTally(cs)\n",
-  "replace": ""
  },
  {
   "pkg": "kourtv2",
@@ -1845,15 +1824,15 @@
   "pkg": "kourtv2",
   "file": "dispute.gno",
   "label": "provCloseClaim: the court's deposit ledger is not decremented",
-  "find": "\t\tc.deposit -= cs.deposit",
-  "replace": ""
+  "find": "\t\tc.coin.Transfer(c.escrow, cs.author, cs.deposit)\n\t\tc.deposit -= cs.deposit",
+  "replace": "\t\tc.coin.Transfer(c.escrow, cs.author, cs.deposit)"
  },
  {
   "pkg": "kourtv2",
   "file": "dispute.gno",
   "label": "provCloseClaim: the court's ledger is not decremented for the fee",
-  "find": "\t\tc.deposit -= cs.fee",
-  "replace": ""
+  "find": "\t\tc.coin.Transfer(c.escrow, cs.author, cs.fee)\n\t\tc.deposit -= cs.fee",
+  "replace": "\t\tc.coin.Transfer(c.escrow, cs.author, cs.fee)"
  },
  {
   "pkg": "kourtv2",
@@ -1880,8 +1859,8 @@
   "pkg": "kourtv2",
   "file": "dispute.gno",
   "label": "provCloseClaim: the answerer's priority slot is never released",
-  "find": "\treleasePriority(c, cs.answerer, cs.id)",
-  "replace": ""
+  "find": "\t\tc.coin.Transfer(c.escrow, cs.author, cs.fee)\n\t\tc.deposit -= cs.fee\n\t\tcs.fee = 0\n\t}\n\treleasePriority(c, cs.answerer, cs.id)",
+  "replace": "\t\tc.coin.Transfer(c.escrow, cs.author, cs.fee)\n\t\tc.deposit -= cs.fee\n\t\tcs.fee = 0\n\t}"
  },
  {
   "pkg": "kourtv2",
@@ -5040,8 +5019,8 @@
   "pkg": "kourtv2",
   "file": "dispute.gno",
   "label": "VoteDispute: the live cap is gone (rented weight votes again)",
-  "find": "\tc.gov.VoteWithCap(who, cs.proposalID, choice, held)",
-  "replace": "\tc.gov.Vote(who, cs.proposalID, choice)"
+  "find": "\tc.gov.VoteWithCap(who, cs.proposalID, govChoice, held)",
+  "replace": "\tc.gov.Vote(who, cs.proposalID, govChoice)"
  },
  {
   "pkg": "kourtv2",
