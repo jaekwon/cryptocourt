@@ -266,21 +266,32 @@ chat:
 # except a private copy of examples/, named after this SHELL's pid ($$) so two
 # runs in one checkout do not share it either. Import paths are untouched, so the
 # code under test is byte-identical to the code that is committed.
+#
+# EVERY CHECK AND EVERY PACKAGE RUNS; the target fails at the END. It used to be
+# a chain of `|| exit 1`, and the consequence was not a tidier log: with
+# check-storage.py failing on one filetest's ceiling, this target exited at that
+# line and NEVER REACHED `gno test` — so the whole realm unit suite, seven p/
+# packages and five r/ realms, silently stopped running while the target went on
+# reporting a familiar red for a familiar reason. MEASURED: the target was rc=2
+# with the ceiling breach; running `gno test .` for kourtv2 by hand against the
+# same staged root was rc=0 in 17s, coverage the gate had not been giving for as
+# long as that ceiling had been over.
+#
+# So the independent audits accumulate into rc, and so do the test loops -- one
+# failing package no longer hides the eleven behind it. What still hard-fails is
+# only what the rest cannot run without: the repo lock (do not stage into a tree
+# somebody else is rewriting), the shadow GNOROOT, and the staging copies.
 realm-test:
 	@if ! command -v gno >/dev/null 2>&1; then \
 		if [ -n "$$REQUIRE_GNO" ]; then echo "gno not installed"; exit 1; fi; \
 		echo "gno not installed - skipping realm tests"; exit 0; \
 	fi; \
 	python3 scripts/repolock.py check realm-test || exit 1; \
-	python3 scripts/check-citations.py || exit 1; \
-	python3 scripts/check-docnumbers.py || exit 1; \
-	python3 scripts/check-storage.py || exit 1; \
-	python3 scripts/check-nontransferable.py || exit 1; \
-	python3 scripts/check-epoch-coherence.py || exit 1; \
-	python3 scripts/check-membership-clears.py || exit 1; \
-	python3 scripts/check-read-purity.py || exit 1; \
-	python3 scripts/check-spend-paths.py || exit 1; \
-	python3 scripts/check-abort-assertions.py || exit 1; \
+	rc=0; \
+	for chk in citations docnumbers storage nontransferable epoch-coherence \
+	           membership-clears read-purity spend-paths abort-assertions; do \
+		python3 scripts/check-$$chk.py || rc=1; \
+	done; \
 	root=$$(python3 scripts/gnoroot.py build --label realm-test --pid $$$$) || exit 1; \
 	trap 'python3 scripts/gnoroot.py remove --path "$$root"' EXIT; \
 	export GNOROOT="$$root"; \
@@ -291,13 +302,14 @@ realm-test:
 		cp realm/p/$$p/*.gno realm/p/$$p/gnomod.toml "$$pbase/$$p/v0/" || exit 1; \
 	done; \
 	for p in checkpoint grc20votes governor twap cshares tickbook curve; do \
-		( cd "$$pbase/$$p/v0" && gno test . ) || exit 1; \
+		( cd "$$pbase/$$p/v0" && gno test . ) || rc=1; \
 	done; \
 	for r in govern offerer kourtv1 kourtv2 ccwrap; do \
 		mkdir -p "$$rbase/$$r" && \
-		cp realm/r/$$r/*.gno realm/r/$$r/gnomod.toml "$$rbase/$$r/" && \
-		( cd "$$rbase/$$r" && gno test . ) || exit 1; \
-	done
+		cp realm/r/$$r/*.gno realm/r/$$r/gnomod.toml "$$rbase/$$r/" || exit 1; \
+		( cd "$$rbase/$$r" && gno test . ) || rc=1; \
+	done; \
+	exit $$rc
 
 # The claims that need a chain: that the source compiles on one, what a
 # transaction costs, what an indexer sees, and whether the deploy fits.
