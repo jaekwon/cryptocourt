@@ -461,9 +461,9 @@ const CHATCSS = `
 .chatsend:disabled{opacity:.4;cursor:default;transform:none}
 .chatnote{min-height:1.2em;opacity:.7;font-size:.85em;margin-top:.25rem}
 /* THE DEEP NIGHT SKY BEHIND THE CHAT — a window onto it, not a boxed widget.
-   Very dark royal purple, two nebula glows in opposite corners, the galactic
-   dust band across it on the diagonal, and ten layers of stars grading from
-   crisp pixels down to a hairline dust.
+   Very dark royal purple fading top to bottom -- just the gradient of the sky,
+   no galactic band -- with 84 stars scattered across it, grading from crisp
+   pixels down to a hairline dust.
 
    PAINT ONLY, AND THAT IS THE POINT. This is a SECOND .chatpanel rule rather
    than an edit of the first, so the two can be read side by side and this one
@@ -484,50 +484,127 @@ const CHATCSS = `
    rgba(128,128,128,...) borders and the .chatstate wash read on a dark ground,
    and the inputs stay transparent so the sky shows through them.
 
-   HOW THE FIELD IS BUILT, since it looks arbitrary and is not. Each star layer
-   is one tiled radial-gradient, so one dot per tile; the tile sizes are
-   coprime-ish (137/149, 211/173, 89/97, 179/191, 61/71, 101/113, 43/47, 53/59,
-   31/37, 29/41) so the repeats do not line up into a visible grid in a panel
-   this small. Brightness and radius fall together, 1px at .95 alpha down to
-   .45px at .15, which is what gives depth rather than confetti: the four
-   smallest layers read as dust, not as stars.
+   HOW THE FIELD IS BUILT, since it looks arbitrary and is not. NOTHING TILES.
+   Each star is its own no-repeat layer placed at a percentage position, so the
+   field is one fixed scatter over the whole panel and cannot repeat -- which is
+   what the earlier version got wrong. That one used ten TILED gradients at
+   coprime sizes, one dot per tile, and at the rail's full height the repeat was
+   plainly visible.
 
-   THE BAND IS TWO LAYERS, and one is not enough. A single haze at a legible
-   alpha looks like a smudge; a narrow bright core inside a wider faint one
-   reads as depth. Both sit at 108deg so they agree, and both are no-repeat at
-   100% 100% so the band spans the panel however tall it grows -- which matters,
-   because .chatlog has a max-height and this panel changes height with it.
+   The positions come from the R2 (Kronecker) low-discrepancy sequence, stepping
+   two irrational multiples of the plastic number. That buys two things a random
+   generator does not: an even spread with no clumps, and no point landing on a
+   tidy fraction, so nothing reads as a grid either. MEASURED on the 84 points
+   below -- quadrant counts 21/22/21/20, minimum separation 7.79% of the box.
+   They are written out literally rather than generated at runtime, so this stays
+   a static stylesheet.
 
-   Colour stops are written out in full (colour, colour, transparent) rather
-   than the shorter two-position form, for the widest engine support. The
-   fourteen entries in background-image, background-size and background-repeat
-   must stay the same length and in the same order; CSS pairs them by position
-   and silently mismatches if they drift.
+   Brightness rides in six tiers cycled by index, 1px at .95 alpha down to
+   .45px at .16, so size and alpha fall together and the tiers interleave
+   spatially instead of banding.
+
+   THE GRADIENT IS LAST, AND MUST BE. CSS paints the FIRST background-image on
+   top, so an opaque vertical fade listed first would bury every star. Listed
+   last it sits behind them, which is also why the stars are crisper here than
+   in the first version -- that one had its haze layers on top, veiling them.
+
+   ONE background-size AND ONE background-repeat now cover every layer, because
+   a single value propagates to all of them. That deletes a real hazard the
+   earlier version carried: three comma lists of fourteen that CSS pairs by
+   position and silently mismatches if they drift.
 
    NO BACKTICK AND NO DOLLAR-BRACE ANYWHERE IN HERE. The whole block is one
    template literal; a stray pair closes it early and takes every page with it,
    not just the chat. */
-.chatpanel{color:#e9e5f8;background-color:#0b0518;
+.chatpanel{color:#e9e5f8;background-color:#06020e;
   background-image:
-    radial-gradient(120% 80% at 76% 4%, rgba(104,62,182,.30) 0, rgba(104,62,182,0) 62%),
-    radial-gradient(90% 70% at 12% 96%, rgba(70,44,140,.24) 0, rgba(70,44,140,0) 66%),
-    linear-gradient(108deg, rgba(176,152,240,0) 26%, rgba(176,152,240,.055) 41%, rgba(198,182,255,.15) 50%, rgba(176,152,240,.055) 59%, rgba(176,152,240,0) 74%),
-    linear-gradient(108deg, rgba(150,120,225,0) 34%, rgba(150,120,225,.07) 50%, rgba(150,120,225,0) 66%),
-    radial-gradient(circle at 21% 29%, rgba(255,255,255,.95) 0, rgba(255,255,255,.95) 1px, rgba(255,255,255,0) 1.5px),
-    radial-gradient(circle at 68% 77%, rgba(232,224,255,.75) 0, rgba(232,224,255,.75) 1px, rgba(232,224,255,0) 1.5px),
-    radial-gradient(circle at 44% 13%, rgba(255,255,255,.6) 0, rgba(255,255,255,.6) .8px, rgba(255,255,255,0) 1.2px),
-    radial-gradient(circle at 86% 41%, rgba(204,186,255,.55) 0, rgba(204,186,255,.55) .8px, rgba(204,186,255,0) 1.2px),
-    radial-gradient(circle at 9% 71%, rgba(255,255,255,.42) 0, rgba(255,255,255,.42) .6px, rgba(255,255,255,0) .95px),
-    radial-gradient(circle at 57% 52%, rgba(220,208,255,.34) 0, rgba(220,208,255,.34) .6px, rgba(220,208,255,0) .95px),
-    radial-gradient(circle at 33% 84%, rgba(255,255,255,.26) 0, rgba(255,255,255,.26) .5px, rgba(255,255,255,0) .85px),
-    radial-gradient(circle at 74% 22%, rgba(226,214,255,.22) 0, rgba(226,214,255,.22) .5px, rgba(226,214,255,0) .85px),
-    radial-gradient(circle at 51% 66%, rgba(255,255,255,.18) 0, rgba(255,255,255,.18) .45px, rgba(255,255,255,0) .8px),
-    radial-gradient(circle at 15% 47%, rgba(214,204,255,.15) 0, rgba(214,204,255,.15) .45px, rgba(214,204,255,0) .8px);
-  background-size:100% 100%,100% 100%,100% 100%,100% 100%,
-    137px 149px,211px 173px,89px 97px,179px 191px,61px 71px,101px 113px,
-    43px 47px,53px 59px,31px 37px,29px 41px;
-  background-repeat:no-repeat,no-repeat,no-repeat,no-repeat,
-    repeat,repeat,repeat,repeat,repeat,repeat,repeat,repeat,repeat,repeat}
+    radial-gradient(circle at 25.49% 6.98%, rgba(232,224,255,0.7) 0, rgba(232,224,255,0.7) 0.85px, rgba(232,224,255,0) 1.25px),
+    radial-gradient(circle at 0.98% 63.97%, rgba(255,255,255,0.5) 0, rgba(255,255,255,0.5) 0.7px, rgba(255,255,255,0) 1.10px),
+    radial-gradient(circle at 76.46% 20.95%, rgba(204,186,255,0.35) 0, rgba(204,186,255,0.35) 0.6px, rgba(204,186,255,0) 1.00px),
+    radial-gradient(circle at 51.95% 77.94%, rgba(255,255,255,0.22) 0, rgba(255,255,255,0.22) 0.5px, rgba(255,255,255,0) 0.90px),
+    radial-gradient(circle at 27.44% 34.92%, rgba(214,204,255,0.16) 0, rgba(214,204,255,0.16) 0.45px, rgba(214,204,255,0) 0.85px),
+    radial-gradient(circle at 2.93% 91.90%, rgba(255,255,255,0.95) 0, rgba(255,255,255,0.95) 1.0px, rgba(255,255,255,0) 1.40px),
+    radial-gradient(circle at 78.41% 48.89%, rgba(232,224,255,0.7) 0, rgba(232,224,255,0.7) 0.85px, rgba(232,224,255,0) 1.25px),
+    radial-gradient(circle at 53.90% 5.87%, rgba(255,255,255,0.5) 0, rgba(255,255,255,0.5) 0.7px, rgba(255,255,255,0) 1.10px),
+    radial-gradient(circle at 29.39% 62.86%, rgba(204,186,255,0.35) 0, rgba(204,186,255,0.35) 0.6px, rgba(204,186,255,0) 1.00px),
+    radial-gradient(circle at 4.88% 19.84%, rgba(255,255,255,0.22) 0, rgba(255,255,255,0.22) 0.5px, rgba(255,255,255,0) 0.90px),
+    radial-gradient(circle at 80.37% 76.82%, rgba(214,204,255,0.16) 0, rgba(214,204,255,0.16) 0.45px, rgba(214,204,255,0) 0.85px),
+    radial-gradient(circle at 55.85% 33.81%, rgba(255,255,255,0.95) 0, rgba(255,255,255,0.95) 1.0px, rgba(255,255,255,0) 1.40px),
+    radial-gradient(circle at 31.34% 90.79%, rgba(232,224,255,0.7) 0, rgba(232,224,255,0.7) 0.85px, rgba(232,224,255,0) 1.25px),
+    radial-gradient(circle at 6.83% 47.78%, rgba(255,255,255,0.5) 0, rgba(255,255,255,0.5) 0.7px, rgba(255,255,255,0) 1.10px),
+    radial-gradient(circle at 82.32% 4.76%, rgba(204,186,255,0.35) 0, rgba(204,186,255,0.35) 0.6px, rgba(204,186,255,0) 1.00px),
+    radial-gradient(circle at 57.80% 61.74%, rgba(255,255,255,0.22) 0, rgba(255,255,255,0.22) 0.5px, rgba(255,255,255,0) 0.90px),
+    radial-gradient(circle at 33.29% 18.73%, rgba(214,204,255,0.16) 0, rgba(214,204,255,0.16) 0.45px, rgba(214,204,255,0) 0.85px),
+    radial-gradient(circle at 8.78% 75.71%, rgba(255,255,255,0.95) 0, rgba(255,255,255,0.95) 1.0px, rgba(255,255,255,0) 1.40px),
+    radial-gradient(circle at 84.27% 32.70%, rgba(232,224,255,0.7) 0, rgba(232,224,255,0.7) 0.85px, rgba(232,224,255,0) 1.25px),
+    radial-gradient(circle at 59.76% 89.68%, rgba(255,255,255,0.5) 0, rgba(255,255,255,0.5) 0.7px, rgba(255,255,255,0) 1.10px),
+    radial-gradient(circle at 35.24% 46.66%, rgba(204,186,255,0.35) 0, rgba(204,186,255,0.35) 0.6px, rgba(204,186,255,0) 1.00px),
+    radial-gradient(circle at 10.73% 3.65%, rgba(255,255,255,0.22) 0, rgba(255,255,255,0.22) 0.5px, rgba(255,255,255,0) 0.90px),
+    radial-gradient(circle at 86.22% 60.63%, rgba(214,204,255,0.16) 0, rgba(214,204,255,0.16) 0.45px, rgba(214,204,255,0) 0.85px),
+    radial-gradient(circle at 61.71% 17.62%, rgba(255,255,255,0.95) 0, rgba(255,255,255,0.95) 1.0px, rgba(255,255,255,0) 1.40px),
+    radial-gradient(circle at 37.19% 74.60%, rgba(232,224,255,0.7) 0, rgba(232,224,255,0.7) 0.85px, rgba(232,224,255,0) 1.25px),
+    radial-gradient(circle at 12.68% 31.58%, rgba(255,255,255,0.5) 0, rgba(255,255,255,0.5) 0.7px, rgba(255,255,255,0) 1.10px),
+    radial-gradient(circle at 88.17% 88.57%, rgba(204,186,255,0.35) 0, rgba(204,186,255,0.35) 0.6px, rgba(204,186,255,0) 1.00px),
+    radial-gradient(circle at 63.66% 45.55%, rgba(255,255,255,0.22) 0, rgba(255,255,255,0.22) 0.5px, rgba(255,255,255,0) 0.90px),
+    radial-gradient(circle at 39.15% 2.54%, rgba(214,204,255,0.16) 0, rgba(214,204,255,0.16) 0.45px, rgba(214,204,255,0) 0.85px),
+    radial-gradient(circle at 14.63% 59.52%, rgba(255,255,255,0.95) 0, rgba(255,255,255,0.95) 1.0px, rgba(255,255,255,0) 1.40px),
+    radial-gradient(circle at 90.12% 16.50%, rgba(232,224,255,0.7) 0, rgba(232,224,255,0.7) 0.85px, rgba(232,224,255,0) 1.25px),
+    radial-gradient(circle at 65.61% 73.49%, rgba(255,255,255,0.5) 0, rgba(255,255,255,0.5) 0.7px, rgba(255,255,255,0) 1.10px),
+    radial-gradient(circle at 41.10% 30.47%, rgba(204,186,255,0.35) 0, rgba(204,186,255,0.35) 0.6px, rgba(204,186,255,0) 1.00px),
+    radial-gradient(circle at 16.58% 87.46%, rgba(255,255,255,0.22) 0, rgba(255,255,255,0.22) 0.5px, rgba(255,255,255,0) 0.90px),
+    radial-gradient(circle at 92.07% 44.44%, rgba(214,204,255,0.16) 0, rgba(214,204,255,0.16) 0.45px, rgba(214,204,255,0) 0.85px),
+    radial-gradient(circle at 67.56% 1.43%, rgba(255,255,255,0.95) 0, rgba(255,255,255,0.95) 1.0px, rgba(255,255,255,0) 1.40px),
+    radial-gradient(circle at 43.05% 58.41%, rgba(232,224,255,0.7) 0, rgba(232,224,255,0.7) 0.85px, rgba(232,224,255,0) 1.25px),
+    radial-gradient(circle at 18.54% 15.39%, rgba(255,255,255,0.5) 0, rgba(255,255,255,0.5) 0.7px, rgba(255,255,255,0) 1.10px),
+    radial-gradient(circle at 94.02% 72.38%, rgba(204,186,255,0.35) 0, rgba(204,186,255,0.35) 0.6px, rgba(204,186,255,0) 1.00px),
+    radial-gradient(circle at 69.51% 29.36%, rgba(255,255,255,0.22) 0, rgba(255,255,255,0.22) 0.5px, rgba(255,255,255,0) 0.90px),
+    radial-gradient(circle at 45.00% 86.35%, rgba(214,204,255,0.16) 0, rgba(214,204,255,0.16) 0.45px, rgba(214,204,255,0) 0.85px),
+    radial-gradient(circle at 20.49% 43.33%, rgba(255,255,255,0.95) 0, rgba(255,255,255,0.95) 1.0px, rgba(255,255,255,0) 1.40px),
+    radial-gradient(circle at 95.97% 0.31%, rgba(232,224,255,0.7) 0, rgba(232,224,255,0.7) 0.85px, rgba(232,224,255,0) 1.25px),
+    radial-gradient(circle at 71.46% 57.30%, rgba(255,255,255,0.5) 0, rgba(255,255,255,0.5) 0.7px, rgba(255,255,255,0) 1.10px),
+    radial-gradient(circle at 46.95% 14.28%, rgba(204,186,255,0.35) 0, rgba(204,186,255,0.35) 0.6px, rgba(204,186,255,0) 1.00px),
+    radial-gradient(circle at 22.44% 71.27%, rgba(255,255,255,0.22) 0, rgba(255,255,255,0.22) 0.5px, rgba(255,255,255,0) 0.90px),
+    radial-gradient(circle at 97.93% 28.25%, rgba(214,204,255,0.16) 0, rgba(214,204,255,0.16) 0.45px, rgba(214,204,255,0) 0.85px),
+    radial-gradient(circle at 73.41% 85.23%, rgba(255,255,255,0.95) 0, rgba(255,255,255,0.95) 1.0px, rgba(255,255,255,0) 1.40px),
+    radial-gradient(circle at 48.90% 42.22%, rgba(232,224,255,0.7) 0, rgba(232,224,255,0.7) 0.85px, rgba(232,224,255,0) 1.25px),
+    radial-gradient(circle at 24.39% 99.20%, rgba(255,255,255,0.5) 0, rgba(255,255,255,0.5) 0.7px, rgba(255,255,255,0) 1.10px),
+    radial-gradient(circle at 99.88% 56.19%, rgba(204,186,255,0.35) 0, rgba(204,186,255,0.35) 0.6px, rgba(204,186,255,0) 1.00px),
+    radial-gradient(circle at 75.36% 13.17%, rgba(255,255,255,0.22) 0, rgba(255,255,255,0.22) 0.5px, rgba(255,255,255,0) 0.90px),
+    radial-gradient(circle at 50.85% 70.15%, rgba(214,204,255,0.16) 0, rgba(214,204,255,0.16) 0.45px, rgba(214,204,255,0) 0.85px),
+    radial-gradient(circle at 26.34% 27.14%, rgba(255,255,255,0.95) 0, rgba(255,255,255,0.95) 1.0px, rgba(255,255,255,0) 1.40px),
+    radial-gradient(circle at 1.83% 84.12%, rgba(232,224,255,0.7) 0, rgba(232,224,255,0.7) 0.85px, rgba(232,224,255,0) 1.25px),
+    radial-gradient(circle at 77.31% 41.11%, rgba(255,255,255,0.5) 0, rgba(255,255,255,0.5) 0.7px, rgba(255,255,255,0) 1.10px),
+    radial-gradient(circle at 52.80% 98.09%, rgba(204,186,255,0.35) 0, rgba(204,186,255,0.35) 0.6px, rgba(204,186,255,0) 1.00px),
+    radial-gradient(circle at 28.29% 55.07%, rgba(255,255,255,0.22) 0, rgba(255,255,255,0.22) 0.5px, rgba(255,255,255,0) 0.90px),
+    radial-gradient(circle at 3.78% 12.06%, rgba(214,204,255,0.16) 0, rgba(214,204,255,0.16) 0.45px, rgba(214,204,255,0) 0.85px),
+    radial-gradient(circle at 79.27% 69.04%, rgba(255,255,255,0.95) 0, rgba(255,255,255,0.95) 1.0px, rgba(255,255,255,0) 1.40px),
+    radial-gradient(circle at 54.75% 26.03%, rgba(232,224,255,0.7) 0, rgba(232,224,255,0.7) 0.85px, rgba(232,224,255,0) 1.25px),
+    radial-gradient(circle at 30.24% 83.01%, rgba(255,255,255,0.5) 0, rgba(255,255,255,0.5) 0.7px, rgba(255,255,255,0) 1.10px),
+    radial-gradient(circle at 5.73% 39.99%, rgba(204,186,255,0.35) 0, rgba(204,186,255,0.35) 0.6px, rgba(204,186,255,0) 1.00px),
+    radial-gradient(circle at 81.22% 96.98%, rgba(255,255,255,0.22) 0, rgba(255,255,255,0.22) 0.5px, rgba(255,255,255,0) 0.90px),
+    radial-gradient(circle at 56.70% 53.96%, rgba(214,204,255,0.16) 0, rgba(214,204,255,0.16) 0.45px, rgba(214,204,255,0) 0.85px),
+    radial-gradient(circle at 32.19% 10.95%, rgba(255,255,255,0.95) 0, rgba(255,255,255,0.95) 1.0px, rgba(255,255,255,0) 1.40px),
+    radial-gradient(circle at 7.68% 67.93%, rgba(232,224,255,0.7) 0, rgba(232,224,255,0.7) 0.85px, rgba(232,224,255,0) 1.25px),
+    radial-gradient(circle at 83.17% 24.91%, rgba(255,255,255,0.5) 0, rgba(255,255,255,0.5) 0.7px, rgba(255,255,255,0) 1.10px),
+    radial-gradient(circle at 58.66% 81.90%, rgba(204,186,255,0.35) 0, rgba(204,186,255,0.35) 0.6px, rgba(204,186,255,0) 1.00px),
+    radial-gradient(circle at 34.14% 38.88%, rgba(255,255,255,0.22) 0, rgba(255,255,255,0.22) 0.5px, rgba(255,255,255,0) 0.90px),
+    radial-gradient(circle at 9.63% 95.87%, rgba(214,204,255,0.16) 0, rgba(214,204,255,0.16) 0.45px, rgba(214,204,255,0) 0.85px),
+    radial-gradient(circle at 85.12% 52.85%, rgba(255,255,255,0.95) 0, rgba(255,255,255,0.95) 1.0px, rgba(255,255,255,0) 1.40px),
+    radial-gradient(circle at 60.61% 9.83%, rgba(232,224,255,0.7) 0, rgba(232,224,255,0.7) 0.85px, rgba(232,224,255,0) 1.25px),
+    radial-gradient(circle at 36.09% 66.82%, rgba(255,255,255,0.5) 0, rgba(255,255,255,0.5) 0.7px, rgba(255,255,255,0) 1.10px),
+    radial-gradient(circle at 11.58% 23.80%, rgba(204,186,255,0.35) 0, rgba(204,186,255,0.35) 0.6px, rgba(204,186,255,0) 1.00px),
+    radial-gradient(circle at 87.07% 80.79%, rgba(255,255,255,0.22) 0, rgba(255,255,255,0.22) 0.5px, rgba(255,255,255,0) 0.90px),
+    radial-gradient(circle at 62.56% 37.77%, rgba(214,204,255,0.16) 0, rgba(214,204,255,0.16) 0.45px, rgba(214,204,255,0) 0.85px),
+    radial-gradient(circle at 38.05% 94.75%, rgba(255,255,255,0.95) 0, rgba(255,255,255,0.95) 1.0px, rgba(255,255,255,0) 1.40px),
+    radial-gradient(circle at 13.53% 51.74%, rgba(232,224,255,0.7) 0, rgba(232,224,255,0.7) 0.85px, rgba(232,224,255,0) 1.25px),
+    radial-gradient(circle at 89.02% 8.72%, rgba(255,255,255,0.5) 0, rgba(255,255,255,0.5) 0.7px, rgba(255,255,255,0) 1.10px),
+    radial-gradient(circle at 64.51% 65.71%, rgba(204,186,255,0.35) 0, rgba(204,186,255,0.35) 0.6px, rgba(204,186,255,0) 1.00px),
+    radial-gradient(circle at 40.00% 22.69%, rgba(255,255,255,0.22) 0, rgba(255,255,255,0.22) 0.5px, rgba(255,255,255,0) 0.90px),
+    radial-gradient(circle at 15.48% 79.67%, rgba(214,204,255,0.16) 0, rgba(214,204,255,0.16) 0.45px, rgba(214,204,255,0) 0.85px),
+    radial-gradient(circle at 90.97% 36.66%, rgba(255,255,255,0.95) 0, rgba(255,255,255,0.95) 1.0px, rgba(255,255,255,0) 1.40px),
+    linear-gradient(to bottom, #1d1042 0, #150b31 34%, #0d0620 68%, #06020e 100%);
+  background-size:100% 100%;
+  background-repeat:no-repeat}
 `;
 function chatStyles(doc) {
   const d = doc || (typeof document !== "undefined" ? document : null);
