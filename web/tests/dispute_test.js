@@ -55,13 +55,22 @@ const html = disputeTicket("orem", 3, d, NOW);
 // what. The side on the record is one word; the ballot prints it. The old
 // wording survives only where the answer did not read — a question naming the
 // WRONG side is worse than one naming none.
+// The side wears the signal bar's hairline oval rather than a bare <b>; see
+// chart_test.js for why that mark is shared and why its weight is not.
+const ballotH3 = (/<h3>([\s\S]*?)<\/h3>/.exec(html) || [, null])[1];
 ok("the ballot names the answer on the record and asks about it",
-   /Overturn the <b>(YES|NO)<\/b> answer\?/.test(html));
+   ballotH3 !== null
+   && /^Overturn the <span class="sidetag">(YES|NO)<\/span> answer\?$/.test(ballotH3));
 // It has to fit one line beside the clock, which is why it is four words and not
 // a sentence — the first version read "The answer on the record is YES. Should it
 // be overturned?" and wrapped.
+/* GUARDED ON THE MATCH. The old form of this assertion read the h3 with a regex
+   that allowed one optional <b> inside it and fell back to "" when it did not
+   match. Wrapping the side in a <span> made it stop matching, so the length it
+   measured was 0 and the assertion passed while measuring nothing. A heading
+   that cannot be found is a failure here, not a short heading. */
 ok("...in a heading short enough not to wrap",
-   (/<h3>([^<]*(?:<b>[^<]*<\/b>)?[^<]*)<\/h3>/.exec(html)||[,""])[1].replace(/<[^>]+>/g,"").length < 30);
+   ballotH3 !== null && ballotH3.replace(/<[^>]+>/g, "").length < 30);
 ok("...and falls back to the unnamed question when the answer is unknown",
    src.includes('"Should this answer be overturned?"'));
 ok("the hint is one line, and it is the clock",

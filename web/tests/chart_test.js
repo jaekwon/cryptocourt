@@ -564,13 +564,52 @@ ok("the side's name is wrapped for its own oval",
    src.includes('<b><span class="sidetag">YES</span> ${py.toFixed(1)}%</b>')
    && src.includes('<b><span class="sidetag">NO</span> ${pn.toFixed(1)}%</b>'));
 ok("...as a hairline, fully rounded",
-   /\.sbout \.sidetag\{border:1px solid currentColor; border-radius:999px/.test(src));
+   /^\.sidetag\{[^}]*border:1px solid currentColor;[\s\S]{0,40}border-radius:999px/m.test(src));
 ok("...taking its colour from the side, not a fixed token",
-   !/\.sbout \.sidetag\{[^}]*border:1px solid var\(/.test(src));
+   !/^\.sidetag\{[^}]*border:1px solid var\(/m.test(src));
 /* THE PERCENTAGE STAYS OUTSIDE IT. That figure changes on every read; the side
    is the label. A box around both reads as a control rather than a result. */
 ok("...with the percentage outside the oval",
    !/class="sidetag">YES \$\{py/.test(src) && !/class="sidetag">NO \$\{pn/.test(src));
+
+/* INLINE-BLOCK IS LOAD-BEARING, NOT TIDINESS. Reported as: "the top right and
+   bottom left corners are square". An inline box that breaks across lines has
+   its decoration sliced at the break — box-decoration-break defaults to slice —
+   so the fragment before the break loses its right corners and the one after
+   loses its left. Seen as one shape, that is a fully-rounded element with two
+   square corners on one diagonal, which is the report exactly.
+   IT DOES NOT REPRODUCE IN CHROMIUM and this pin does not claim it did: the
+   computed radius is 999px on all four corners, an 8x render shows a clean
+   stadium, and a device-pixel map of the real page is symmetric. white-space
+   denies a break inside "YES", so Chromium cannot slice it. The declaration
+   makes the failure unrepresentable rather than merely unreachable, and it is
+   pinned so that dropping back to inline is a decision. */
+ok("the oval is a block, so no engine can slice it across a line",
+   /^\.sidetag\{[^}]*display:inline-block/m.test(src));
+ok("...and still refuses to break inside the side's name",
+   /^\.sidetag\{[^}]*white-space:nowrap/m.test(src));
+/* AND IT PAYS FOR ITSELF. An inline-block's content area is its LINE HEIGHT,
+   where an inline box's is the font's em box, so the display change alone grew
+   the tag 17px -> 21.66px and the 320px claim embed 500px -> 503px, failing
+   embed_layout.js. line-height:1 reproduces the inline geometry: measured at
+   both #/embed/orem/1 and #/c/orem/3, scrollHeight and the .sbout row match the
+   inline version exactly. The two declarations only work as a pair, so dropping
+   this one silently re-breaks a check in a different file. */
+ok("...at no cost to the line it sits in",
+   /^\.sidetag\{[^}]*line-height:1;/m.test(src));
+
+/* THE BALLOT QUESTION WEARS THE SAME MARK. Asked for alongside the signal bar:
+   "also in the text 'Overturn the YES answer?'". It was a bare <b>.
+   WEIGHT AND MARGIN STAY BAR-ONLY. The tag in the bar sits beside a percentage
+   and needs a gap; the one in the <h3> does not. And the bar pins 600, which
+   inside an already-bold heading would render the named side LIGHTER than the
+   sentence around it — so the weight cannot live on the shared rule. */
+ok("the ballot question names the side in the same oval",
+   src.includes('Overturn the <span class="sidetag">${ansSide}</span> answer?'));
+ok("...and no longer in a bare bold", !/Overturn the <b>\$\{ansSide\}<\/b>/.test(src));
+ok("the gap and the weight are the signal bar's alone, not the shared rule",
+   /^\.sbout \.sidetag\{margin-right:2px; font-weight:600\}/m.test(src)
+   && !/^\.sidetag\{[^}]*font-weight/m.test(src));
 
 
 console.log(fail? fail+" FAILURES":"ok all "+"chart pins");

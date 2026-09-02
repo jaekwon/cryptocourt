@@ -742,10 +742,32 @@ html.embed .main{grid-column:1; grid-row:1; max-width:none; padding:0;
    and a theme that changes either colour changes its oval with it.
    The percentage stays OUTSIDE the oval. It is the number that moves; the side
    is the label. Enclosing both would draw a box around a figure that changes
-   every read and make the whole thing look like a control. */
-.sbout .sidetag{border:1px solid currentColor; border-radius:999px;
-  padding:1px 7px 2px; margin-right:2px; font-size:.86em; letter-spacing:.08em;
-  font-weight:600; white-space:nowrap}
+   every read and make the whole thing look like a control.
+   INLINE-BLOCK, NOT INLINE. An inline box that breaks across lines has its
+   decoration sliced at the break by spec — the fragment before it loses its
+   right corners and the one after loses its left, which is how a "fully
+   rounded" element ends up with square corners on one diagonal. white-space
+   already denies a break inside "YES", so this cannot happen in Chromium; the
+   inline-block makes it unrepresentable in any engine instead of relying on
+   that, and it is also the standard workaround for engines that draw an inline
+   element's rounded border from the font box rather than the padding box.
+   line-height:1 IS PART OF THAT, NOT TIDINESS. An inline-block's content area
+   is its LINE HEIGHT, where an inline box's is the font's em box — so the
+   declaration above on its own grew the tag from 17px to 21.66px and the 320px
+   claim embed from 500px to 503px, which embed_layout.js failed on. Pinning the
+   line height to the font size reproduces the inline geometry exactly: measured
+   at both #/embed/orem/1 and #/c/orem/3, scrollHeight and the .sbout row are
+   identical to the inline version, and the tag settles at 15.75px.
+   NOT SCOPED TO .sbout: the ballot question ("Overturn the YES answer?") wears
+   the same oval, and there currentColor is the heading's ink rather than the
+   side's hue — the shape is the same mark, the colour is whatever it sits in. */
+.sidetag{display:inline-block; line-height:1; border:1px solid currentColor;
+  border-radius:999px; padding:1px 7px 2px; font-size:.86em;
+  letter-spacing:.08em; white-space:nowrap}
+/* Bar-only: the gap to the percentage beside it, and a weight of its own. In the
+   ballot the tag is inside an <h3>, which is already bold — pinning 600 there
+   would make the named side LIGHTER than the words around it. */
+.sbout .sidetag{margin-right:2px; font-weight:600}
 /* NO FILL, A HAIRLINE, AND REGISTRATION MARKS AT THE CORNERS. A court of record
    is rules and type; a filled card is a slab floating over a page. Taking the
    fill away is what makes the one glowing line on the page mean something.
@@ -6223,8 +6245,14 @@ function disputeTicket(slug, id, d, nowH){
      answer did not read, because a question that names the wrong side is worse
      than one that names none. */
   const ansSide = (d.answer===0 || d.answer===1)? sideName(d.answer) : null;
+  /* THE SAME OVAL AS THE SIGNAL BAR. The side's name is the same mark wherever
+     it is named, so it carries the same hairline here as it does above the
+     percentages — <span class="sidetag"> rather than a bare <b>. The oval takes
+     currentColor, which in this <h3> is the heading's ink, so the question does
+     not acquire a green or red word in the middle of a sentence that is asking
+     about both sides. */
   const ballotQ = ansSide
-    ? `Overturn the <b>${ansSide}</b> answer?`     // one line at every width
+    ? `Overturn the <span class="sidetag">${ansSide}</span> answer?`   // one line at every width
     : "Should this answer be overturned?";
   return `<div class="ticket" style="margin-top:12px"><h3>${ballotQ}</h3>
       <div class="hint">${ballotHint(slug, d, nowH)} <button type="button" class="helplink" data-help="help-vote">How this vote works →</button></div>
