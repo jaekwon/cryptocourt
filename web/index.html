@@ -326,7 +326,12 @@ section{margin-top:34px}
   display:block; background:var(--surface-2); align-self:center}
 .courtface svg,.courtface img{display:block; width:100%; height:100%; object-fit:cover}
 .lead-row .courtface{width:52px; height:52px; border-radius:4px; margin-right:14px}
-.leadface{display:flex; align-items:center}
+/* LEFT-ADJUSTED, against .lead-row's space-between. That rule is right where a
+   lead row has something on each side, and wrong here: the court face and the
+   title are one unit, so spreading them left the name floating in the middle
+   of the page with a gap behind it. */
+.leadface{display:flex; align-items:center; justify-content:flex-start}
+.leadface > div{min-width:0}
 /* IN THE COLUMN THE STRIP IS A 2x2 BLOCK, at every width. auto-fit gave three
    across and one orphan on a second row, with the rules still drawn as if it
    were one line — the orphan carried a left edge and no top edge. Fixing that
@@ -8263,7 +8268,7 @@ function courtStatsHtml(slug, s){
       s.minted===0? priceText(s.price, s.minted)
                   : `${priceText(s.price, s.minted)}<small> µGNOT/unit</small>`,
       s.minted===0
-        ? `no coin minted yet — the first buy sets the price. The curve starts at zero and rises with supply, so what you pay is the average over what you take, quoted in Join this court.`
+        ? ``   // the dash says it: no price yet. statTile omits an empty sub entirely.
         : `the next unit's price — you pay the average over what you buy. One-way: the GNOT is burned. Quoted per unit because the curve moves per unit; 1 ${ccSymHtml(slug)} is 1,000,000 of them.`),
     // The emitted split is a footnote on supply, and only once any exists.
     statTile("coin supply", cc(s.supply,slug),

@@ -25,6 +25,8 @@ eval(slice('function fmtN(', '\n'));
 eval(slice('function notFound(', '\n'));
 var store = {get:()=>null, set:()=>{}};
 var location = {hash:"#/c/orem/1/board"};
+// courtCrumb first: crumbs' court entries are built through it now.
+eval(V(slice('const courtCrumb = (slug, name) =>', '\n};') + '\n};'));
 eval(V(slice('const crumbs = parts =>', '\n};') + '\n};'));
 eval(slice('function wireFields(', '\nconst boardNewestRows'));
 eval(V(slice('const boardNewestRows', '\n\n')));
