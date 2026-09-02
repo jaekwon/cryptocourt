@@ -3,8 +3,8 @@
   "pkg": "kourtv2",
   "file": "court.gno",
   "label": "slug charset allows a path separator",
-  "find": "ok := (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '-'",
-  "replace": "ok := (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '-' || ch == '/'"
+  "find": "ok := (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9')",
+  "replace": "ok := (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '/'"
  },
  {
   "pkg": "kourtv2",
@@ -2090,44 +2090,9 @@
  {
   "pkg": "kourtv2",
   "file": "court.gno",
-  "label": "CONST flagBondXBps halved (2%\u00b7X-bar -> 1%)",
-  "find": "\tflagBondXBps    = int64(200)",
-  "replace": "\tflagBondXBps    = int64(100)"
- },
- {
-  "pkg": "kourtv2",
-  "file": "court.gno",
-  "label": "CONST flagMinCC gutted (1 CC -> 1 unit)",
-  "find": "\tflagMinCC       = int64(1_000_000) // 1 CC",
-  "replace": "\tflagMinCC       = int64(1)"
- },
- {
-  "pkg": "kourtv2",
-  "file": "court.gno",
-  "label": "CONST flagFrozenMultX 4x -> 2x",
-  "find": "\tflagFrozenMultX = int64(4)",
-  "replace": "\tflagFrozenMultX = int64(2)"
- },
- {
-  "pkg": "kourtv2",
-  "file": "court.gno",
-  "label": "CONST slashXBps halved (4.5%\u00b7X-bar floor -> 2.25%)",
-  "find": "\tslashXBps       = int64(450)",
-  "replace": "\tslashXBps       = int64(225)"
- },
- {
-  "pkg": "kourtv2",
-  "file": "court.gno",
-  "label": "CONST slashDrawBps halved (1.6x midGross -> 0.8x)",
-  "find": "\tslashDrawBps    = int64(16000)",
-  "replace": "\tslashDrawBps    = int64(8000)"
- },
- {
-  "pkg": "kourtv2",
-  "file": "court.gno",
   "label": "CONST depositFeeBps doubled (10% -> 20%)",
-  "find": "\tdepositFeeBps   = int64(1000)",
-  "replace": "\tdepositFeeBps   = int64(2000)"
+  "find": "\tdepositFeeBps    = int64(1000)",
+  "replace": "\tdepositFeeBps    = int64(2000)"
  },
  {
   "pkg": "kourtv2",
@@ -4156,15 +4121,15 @@
   "pkg": "kourtv2",
   "file": "court.gno",
   "label": "mustSlug: any character is allowed in a slug (raw in every markdown link)",
-  "find": "\t\tok := (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '-'\n\t\tif !ok {",
-  "replace": "\t\tok := (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '-'\n\t\tif !ok && len(slug) < 0 {"
+  "find": "\t\tok := (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9')\n\t\tif !ok {",
+  "replace": "\t\tok := (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9')\n\t\tif !ok && len(slug) < 0 {"
  },
  {
   "pkg": "kourtv2",
   "file": "court.gno",
   "label": "mustSlug: UPPERCASE is allowed in a slug",
-  "find": "\t\tok := (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '-'",
-  "replace": "\t\tok := (ch >= 'A' && ch <= 'z') || (ch >= '0' && ch <= '9') || ch == '-'"
+  "find": "\t\tok := (ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9')",
+  "replace": "\t\tok := (ch >= 'A' && ch <= 'z') || (ch >= '0' && ch <= '9')"
  },
  {
   "pkg": "kourtv2",
