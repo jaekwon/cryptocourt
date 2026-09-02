@@ -467,18 +467,33 @@ a.card:hover{border-color:var(--line-2)}
    wordmark can take --gilt because 22px at 600 is large text, where the bar is
    3.0. Same gold family, two weights, chosen by where each one sits. */
 .ccsym{color:var(--mark); font-weight:500; white-space:nowrap;
-  display:inline-flex; align-items:baseline; gap:4px}
+  display:inline-flex; align-items:center; gap:4px; vertical-align:middle}
 /* THE BAR. Small caps-height text in a gold hairline box, rounded just enough to
    read as a bar rather than a table cell. Smaller than the name it sits beside,
    because the mark is the constant and the court is the information — the eye
    should land on COVID, not on Kourt.
-   BASELINE-ALIGNED, not centred: the bar and the name sit in running text, and
-   centring a bordered box against a text baseline lifts it off the line.
-   nowrap on the wrapper above is the other half of the report — the symbol used
-   to break between KOURT: and the slug in narrow cells. It cannot now. */
+   CENTRED, in both directions, and the second one is measured rather than
+   argued. Baseline-aligning a 0.72em bar and a 1em name on their feet reads as
+   the bar hanging off the top, which is what was reported.
+
+   align-items:center fixes that inside the symbol. But leaving the WRAPPER on
+   the baseline then grew every line it sits in by 3px — an inline-flex's
+   baseline is taken from its first item, so moving the items moves the box's
+   baseline and the line box has to make room. That is not theory: the 320px
+   claim embed went from 500px to 503 and broke the height it promises its host.
+   vertical-align:middle costs none of it — measured back at exactly 500 — and
+   centres the symbol on the line, which is what a symbol standing alone in a
+   tile or a crumb wants anyway.
+   nowrap on the wrapper is the other half of that report — the symbol used to
+   break between KOURT: and the slug in narrow cells. It cannot now. */
+/* THE BAR MUST NOT MAKE THE LINE TALLER. Centring it against the name let its
+   border box push the flex box past the text height, and a 320px-wide embed
+   went three pixels over the height it promises its host. Negative block
+   margins keep the box drawn at full size while it contributes only the text's
+   own height to the line. */
 .ccsym .ccbar{font-size:.72em; line-height:1.15; letter-spacing:.02em;
   padding:1px 4px 2px; border:1px solid var(--mark); border-radius:3px;
-  font-variant-numeric:normal}
+  font-variant-numeric:normal; margin-block:-2px}
 .ccsym .ccname{font-size:1em; letter-spacing:.01em}
 /* Visually hidden, not display:none — the joining colon is meant to be absent
    from the screen and present in the text. clip-path over `display:none`
