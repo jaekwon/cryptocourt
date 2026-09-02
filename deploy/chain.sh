@@ -148,6 +148,16 @@ fi
 # config.toml is addressed by -config-path, not -data-dir.
 [ -f "$CHAINDIR/data/config/config.toml" ] || \
     "$APPDIR/bin/gnoland" config init -config-path "$CHAINDIR/data/config/config.toml" >/dev/null
+# ONE VALIDATOR, SO THERE IS NOBODY TO WAIT FOR. tm2 defaults timeout_commit to
+# 5s, which is time held open for other validators' precommits — this chain has
+# none, so every block costs five seconds for nothing. Seeding a scenario is a
+# few hundred transactions, one per block, and that default alone made it a
+# forty-minute job.
+#
+# Set unconditionally, not guarded by the init above: an existing chain must
+# pick this up on the next restart too.
+"$APPDIR/bin/gnoland" config set -config-path "$CHAINDIR/data/config/config.toml" \
+    consensus.skip_timeout_commit true >/dev/null
 
 # The faucet's wallet. Generated here, printed nowhere: the mnemonic goes
 # straight into a root-owned 0600 file that systemd hands to the unit as a
