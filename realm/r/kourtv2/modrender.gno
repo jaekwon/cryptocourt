@@ -63,6 +63,10 @@ func reindexBurn(c *Court, spent int64) {
 	c.burnedGNOT = sum
 	c.burnKey = beInv(c.burnedGNOT) + c.id
 	burnIdx.Set(c.burnKey, c.id)
+	// Checkpoint the new total for the court page's chart. AFTER the total
+	// moves, and change-only, the same order recordPools follows. Buys inside
+	// one epoch coalesce, so a busy hour costs one row and not one per buy.
+	recordBurn(c)
 }
 
 // indexNewCourt registers a court in both directory indexes at creation.

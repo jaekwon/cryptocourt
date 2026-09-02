@@ -692,6 +692,10 @@ type Court struct {
 	burnedGNOT int64
 	burnKey    string
 	createdSeq uint64
+	// burnH checkpoints burnedGNOT so the court page can chart how much real
+	// value this court has absorbed over time. Render-layer state, like the
+	// per-claim pool series: no money path reads it.
+	burnH checkpoint.Series
 
 	// absBudget: when > 0 this court's weekly emission is a FIXED ABSOLUTE
 	// amount (stepped down like every other budget) instead of S_live × bps.
