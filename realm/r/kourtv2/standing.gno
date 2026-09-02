@@ -568,9 +568,12 @@ func scaleBps(base, bps int64) int64 {
 //     is recorded at origination for exactly this reason.
 //   - THE BASE WAS PUMPABLE. Scaling on the posted bond was doubly wrong: on the
 //     slashGrade branch the bond is returned WHOLE (the half-burn arm requires
-//     !slashGrade), so nothing was risked, and flagBondFor multiplies by
-//     flagCycles, which an inconclusive-LOW advances while returning the bond
-//     whole — two free cycles, four times the credit.
+//     !slashGrade), so nothing was risked, and flagBondFor multiplied by
+//     flagCycles, which an inconclusive-LOW advanced while returning the bond
+//     whole — two free cycles, four times the credit. (flagBondFor and
+//     flagCycles went with the quality lane; this paragraph is kept because the
+//     REASON the base is what it is outlives the mechanism that forced it, but
+//     nothing here is a function you can still go and read.)
 //
 // So the base is what the act DESTROYED, which is also what the bounty is
 // capped against.

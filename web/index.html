@@ -2687,7 +2687,7 @@ const DEMO_CHAIN = {
     "orem/4":{ timeline:"opened:1785554400:4500000;answered:1786454400:4680000;verdict:1786754400:4740000;now:1787054400:4800000", title:"Q3 city revenue exceeded the June forecast.",
       author:"g1youdemoholder0000000000000000000000000",
       yesStake:180_000_000, noStake:20_000_000, convYes:1707589, convNo:189732, trailYes:90,
-      phase:"settled", verdict:0, answer:1, answerer:"g1answerkeeper00000000000000000000000000", route:"vote", tier:2, tierFinal:true, record:3,
+      phase:"settled", verdict:0, answer:1, answerer:"g1answerkeeper00000000000000000000000000", route:"vote", record:3,
       crystallized:true, draw:{w:1_644_800, a:164_480, ans:0, carrot:12_320},
       pulls:{winnerPaid:false, authorPaid:false, answererPaid:false} },
     // provClose — three failed rounds, everyone 1×
@@ -2698,7 +2698,7 @@ const DEMO_CHAIN = {
     "orem/6":{ timeline:"opened:1786304400:4650000;answered:1786784200:4745960;settle:1787043400:4797800;now:1787054400:4800000", title:"The vendor's audit found zero critical findings.",
       yesStake:110_000_000, noStake:8_000_000, convYes:556316, convNo:40459, trailYes:92,
       author:"g1oremfiler0000000000000000000000000000", phase:"answered", answer:0, answerer:"g1answerkeeper00000000000000000000000000",
-      answerBond:59_000_000, record:0, settleAt:NOW-2_200, disputeBondNext:23_600_000, flagOpen:true, flagBondNext:2_360_000 },
+      answerBond:59_000_000, record:0, settleAt:NOW-2_200, disputeBondNext:23_600_000, },
     // closed — the dead-claim timeout passed unanswered
     "orem/8":{ timeline:"opened:1784554400:4300000;now:1787054400:4800000", title:"The archived forum post predates the patent filing.",
       author:"g1author4x9q2demo0000000000000000000000",
@@ -11206,7 +11206,7 @@ function resolutionSection(slug,id,d,nowH,tl){
     const v=(d.verdict!=null?d.verdict:d.answer);
     inner = `<div class="notice good"><span class="g">✓</span><div><b>Settled ${sideName(v)}</b>${d.route?" — "+esc(d.route)+"":""}.
       Both sides withdraw principal 1×; the winning side also draws its accuracy reward once the rewards are opened.
-      ${d.crystallized && d.route==="vote"? `<p class="small" style="margin:8px 0 0">Voters whose ballot matched the final verdict may pull a small participation carrot — newly issued, capped below half a flag bond, queued behind earlier awards; abstain and against-verdict ballots receive nothing.</p>`:""}</div></div>`;
+      ${d.crystallized && d.route==="vote"? `<p class="small" style="margin:8px 0 0">Voters whose ballot matched the final verdict may pull a small participation carrot — newly issued, capped just under half the court's base bond — 2% of its trailing average stake, or 1 KOURT, whichever is larger — and queued behind earlier awards; abstain and against-verdict ballots receive nothing.</p>`:""}</div></div>`;
   } else if(d.phase==="disputed"){
     inner = `<div class="notice warn"><span class="g">⚖</span><div><b>A dispute is under way</b>${d.round?` (after ${d.round} failed round${d.round>1?"s":""})`:""}.
       The court is voting on <i>“overturn the answer?”</i> — the verdict belongs to everyone but the claim\u2019s own participants.
