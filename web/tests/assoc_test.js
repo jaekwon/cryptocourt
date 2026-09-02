@@ -58,6 +58,36 @@ ok("#9: section renders", h9.includes("Where this claim sits"));
 // §5 keeps containment and association separate, and the old head merged them.
 ok("#9: heading names neither axis alone", !h9.includes("The argument"));
 ok("#9: sample label", h9.includes("sample curation — the chain stores no relations"));
+
+/* NOTHING TO SHOW MEANS NOTHING RENDERED, which is the case MOST claims are in.
+   With no parent, no parts and no related claims this printed a heading, a
+   caption asserting relations had been read from the chain, and a paragraph
+   about what relations do not do — three pieces of furniture around an absence,
+   and a caption that read as a claim something was found.
+   Asserted with a claim that has no relations at all AND an empty chain answer,
+   because those are two different sources of nothing and either one alone would
+   have let the other regress. */
+const bare = i => null;
+const noRelId = (() => {
+  const rel = DEMO.relations.orem;
+  for(const k of Object.keys(DEMO.claims)){
+    if(!k.startsWith("orem/")) continue;
+    const id = +k.split("/")[1];
+    if(!rel.some(r => r.from === id || r.to === id)) return id;
+  }
+  return null;
+})();
+ok("a claim with no relations exists in the fixture to test with", noRelId !== null);
+ok("...and its section is empty, not a heading over nothing",
+   associationSection("orem", noRelId, demoLookup) === "");
+ok("...also with an empty chain answer rather than none",
+   associationSection("orem", noRelId, demoLookup, []) === "");
+ok("...and a claim that HAS relations still renders", h9.includes("Where this claim sits"));
+// The id-only fallback: a related claim outside the loaded window is marked for
+// the filler rather than explained in terms of this page's pagination.
+ok("a title the window lacks is marked for fetching, not narrated",
+   associationSection("orem", 9, bare).includes("data-needtitle")
+   && !associationSection("orem", 9, bare).includes("not in the rendered docket window"));
 ok("#9: rests on 3, 1 settled", h9.includes("1 of 3 parts settled"));
 ok("#9: undecided banner", h9.includes("2 of 3 parts are still undecided — any verdict here is reached without them"));
 ok("#9: children rows 3/4/7 as 'one part'", ["/3","/4","/7"].every(x=>h9.includes(`#/c/orem${x}`)) && (h9.match(/one part/g)||[]).length===3);

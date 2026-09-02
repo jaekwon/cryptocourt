@@ -6547,9 +6547,16 @@ function commitmentsTicket(com, slug){
 function assocRow(slug, rid, chip, lookup){
   const d = lookup? lookup(rid) : null;
   // an id the current chain page doesn't carry renders bare — never invented
+  /* A TITLE THIS PAGE HAS NOT LOADED IS STILL ON THE CHAIN. The fallback said
+     "claim #4 — not in the rendered docket window", which explains the
+     overlay's pagination to somebody who asked what the claim was. The window
+     is an artifact of how many rows this page happened to fetch, not a property
+     of the claim. Marked for fillAssocTitles below, which asks the realm and
+     writes the answer in; until it lands the id is shown alone, because a
+     number with no sentence beside it is honest about not knowing yet. */
   return `<a class="crow assocrow" href="#/c/${esc(slug)}/${rid}">
     <span class="id">#${rid}</span>
-    <span><span class="t">${d? safeInline(d.title) : `<span class="muted">claim #${rid} — not in the rendered docket window</span>`}</span></span>
+    <span><span class="t"${d? "" : ` data-needtitle="${rid}"`}>${d? safeInline(d.title) : ""}</span></span>
     <span class="rt"><span class="pill ${/contradict/.test(chip)?"contra":"void"}">${esc(chip)}</span>
     ${d? statusPill(d.statusText) : ""}</span></a>`;
 }
@@ -6598,6 +6605,14 @@ function associationSection(slug, id, lookup, chainRows){
         ? "relations read from the chain; containment and supersedes are curation"
         : "relations read from the chain")
     : (cur && cur.source==="local"? CUR_LABEL : "sample curation — the chain stores no relations");
+  /* NOTHING TO SHOW MEANS NOTHING RENDERED. With no parent, no parts and no
+     related claims — which is most claims — this printed a heading, a caption
+     asserting that relations HAD been read from the chain, and a paragraph
+     explaining what relations do not do, with empty space where the relations
+     would have been. Three pieces of furniture around an absence, and the
+     caption was the worst of them: it read as a claim that something was found.
+     The absence of relations is unremarkable and needs no announcement. */
+  if(!parent && !children.length && !rel.length) return "";
   let g = `<section style="margin-top:22px"><div class="sec-h">Where this claim sits <span class="count">${esc(srcNote)}</span></div>`;
   // The parent is CONTAINMENT, the same axis as "Rests on" and pointing the
   // other way, so it belongs beside it rather than under "Related" — that group
@@ -8319,6 +8334,27 @@ function joinPanel(slug, s){
 /* One read, and it says nothing rather than guessing when it fails: a wrong
    balance here is worse than an absent one, because this is the row somebody
    checks to find out whether their buy arrived. */
+/* THE TITLES THE DOCKET WINDOW DID NOT HAPPEN TO CARRY. A related claim outside
+   the fetched page had no title, and the row said so in terms of this page's
+   pagination — which is not something a reader asked about. One read per
+   missing id, and only the ids actually on screen.
+   HIDDEN CLAIMS STAY BLANK. HiddenFromListing is checked first and failure is
+   read as hidden, the same fail-closed rule the docket applies: a moderated
+   title must not reappear here because a relation points at it. */
+async function fillAssocTitles(slug){
+  const want = [...document.querySelectorAll("[data-needtitle]")];
+  if(!want.length || !isLive()) return;
+  const s2 = gstr(slug);
+  await Promise.all(want.map(async el => {
+    const id = parseInt(el.dataset.needtitle, 10);
+    if(!isFinite(id)) return;
+    try{
+      if(await one(`HiddenFromListing(${s2},${id})`).catch(()=>true)) return;
+      const t = await one(`ClaimTitle(${s2},${id})`).then(unesc);
+      if(t) el.innerHTML = safeInline(t);
+    }catch(_){ /* leave the id standing alone rather than guess */ }
+  }));
+}
 async function fillJoinHeld(slug){
   const row = document.getElementById("joinheld"), val = document.getElementById("joinheldv");
   if(!row || !val || !CFG.addr) return;
@@ -9702,6 +9738,8 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
   // Unconditional: the board is the one action on this page that needs no
   // address, and the sample answers it offline like everything else here.
   fillBoardChip(slug, id);
+  // The related rows are painted; ask the chain for the titles they lack.
+  fillAssocTitles(slug);
   /* THE REALM'S CLOCK ON BOTH SIDES OF THE COMPARISON. chainHeight() asks the
      RPC for the latest block; the verdict height comes from ClaimTimeline, which
      the realm answers from heightNow() — chain height PLUS the test skew. On a
