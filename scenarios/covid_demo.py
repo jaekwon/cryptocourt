@@ -329,8 +329,19 @@ D = [
   dict(key="bioweapon", on="2020-09-15", arc="no", shape=short_grind,
        path=("Origins",),
        cast=("skeptic", "genomics", "trader", "virology"),
-       body='Settles on evidence of deliberate design and deliberate release. The published case rests on the Yan Li-Meng reports; no review has sustained them.\n\nFiled because it is one of the most circulated claims about this pandemic, and a docket that will not hear the popular claim is not a court.',
-       title="SARS-CoV-2 was deliberately engineered and released as a Chinese state bioweapon."),
+       # ONE PROPOSITION, NOT TWO. This read "deliberately engineered AND
+       # released as a Chinese state bioweapon", which is a conjunction, and a
+       # conjunction cannot be answered YES or NO honestly: the docket settled
+       # it NO on the release, and the title made that verdict look like a
+       # finding against engineering as well. Engineering is separately docketed
+       # in this very folder -- lab23, defuse, furin, baric -- and two of those
+       # run YES, so the compound title had this court contradicting itself.
+       # The overlay strikes a settled-NO title through now, which is what
+       # surfaced it: a strike across the conjunction reads as a strike across
+       # each half. Asks ONLY about deliberate release, the way defuse asks only
+       # what the proposal says.
+       body='Settles on evidence of deliberate release as a weapon. The published case rests on the Yan Li-Meng reports; no review has sustained them.\n\nAsks ONLY about deliberate release. Whether the virus was engineered is a different claim and is docketed separately in this folder, some of it running the other way — a NO here rejects the weapon story, not the laboratory one.\n\nFiled because it is one of the most circulated claims about this pandemic, and a docket that will not hear the popular claim is not a court.',
+       title="SARS-CoV-2 was released deliberately as a Chinese state bioweapon."),
   dict(key="yanrep", on="2020-10-05", arc="yes", shape=sparse,
        path=("Origins",),
        cast=("genomics", "skeptic", "virology", "trader"),
