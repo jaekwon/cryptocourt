@@ -59,6 +59,14 @@ def qeval(remote, expr):
     if r.get("Error") or rb.get("Error"):
         raise RuntimeError(" ".join(str(r.get("Log") or rb.get("Log")).split())[:140])
     data = r.get("Data") if r.get("Data") is not None else rb.get("Data")
+    # NO Data AND NO Error is a real answer shape, and it has to be named here.
+    # Without this, b64decode(None) raises "TypeError: argument should be a
+    # bytes-like object or ASCII string, not 'NoneType'" -- a stack trace about
+    # base64 for what is actually "the node answered nothing". The twin of this
+    # function in check-live-reads.py has always had the branch; it was added
+    # there and not here, which is what two hand-rolled copies of one client do.
+    if data is None:
+        raise RuntimeError("no Data in response")
     return base64.b64decode(data).decode("utf-8", "replace")
 
 
