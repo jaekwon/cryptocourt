@@ -20,7 +20,7 @@ let code = '';
 code += slice('function esc(', '\n');
 code += slice('function fmtN(', '\n');
 code += slice('function ccSym(', '\n');
-code += slice('function cc(', 'function ugnot(');
+code += slice('function ccSymHtml(', 'function ugnot(');
 // voteLockFigures came in via the voteLockLine slice, which ended at it; that
 // slice went when the row did, so it is pulled in on its own now.
 code += slice('function voteLockFigures(', 'async function fillVoteCommitment(');
@@ -97,13 +97,15 @@ ok("no figures at all renders nothing", voteLockFigures("orem", null, null, null
 ok("a zero would-commit is omitted, not printed as 0", voteLockFigures("orem", 0, null, null) === "");
 // Format-agnostic on purpose: cc() gives two decimals below ten and one above, so
 // pinning "12.00" pinned the formatter rather than the disclosure.
+// Tags stripped: the symbol is wrapped for colour, the wording is unchanged.
+const bare = h => String(h).replace(/<[^>]*>/g, "");
 ok("a would-commit is quoted in the court's own unit",
-  /this vote would commit [\d,.]+ KOURT:OREM/.test(voteLockFigures("orem", 12_000_000, null, null)));
+  /this vote would commit [\d,.]+ KOURT:OREM/.test(bare(voteLockFigures("orem", 12_000_000, null, null))));
 ok("an existing commitment is named separately",
-  /already committed by voting: 5\.00 KOURT:OREM/.test(voteLockFigures("orem", null, 5_000_000, null)));
+  /already committed by voting: 5\.00 KOURT:OREM/.test(bare(voteLockFigures("orem", null, 5_000_000, null))));
 // Zero FREE is meaningful and must show: "nothing is free" is the disclosure.
 ok("zero free-to-bond is shown rather than omitted",
-  /free to bond or deposit right now: 0\.00 KOURT:OREM/.test(voteLockFigures("orem", null, null, 0)));
+  /free to bond or deposit right now: 0\.00 KOURT:OREM/.test(bare(voteLockFigures("orem", null, null, 0))));
 ok("all three figures can appear together",
   (f => /would commit/.test(f) && /already committed/.test(f) && /free to bond/.test(f))
     (voteLockFigures("orem", 1_000_000, 2_000_000, 3_000_000)));

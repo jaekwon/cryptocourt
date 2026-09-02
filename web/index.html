@@ -410,6 +410,13 @@ a.card:hover{border-color:var(--line-2)}
 .spark polyline{fill:none; stroke:var(--muted); stroke-width:1.5; stroke-linejoin:round}
 .docket a.crow:hover .spark polyline{stroke:var(--accent)}
 .spark .base{stroke:var(--line); stroke-width:1}
+.rpcwrap{width:min(260px,60%); height:3px; margin:14px auto 6px; background:var(--line); border-radius:2px; overflow:hidden}
+.rpcbar{height:100%; width:0; background:var(--accent); transition:width .18s linear}
+.rpcnum{font-size:11px; color:var(--muted); font-variant-numeric:tabular-nums}
+/* The court coin's name, everywhere it is written. One hardcoded purple rather
+   than a theme token: the token IS the colour, and it must read the same in
+   light and dark. */
+.ccsym{color:#a855f7; font-weight:500}
 /* A figure's own history, directly under it. Muted and small on purpose: the
    number is the statement and the shape is the context, never the other way. */
 .tspark{width:100%; height:44px; display:block; margin:6px 0 2px; overflow:visible}
@@ -2047,6 +2054,12 @@ function abci(path, data){
     return p;
   }
   const p = abciFetch(path, data);
+  // Counted here and not in abciFetch, so a cache hit — which costs nothing and
+  // returns in the same tick — never appears as work the reader is waiting for.
+  RPCQ.started++;
+  const settle = () => { RPCQ.done++; rpcProgress(); };
+  p.then(settle, settle);
+  rpcProgress();
   RPCC.set(k, {t:now, p});
   // Both arms, not a bare .then: a rejection handler is REQUIRED here, because
   // .then(fn) alone forks a second promise nobody is watching and every failed
@@ -2988,7 +3001,7 @@ async function fillUnstakeSides(slug, id){
         ok = true;
       }catch(_){ ok = false; }
       if(!ok) continue;                 // stays hidden rather than send 1000000
-      b.insertAdjacentHTML("beforeend", ` <small>${esc(cc(held, slug))}</small>`);
+      b.insertAdjacentHTML("beforeend", ` <small>${cc(held, slug)}</small>`);
     }
     el.hidden = false;
   }
@@ -3012,7 +3025,7 @@ async function fillStakeBalance(slug){
      moment the balance grew. Inside: what you are staking, then out of how much,
      then of what. "0 / 201.7 KOURT:COVID" — one glance, and the unit governs
      both numbers because it sits after both. */
-  const fig = cc(micro, slug).replace(" " + ccSym(slug), "");
+  const fig = ccText(micro, slug).replace(" " + ccSym(slug), "");
   out.textContent = "/ " + (micro>0? fig : "0") + " " + ccSym(slug);
   // Left where the click handler can read it: whether the reader holds any coin
   // decides what a refused amount should SAY, and that is decided at the press.
@@ -3061,7 +3074,7 @@ async function fillTicketPulls(slug, id, d, p){
     // The author's and the answerer's slices are the WHOLE slice, so they can be
     // stated. Accuracy and the carrot are shared out, so they name the pool.
     const sm = document.createElement("small");
-    sm.textContent = (k==="author"||k==="answerer")? cc(pool, slug) : "of "+cc(pool, slug);
+    sm.textContent = (k==="author"||k==="answerer")? ccText(pool, slug) : "of "+ccText(pool, slug);
     el.appendChild(document.createTextNode(" "));
     el.appendChild(sm);
   }
@@ -3112,7 +3125,7 @@ async function fillWithdrawSides(slug, id, d, nowH, vAt){
     const lab = w.querySelector(".btn");
     if(lab && !lab.querySelector("small")){
       const sm = document.createElement("small");
-      sm.textContent = cc(amt, slug);
+      sm.textContent = ccText(amt, slug);
       lab.appendChild(document.createTextNode(" "));
       lab.appendChild(sm);
     }
@@ -3204,9 +3217,24 @@ function ccSym(slug){ return slug? "KOURT:"+String(slug).toUpperCase() : "court 
    µCC, and "0.00 KOURT:COVID" on a button is a page telling somebody their
    reward is nothing. Under a hundredth it switches to the micro unit, which is
    what the realm counts in and what ugnot() already does for GNOT. */
-function cc(n, slug){ const u=n||0, v=u/1e6;
-  if(u!==0 && Math.abs(v)<0.01) return fmtN(u)+" µ"+ccSym(slug);
-  return (v>=1000? fmtN(v): v.toFixed(v<10?2:1))+" "+ccSym(slug); }
+/* THE COURT COIN IS ALWAYS THE SAME COLOUR, wherever its name appears, so a
+   reader can spot which figures are denominated in THIS court's coin without
+   reading the words. Hardcoded rather than themed: it has to be the same purple
+   in light and dark, which is the whole point of a token colour.
+
+   cc() EMITS MARKUP, so its output must not be esc()'d and must not be sliced.
+   Nine call sites did one or the other; they use ccText, which is the same
+   figure without the span. */
+function ccSymHtml(slug){ return `<span class="ccsym">${esc(ccSym(slug))}</span>`; }
+function ccFigure(n){ const u=n||0, v=u/1e6;
+  if(u!==0 && Math.abs(v)<0.01) return {fig:fmtN(u), micro:true};
+  return {fig:(v>=1000? fmtN(v): v.toFixed(v<10?2:1)), micro:false}; }
+function cc(n, slug){ const {fig,micro}=ccFigure(n);
+  return fig+" "+(micro?"µ":"")+ccSymHtml(slug); }
+/* The same figure as plain text, for what cannot take markup: an aria-label, a
+   textContent, or a caller that slices the symbol back off. */
+function ccText(n, slug){ const {fig,micro}=ccFigure(n);
+  return fig+" "+(micro?"µ":"")+ccSym(slug); }
 function ugnot(n){ return fmtN(n)+" µGNOT"; }
 /* GNOT IN THE SAME SHAPE AS cc(), and for the same reason. fmtN alone ROUNDS: a
    wallet holding 0.4 GNOT printed as "0 GNOT", which is indistinguishable from
@@ -4499,10 +4527,10 @@ async function acctFill(){
     + `<button type="button" data-acctoff>Disconnect</button></div>`;
   const row = (l,r) => `<div class="arow"><span class="l">${l}</span><span class="r">${r}</span></div>`;
   pop.innerHTML = head + row("GNOT","<span class=\"muted\">reading…</span>")
-    + (slug? row(esc(ccSym(slug)),"<span class=\"muted\">reading…</span>") : "") + acts;
+    + (slug? row(ccSymHtml(slug),"<span class=\"muted\">reading…</span>") : "") + acts;
   if(!isLive()){
     pop.innerHTML = head + row("GNOT","<span class=\"muted\">demo — no chain</span>")
-      + (slug? row(esc(ccSym(slug)), cc(await balanceOf(slug,CFG.addr), slug)) : "") + acts;
+      + (slug? row(ccSymHtml(slug), cc(await balanceOf(slug,CFG.addr), slug)) : "") + acts;
     return;
   }
   /* SETTLED, NOT all-or-nothing: one unreadable balance must not blank the other,
@@ -4519,7 +4547,7 @@ async function acctFill(){
      nothing on this page can explain why. Named here, where the number is. */
   const warn = (g.status==="fulfilled" && g.value===0)
     ? `<p class="awarn">No GNOT — a wallet cannot pay a transaction fee, so signing will be refused before it reaches the court.</p>` : "";
-  pop.innerHTML = head + row("GNOT", gtxt) + (slug? row(esc(ccSym(slug)), ctxt) : "") + warn + acts;
+  pop.innerHTML = head + row("GNOT", gtxt) + (slug? row(ccSymHtml(slug), ctxt) : "") + warn + acts;
 }
 
 /* ======================= the claim composer ============================= */
@@ -4965,7 +4993,34 @@ document.addEventListener("click", ev=>{
   document.querySelectorAll("#intro, .crumbs .orient").forEach(el=>el.remove());
 });
 
-function loading(){ main.innerHTML = `<div class="empty"><div class="g">⚖︎</div><p>Reading the chain…</p></div>`; }
+/* HOW MUCH OF THE CHAIN IS LEFT TO READ.
+ *
+ * A court map asks the node well over a hundred questions, and until they land
+ * the page said "Reading the chain…" and nothing else — so a slow read and a
+ * hung one looked identical. This counts the ones that are actually in flight.
+ *
+ * NO PERCENTAGE OF A KNOWN TOTAL, because there is no known total: each answer
+ * can produce more questions. The bar is answered-over-asked, which dips when a
+ * new batch is queued. That is honest — it went UP because there is more to do —
+ * and it is the only ratio here that is not invented. */
+const RPCQ = {started:0, done:0};
+function rpcProgress(){
+  const el = document.getElementById("rpcbar");
+  if(!el) return;
+  const {started, done} = RPCQ;
+  if(!started) return;
+  const pct = Math.round(done / started * 100);
+  el.style.width = pct + "%";
+  const n = document.getElementById("rpcnum");
+  if(n) n.textContent = `${done} of ${started} answers`;
+}
+function loading(){
+  RPCQ.started = 0; RPCQ.done = 0;
+  main.innerHTML = `<div class="empty"><div class="g">⚖︎</div><p>Reading the chain…</p>
+    <div class="rpcwrap"><div id="rpcbar" class="rpcbar"></div></div>
+    <p id="rpcnum" class="rpcnum">asking…</p></div>`;
+  rpcProgress();
+}
 
 /* ---------------- pagination (one pattern site-wide) ----------------
    Newest-first windows of 25, window state in the hash (?p=2). Captions
@@ -5591,7 +5646,7 @@ function buyRowsHtml(q, price, slug, after){
   const pct = q.share*100;
   if(after) return `<div class="line"><span class="l">Average price you pay</span><span class="r tnum">${q.avg.toFixed(4)} <small>µGNOT/unit</small></span></div>`
     + (q.refund>0n? `<div class="line"><span class="l">Returned to you</span><span class="r tnum">${q.refund.toLocaleString("en-US")} <small>µGNOT, sent back in the same transaction</small></span></div>` : "")
-    + `<div class="line"><span class="l">Price after your buy</span><span class="r tnum">${fmtN(q.priceAfter)} <small>µGNOT/unit · now ${fmtN(price)}</small></span></div>`
+    + `<div class="line"><span class="l">Price after this</span><span class="r tnum">${fmtN(q.priceAfter)} <small>µGNOT/unit · now ${fmtN(price)}</small></span></div>`
     + `<div class="line"><span class="l">Your voice share</span><span class="r tnum">${pct<0.1? "&lt;0.1%" : pct.toFixed(1)+"%"}</span></div>`;
   return `<div class="line"><span class="l">You receive</span><span class="r tnum">${cc(Number(q.units),slug)} <small>${fmtN(Number(q.units))} units</small></span></div>`;
 }
@@ -5632,7 +5687,14 @@ function buyActionsHtml(slug, q){
      already says the coin cannot be sold back, in the reader's own words and
      with a tick beside it; five more words of shorthand under the button says
      the same thing worse. */
-  return btn(ok? "Buy "+cc(Number(q.units),slug) : "Buy the coin", "Buy", {slug}, "primary", "", send, gate);
+  // GET, NOT BUY, in every label. Buying implies a seller and a price you could
+  // sell back at; there is neither. The GNOT is burned and the coin is minted,
+  // which is what the acknowledgement beside this button already says. The
+  // second argument stays "Buy": that is the realm entrypoint, not copy.
+  // ccText, not cc: btn() escapes its label, so the coloured span would print
+  // as literal "&lt;span class=..." on the button face. The one place the coin
+  // name is not purple, and the only alternative is unescaping a button label.
+  return btn(ok? "Get "+ccText(Number(q.units),slug) : "Get the coin", "Buy", {slug}, "primary", "", send, gate);
 }
 /* ---------------- the court record (adverse disclosure) ----------------
    Outcomes only the chain can assert, published because they are the only
@@ -7785,7 +7847,11 @@ function joinPanel(slug, s){
     const amtMicro = parseGnot(amtVal);
     const q = BUYQ = curveQuote(minted, s.supply, amtMicro==null? 100000000n : amtMicro);
     body = `<div class="ticket buyrcpt compact">
-          <div class="line"><span class="l"><label for="buyamt">You send</label></span>
+          <!-- "You burn", not "You send". Nothing is sent: the curve is one way,
+               the GNOT is destroyed, and no address ends up holding it. "Send"
+               implies a recipient and a possible way back, and this panel's own
+               acknowledgement one line down says the opposite. -->
+          <div class="line"><span class="l"><label for="buyamt">You burn</label></span>
             <span class="r tnum"><input id="buyamt" type="text" inputmode="decimal" value="${esc(amtVal)}" autocomplete="off" aria-describedby="buynote"> GNOT
               <small id="buyugnot">${amtMicro==null? "= not a GNOT amount" : "= "+fmtN(Number(amtMicro))+" µGNOT"}</small></span></div>
           <div id="buyrows" aria-live="polite">${buyRowsHtml(q, s.price, slug)}</div>
@@ -7833,7 +7899,7 @@ async function fillJoinHeld(slug){
   /* ZERO IS SHOWN TOO, and deliberately. "You hold none of this court's coin" is
      the answer to the same question as a number, and on a court somebody has just
      failed to buy into it is the more useful of the two. */
-  val.textContent = n > 0 ? cc(n, slug) : "none yet";
+  val.textContent = n > 0 ? ccText(n, slug) : "none yet";
   row.hidden = false;
 }
 function recomputeBuy(){
@@ -8009,7 +8075,7 @@ function courtStatsHtml(slug, s){
   // combined chart back to the tile it belongs to.
   const tiles = [
     statTile("coin price", `${priceText(s.price, s.minted)}<small> µGNOT/unit</small>`,
-      `one-way — the GNOT is burned. 1 ${ccSym(slug)} = 1,000,000 units`),
+      `one-way — the GNOT is burned. 1 ${ccSymHtml(slug)} = 1,000,000 units`),
     // The emitted split is a footnote on supply, and only once any exists.
     statTile("coin supply", cc(s.supply,slug),
       s.emitted>0? `${cc(s.emitted,slug)} of it earned as rewards` : ""),
@@ -8239,16 +8305,27 @@ on(/^\/c\/([a-z0-9-]+)\/curate$/, async (slug)=>{
 /* --- the map --- */
 on(/^\/c\/([a-z0-9-]+)\/map$/, async (slug)=>{
   loading();
-  let cs=null; try{ cs=await courtStats(slug); }catch(_){}
+  /* THREE READS, ONE WAIT. These were three awaits in a row and none of them
+     needs another's answer: courtStats, listClaims and chainFolders all take
+     only the slug. Serial, the page paid a full round trip for each before the
+     first claim title was even asked for — the same shape chainFolders already
+     fixed inside itself when FolderCount and FolderTree were split apart.
+
+     A court that does not exist now costs two reads nobody uses. That is the
+     error path, and it is worth a round trip on every real one. */
+  const [cs, parsed, chainF0] = await Promise.all([
+    courtStats(slug).catch(()=>null),
+    listClaims(slug).catch(()=>[]),
+    isLive()? chainFolders(slug).catch(()=>null) : Promise.resolve(null),
+  ]);
   if(!cs){ main.innerHTML = crumbs([{label:"Directory",href:"#/"}]) + notFound("No such court on this node (or the node did not answer)."); return; }
-  const parsed = await listClaims(slug);
   const demo = !isLive();
   let mfocus = null, mfocusBad = false;
   if(QP.focus!=null && QP.focus!==""){
     const fz = /^0*([1-9]\d{0,14})$/.exec(String(QP.focus).trim());
     if(fz) mfocus = parseInt(fz[1],10); else mfocusBad = true;
   }
-  const chainF = isLive()? await chainFolders(slug).catch(()=>null) : null;
+  const chainF = chainF0;
   const cur = foldersFor(slug, chainF);
   if(!parsed.length){
     main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:cs.name,href:"#/c/"+slug},{label:"Map"}])
@@ -9328,8 +9405,8 @@ function composerHtml(slug, id, state, parent){
   const extra = state.connect
     ? `<p class="composer-why"><button type="button" class="btn" data-walletconnect>Connect Adena</button></p>`
     : state.buy
-      ? `<p class="composer-why">An entry pass costs ${esc(cc(state.buy, slug))}, burned. `
-        + `<a href="#/c/${esc(slug)}">Buy one from the court page</a>.</p>`
+      ? `<p class="composer-why">An entry pass costs ${cc(state.buy, slug)}, burned. `
+        + `<a href="#/c/${esc(slug)}">Get one from the court page</a>.</p>`
       : "";
   if(!state.can) return `<section class="composer">${head}${extra}</section>`;
   return `<section class="composer">${head}
@@ -10155,7 +10232,7 @@ function stakeBar(d, slug){
   // Labels sit BELOW the bar, never inside it. Inside, a label has only its own
   // side's width, and "NO 12.0 KOURT:OREM · 23.1%" does not fit a 23% block at
   // any viewport — the first attempt clipped it to "JRT:OREM · 23.1%".
-  return `<div class="sbar" role="img" aria-label="staked YES ${cc(y,slug)} ${py.toFixed(1)}%, NO ${cc(n,slug)} ${pn.toFixed(1)}%">
+  return `<div class="sbar" role="img" aria-label="staked YES ${ccText(y,slug)} ${py.toFixed(1)}%, NO ${ccText(n,slug)} ${pn.toFixed(1)}%">
       <div class="sbY" style="width:${py.toFixed(3)}%"></div>
       <div class="sbN" style="width:${pn.toFixed(3)}%"></div>
     </div>
@@ -10163,7 +10240,7 @@ function stakeBar(d, slug){
 }
 function chartChips(d, slug){
   const chips=[
-    `conviction ${cc(d.convYes,slug).replace(/ [A-Z:]+$/,"")} / ${cc(d.convNo,slug)}`,
+    `conviction ${ccText(d.convYes,slug).replace(/ [A-Z:]+$/,"")} / ${cc(d.convNo,slug)}`,
     d.round? `${d.round} failed round${d.round>1?"s":""}`:null,
     d.disputeBondNext? `next dispute bond ${cc(d.disputeBondNext,slug)}`:null,
     d.phase==="settled"? `verdict ${sideName(d.verdict!=null?d.verdict:d.answer)}${d.route?" · "+esc(d.route):""}`:null,
@@ -11050,7 +11127,7 @@ async function meHoldings(addr,courts){
     ? strip + pullSec + maybeSec + seniorBlocks.join("") + blocks.join("")
       + (anyArec? `<p class="small muted" style="margin:8px 0 0">answer record is the court's own credential: only a contested-and-upheld answer scores, and an overturn resets it to zero.</p>`:"")
       + ladder
-    : `<div class="empty"><div class="g">${mefail?"⚠":"◌"}</div><p>${mefail? "Could not read everything — no conclusions." : `No coin and no positions found for <span class="mono">${shortAddr(addr)}</span>.`}</p><p class="small">${mefail? "" : "Buy a court's coin and stake a claim to begin."}</p></div>`) + mescanNote + mewarn;
+    : `<div class="empty"><div class="g">${mefail?"⚠":"◌"}</div><p>${mefail? "Could not read everything — no conclusions." : `No coin and no positions found for <span class="mono">${shortAddr(addr)}</span>.`}</p><p class="small">${mefail? "" : "Get a court's coin and stake a claim to begin."}</p></div>`) + mescanNote + mewarn;
 }
 
 /* --- what needs you: live answers on claims YOU staked, flagged if against your
@@ -11782,7 +11859,7 @@ async function embedClaimView(slug, idS){
   }
   const when = tl && tl.opened ? stampDate(tl.opened.t) : null;
   main.innerHTML = `<div class="emb">
-      <div class="ehead">${embedLink("/c/" + slug, esc(ccSym(slug)))}<span>·</span>
+      <div class="ehead">${embedLink("/c/" + slug, ccSymHtml(slug))}<span>·</span>
         ${embedLink("/c/" + slug, esc(cs ? cs.name : slug), "elink ename")}<span>·</span><span>#${id}</span></div>
       <h3 class="etitle">${embedLink("/c/" + slug + "/" + id, safeInline(d.title))}</h3>
       ${embedSpark(ser, tl, d)}
@@ -11808,10 +11885,10 @@ async function embedCourtView(slug){
     return;
   }
   main.innerHTML = `<div class="emb">
-      <div class="ehead">${embedLink("/c/" + slug, esc(ccSym(slug)))}<span>·</span><span>court</span></div>
+      <div class="ehead">${embedLink("/c/" + slug, ccSymHtml(slug))}<span>·</span><span>court</span></div>
       <h3 class="etitle">${embedLink("/c/" + slug, safeInline(cs.name))}</h3>
       <div class="estat">${fmtN(cs.claims || 0)} claim${(cs.claims === 1) ? "" : "s"} ·
-        ${esc(cc(cs.supply, slug))} in issue ·
+        ${cc(cs.supply, slug)} in issue ·
         ${esc(priceText(cs.price, cs.minted))} µGNOT/unit</div>
       ${esrc(note)}
       <div class="efoot">

@@ -24,6 +24,8 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
 global.esc = s => String(s).replace(/[&<>"']/g, c =>
   ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 global.ccSym = () => "KOURT:COVID";
+global.ccSymHtml = slug => `<span class="ccsym">${ccSym(slug)}</span>`;
+global.ccText = (n,slug) => ((n||0)/1e6) + " " + ccSym(slug);
 global.cc = (m) => (m/1e6) + " KOURT:COVID";
 global.btn = (label) => `<button>${label}</button>`;
 global.stakeTicketHasActions = () => true;

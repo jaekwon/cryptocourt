@@ -28,7 +28,7 @@ global.CFG = { addr:"g1w746drdmenjdg0ll38dltjt7kkgtq5lmsmghcg", mode:"live" };
 global.ccSym = slug => slug? "KOURT:"+String(slug).toUpperCase() : "court coin";
 global.fmtN = n => (n==null?0:Math.round(n)).toLocaleString("en-US");
 // The real cc(), because the row's text is what a reader acts on.
-eval(slice('function cc(n, slug){', '\nfunction ugnot('));
+eval(slice('function ccSymHtml(', '\nfunction ugnot('));
 let BAL = null;
 global.balanceOf = async () => { if(typeof BAL === "function") return BAL(); return BAL; };
 

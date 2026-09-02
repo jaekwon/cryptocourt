@@ -33,7 +33,9 @@ global.esc = s => String(s).replace(/[&<>"']/g, c =>
   ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 global.fmtN = n => (n==null?0:Math.round(n)).toLocaleString("en-US");
 global.ccSym = slug => slug? "KOURT:"+String(slug).toUpperCase() : "court coin";
-global.cc = (n,slug) => ((n||0)/1e6) + " " + ccSym(slug);
+global.ccSymHtml = slug => `<span class="ccsym">${ccSym(slug)}</span>`;
+global.cc = (n,slug) => ((n||0)/1e6) + " " + ccSymHtml(slug);
+global.ccText = (n,slug) => ((n||0)/1e6) + " " + ccSym(slug);
 global.note = () => {};
 let ABCI = null, BAL = null;          // per-test answers
 global.abci = async () => { if(typeof ABCI === "function") return ABCI(); return ABCI; };

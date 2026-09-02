@@ -106,7 +106,7 @@ ok("deterministic", q2.units===q.units && q2.cost===q.cost);
 const s = {price:118, supply:118500000000, emitted:8900000, minted:S0};
 const html = joinPanel("orem", s);
 ok("panel: input present", html.includes('id="buyamt"'));
-ok("panel: five labels", ["You send","You receive","Average price you pay","Price after your buy","Your voice share"].every(l=>html.includes(l)));
+ok("panel: five labels", ["You burn","You receive","Average price you pay","Price after this","Your voice share"].every(l=>html.includes(l)));
 // round 61: the Buy button had to be scrolled to. What a reader needs BEFORE
 // pressing is one row — what they get; the rest is a receipt and belongs under
 // the button. Lock the order, or the receipt creeps back above it row by row.
@@ -115,11 +115,14 @@ ok("panel: one row above the button", (()=>{
   return (buyRowsHtml(q, s.price, "orem").match(/class="line"/g)||[]).length === 1;
 })());
 ok("panel: button precedes the receipt", html.indexOf('id="buyactions"') < html.indexOf('id="buyrows2"'));
-ok("panel: receipt rows sit below the button", ["Average price you pay","Price after your buy","Your voice share"]
+ok("panel: receipt rows sit below the button", ["Average price you pay","Price after this","Your voice share"]
      .every(l => html.indexOf(l) > html.indexOf('id="buyactions"')));
 ok("panel: what you get sits above the button", html.indexOf("You receive") < html.indexOf('id="buyactions"'));
 ok("panel: ack sentence", html.includes("cannot be sold back to the court"));
-ok("panel: button restates output", /Buy 0\.8\d KOURT:[A-Z]+/.test(html));
+// Tags stripped to a SPACE, not to nothing: the coin symbol is wrapped for
+// colour now, so "0.87<span ...>KOURT:X</span>" would otherwise join up.
+const plain = h => String(h).replace(/<[^>]*>/g, " ").replace(/\s+/g, " ");
+ok("panel: button restates output", /Get 0\.8\d KOURT:[A-Z]+/.test(plain(html)));
 ok("panel: demo sample note", html.includes("Sample data — computed from the demo court"));
 // DEMO CARRIES NO COMMAND LINE ANY MORE. It used to: the CLI toggle rendered
 // beside every button in every mode, so sample data came with a runnable
