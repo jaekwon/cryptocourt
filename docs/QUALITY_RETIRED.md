@@ -125,9 +125,22 @@ which sidesteps the question rather than answering it. That is tolerable while
 the chain carries only seeded fixtures and stops being tolerable the moment it
 carries someone's bond.
 
-## Docs that still describe the lane as live
+## The older docs, and why they were not rewritten
 
-`PLAN.md`, `MODERATION.md` and `VOTEFLOOR.md` still document the
-flag/slash/quality-ballot mechanism in the present tense. They are the
-remaining half of this cleanup and are not corrected by this file.
+`PLAN.md`, `MODERATION.md` and `VOTEFLOOR.md` all still contain the mechanism
+in the present tense, and all three open with a **SUPERSEDED IN PART** banner
+saying so and pointing here. That was the right call and is worth restating,
+because the instinct is to delete:
+
+> It is left in place because the reasoning around it is still the reasoning
+> for what replaced it, and because rewriting it in line would lose the
+> argument that produced the decision.
+
+Measured rather than assumed: of the ~103 quality-lane lines across those three
+files, most are in CHANGELOGS and audit narratives — 46 of PLAN.md's 71 sit
+under its changelog, 11 of MODERATION.md's 15 under its own. Rewriting a
+changelog would falsify the record of what was believed when. The live
+descriptive passages are the minority, and the banner covers them by telling a
+reader to treat any quality-lane passage below as history.
+
 `WHITEPAPER.md` is generated and must not be hand-edited.

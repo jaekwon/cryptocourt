@@ -11,6 +11,13 @@
 > — one ballot (overturn / uphold / spam), two multipliers on the draw, and
 > `Unstake` forfeiting conviction in proportion. Read that first; treat any
 > quality-lane passage below as history.
+>
+> What was DECIDED, and what it was decided against:
+> **[docs/QUALITY_RETIRED.md](docs/QUALITY_RETIRED.md)** — the accepted cost, the
+> findings the removal retired, and the migration question it does not answer.
+> Worth reading before re-arguing any of the passages below: the analysis
+> recommended merging the two ballots and keeping the economics, and full
+> removal was chosen over that advice.
 
 > **STATUS: v0.52 — CONVERGED + BUILDING. Design converged at round 7; v0.9
 > added the meta/local peer install (owner), v0.10 folded in its three-way vet

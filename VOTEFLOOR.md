@@ -1,6 +1,6 @@
 # Vote weight: snapshot ceiling, live floor
 
-> **SUPERSEDED IN PART — THE QUALITY LANE IS GONE.** The passages below about the
+> **SUPERSEDED IN PART — THE QUALITY LANE IS GONE.** Everything below about the
 > three-bucket quality vote, the flag slot, the flag bond, the conclusive-low
 > slash and the counter-flag window describes a mechanism that has been REMOVED
 > from the realm. It is left in place because the reasoning around it is still
@@ -11,6 +11,13 @@
 > — one ballot (overturn / uphold / spam), two multipliers on the draw, and
 > `Unstake` forfeiting conviction in proportion. Read that first; treat any
 > quality-lane passage below as history.
+>
+> What was DECIDED, and what it was decided against:
+> **[docs/QUALITY_RETIRED.md](docs/QUALITY_RETIRED.md)** — the accepted cost, the
+> findings the removal retired, and the migration question it does not answer.
+> Worth reading before re-arguing any of the passages below: the analysis
+> recommended merging the two ballots and keeping the economics, and full
+> removal was chosen over that advice.
 
 **SHIPPED 2026-08-20, on panel 3's ordering. Revision 4 was the plan; this header
 records what actually happened, including the three places the plan was wrong.**
