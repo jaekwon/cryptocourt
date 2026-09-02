@@ -575,3 +575,144 @@ func TestDecidedCarrotRefusesTheAgainstVerdictVoter(cur realm, t *testing.T) {
 		PullCarrot(cross(cur), "cvd1", id)
 	})
 }
+
+// THE CARROT'S SPLIT, found SURVIVING: replace the denominator with the voter's own
+// weight and the whole kourtv2 suite still passes. In production that pays EVERY
+// with-verdict voter the entire carrot instead of their share, so the pool over-draws
+// by the size of the electorate.
+//
+// Nothing caught it because every carrot fixture pulls with ONE voter on the winning
+// side, which makes w == denom by construction and collapses
+// mulDiv128(carrotTotal, w, denom) to carrotTotal. Measured before writing this: five
+// PullCarrot call sites in four tests, and not one has two distinct voters drawing on
+// the same claim -- one is named ...ForASoleVoter. Their assertions are either
+// clamp-dominated (p2c crafts carrotTotal above the bound and requires exactly
+// b0/2-1, the same number with or without a denominator bug) or a bare sign check
+// (cvd1 and rntw6 ask only for > 0). A share that is wrong by a factor of the
+// electorate is still positive, and still gets clamped to the same ceiling.
+//
+// So this fixture is the smallest one that CANNOT degenerate: two voters on the
+// winning side with DIFFERENT weights. The four preconditions are load-bearing, not
+// decoration -- they assert the denominator is a genuine sum, that the weights
+// differ, that the clamp does not bind, and that a share is strictly less than the
+// whole carrot. Drop any of them and this test rots back into the shape it exists to
+// replace, which is exactly how the existing coverage came to prove nothing.
+func TestDecidedCarrotSplitsOnWeightNotHeadcount(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("cspl-alice") // author + answerer
+	bob := testutils.TestAddress("cspl-bob")     // disputer
+	carol := testutils.TestAddress("cspl-carol") // votes NO, wins, BIG weight
+	erin := testutils.TestAddress("cspl-erin")   // votes NO, wins, SMALL weight
+	dan := testutils.TestAddress("cspl-dan")     // votes YES, loses
+	c := testCourt(cur, "cspl", alice, 50_000_000_000)
+	c.coin.Mint(bob, 1_000_000_000)
+	c.coin.Mint(carol, 5_000_000_000)
+	c.coin.Mint(erin, 1_000_000_000)
+	c.coin.Mint(dan, 1_000_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "cspl", "the carrot splits on weight")
+	matureOI(cur, "cspl", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "cspl", id, sideYES)
+	c.params.escrowMinBlocks = 900_000
+	c.params.escrowMaxBlocks = 900_000
+
+	// Round 1 fails quorum, which opens the escrow window the decided round needs.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), "cspl", id)
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveDispute(cross(cur), "cspl", id)
+
+	// The decided round: NO carries on carol's and erin's COMBINED weight.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), "cspl", id)
+	testing.SetRealm(testing.NewUserRealm(carol))
+	VoteDispute(cross(cur), "cspl", id, "no")
+	testing.SetRealm(testing.NewUserRealm(erin))
+	VoteDispute(cross(cur), "cspl", id, "no")
+	testing.SetRealm(testing.NewUserRealm(dan))
+	VoteDispute(cross(cur), "cspl", id, "yes")
+	testing.SkipHeights(c.params.votingBlocks + 1)
+	ResolveDispute(cross(cur), "cspl", id)
+
+	cs := mustClaim(c, id)
+	if cs.decidedPID == 0 || cs.carrotChoice != "no" {
+		t.Fatalf("setup: need a decided round carried by NO: pid=%d choice=%q",
+			cs.decidedPID, cs.carrotChoice)
+	}
+
+	testing.SkipHeights(EscrowUntil("cspl", id) - heightNow())
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Finalize(cross(cur), "cspl", id)
+	testing.SkipHeights(priorityWindowBlocks + 1)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Crystallize(cross(cur), "cspl", id)
+
+	// Read the weights this realm actually RECORDED, rather than re-deriving them
+	// from the mints -- the lanes cap at live balance, so a re-derivation is the very
+	// mistake PullCarrot's own comment above warns about.
+	wOf := func(who address) int64 {
+		v := cs.voted.Get("dw" + beClaimKey(uint64(cs.decidedPID)) + string(who))
+		if v == nil {
+			t.Fatalf("setup: no recorded weight for %s on the deciding round", who)
+		}
+		return v.(int64)
+	}
+	wC, wE, denom := wOf(carol), wOf(erin), cs.carrotDenom
+
+	// PRECONDITION 1: the denominator is a GENUINE SUM. Without this the fixture is
+	// the degenerate single-voter shape and proves nothing about the division.
+	if denom != wC+wE || wC == denom || wE == denom {
+		t.Fatalf("setup: denom must be a real sum of two weights: wC=%d wE=%d denom=%d",
+			wC, wE, denom)
+	}
+	// PRECONDITION 2: the weights DIFFER, so a share that splits by headcount is a
+	// different number from the right one.
+	if wC == wE {
+		t.Fatalf("setup: the two winning weights must differ: wC=%d wE=%d", wC, wE)
+	}
+	// PRECONDITION 3: the clamp must NOT bind, or both shares are cut to b0/2-1 and
+	// every assertion below passes for the wrong reason.
+	b0 := cs.xBarFrozen * carrotClampXBps / 10000
+	if b0 < carrotClampMinCC {
+		b0 = carrotClampMinCC
+	}
+	clamp := b0/2 - 1
+	total := cs.carrotTotal
+	wantC := mulDiv128(total, wC, denom)
+	wantE := mulDiv128(total, wE, denom)
+	if wantC >= clamp || wantE >= clamp {
+		t.Fatalf("setup: the clamp must not bind or this test is clamp-dominated: "+
+			"wantC=%d wantE=%d clamp=%d", wantC, wantE, clamp)
+	}
+	// PRECONDITION 4: and a proportional share is STRICTLY LESS than the whole
+	// carrot, which is the single number a denominator bug collapses to.
+	if wantC >= total {
+		t.Fatalf("setup: a share of a two-voter carrot must be less than all of it: "+
+			"wantC=%d carrotTotal=%d", wantC, total)
+	}
+
+	testing.SetRealm(testing.NewUserRealm(carol))
+	gotC := PullCarrot(cross(cur), "cspl", id)
+	if gotC != wantC {
+		t.Fatalf("the big-weight voter draws carrotTotal*w/denom: got %d want %d "+
+			"(w=%d denom=%d total=%d)", gotC, wantC, wC, denom, total)
+	}
+	testing.SetRealm(testing.NewUserRealm(erin))
+	gotE := PullCarrot(cross(cur), "cspl", id)
+	if gotE != wantE {
+		t.Fatalf("the small-weight voter draws carrotTotal*w/denom: got %d want %d "+
+			"(w=%d denom=%d total=%d)", gotE, wantE, wE, denom, total)
+	}
+	// Ordered by weight, and NOT equal -- a headcount split makes these the same.
+	if gotC <= gotE {
+		t.Fatalf("more weight must draw more carrot: gotC=%d (w=%d) gotE=%d (w=%d)",
+			gotC, wC, gotE, wE)
+	}
+	// AND THE POOL IS NOT OVER-DRAWN, which is the production consequence: each
+	// voter pulling their "share" must not between them exceed the carrot.
+	if gotC+gotE > total {
+		t.Fatalf("the two shares must not exceed the carrot: %d+%d > %d",
+			gotC, gotE, total)
+	}
+}

@@ -7590,6 +7590,22 @@
  },
  {
   "pkg": "kourtv2",
+  "file": "crystallize.gno",
+  "label": "PullCarrot: the carrot's denominator is the voter's OWN weight, so every with-verdict voter draws the whole carrot",
+  "find": "\tw, denom := vw.(int64), cs.carrotDenom",
+  "replace": "\tw, denom := vw.(int64), vw.(int64)",
+  "why": "Found SURVIVING the whole suite. Every carrot fixture pulled with ONE voter on the winning side, so w == denom by construction and mulDiv128(carrotTotal, w, denom) collapsed to carrotTotal; the existing assertions were clamp-dominated or bare sign checks, and a share wrong by a factor of the electorate is still positive. Killed now by TestDecidedCarrotSplitsOnWeightNotHeadcount: got 1593 want 1327 with w=5e9 denom=6e9, i.e. the mutant hands each of two voters the entire 1593 pool."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "crystallize.gno",
+  "label": "PullCarrot: the tallied weight is read from a round other than the deciding one",
+  "find": "\tvw := cs.voted.Get(\"dw\" + beClaimKey(uint64(cs.decidedPID)) + string(who))",
+  "replace": "\tvw := cs.voted.Get(\"dw\" + beClaimKey(uint64(cs.decidedPID+1)) + string(who))",
+  "why": "Pins the 'dw' weight record to the SAME round the choice and the once-per-address latch are keyed on. Reading any other round finds no weight and aborts with 'no recorded weight for that voter on the deciding round', which is how this row dies."
+ },
+ {
+  "pkg": "kourtv2",
   "file": "boardlegal.gno",
   "label": "GlobalHideRow: the global-DAO gate",
   "find": "\tif !isGlobalMod(who) {\n\t\tpanic(\"kourtv2: only a global DAO member may globally hide a comment\")\n\t}\n",
