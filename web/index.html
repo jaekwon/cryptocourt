@@ -732,6 +732,20 @@ html.embed .main{grid-column:1; grid-row:1; max-width:none; padding:0;
   color:var(--muted); font-size:12px}
 .sbout{display:flex; justify-content:space-between; gap:14px; margin-top:6px; font-size:12.5px; flex-wrap:wrap}
 .sbout .y{color:var(--yes)} .sbout .n{color:var(--no); text-align:right}
+/* THE SIDE'S NAME IN A HAIRLINE OVAL — the gold bar's treatment with the corners
+   taken all the way round. border-radius:999px rather than a measured value:
+   any radius past half the height renders as a semicircular cap, so an
+   over-large number is the standard way to say "fully rounded" and cannot go
+   wrong when the font size or padding changes.
+   currentColor, NOT a token. .sbout .y is --yes and .n is --no, so the border
+   inherits the side's own colour and the two ovals never need separate rules —
+   and a theme that changes either colour changes its oval with it.
+   The percentage stays OUTSIDE the oval. It is the number that moves; the side
+   is the label. Enclosing both would draw a box around a figure that changes
+   every read and make the whole thing look like a control. */
+.sbout .sidetag{border:1px solid currentColor; border-radius:999px;
+  padding:1px 7px 2px; margin-right:2px; font-size:.86em; letter-spacing:.08em;
+  font-weight:600; white-space:nowrap}
 /* NO FILL, A HAIRLINE, AND REGISTRATION MARKS AT THE CORNERS. A court of record
    is rules and type; a filled card is a slab floating over a page. Taking the
    fill away is what makes the one glowing line on the page mean something.
@@ -10629,7 +10643,7 @@ function stakeBar(d, slug){
       <div class="sbY" style="width:${py.toFixed(3)}%"></div>
       <div class="sbN" style="width:${pn.toFixed(3)}%"></div>
     </div>
-    <div class="sbout"><span class="y"><b>YES ${py.toFixed(1)}%</b> · ${cc(y,slug)}</span><span class="n"><b>NO ${pn.toFixed(1)}%</b> · ${cc(n,slug)}</span></div>`;
+    <div class="sbout"><span class="y"><b><span class="sidetag">YES</span> ${py.toFixed(1)}%</b> · ${cc(y,slug)}</span><span class="n"><b><span class="sidetag">NO</span> ${pn.toFixed(1)}%</b> · ${cc(n,slug)}</span></div>`;
 }
 function chartChips(d, slug){
   const chips=[

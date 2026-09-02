@@ -550,6 +550,28 @@ ok("no claim is stamped in the future", Object.values(DEMO.claims).filter(d=>d.t
    nested bordered spans, chips wider than the row. */
 ok("only a chip itself is boxed, not the spans inside it",
    /\.chartchips > span\{/.test(src) && !/\.chartchips span\{/.test(src));
+/* THE SIDE'S NAME SITS IN A HAIRLINE OVAL, the gold bar's treatment with the
+   corners taken all the way round.
+   ROUNDED BY OVER-LARGE RADIUS, not by a measured one: any radius past half the
+   height renders as a semicircular cap, so 999px says "fully rounded" and stays
+   right when the font size or padding changes. A literal like 8px would look
+   correct today and square off the moment the row grew.
+   currentColor, NOT a token, so the border inherits --yes on one side and --no
+   on the other from the .y/.n wrappers — one rule for both ovals, and a theme
+   that moves either colour moves its oval with it. Pinned because a token here
+   would give both sides the same border and quietly lose the distinction. */
+ok("the side's name is wrapped for its own oval",
+   src.includes('<b><span class="sidetag">YES</span> ${py.toFixed(1)}%</b>')
+   && src.includes('<b><span class="sidetag">NO</span> ${pn.toFixed(1)}%</b>'));
+ok("...as a hairline, fully rounded",
+   /\.sbout \.sidetag\{border:1px solid currentColor; border-radius:999px/.test(src));
+ok("...taking its colour from the side, not a fixed token",
+   !/\.sbout \.sidetag\{[^}]*border:1px solid var\(/.test(src));
+/* THE PERCENTAGE STAYS OUTSIDE IT. That figure changes on every read; the side
+   is the label. A box around both reads as a control rather than a result. */
+ok("...with the percentage outside the oval",
+   !/class="sidetag">YES \$\{py/.test(src) && !/class="sidetag">NO \$\{pn/.test(src));
+
 
 console.log(fail? fail+" FAILURES":"ok all "+"chart pins");
 DONE = true;
