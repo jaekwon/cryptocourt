@@ -662,7 +662,7 @@
   "pkg": "kourtv2",
   "file": "answer.gno",
   "label": "COLLATERALIZATION FLOOR removed (drained mill posts 224x less)",
-  "find": "\tconvHi, convLo := cs.sideConv(verdict)\n\tfloor := slashSizeAt(xbar, convHi, convLo)\n\toppHi, oppLo := cs.sideConv(oppositeSide(verdict))\n\tif opp := slashSizeAt(xbar, oppHi, oppLo); opp > floor {\n\t\tfloor = opp\n\t}\n\tif floor > bond {\n\t\tbond = floor\n\t}",
+  "find": "\tconvHi, convLo := cs.sideConv(verdict)\n\tfloor := bondFloorAt(xbar, convHi, convLo)\n\toppHi, oppLo := cs.sideConv(oppositeSide(verdict))\n\tif opp := bondFloorAt(xbar, oppHi, oppLo); opp > floor {\n\t\tfloor = opp\n\t}\n\tif floor > bond {\n\t\tbond = floor\n\t}",
   "replace": ""
  },
  {
@@ -676,7 +676,7 @@
   "pkg": "kourtv2",
   "file": "answer.gno",
   "label": "FLOOR covers only the draw arm, not the flat arm",
-  "find": "\tfloor := slashSizeAt(xbar, convHi, convLo)\n\toppHi, oppLo := cs.sideConv(oppositeSide(verdict))\n\tif opp := slashSizeAt(xbar, oppHi, oppLo); opp > floor {",
+  "find": "\tfloor := bondFloorAt(xbar, convHi, convLo)\n\toppHi, oppLo := cs.sideConv(oppositeSide(verdict))\n\tif opp := bondFloorAt(xbar, oppHi, oppLo); opp > floor {",
   "replace": "\tfloor := mulDiv128(convToCC(convHi, convLo), slashDrawBps, 10000)\n\toppHi, oppLo := cs.sideConv(oppositeSide(verdict))\n\tif opp := mulDiv128(convToCC(oppHi, oppLo), slashDrawBps, 10000); opp > floor {"
  },
  {
@@ -732,7 +732,7 @@
   "pkg": "kourtv2",
   "file": "claim.gno",
   "label": "OpenClaim: a title of any length is accepted",
-  "find": "\tif len(title) == 0 || len(title) > 200 {",
+  "find": "\tif runeLen(title) == 0 || runeLen(title) > 200 {",
   "replace": "\tif false {"
  },
  {
@@ -2105,8 +2105,8 @@
   "pkg": "kourtv2",
   "file": "claim.gno",
   "label": "OpenClaim: an EMPTY title is accepted",
-  "find": "\tif len(title) == 0 || len(title) > 200 {",
-  "replace": "\tif len(title) > 200 {"
+  "find": "\tif runeLen(title) == 0 || runeLen(title) > 200 {",
+  "replace": "\tif runeLen(title) > 200 {"
  },
  {
   "pkg": "kourtv2",
@@ -6356,15 +6356,15 @@
   "pkg": "kourtv2",
   "file": "claim.gno",
   "label": "openClaim: an empty title is accepted",
-  "find": "\tif len(title) == 0 || len(title) > 200 {",
-  "replace": "\tif len(title) == 0 && len(title) > 200 {"
+  "find": "\tif runeLen(title) == 0 || runeLen(title) > 200 {",
+  "replace": "\tif runeLen(title) == 0 && runeLen(title) > 200 {"
  },
  {
   "pkg": "kourtv2",
   "file": "claim.gno",
   "label": "openClaim: the body cap is off by one",
-  "find": "\tif len(body) > maxClaimBodyLen {",
-  "replace": "\tif len(body) > maxClaimBodyLen+1 {"
+  "find": "\tif runeLen(body) > maxClaimBodyLen {",
+  "replace": "\tif runeLen(body) > maxClaimBodyLen+1 {"
  },
  {
   "pkg": "kourtv2",
@@ -6846,8 +6846,8 @@
   "pkg": "kourtv2",
   "file": "answer.gno",
   "label": "PostAnswer: the collateral floor takes the SMALLER of the two sides",
-  "find": "\tif opp := slashSizeAt(xbar, oppHi, oppLo); opp > floor {",
-  "replace": "\tif opp := slashSizeAt(xbar, oppHi, oppLo); opp < floor {"
+  "find": "\tif opp := bondFloorAt(xbar, oppHi, oppLo); opp > floor {",
+  "replace": "\tif opp := bondFloorAt(xbar, oppHi, oppLo); opp < floor {"
  },
  {
   "pkg": "kourtv2",
@@ -6971,8 +6971,8 @@
   "pkg": "kourtv2",
   "file": "court.gno",
   "label": "maxCourtNameLen: a name of exactly the maximum length is refused",
-  "find": "if len(name) == 0 || len(name) > maxCourtNameLen {",
-  "replace": "if len(name) == 0 || len(name) >= maxCourtNameLen {"
+  "find": "if runeLen(name) == 0 || runeLen(name) > maxCourtNameLen {",
+  "replace": "if runeLen(name) == 0 || runeLen(name) >= maxCourtNameLen {"
  },
  {
   "pkg": "kourtv2",
@@ -9090,7 +9090,7 @@
   "pkg": "kourtv2",
   "file": "board.gno",
   "label": "PostComment: the byte cap on comment text",
-  "find": "\tif len(text) > maxBoardTextLen {\n",
+  "find": "\tif runeLen(text) > maxBoardTextLen {\n",
   "replace": "\tif false {\n"
  },
  {
