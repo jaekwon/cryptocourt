@@ -289,6 +289,37 @@ const ROUTES = [
     localStorage.setItem("cc.intro", "1");
   });
 
+  /* THE HEADER'S RULE REACHES THE RAIL. It was 2px of --ink — near-white on the
+     dark page, a bar heavier than the court's own name — and it stopped at
+     .main's left padding, leaving a gap between the line and the sidebar it
+     pointed at. Now a 1px --rule, the same token the rail's border-right uses,
+     bled left by a negative margin of the SAME clamp .main pads by.
+     MEASURED AT THREE WIDTHS, because the reach is a coincidence of two boxes
+     that no stylesheet states: .main's padding is clamp(20px,4vw,56px), so a
+     hardcoded 56 would line up at 1400+ and drift at every width below it,
+     where the clamp is still interpolating. 1280 and 1024 are inside that
+     range; 1600 is past it. */
+  for (const w of [1600, 1280, 1024]) {
+    await page.setViewport({width: w, height: 1000});
+    await page.goto(PAGE + "#/c/orem", {waitUntil: "networkidle2"});
+    await new Promise(r => setTimeout(r, 1200));
+    const g = await page.evaluate(() => {
+      const lr = document.querySelector(".lead-row");
+      const rail = document.querySelector(".rail");
+      if (!lr || !rail) return null;
+      const cs = getComputedStyle(lr);
+      return {lineLeft: lr.getBoundingClientRect().left,
+              railRight: rail.getBoundingClientRect().right,
+              width: cs.borderBottomWidth};
+    });
+    ok(`${w}px: the header rule and the rail are both there`, g !== null);
+    if (!g) continue;
+    ok(`${w}px: the rule reaches the sidebar (${Math.round(g.lineLeft)} vs ${Math.round(g.railRight)})`,
+       Math.abs(g.lineLeft - g.railRight) <= 1);
+    ok(`${w}px: ...as a hairline, not a bar (${g.width})`, parseFloat(g.width) <= 1);
+  }
+  await page.setViewport({width: 1280, height: 1000});
+
   ok("no page errors on any route with this row", errs.length === 0, errs.slice(0, 2).join(" | "));
 
   console.log(fail ? "\n" + fail + " FAILURES" : "\nALL PASS");

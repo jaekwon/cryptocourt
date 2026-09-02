@@ -475,7 +475,21 @@ a.card:hover{border-color:var(--line-2)}
    draws nothing at all. */
 .tspark-none{visibility:hidden}
 
-.lead-row{border-bottom:2px solid var(--ink); padding-bottom:16px; margin-bottom:16px}
+/* A HAIRLINE THAT MEETS THE RAIL, not a bar under the title.
+   It was 2px of --ink, and --ink is near-white on the dark page: a bright band
+   across the top of every court, heavier than the court's own name. 1px of
+   --rule instead, which is the exact token the rail's own border-right uses —
+   so where the two now meet they read as one ruling rather than two decisions.
+   IT REACHES LEFT. .main pads its content by clamp(20px,4vw,56px) and the rule
+   stopped at that padding, leaving a gap between the line and the sidebar it
+   was pointing at. Negative margin of the same clamp, with the padding put back
+   so the CONTENT does not move — only the border extends. The expression is
+   written twice on purpose: a hardcoded 56 here would detach from .main at any
+   width below 1400, where the clamp is still interpolating.
+   Left only. The right edge is where the page's measure ends, and a rule
+   running off into the margin there points at nothing. */
+.lead-row{border-bottom:1px solid var(--rule); padding-bottom:16px; margin-bottom:16px;
+  margin-left:calc(-1 * clamp(20px,4vw,56px)); padding-left:clamp(20px,4vw,56px)}
 
 /* buttons / txlinks */
 .actions{display:flex; gap:10px; flex-wrap:wrap; margin-top:6px}
