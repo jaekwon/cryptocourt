@@ -460,6 +460,74 @@ const CHATCSS = `
 .chatsend:active{transform:translateY(1px)}
 .chatsend:disabled{opacity:.4;cursor:default;transform:none}
 .chatnote{min-height:1.2em;opacity:.7;font-size:.85em;margin-top:.25rem}
+/* THE DEEP NIGHT SKY BEHIND THE CHAT — a window onto it, not a boxed widget.
+   Very dark royal purple, two nebula glows in opposite corners, the galactic
+   dust band across it on the diagonal, and ten layers of stars grading from
+   crisp pixels down to a hairline dust.
+
+   PAINT ONLY, AND THAT IS THE POINT. This is a SECOND .chatpanel rule rather
+   than an edit of the first, so the two can be read side by side and this one
+   can be seen to set nothing but colour: no margin, no padding, no border, no
+   size, no position, no font. The layout above is untouched and nothing moves.
+
+   THE ONE DELIBERATE DEPARTURE from this sheet's own rule. Everything else here
+   is neutral grey and inherited colour, because "this file cannot see the
+   page's colour tokens and a hardcoded brand colour would be wrong on one
+   theme or the other". A night sky is different in kind: it is a COMMITTED
+   look, dark in both themes on purpose, so it is the one place where hardcoding
+   is the correct answer instead of a shortcut.
+
+   WHICH FORCES THE FOREGROUND. Every control in this panel takes
+   color:inherit, so a dark background alone would leave dark-on-dark text on a
+   light theme -- unreadable. The pale starlight colour here is not decoration,
+   it is what makes the background legal. The greys above ride on it correctly:
+   rgba(128,128,128,...) borders and the .chatstate wash read on a dark ground,
+   and the inputs stay transparent so the sky shows through them.
+
+   HOW THE FIELD IS BUILT, since it looks arbitrary and is not. Each star layer
+   is one tiled radial-gradient, so one dot per tile; the tile sizes are
+   coprime-ish (137/149, 211/173, 89/97, 179/191, 61/71, 101/113, 43/47, 53/59,
+   31/37, 29/41) so the repeats do not line up into a visible grid in a panel
+   this small. Brightness and radius fall together, 1px at .95 alpha down to
+   .45px at .15, which is what gives depth rather than confetti: the four
+   smallest layers read as dust, not as stars.
+
+   THE BAND IS TWO LAYERS, and one is not enough. A single haze at a legible
+   alpha looks like a smudge; a narrow bright core inside a wider faint one
+   reads as depth. Both sit at 108deg so they agree, and both are no-repeat at
+   100% 100% so the band spans the panel however tall it grows -- which matters,
+   because .chatlog has a max-height and this panel changes height with it.
+
+   Colour stops are written out in full (colour, colour, transparent) rather
+   than the shorter two-position form, for the widest engine support. The
+   fourteen entries in background-image, background-size and background-repeat
+   must stay the same length and in the same order; CSS pairs them by position
+   and silently mismatches if they drift.
+
+   NO BACKTICK AND NO DOLLAR-BRACE ANYWHERE IN HERE. The whole block is one
+   template literal; a stray pair closes it early and takes every page with it,
+   not just the chat. */
+.chatpanel{color:#e9e5f8;background-color:#0b0518;
+  background-image:
+    radial-gradient(120% 80% at 76% 4%, rgba(104,62,182,.30) 0, rgba(104,62,182,0) 62%),
+    radial-gradient(90% 70% at 12% 96%, rgba(70,44,140,.24) 0, rgba(70,44,140,0) 66%),
+    linear-gradient(108deg, rgba(176,152,240,0) 26%, rgba(176,152,240,.055) 41%, rgba(198,182,255,.15) 50%, rgba(176,152,240,.055) 59%, rgba(176,152,240,0) 74%),
+    linear-gradient(108deg, rgba(150,120,225,0) 34%, rgba(150,120,225,.07) 50%, rgba(150,120,225,0) 66%),
+    radial-gradient(circle at 21% 29%, rgba(255,255,255,.95) 0, rgba(255,255,255,.95) 1px, rgba(255,255,255,0) 1.5px),
+    radial-gradient(circle at 68% 77%, rgba(232,224,255,.75) 0, rgba(232,224,255,.75) 1px, rgba(232,224,255,0) 1.5px),
+    radial-gradient(circle at 44% 13%, rgba(255,255,255,.6) 0, rgba(255,255,255,.6) .8px, rgba(255,255,255,0) 1.2px),
+    radial-gradient(circle at 86% 41%, rgba(204,186,255,.55) 0, rgba(204,186,255,.55) .8px, rgba(204,186,255,0) 1.2px),
+    radial-gradient(circle at 9% 71%, rgba(255,255,255,.42) 0, rgba(255,255,255,.42) .6px, rgba(255,255,255,0) .95px),
+    radial-gradient(circle at 57% 52%, rgba(220,208,255,.34) 0, rgba(220,208,255,.34) .6px, rgba(220,208,255,0) .95px),
+    radial-gradient(circle at 33% 84%, rgba(255,255,255,.26) 0, rgba(255,255,255,.26) .5px, rgba(255,255,255,0) .85px),
+    radial-gradient(circle at 74% 22%, rgba(226,214,255,.22) 0, rgba(226,214,255,.22) .5px, rgba(226,214,255,0) .85px),
+    radial-gradient(circle at 51% 66%, rgba(255,255,255,.18) 0, rgba(255,255,255,.18) .45px, rgba(255,255,255,0) .8px),
+    radial-gradient(circle at 15% 47%, rgba(214,204,255,.15) 0, rgba(214,204,255,.15) .45px, rgba(214,204,255,0) .8px);
+  background-size:100% 100%,100% 100%,100% 100%,100% 100%,
+    137px 149px,211px 173px,89px 97px,179px 191px,61px 71px,101px 113px,
+    43px 47px,53px 59px,31px 37px,29px 41px;
+  background-repeat:no-repeat,no-repeat,no-repeat,no-repeat,
+    repeat,repeat,repeat,repeat,repeat,repeat,repeat,repeat,repeat,repeat}
 `;
 function chatStyles(doc) {
   const d = doc || (typeof document !== "undefined" ? document : null);
