@@ -364,15 +364,33 @@ control("a second reader of the lock tree", f"{KOURTV2}/lock.gno",
 # governor's `rest` contract outright. Three arms, three controls, plus fail-closed.
 # The tally files hold no live read at all now — the expression lives in
 # voteweight.gno — so this plants one where arm 1 pins zero.
-control("a live weight read reached a tally file", f"{KOURTV2}/quality.gno",
-        "w, snapshot := votingWeight(c, who, cs.qualityEpoch)",
-        "w, snapshot := c.coin.BalanceOf(who), c.coin.BalanceOf(who)",
+#
+# BOTH RE-POINTED FROM quality.gno TO dispute.gno, which is the other tally file
+# TALLY_LIVE_ALLOWED pins at zero. They were BROKEN CONTROL (no such file) and so
+# exercised nothing. The rules are live and needed no change.
+#
+# The first plant is now a STRICTER reading of arm 1 than the old one: rather than
+# swapping a votingWeight call for two BalanceOf calls, it turns quorumFloor's
+# sealed denominator into a LIVE one (PastTotal(at) -> TotalSupply()). TotalSupply
+# is in the LIVE pattern, so arm 1 fires — and this is the exact defect the note
+# above describes, a live figure measured against a frozen bar.
+control("a live weight read reached a tally file", f"{KOURTV2}/dispute.gno",
+        "\tsupply := c.coin.PastTotal(at)",
+        "\tsupply := c.coin.TotalSupply()",
         "live weight read(s) in a file that decides by weight",
         argv=["python3", EPOCHCOH])
-control("one function reading two different epochs", f"{KOURTV2}/quality.gno",
-        "supply := c.coin.PastTotal(cs.qualityEpoch)",
-        "supply := c.coin.PastTotal(c.coin.Epoch() - 1)",
-        "reads", argv=["python3", EPOCHCOH])
+# AND ITS EXPECTED STRING WAS VACUOUS. This arm wanted 'reads', which
+# check-epoch-coherence prints on a CLEAN run, so even with a working anchor it
+# could not tell a defect from a pass — the suite's own vacuity pass reports it.
+# It now wants the [two-epochs] tag, verified ABSENT from the clean output.
+#
+# The plant adds a SECOND sealed read at a different instant (at-1) beside the
+# existing one, which is arm 2's subject exactly: one function, two epochs.
+control("one function reading two different epochs", f"{KOURTV2}/dispute.gno",
+        "\tat := c.coin.Epoch() - 1\n\tsupply := c.coin.PastTotal(at)",
+        "\tat := c.coin.Epoch() - 1\n"
+        "\tsupply := c.coin.PastTotal(at) + c.coin.PastTotal(at-1)",
+        "[two-epochs]", argv=["python3", EPOCHCOH])
 # The CRITICAL one: an engine told its weight rather than deriving it is what let
 # cast exceed p.total and dropped `no` out of the early-decide test.
 control("the engine accepting a supplied weight", f"{GOVERNORDIR}/governor.gno",
@@ -427,7 +445,11 @@ control("a second path exempted from the vote lock", f"{KOURTV2}/claim.gno",
 # such a path bypasses the stake lock AND the vote lock while the transfer succeeds
 # and no arithmetic goes wrong — there is nothing for a test to notice unless a test
 # happens to exist for that exact path.
-control("a coin outflow with its gate removed", f"{KOURTV2}/quality.gno",
+# RE-POINTED from quality.gno to dispute.gno, which carries the IDENTICAL shape at
+# 112-113: the same mustSpendable(c, who, bond) above the same
+# c.coin.Transfer(who, c.escrow, bond). A one-for-one move, so the arm plants the
+# same defect it always did — the dispute bond instead of the flag bond.
+control("a coin outflow with its gate removed", f"{KOURTV2}/dispute.gno",
         "\tmustSpendable(c, who, bond)\n\tc.coin.Transfer(who, c.escrow, bond)",
         "\tc.coin.Transfer(who, c.escrow, bond)",
         "[ungated-outflow]", argv=["python3", EPOCHCOH])
@@ -436,18 +458,28 @@ control("a coin outflow with its gate removed", f"{KOURTV2}/quality.gno",
 # pass on another pin's complaint. The hazard is one edit away in each direction — a
 # lock row taxes its owner's own transfers at a measured 110,245 gas per dead row, so
 # a row created for somebody else is a griefing weapon rather than a self-imposed cost.
-control("a lock row created for a third party", f"{KOURTV2}/quality.gno",
-        "lockVote(c, who, voteLockQuality,",
-        "lockVote(c, cs.author, voteLockQuality,",
+# RE-POINTED to the dispute lane, one of the two lanes that still lock votes
+# (LOCKVOTE_CALLS_N = 2: dispute.gno and modvote.gno). ARM 8's four controls sit
+# on four distinct pins and the two aimed at the quality lane went BROKEN CONTROL
+# with it; the rule and the other two are untouched.
+#
+# THE DISTINCT-STRING DISCIPLINE IS THE POINT and it is now measured rather than
+# asserted. This pin and the `who`-rebinding pin below both emit [foreign-lock],
+# so matching the tag would let either pass on the other's complaint. Probed
+# both ways: this plant produces "rather than `who`" and NOT "binds `who` to",
+# and the one below produces "binds `who` to" and NOT "rather than `who`".
+control("a lock row created for a third party", f"{KOURTV2}/dispute.gno",
+        "lockVote(c, who, voteLockDispute,",
+        "lockVote(c, cs.author, voteLockDispute,",
         "rather than `who`", argv=["python3", EPOCHCOH])
 control("a fourth lane locking votes", f"{KOURTV2}/dispute.gno",
         "\tlockVote(c, who, voteLockDispute, int64(claimID), cs.proposalID, dw)",
         "\tlockVote(c, who, voteLockDispute, int64(claimID), cs.proposalID, dw)\n"
         "\tlockVote(c, who, voteLockDispute, int64(claimID), cs.proposalID, dw)",
         "vote-lock site(s), expected 3", argv=["python3", EPOCHCOH])
-control("`who` rebound away from the caller", f"{KOURTV2}/quality.gno",
-        "\tlockVote(c, who, voteLockQuality,",
-        "\twho = cs.author\n\tlockVote(c, who, voteLockQuality,",
+control("`who` rebound away from the caller", f"{KOURTV2}/dispute.gno",
+        "\tlockVote(c, who, voteLockDispute,",
+        "\twho = cs.author\n\tlockVote(c, who, voteLockDispute,",
         "binds `who` to", argv=["python3", EPOCHCOH])
 control("a locking helper passed a foreign address", f"{KOURTV2}/modvote.gno",
         "\tapprove(cur.Previous().Address(), courtSlug, 0, true)",
@@ -493,22 +525,28 @@ control("a fresh restatement of the release rule", "VOTEFLOOR.md",
 # ARM 10's controls, one per sub-check, each with its own expected string. The arm has
 # to tell three situations apart: a COPY of the liveness disjunction, a second
 # DEFINITION of it, and crystallize's own question stopping being its own question.
-control("the liveness disjunction copied back into a reader",
-        f"{KOURTV2}/voteweight.gno",
-        "\tif qualityQuestionOpen(cs) {\n\t\tquality, _ = votingWeight(c, who, cs.qualityEpoch)",
-        "\tif cs.flagOpen || cs.disputeOpen || cs.counterOpen {\n"
-        "\t\tquality, _ = votingWeight(c, who, cs.qualityEpoch)",
-        "disjoin two or more", argv=["python3", EPOCHCOH])
-control("a second definition of the same disjunction",
-        f"{KOURTV2}/crystallize.gno",
-        "if cs.flagOpen || cs.counterOpen || cs.pendingSlash > 0 {",
-        "if cs.flagOpen || cs.disputeOpen || cs.counterOpen || cs.pendingSlash > 0 {",
-        "carry all three quality-question flags", argv=["python3", EPOCHCOH])
-control("crystallize's own question becoming a partial copy",
-        f"{KOURTV2}/crystallize.gno",
-        "if cs.flagOpen || cs.counterOpen || cs.pendingSlash > 0 {",
-        "if cs.flagOpen || cs.counterOpen || cs.tierFinal {",
-        "without pendingSlash", argv=["python3", EPOCHCOH])
+# ARM 10'S THREE CONTROLS ARE RETIRED, because ARM 10 ITSELF IS GONE.
+#
+# They were BROKEN CONTROL ("anchor matched 0x") and hid better than the five that
+# named quality.gno: they plant into voteweight.gno and crystallize.gno, which both
+# still EXIST, so a pass that counts missing plant FILES does not see them. What is
+# gone is the code they name — qualityQuestionOpen, cs.qualityEpoch,
+# cs.pendingSlash, cs.tierFinal, cs.flagOpen and cs.counterOpen all have ZERO
+# non-comment references in realm/r/kourtv2 today, flagOpen and counterOpen
+# included, which read as though they were live.
+#
+# NOT RE-POINTED, and that is check-epoch-coherence's own decision rather than a
+# convenience. Its note at the site of the deleted arm says the hazard was a
+# DISJUNCTION drifting between two readers, which needs two or more flags to exist
+# before it can happen, and that "re-aiming it at a single flag would leave a check
+# that passes for a reason unrelated to the one it was written for — the kind of
+# green this file exists to refuse." There is one liveness question now and
+# cs.disputeOpen is it, so a control here would have no subject either.
+#
+# THE INSTRUCTION THAT COMES WITH THE RETIREMENT, carried here so it survives with
+# the arm: "If a second liveness flag is ever added, restore this arm from git
+# history rather than writing a new one." That applies to these three controls too
+# — they are in the history alongside it.
 # ARM 9's controls, one per formula shape, in the two realms that expose the figure.
 # SpendableOf is stake-only and named as though it were not, and the tree has walked
 # into that three times — so what is pinned is arithmetic WITH it, in either direction:

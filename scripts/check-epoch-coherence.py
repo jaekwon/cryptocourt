@@ -55,9 +55,16 @@ LIVE = re.compile(r"\.(BalanceOf|VotesOf|TotalSupply)\(")
 # now that the value is an ALLOWANCE, a governor/meta.gno appearing one day would
 # silently inherit kourtv2's — misattribution that grants permission rather than
 # denying it, which is the direction that does not announce itself.
+# quality.gno's row is GONE from here. A key naming a deleted file is never
+# consulted, because the scan walks the files that exist and looks each one up —
+# so it is dead configuration that reads as live coverage. The counts nearby were
+# re-derived when the quality lane went (LOCKVOTE_CALLS_N, and COIN_OUT_N
+# explicitly "RE-DERIVED by listing the eight that remain rather than by
+# decrementing"); this table was missed because nothing here fails when a key
+# goes stale. It denies rather than grants, so it was harmless — the cost was to
+# the reader, who had no way to tell it from a file still being watched.
 TALLY_LIVE_ALLOWED = {
     ("kourtv2", "dispute.gno"): 0,
-    ("kourtv2", "quality.gno"): 0,
     ("kourtv2", "modvote.gno"): 0,
     ("kourtv2", "crystallize.gno"): 0,
     ("kourtv2", "meta.gno"): 0,
@@ -95,8 +102,15 @@ FUNC = re.compile(r"^func\s+(?:\([^)]*\)\s*)?([A-Za-z0-9_]+)", re.M)
 # enumeration went stale the moment it was written — which is the argument for the
 # threshold being a floor rather than an equality.)
 #   court.gno:supplyFloor        dispute.gno:VotableSupply   dispute.gno:quorumFloor
-#   dispute.gno:credWeightFloorAt  modvote.gno:votableAt     quality.gno:qualityBars
+#   dispute.gno:credWeightFloorAt  modvote.gno:votableAt   [quality.gno:qualityBars]
 #   voteweight.gno:votingWeight  governor.gno:propose        governor.gno:castVote
+#
+# qualityBars is bracketed above because it is GONE with the quality lane, so the
+# nine are eight of nine plus one that cannot come back on its own. Left in place
+# rather than deleted: the list exists to diagnose a DROP, and a reader who sees
+# eight where nine are named needs the ninth's name to work out which one went.
+# The threshold below was never lowered for it — it is a floor, not an equality,
+# and there is real slack under it today rather than a boundary to defend.
 MIN_SEALED_FUNCS = 8
 
 # ARM 3 — the engine derives its own weight, and a consumer may only LOWER it.
