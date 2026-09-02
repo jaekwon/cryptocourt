@@ -472,11 +472,27 @@ control("a lock row created for a third party", f"{KOURTV2}/dispute.gno",
         "lockVote(c, who, voteLockDispute,",
         "lockVote(c, cs.author, voteLockDispute,",
         "rather than `who`", argv=["python3", EPOCHCOH])
+# ITS EXPECTED STRING WAS OFF BY THE DELETED LANE, so this arm never fired even
+# though its anchor matched live code — which is why it was not BROKEN CONTROL and
+# survived the sweep that fixed the eight that were.
+#
+# The arm wants the count pin's complaint. The guard emits
+# "[foreign-lock] {found} vote-lock site(s), expected {pinned}", and the pin went
+# 3 -> 2 when the quality lane went (LOCKVOTE_CALLS_N: dispute.gno, modvote.gno).
+# The want still read "expected 3", the pinned half — so it matched neither the
+# clean run nor the planted one. MEASURED: with the doubled call planted the guard
+# says "3 vote-lock site(s), expected 2", and the old string appears in NEITHER
+# output.
+#
+# It now pins the guard's own current pin. If a fourth lane is ever legitimately
+# added and LOCKVOTE_CALLS_N moves, this arm goes quiet and the selftest says so —
+# which is the right failure, since a new vote-locking lane is exactly the thing
+# the guard's message says "has to be argued".
 control("a fourth lane locking votes", f"{KOURTV2}/dispute.gno",
         "\tlockVote(c, who, voteLockDispute, int64(claimID), cs.proposalID, dw)",
         "\tlockVote(c, who, voteLockDispute, int64(claimID), cs.proposalID, dw)\n"
         "\tlockVote(c, who, voteLockDispute, int64(claimID), cs.proposalID, dw)",
-        "vote-lock site(s), expected 3", argv=["python3", EPOCHCOH])
+        "vote-lock site(s), expected 2", argv=["python3", EPOCHCOH])
 control("`who` rebound away from the caller", f"{KOURTV2}/dispute.gno",
         "\tlockVote(c, who, voteLockDispute,",
         "\twho = cs.author\n\tlockVote(c, who, voteLockDispute,",
@@ -646,10 +662,23 @@ control("a purge verb with no authority gate", f"{KOURTV2}/folders.gno",
         "PurgeFolder does not carry the global-DAO authority gate",
         argv=["python3", EPOCHCOH])
 # Fail CLOSED: a verb pattern that stops matching leaves the census counting nothing.
+#
+# ITS EXPECTED STRING WAS OFF BY ONE VERB, the same defect as the fourth-lane arm
+# above and just as invisible: the anchor matches, so it was never BROKEN CONTROL,
+# it simply never fired. PURGE_VERBS_N went 7 -> 8 when PurgeClaimMedia arrived
+# ("the eighth", as its own comment in the guard says), and this want still read
+# "expected 7". MEASURED with the pattern broken: the guard says
+# "[ungated-purge] 0 purge verb(s), expected 8", and the old string appears in
+# NEITHER the clean nor the planted output.
+#
+# Counted the live verbs rather than trusting either number: 8 in
+# realm/r/kourtv2, tests excluded — PurgeBoardRow, PurgeBoardRange,
+# PurgeCourtLogRow, PurgeFolder, PurgeClaimMedia, PurgeClaim, PurgeCourt,
+# PurgeModLogRow. So the guard's pin is right and the arm was wrong.
 control("the purge verb pattern drifting off the code", EPOCHCOH,
         r'PURGE_VERB = re.compile(r"^func (Purge\w*)\(cur realm", re.M)',
         r'PURGE_VERB = re.compile(r"^func (PurgeNOPE\w*)\(cur realm", re.M)',
-        "0 purge verb(s), expected 7",
+        "0 purge verb(s), expected 8",
         argv=["python3", EPOCHCOH])
 
 # ARM 15, the entitlement-queue census. enqueueSenior's tiling invariant — seniors and
