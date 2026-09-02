@@ -155,20 +155,6 @@ func TestSlugCharsetIsWhatMakesTheRawRenderSafe(cur realm, t *testing.T) {
 // governance path with. Each case also asserts the DEFAULTS pass, so the guards cannot
 // hold by rejecting everything.
 func TestParamsMustSaneRefusesEachMalformedField(cur realm, t *testing.T) {
-	mustPanicWith := func(want string, fn func()) {
-		t.Helper()
-		defer func() {
-			r := recover()
-			if r == nil {
-				t.Fatalf("expected a panic saying %q; nothing panicked", want)
-			}
-			got, ok := r.(string)
-			if !ok || !containsSub(got, want) {
-				t.Fatalf("panic %v, want one saying %q", r, want)
-			}
-		}()
-		fn()
-	}
 
 	// The defaults are sane — the control.
 	_ = defaultParams().mustSane()
@@ -177,7 +163,7 @@ func TestParamsMustSaneRefusesEachMalformedField(cur realm, t *testing.T) {
 	for _, bad := range []int64{5000, 0, -1, 10001} {
 		p := defaultParams()
 		p.disputeThresholdBps = bad
-		mustPanicWith("overturn threshold must be in [5001, 10000]", func() { p.mustSane() })
+		mustPanicWith(t, "overturn threshold must be in [5001, 10000]", func() { p.mustSane() })
 	}
 	// Both boundaries accepted.
 	for _, ok := range []int64{5001, 10000} {
@@ -194,27 +180,27 @@ func TestParamsMustSaneRefusesEachMalformedField(cur realm, t *testing.T) {
 	} {
 		p := defaultParams()
 		f(&p)
-		mustPanicWith("vote and grace windows must be positive", func() { p.mustSane() })
+		mustPanicWith(t, "vote and grace windows must be positive", func() { p.mustSane() })
 	}
 
 	// minAnswerX is the answerability floor; zero would let a claim with no stake be
 	// answered, and every %-of-X̄ bar would then price off nothing.
 	p := defaultParams()
 	p.minAnswerX = 0
-	mustPanicWith("minAnswerX must be positive", func() { p.mustSane() })
+	mustPanicWith(t, "minAnswerX must be positive", func() { p.mustSane() })
 
 	// A zero deposit makes claim-opening free, which is the anti-spam price.
 	p = defaultParams()
 	p.minClaimDepositCC = 0
-	mustPanicWith("claim deposit must never be zero", func() { p.mustSane() })
+	mustPanicWith(t, "claim deposit must never be zero", func() { p.mustSane() })
 
 	// The escrow window must be a window: positive, and max not below min.
 	p = defaultParams()
 	p.escrowMinBlocks = 0
-	mustPanicWith("escrow window is malformed", func() { p.mustSane() })
+	mustPanicWith(t, "escrow window is malformed", func() { p.mustSane() })
 	p = defaultParams()
 	p.escrowMaxBlocks = p.escrowMinBlocks - 1
-	mustPanicWith("escrow window is malformed", func() { p.mustSane() })
+	mustPanicWith(t, "escrow window is malformed", func() { p.mustSane() })
 	// Equal is still allowed — a fixed-length window is legitimate — but it must be
 	// LONG enough for a defaulted verdict's failed-round ladder, which is what the
 	// S2 invariant adds. At the default 120_960 it is not: that is exactly one
@@ -226,7 +212,7 @@ func TestParamsMustSaneRefusesEachMalformedField(cur realm, t *testing.T) {
 	// One block short of the ladder is refused, at the ceiling.
 	p = defaultParams()
 	p.escrowMinBlocks, p.escrowMaxBlocks = ladderWindow(p)-1, ladderWindow(p)-1
-	mustPanicWith("cannot fit the failed-round ladder", func() { p.mustSane() })
+	mustPanicWith(t, "cannot fit the failed-round ladder", func() { p.mustSane() })
 	// And the shipped defaults clear it with room.
 	p = defaultParams()
 	if ladderWindow(p) > p.escrowMaxBlocks {
@@ -238,7 +224,7 @@ func TestParamsMustSaneRefusesEachMalformedField(cur realm, t *testing.T) {
 	// A negative cap would read as "uncapped" through the `> 0` test at PostAnswer.
 	p = defaultParams()
 	p.answerBondCapCC = -1
-	mustPanicWith("answerBondCapCC must be non-negative", func() { p.mustSane() })
+	mustPanicWith(t, "answerBondCapCC must be non-negative", func() { p.mustSane() })
 	// Zero is the documented "uncapped" sentinel and must stay legal.
 	p = defaultParams()
 	p.answerBondCapCC = 0

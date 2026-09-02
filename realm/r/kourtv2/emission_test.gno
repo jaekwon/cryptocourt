@@ -198,20 +198,6 @@ func TestDEffIsCappedByTheWeeklyBudget(cur realm, t *testing.T) {
 // senior's start cursor back under the junior stretch, which is precisely the
 // overlap M3-CRITICAL-1 exists to prevent.
 func TestSeniorQueueRefusesJunkAndNeverOverwrites(cur realm, t *testing.T) {
-	mustPanicWith := func(want string, fn func()) {
-		t.Helper()
-		defer func() {
-			r := recover()
-			if r == nil {
-				t.Fatalf("expected a panic saying %q; nothing panicked", want)
-			}
-			got, ok := r.(string)
-			if !ok || !containsSub(got, want) {
-				t.Fatalf("panic %v, want one saying %q", r, want)
-			}
-		}()
-		fn()
-	}
 
 	alice := testutils.TestAddress("sq1-alice")
 	bob := testutils.TestAddress("sq1-bob")
@@ -236,9 +222,9 @@ func TestSeniorQueueRefusesJunkAndNeverOverwrites(cur realm, t *testing.T) {
 	}
 
 	// Junk is refused rather than parked in a queue that never forgets.
-	mustPanicWith("kourtv2: a senior entitlement must be positive",
+	mustPanicWith(t, "kourtv2: a senior entitlement must be positive",
 		func() { enqueueSenior(c, alice, 0, "comp") })
-	mustPanicWith("kourtv2: a senior entitlement must be positive",
+	mustPanicWith(t, "kourtv2: a senior entitlement must be positive",
 		func() { enqueueSenior(c, alice, -1, "comp") })
 
 	// reserveJunior CLAMPS rather than aborting (F4 — it is on a shared settlement

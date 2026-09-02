@@ -479,32 +479,18 @@ func TestMulDiv128RefusesItsDomainAndOverflow(cur realm, t *testing.T) {
 	// uassert.AbortsContains recovers panics from CROSSING calls; mulDiv128 is an
 	// internal call, so its panic escapes it. Recover locally instead, the way the
 	// grc20votes suite does for the same reason.
-	mustPanicWith := func(want string, fn func()) {
-		t.Helper()
-		defer func() {
-			r := recover()
-			if r == nil {
-				t.Fatalf("expected a panic saying %q; nothing panicked", want)
-			}
-			got, ok := r.(string)
-			if !ok || !containsSub(got, want) {
-				t.Fatalf("panic %v, want one saying %q", r, want)
-			}
-		}()
-		fn()
-	}
 
 	// DOMAIN: negatives and a non-positive denominator are caller bugs, not values to
 	// silently coerce — the u128 path has no sign.
 	for _, c := range []struct{ a, b, den int64 }{
 		{-1, 1, 1}, {1, -1, 1}, {-1, -1, 1}, {1, 1, 0}, {1, 1, -1},
 	} {
-		mustPanicWith("mulDiv128 domain", func() { mulDiv128(c.a, c.b, c.den) })
+		mustPanicWith(t, "mulDiv128 domain", func() { mulDiv128(c.a, c.b, c.den) })
 	}
 
 	// QUOTIENT OVERFLOW, the hi>=den guard: a product whose 128-bit high word reaches
 	// the denominator cannot yield a uint64 quotient at all.
-	mustPanicWith("mulDiv128 quotient overflow", func() {
+	mustPanicWith(t, "mulDiv128 quotient overflow", func() {
 		mulDiv128(9223372036854775807, 9223372036854775807, 1)
 	})
 	// And the THIRD guard, which I did not know was there until this fixture hit it:
@@ -512,13 +498,43 @@ func TestMulDiv128RefusesItsDomainAndOverflow(cur realm, t *testing.T) {
 	// silently through int64(q). math-audit NOTE-6 fails loud instead, with its own
 	// message. Both paths are unreachable at bounded inputs; both are pinned because
 	// the discipline is fail-loud, never silent-wrong.
-	mustPanicWith("mulDiv128 quotient exceeds int64", func() {
+	mustPanicWith(t, "mulDiv128 quotient exceeds int64", func() {
 		mulDiv128(9223372036854775807, 4, 2)
 	})
 	// The boundary just inside every guard still computes.
 	if got := mulDiv128(9223372036854775807, 2, 4); got <= 0 {
 		t.Fatalf("a quotient that fits must be returned: %d", got)
 	}
+}
+
+// mustPanicWith is shouldPanic with teeth: it reads the recovered value and fails
+// unless it CONTAINS want. Use it wherever the MESSAGE is what distinguishes one
+// refusal from another — mustSane has eight validation branches and shouldPanic
+// cannot tell them apart, so eight arms named for eight branches would be
+// satisfied by any panic at all.
+//
+// shouldPanic is still right where there is exactly ONE way for the call to fail;
+// then a message match adds nothing and couples the test to wording.
+//
+// PACKAGE SCOPE, because it was a closure in four separate tests —
+// TestParamsRefuseInsaneValues, TestSeniorEntitlementMustBePositive,
+// TestMulDiv128RefusesItsDomainAndOverflow and TestReasonLength — fifteen
+// identical lines each, reachable from nowhere else. p/twap's freshness_test.gno
+// carries the same helper for the same reason; this is that fix applied here.
+// Lives beside containsSub, which it calls.
+func mustPanicWith(t *testing.T, want string, fn func()) {
+	t.Helper()
+	defer func() {
+		r := recover()
+		if r == nil {
+			t.Fatalf("expected a panic saying %q; nothing panicked", want)
+		}
+		got, ok := r.(string)
+		if !ok || !containsSub(got, want) {
+			t.Fatalf("panic %v, want one saying %q", r, want)
+		}
+	}()
+	fn()
 }
 
 // containsSub is strings.Contains; the realm imports no strings package and a test

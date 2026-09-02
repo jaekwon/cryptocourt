@@ -36,21 +36,8 @@ func TestAReasonOfExactlyTheMaximumLengthIsAccepted(cur realm, t *testing.T) {
 	}
 	// A local recover, the shape court_test.gno uses: checkReason is not a crossing
 	// call, so this is a plain panic rather than an abort.
-	mustPanicWith := func(want string, fn func()) {
-		t.Helper()
-		defer func() {
-			r := recover()
-			if r == nil {
-				t.Fatalf("expected a panic saying %q; nothing panicked", want)
-			}
-			if got, ok := r.(string); !ok || !containsSub(got, want) {
-				t.Fatalf("panic %v, want one saying %q", r, want)
-			}
-		}()
-		fn()
-	}
 	checkReason(atCap) // must not panic: the message promises "at most 200"
-	mustPanicWith("at most 200 characters", func() { checkReason(over) })
+	mustPanicWith(t, "at most 200 characters", func() { checkReason(over) })
 
 	// The purge code is the same cap enforced inline in PurgeFolder, with its own
 	// message, so it needs its own arm. Fixture per folderpurge_test: the directory
