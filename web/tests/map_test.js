@@ -72,22 +72,31 @@ eval(buildCode());
 
 let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else console.log("ok:",n); };
 
+/* The element the map draws a phase dot with. A square, deliberately: a star
+   chart plots a point, and shape-rendering:crispEdges keeps its sides on whole
+   pixels at any zoom. Named once because this file matches it twice. */
+const MDOT_SHAPE = "rect";
 function parseSVG(svg){
-  const rects=[], texts=[], circles=[], spokes=[], chords=[];
+  const rects=[], texts=[], dots=[], spokes=[], chords=[];
   for(const m of svg.matchAll(/<rect class="(mnode|mfold[^"]*|mcourt)" x="([-\d.]+)" y="([-\d.]+)" width="([\d.]+)" height="([\d.]+)"(?: rx="[\d.]+")?(?: data-(?:id|fid)="(\d+)")?/g))
     rects.push({cls:m[1].split(" ")[0], x:+m[2], y:+m[3], w:+m[4], h:+m[5], ref:m[6]});
   for(const m of svg.matchAll(/<text class="mtext ?[^"]*" x="([-\d.]+)" y="([-\d.]+)" font-size="([\d.]+)" textLength="([\d.]+)"[^>]*data-owner="(\w+)">([^<]*)<\/text>/g)){
     const fs_=+m[3];
     texts.push({x:+m[1], y:+m[2]-0.8*fs_, w:+m[4], h:1.05*fs_, owner:m[5], s:m[6]});
   }
-  for(const m of svg.matchAll(/<circle class="mdot ([a-z]+)" cx="([-\d.]+)" cy="([-\d.]+)" r="([\d.]+)" data-owner="(\w+)"/g))
-    circles.push({cls:m[1], x:+m[2]-+m[4], y:+m[3]-+m[4], w:2*+m[4], h:2*+m[4], owner:m[5]});
+  /* THE PHASE DOT IS A RECT NOW — a crisp pixel square, the star-chart point.
+     Matched on its own shape and not on both: accepting <circle> as well would
+     let a silent revert to discs keep passing, and the whole reason this parser
+     names shapes is so the map cannot change one without the harness noticing.
+     The array is `dots`, not `circles`, because that is what it holds. */
+  for(const m of svg.matchAll(new RegExp(`<${MDOT_SHAPE} class="mdot ([a-z]+)" x="([-\\d.]+)" y="([-\\d.]+)" width="([\\d.]+)" height="([\\d.]+)" data-owner="(\\w+)"`, "g")))
+    dots.push({cls:m[1], x:+m[2], y:+m[3], w:+m[4], h:+m[5], owner:m[6]});
   for(const m of svg.matchAll(/<polyline class="medge spoke ([a-z]+)" points="([^"]+)" data-s="(\d+)"/g))
     spokes.push({kind:m[1], pts:m[2].split(" ").map(p=>p.split(",").map(Number))});
   for(const m of svg.matchAll(/<polyline class="medge ((?!spoke)[^"]+)" points="([^"]+)" data-e="(\d+)" data-from="(\d+)" data-to="(\d+)"/g))
     chords.push({cls:m[1], pts:m[2].split(" ").map(p=>p.split(",").map(Number)), from:m[4], to:m[5]});
   const vb = svg.match(/viewBox="([-\d. ]+)"/)[1].split(" ").map(Number);
-  return {rects, texts, circles, spokes, chords, vb};
+  return {rects, texts, dots, spokes, chords, vb};
 }
 const disjoint=(a,b,g=0)=>a.x+a.w+g<=b.x||b.x+b.w+g<=a.x||a.y+a.h+g<=b.y||b.y+b.h+g<=a.y;
 const inside=(a,b)=>a.x>=b.x-0.51&&a.y>=b.y-0.51&&a.x+a.w<=b.x+b.w+0.51&&a.y+a.h<=b.y+b.h+0.51;
@@ -130,7 +139,7 @@ function verify(svg, label){
   for(const s of P.spokes) for(const pt of [s.pts[0], s.pts[s.pts.length-1]])
     for(const b of boxes) if(pt[0]>=b.x-1&&pt[0]<=b.x+b.w+1&&pt[1]>=b.y-1&&pt[1]<=b.y+b.h+1) ends.add(b);
   for(const b of [...claims,...folders]) if(!ends.has(b)) fails.push(`E ${b.cls}${b.ref||""} unreached`);
-  for(const d of P.circles){
+  for(const d of P.dots){
     const o=claims.find(r=>r.ref===d.owner.slice(1));
     if(!o||!inside(d,o)) fails.push(`F dot ${d.owner}`);
     for(const t of P.texts) if(t.owner===d.owner && !disjoint(d,t)) fails.push(`F dot/text ${d.owner}`);
@@ -145,7 +154,7 @@ function verify(svg, label){
       for(const b of boxes) if(!touches(b)&&segHitsRect(s.pts[k],s.pts[k+1],b)) fails.push(`G spoke x ${b.cls}${b.ref||""}`);
   }
   const [bx,by,bw,bh]=P.vb;
-  for(const r of [...P.rects,...P.texts,...P.circles]) if(!inside(r,{x:bx,y:by,w:bw,h:bh})) fails.push("I overflow");
+  for(const r of [...P.rects,...P.texts,...P.dots]) if(!inside(r,{x:bx,y:by,w:bw,h:bh})) fails.push("I overflow");
   console.log(`  [${label}] claims=${claims.length} folders=${folders.length} chords=${P.chords.length} spokes=${P.spokes.length} minGap=${isFinite(minGap)?minGap.toFixed(0):"-"} vb=${bw}x${bh} -> ${fails.length?"FAIL":"PASS"}`);
   fails.slice(0,6).forEach(f=>console.log("    !!",f));
   return fails.length===0;
@@ -833,7 +842,7 @@ const TILES = svg => [...svg.matchAll(
   // Asked of the phase dot rather than of the verdict text: the dot rides the
   // verdict row, and parseSVG's text regex only catches the left-adjusted
   // labels — a right-adjusted one would silently make this assertion vacuous.
-  const vdot = P.circles.find(c=>c.owner==="c3");
+  const vdot = P.dots.find(c=>c.owner==="c3");
   ok("the verdict row sits below the strip", !!vdot && vdot.y >= t[0].y + t[0].h - 0.51);
   ok("the strip sits below the last line of the title",
      t[0].y >= Math.max(...own.map(x=>x.y + x.h)) - 0.51);
@@ -902,7 +911,12 @@ const TILES = svg => [...svg.matchAll(
   let agree=true;
   for(const id of c0.claims){
     const pc=phaseClass(claimsMap[id].statusText);
-    const m=svgs.titles.match(new RegExp(`<circle class="mdot ([a-z]+)"[^>]*data-owner="c${id}"`));
+    // MDOT_SHAPE, not a second literal. The dot's element changed once — circle
+    // to a crisp pixel rect — and this file names it in two independent places:
+    // parseSVG, and here. Fixing only the parser left this one matching nothing
+    // and reporting every claim's dot as null, which reads like a colour bug
+    // rather than a shape rename. One constant now, used by both.
+    const m=svgs.titles.match(new RegExp(`<${MDOT_SHAPE} class="mdot ([a-z]+)"[^>]*data-owner="c${id}"`));
     const dot=m&&m[1];
     // settled splits by verdict: the dot must not show the YES green on a claim
     // that decided NO. Spelled out here rather than calling mapDotClass, so this
@@ -970,8 +984,12 @@ ok("controls present", ["mt-titles","mt-ids","mz-in","mz-out","mz-fit","mz-slide
      say so: the demo docket has no settled-NO claim, so the agreement check further
      down passes whatever the settled branch returns. --good and --yes are the same
      green, so before this a court that ruled NO got the YES colour. */
+  // The THIRD place this file matched the dot's element. Two were updated when
+  // the shape changed and this one was not, which is why MDOT_SHAPE exists —
+  // each of these regexes is independent by design, but the element they look
+  // for is one fact and should be written once.
   const dotOf = (svg,id) =>
-    (new RegExp(`<circle class="mdot ([a-z]+)"[^>]*data-owner="c${id}"`).exec(svg)||[])[1];
+    (new RegExp(`<${MDOT_SHAPE} class="mdot ([a-z]+)"[^>]*data-owner="c${id}"`).exec(svg)||[])[1];
   const svgT = svgOf("titles");
   ok("a settled-NO node is not drawn in the YES colour", dotOf(svgT,1) === "gn");
   ok("a settled-YES node keeps it", dotOf(svgT,2) === "g");

@@ -1953,6 +1953,9 @@ const saveCfg = () => { Object.assign(CFG, cleanCfg(CFG)); store.set("cc.cfg", J
   // call themselves "dev" are exactly how that would go unnoticed.
   if(typeof chainCacheClear === "function") chainCacheClear(); };
 
+/* What Adena is asked to CALL this chain when it registers it. Cosmetic in the
+   wallet's own list, and only ever used there. */
+const CHAIN_LABEL = "Kourt";
 const BLOCK_SECS = 5;      // gno.land block time — how block heights become wall-clock
 const WEEK = 120960;       // one emission period, in blocks (trailing-ratio window)
 /* THE PARTICIPANT-PRIORITY WINDOW, in blocks. Opening a settled claim's rewards
@@ -4205,8 +4208,30 @@ async function adenaSign(func, args, el){
       return;
     }
     if(net.data && net.data.chainId && net.data.chainId!==want){
-      const sw = await a.SwitchNetwork(want);
-      if(sw.code!==0){ note("Adena is on "+net.data.chainId+"; switch it to "+want+" and try again."); return; }
+      let sw = await a.SwitchNetwork(want);
+      /* "unknown chain kourt-1" — AND IT IS RIGHT, IT HAS NEVER HEARD OF IT.
+         SwitchNetwork only picks among networks Adena already holds, and a
+         private chain is in none of them, so the switch fails for a wallet that
+         is working perfectly. Telling the reader to "switch it and try again"
+         asked for something their wallet had no way to do.
+
+         AddNetwork is the missing step: register the chain, then switch. Code
+         4001 is the user declining the dialog, and the chain may well have been
+         added on an earlier attempt, so a retry is still worth making. Guarded
+         on typeof because an older Adena does not have it, and there the honest
+         answer is the message below. */
+      if(sw.code!==0 && typeof a.AddNetwork === "function"){
+        const add = await a.AddNetwork({
+          chainId: want,
+          chainName: (CHAIN_LABEL || want),
+          rpcUrl: (CFG.rpc || "").replace(/\/+$/, ""),
+        }).catch(()=>null);
+        if(add && (add.code===0 || add.code===4001)) sw = await a.SwitchNetwork(want);
+      }
+      if(sw.code!==0){
+        note("Adena is on "+net.data.chainId+" and would not move to "+want
+           +". Add it by hand in Adena — chain id "+want+", RPC "+(CFG.rpc||"?")
+           +" — then try again."); return; }
     }
     /* A MATCHING CHAIN ID IS NOT A MATCHING CHAIN. Two nodes can both call
        themselves "dev" — a local gnodev and whatever Adena has saved under that
