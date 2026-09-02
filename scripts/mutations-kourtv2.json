@@ -6174,8 +6174,8 @@
   "pkg": "kourtv2",
   "file": "moderation.gno",
   "label": "checkReason: a moderation reason may be any length",
-  "find": "\tif len(reason) > maxReasonLen {",
-  "replace": "\tif len(reason) > maxReasonLen*1000 {"
+  "find": "\tif runeLen(reason) > maxReasonLen {",
+  "replace": "\tif runeLen(reason) > maxReasonLen*1000 {"
  },
  {
   "pkg": "kourtv2",
@@ -7020,8 +7020,8 @@
   "pkg": "kourtv2",
   "file": "moderation.gno",
   "label": "maxReasonLen: a reason of exactly the maximum length is refused",
-  "find": "len(reason) > maxReasonLen",
-  "replace": "len(reason) >= maxReasonLen",
+  "find": "runeLen(reason) > maxReasonLen",
+  "replace": "runeLen(reason) >= maxReasonLen",
   "why": "SURVIVED a sweep of every cap comparison in the realm, and it contradicts its own message while doing it: checkReason panics 'a moderation reason is at most 200 characters', so refusing a 200-character reason makes the guard disagree with the sentence it prints. Closed by TestAReasonOfExactlyTheMaximumLengthIsAccepted, which calls checkReason directly - it is a pure function of one string, and a court fixture would only add setup between the bound and the assertion."
  },
  {
