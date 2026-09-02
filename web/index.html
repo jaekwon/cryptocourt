@@ -932,6 +932,18 @@ html.embed .main{grid-column:1; grid-row:1; max-width:none; padding:0;
 .bigchart .evtL{font:10px var(--sans); fill:var(--ink-2)}
 .bigchart .hit{fill:transparent}
 .bigchart .hit:hover + .evtDot, .bigchart .hit:focus + .evtDot{r:5}
+/* THE MARK THE READOUT IS ABOUT UNDERLINES ITSELF. With several marks close
+   together nothing tied the date in the box to the one it came from.
+   A hairline, not a glow: it only has to answer "which one", and anything
+   heavier competes with the readout box that is already saying the rest.
+   THICKNESS IS LEFT TO THE BROWSER. An explicit .5px was tried and Chromium
+   reports it back as `auto` on SVG text — the property is not honoured there —
+   so asking for it only wrote down an intention the page does not keep. At 10px
+   the default rule is a hairline anyway.
+   .evon is set by chartHoverShow, not by :hover — the readout picks the nearest
+   event by x and fires well before the pointer reaches that small circle. */
+.bigchart g.ev.evon .evtL, .bigchart g.evNow.evon .evtL{
+  text-decoration:underline; text-underline-offset:2px}
 .bigchart .note{font:10.5px var(--sans); fill:var(--muted)}
 /* The "now" dot is where the trace terminates — the one point a reader looks
    for, so it is the one that emits. */
@@ -3948,6 +3960,18 @@ function chartHoverShow(svg, hit){
   // A marker's dot rides the axis where the marker's own dot is, so the readout
   // points at the mark rather than hovering above it on the series' line.
   xh.classList.toggle("onev", hit.label!=null);
+  /* THE MARK THE READOUT IS ABOUT SAYS SO. CSS :hover on the hit circle cannot
+     do this: the readout is driven by a document mousemove that picks the
+     NEAREST event by x, so it fires long before the pointer is over that small
+     circle — the label would stay plain while the box beside it named it.
+     Driven from here instead, off the same hit, so the two cannot disagree.
+     Matched on the x each group was drawn at, which is the only identity a
+     marker has. */
+  svg.querySelectorAll("g.ev.evon,g.evNow.evon").forEach(n=>n.classList.remove("evon"));
+  if(hit.label!=null){
+    const g = svg.querySelector(`g[data-evx="${hit.x}"]`);
+    if(g) g.classList.add("evon");
+  }
   const t = xh.querySelector(".xht");
   t.textContent = label;
   // Measured, then placed: the box has to hold whatever the label came out as,
@@ -10800,7 +10824,7 @@ function signalChart(slug,id,d,nowH,ser,tl){
        own height for the date, so the readout names when it happens rather than
        where it had to be drawn. */
     hovev.push([x, zdt? Math.round(zdt(e[0])) : 0, e[1]]);
-    g+=`<g class="${isNow?"evNow":"ev"}"><line class="${isNow?"evtnow":"evt"}" x1="${x}" y1="${isNow?Y100:(above?ly+3:Y100)}" x2="${x}" y2="${isNow?Y0:(above?Y0:ly-9)}"></line>`
+    g+=`<g class="${isNow?"evNow":"ev"}" data-evx="${x}"><line class="${isNow?"evtnow":"evt"}" x1="${x}" y1="${isNow?Y100:(above?ly+3:Y100)}" x2="${x}" y2="${isNow?Y0:(above?Y0:ly-9)}"></line>`
       + `<circle class="hit" cx="${x}" cy="${Y0}" r="10"><title>${esc(e[2])}</title></circle>`
       + (isNow? `<circle class="nowHalo" cx="${x}" cy="${Y0}" r="6"></circle><circle class="nowDot" cx="${x}" cy="${Y0}" r="3.2"></circle>`
               : `<circle class="evtDot" cx="${x}" cy="${Y0}" r="3"></circle>`)
