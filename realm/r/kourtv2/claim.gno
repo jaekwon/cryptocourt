@@ -443,8 +443,21 @@ func openClaim(c *Court, who address, title, body string, seeded bool) uint64 {
 	// On the meta court, store the parsed `mod:` instruction (meta.gno).
 	onClaimOpened(c, cs)
 	// Claim-lane event: clients enumerate claims off events (no on-chain
-	// address→claims index exists; MODERATION.md §2/I3). No user text beyond the
-	// title, which is the claim's whole public content.
+	// address→claims index exists; MODERATION.md §2/I3).
+	//
+	// NO USER TEXT AT ALL, and the title is excluded DELIBERATELY rather than
+	// forgotten. Four fields go out — court, claim, author, seeded — and every
+	// one is an identifier or a flag. A client that wants the title reads it
+	// from state, where purge can still reach it.
+	//
+	// This comment used to say "no user text beyond the title, which is the
+	// claim's whole public content", which described an emit that has never
+	// existed and read as prior sanction for adding one. Events are unpurgeable
+	// history, so an editor who added the title on the strength of that
+	// sentence would put user text somewhere purge cannot retract — defeating
+	// the thing purge is for. moderation.gno states the rule as I6: events
+	// carry act metadata and a category/act code only, NEVER
+	// reason/annotation/title text. This lane is not an exception to it.
 	chain.Emit("ClaimOpened",
 		"court", c.id,
 		"claim", strconv.FormatUint(id, 10),
