@@ -22,6 +22,23 @@ eval(slice('function unesc(', '\n'));
 eval(slice('function safeInline(', "\n/* THE CLAIM'S OWN"));
 eval(slice('function shortAddr(', '\nfunction wall('));
 eval(slice('function fmtN(', '\n'));
+/* wall() and a height, because a comment's meta line is a RELATIVE time now —
+   "3 days ago" rather than "block 130460". wall is the same helper the claim
+   page uses for deadlines; the shortAddr slice above stops exactly at it, so it
+   has to be pulled in on its own. chainHeight is stubbed rather than sliced:
+   boardView awaits it for the "now" to subtract from, and a harness with no
+   network needs an answer, not a fetch. */
+// wall() prices a height difference in BLOCK_SECS, so the constant comes too.
+var BLOCK_SECS = 5;      // gno.land block time — how block heights become wall-clock
+eval(slice('function wall(', '\n}') + '\n}');
+/* THE STUB IS THE DEMO'S OWN CLOCK, sliced rather than typed. First written as a
+   flat 130_500 — a plausible-looking live height — which put it 4.7 MILLION
+   blocks BELOW the sample's newest comment at 4_799_999, so wall() correctly
+   reported the future and the row read "about 270 days" instead of "1 min ago".
+   The bug was entirely in the stub; the page was right. A harness that invents
+   a now for data with a now of its own tests the invention. */
+eval(V(slice('const NOW = ', '\n')));
+var chainHeight = async () => NOW;
 eval(slice('function notFound(', '\n'));
 var store = {get:()=>null, set:()=>{}};
 var location = {hash:"#/c/orem/1/board"};
@@ -175,6 +192,28 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
     ok("the count is READ, not counted from the rendered rows",
        /await one\(`BoardHiddenCount\(/.test(src));
   }
+/* WHEN A COMMENT WAS WRITTEN, in the unit a reader has. The meta line said
+   "block 130460" — the chain's own answer, and no use to anybody: a height is a
+   position, not a time, and nobody carries the current one to subtract from.
+   THE HEIGHT IS STILL THERE, in the title. It is what the chain stores and what
+   a gnoweb link resolves against, so a reader checking a comment against the
+   record has the number one hover away.
+   AND THE FALLBACK IS ASSERTED, because it is the case a stub hides: with no
+   height to compare against there is no elapsed time to state, and the row must
+   say the block rather than invent a duration. */
+{
+  const meta = String(main.innerHTML).match(/<div class="boardmeta">[\s\S]*?<\/div>/);
+  ok("a comment says how long ago it was written", !!meta && /\bago\b/.test(meta[0]));
+  ok("...and no longer prints a bare block height at the reader",
+     !!meta && !/·\s*block\s*\d/.test(meta[0]));
+  ok("...while the exact block stays recoverable in the title",
+     !!meta && /title="block \d+"/.test(meta[0]));
+  // No height: the row falls back rather than inventing an elapsed time.
+  const noH = boardRowHtml("orem", 1, {id: 9, author: "g1abc", at: 130460, text: "x"}, "", "", null);
+  ok("with no height known, the row states the block instead",
+     /block 130460/.test(noH) && !/\bago\b/.test(noH));
+}
+
 
   console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");
   process.exit(fail?1:0);

@@ -9546,14 +9546,31 @@ const gnowebRow = (slug, id, row) =>
 
 /* One row. `meta` is what the ORDERING knows about it — a reply count on Newest,
    a score on Top — rendered as the thing it is rather than as a bare number. */
-function boardRowHtml(slug, id, r, meta, role){
+/* WHEN A COMMENT WAS WRITTEN, in the unit a reader has. It said "block 130460",
+   which is the chain's own answer and no use to anybody: a height is a position,
+   not a time, and nobody carries the current one in their head to subtract from.
+   wall() already turns a height difference into "3 days ago" and the claim page
+   already uses it for deadlines, so this is the same figure in the same words.
+   THE HEIGHT IS NOT LOST, it moves into the title. It is what the chain actually
+   stores and what a gnoweb link resolves against, so a reader checking a comment
+   against the record still has the number — one hover away instead of in the
+   line. And nowH is optional: with no height to compare against there is no
+   elapsed time to state, so the row falls back to the block rather than
+   inventing a duration. */
+function boardWhen(at, nowH){
+  const h = Number(at);
+  if(nowH == null || !isFinite(h) || !isFinite(Number(nowH)))
+    return `block ${esc(String(at))}`;
+  return `<span title="block ${esc(String(at))}">${esc(wall(Number(nowH), h))}</span>`;
+}
+function boardRowHtml(slug, id, r, meta, role, nowH){
   const link = esc(gnowebRow(slug, id, r.id));
   const body = boardText(r.text);
   return `<article class="boardrow" id="c${esc(String(r.id))}">`
     + `<div class="boardmeta"><span class="mono">${shortAddr(r.author)}</span>`
     + (role ? ` <span class="pill">${esc(role)}</span>` : "")
     + (meta ? ` · ${esc(meta)}` : "")
-    + ` · block ${esc(String(r.at))}`
+    + ` · ${boardWhen(r.at, nowH)}`
     + ` · <a class="mono" href="${link}" rel="noopener">#${esc(String(r.id))}</a></div>`
     + body + `</article>`;
 }
@@ -9562,7 +9579,7 @@ function boardRowHtml(slug, id, r, meta, role){
    serves at most maxBoardRepliesShown replies for any parent, while the parent's
    own reply count is the true one — so a thread with fourteen answers shows eight
    and would otherwise read as complete. */
-function boardRepliesHtml(slug, id, parent, reps){
+function boardRepliesHtml(slug, id, parent, reps, nowH){
   if(!reps || !reps.length) return "";
   const total = parseInt(parent.replies, 10);
   const more = (isFinite(total) && total > reps.length)
@@ -9570,7 +9587,7 @@ function boardRepliesHtml(slug, id, parent, reps){
       + `<a href="${esc(gnowebRow(slug, id, parent.id))}" rel="noopener">the rest are on the row's own page</a>.</p>`
     : "";
   return `<div class="boardkids">`
-    + reps.map(r => boardRowHtml(slug, id, r, "", "")).join("") + more + `</div>`;
+    + reps.map(r => boardRowHtml(slug, id, r, "", "", nowH)).join("") + more + `</div>`;
 }
 
 /* The count and the state, in one line, from the two reads the chip already
@@ -9670,7 +9687,7 @@ function composerHtml(slug, id, state, parent){
     ? `<p class="composer-why"><button type="button" class="btn" data-walletconnect>Connect Adena</button></p>`
     : state.buy
       ? `<p class="composer-why">An entry pass costs ${cc(state.buy, slug)}, burned. `
-        + `<a href="#/c/${esc(slug)}">Get one from the court page</a>.</p>`
+        + `<a href="#/c/${esc(slug)}">Get some</a>.</p>`
       : "";
   if(!state.can) return `<section class="composer">${head}${extra}</section>`;
   return `<section class="composer">${head}
@@ -9773,7 +9790,7 @@ function removedLink(slug, id, k){
     + `${k} hidden comment${k === 1 ? "" : "s"}<span aria-hidden="true">↗</span></a>`;
 }
 
-function claimCommentsHtml(slug, id, n, open, rows, kids, roles, withheld){
+function claimCommentsHtml(slug, id, n, open, rows, kids, roles, withheld, nowH){
   const head = `<div class="sec-h">Comments <span class="count">`
     + esc(n > 0 ? boardStateLine(n, open) : (open ? "open" : "closed")) + `</span>`
     + removedLink(slug, id, withheld) + `</div>`;
@@ -9784,8 +9801,8 @@ function claimCommentsHtml(slug, id, n, open, rows, kids, roles, withheld){
       + `<div id="composer"></div></section>`;
   }
   const body = rows.map((r, i) =>
-    boardRowHtml(slug, id, r, boardMetaNewest(r), roles[r.id] || "")
-    + boardRepliesHtml(slug, id, r, kids[i])).join("");
+    boardRowHtml(slug, id, r, boardMetaNewest(r), roles[r.id] || "", nowH)
+    + boardRepliesHtml(slug, id, r, kids[i], nowH)).join("");
   const shown = rows.length + kids.reduce((a, k) => a + k.length, 0);
   const tail = shown < n
     ? `<p class="board-more"><a class="tlink" href="#/c/${esc(slug)}/${id}/board">`
@@ -9801,9 +9818,14 @@ async function fillClaimComments(slug, id){
   const slot = document.getElementById("claimcomments");
   if(!slot) return;
   try{
-    const [n, open] = await Promise.all([boardSize(slug, id), boardOpenOf(slug, id)]);
+    /* The height joins the reads that were already in flight rather than being
+       awaited before them: a comment's "3 days ago" needs a now to subtract
+       from, and asking for it serially would put a round trip in front of the
+       whole thread for one number. */
+    const [n, open, nowH] = await Promise.all([
+      boardSize(slug, id), boardOpenOf(slug, id), chainHeight().catch(()=>null)]);
     if(!(n > 0)){
-      slot.outerHTML = claimCommentsHtml(slug, id, 0, open, [], [], {});
+      slot.outerHTML = claimCommentsHtml(slug, id, 0, open, [], [], {}, 0, nowH);
       fillComposer(slug, id, 0);
       return;
     }
@@ -9816,7 +9838,7 @@ async function fillClaimComments(slug, id){
       parseInt(r.replies, 10) > 0 ? boardRepliesOf(slug, id, r.id).catch(()=>[])
                                   : Promise.resolve([])));
     slot.outerHTML = claimCommentsHtml(slug, id, n, open, rows, kids, roles,
-                                       await boardHiddenOf(slug, id).catch(()=>0));
+                                       await boardHiddenOf(slug, id).catch(()=>0), nowH);
     fillComposer(slug, id, 0);
   }catch(_){ /* an unreadable board leaves the rest of the claim page intact */ }
 }
@@ -9859,8 +9881,10 @@ async function boardView(slug, idS, ranked){
     return;
   }
 
-  const rows = boardVisible(ranked ? await boardTopOf(slug, id, 0, BOARD_PAGE)
-                                   : await boardNewestOf(slug, id, 0, BOARD_PAGE));
+  const [rowsRaw, nowH] = await Promise.all([
+    ranked ? boardTopOf(slug, id, 0, BOARD_PAGE) : boardNewestOf(slug, id, 0, BOARD_PAGE),
+    chainHeight().catch(()=>null)]);
+  const rows = boardVisible(rowsRaw);
   // The parties are badged IN PLACE rather than pinned above the list: this page
   // is the list, and a reserved copy at the top is the duplicate the realm's own
   // render had to grow a `seen` set to stop printing.
@@ -9873,8 +9897,8 @@ async function boardView(slug, idS, ranked){
     parseInt(r.replies, 10) > 0 ? boardRepliesOf(slug, id, r.id).then(boardVisible).catch(()=>[]) : Promise.resolve([])));
 
   const meta = ranked ? boardMetaTop : boardMetaNewest;
-  const body = rows.map((r, i) => boardRowHtml(slug, id, r, meta(r), role[r.id] || "")
-    + (ranked ? "" : boardRepliesHtml(slug, id, r, kids[i]))).join("");
+  const body = rows.map((r, i) => boardRowHtml(slug, id, r, meta(r), role[r.id] || "", nowH)
+    + (ranked ? "" : boardRepliesHtml(slug, id, r, kids[i], nowH))).join("");
 
   // COUNT WHAT IS ON THE PAGE, NOT THE TOP-LEVEL ROWS. `n` is BoardSize, which
   // counts EVERY row — replies and tombstones included — so comparing it against
