@@ -35,6 +35,21 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BROWSER = os.path.join(ROOT, "web", "tests", "browser")
 ENTRY = "run.js"
 
+# A SECOND RUNNER, AND IT IS NOT IN THIS DIRECTORY. compose_intake.js and
+# compose_upload.js take a base URL on argv and refuse without one: they drive a
+# real composer against a real archive, so somebody has to own an HTTP server
+# first. run.js cannot — it loads file:// pages — and internal/archive/
+# browser_test.go can, because it starts the archive it is testing. It registers
+# both by name in a []string literal.
+#
+# COUNTED AS REACHABLE, NOT EXEMPTED. The not-a-check escape hatch would have
+# silenced this guard in one line, and it would have been a lie: these are 31 and
+# 21 assertions of the paste-and-upload path that docs/CLAIM_MEDIA.md calls "the
+# single most important path". Writing "not-a-check" over a real check to quiet a
+# guard is exactly how the 157-assertion hole in this file's header opened.
+GO_ENTRY = os.path.join("internal", "archive", "browser_test.go")
+GO_LIST = re.compile(r"\[\]string\{([^}]*?\.js[^}]*?)\}", re.S)
+
 # A file may legitimately live here without being a check — render_snapshot.js
 # prints a snapshot rather than asserting, so putting it in a gate would prove
 # nothing. Declared IN THE FILE with a reason, the same shape check-web-selectors
@@ -44,8 +59,8 @@ ENTRY = "run.js"
 #     // check-browser-checks: not-a-check — prints a snapshot, asserts nothing
 NOTACHECK = re.compile(r"//\s*check-browser-checks:\s*not-a-check\s+—\s*\S")
 
-# CHECKS = ["a.js", "b.js"] — the one registration shape this tree uses, in the
-# runner and in every wrapper.
+# A declaration holding an array of .js names — the registration shape this tree
+# uses, in the runner and in every wrapper.
 #
 # ANCHORED TO A DECLARATION, NOT TO THE WORD. The first version matched \bCHECKS
 # anywhere, and chat_all.js opens by QUOTING a CHECKS list in prose while
@@ -53,7 +68,27 @@ NOTACHECK = re.compile(r"//\s*check-browser-checks:\s*not-a-check\s+—\s*\S")
 # registration itself and reported the wrong list. A guard that can be fooled by
 # a comment about guards is not one. `^\s*(const|let|var)` cannot match inside a
 # `//` line, and every real assignment in this tree is one.
-CHECKS = re.compile(r"^\s*(?:const|let|var)\s+CHECKS\s*=\s*\[(.*?)\]", re.S | re.M)
+#
+# NOT ANCHORED TO THE NAME `CHECKS` EITHER, and that is a repair. It was, and
+# then run.js grew ONLY= filtering:
+#
+#     const ALL    = ["embed_layout.js", ...]
+#     const CHECKS = only ? ALL.filter(...) : ALL
+#
+# The literal moved to a variable called ALL, `CHECKS = [` stopped matching, and
+# listed() started returning None for the runner — so this guard reported that
+# every check in the tree was unreachable from a runner that in fact runs them.
+# Measured: rc=1 naming map_type.js, route_crawl.js, rowscope_layout.js,
+# tagrow_layout.js and stripped_boot.js, all of them plainly in ALL. Nothing
+# caught it because no target ran this guard (fixed in the same commit) and its
+# own selftest arm was anchored to the same reflowed text.
+#
+# So the question is asked the way it is meant: which .js files does this file
+# NAME? A rename cannot break that, and the indirection does not have to be
+# resolved — CHECKS can only ever be built out of names that appear literally
+# somewhere in the file.
+CHECKS = re.compile(
+    r"^\s*(?:const|let|var)\s+\w+\s*=\s*\[([^\]]*?\.js[^\]]*?)\]", re.S | re.M)
 NAME = re.compile(r"['\"]([^'\"]+\.js)['\"]")
 
 
@@ -81,7 +116,19 @@ if ENTRY not in present:
 # outgrown — the failure a fixed depth would have is precisely the failure this
 # guard exists to catch, one level further down.
 reach, empty, missing = set(), [], []
-stack = [ENTRY]
+# The Go runner is a TRIPWIRE as well as an entry point: if it stops existing or
+# stops naming any .js, the two checks it owns become unreachable and this guard
+# must say so rather than quietly walk one runner and call the tree clean.
+go_path = os.path.join(ROOT, GO_ENTRY)
+if not os.path.exists(go_path):
+    sys.exit("check-browser-checks-registered: %s is gone; the checks it runs "
+             "have no runner left" % GO_ENTRY)
+go_names = [n for m in GO_LIST.findall(io.open(go_path, encoding="utf-8").read())
+            for n in NAME.findall(m)]
+if not go_names:
+    sys.exit("check-browser-checks-registered: %s names no .js check; either it "
+             "stopped running them or its []string literal moved" % GO_ENTRY)
+stack = [ENTRY] + go_names
 while stack:
     f = stack.pop()
     if f in reach:

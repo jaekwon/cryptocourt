@@ -80,6 +80,14 @@ paths:
 # listing; runs no arms and touches no file.
 guards:
 	python3 scripts/check-guards-armed.py
+	@# The browser-side twin, and it says so in its own header: a guard that is
+	@# not registered is not a guard, and a browser check no runner runs is the
+	@# same hole. It was in NO target — measured: `grep -rn
+	@# check-browser-checks-registered Makefile scripts/` found nothing — while
+	@# returning rc=1, so it policed nothing and nobody heard it fail. It is
+	@# static (no puppeteer, no page load), which is the whole reason it exists
+	@# separately from web-visual, and `guards` is already in `check`.
+	python3 scripts/check-browser-checks-registered.py
 
 # The other half of that check. `guards` asks whether each guard is REGISTERED in
 # selftest-checks.py; this asks whether each control arm's PLANT still applies. A

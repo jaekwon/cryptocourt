@@ -79,6 +79,21 @@ def control(label, path, find, replace, want, argv=None, stdin=None, cwd=None):
     for a in (argv or ["python3", "scripts/check-citations.py"]):
         if a.endswith(".py"):
             exercised.add(os.path.basename(a))
+    # A PLANT WHOSE FILE IS GONE IS A ROTTED ARM, NOT A CRASH. shutil.copy on a
+    # missing path raises, and an unhandled raise here does not fail one arm — it
+    # ends the whole run, so every arm BELOW it never executes and nothing says
+    # so. MEASURED: five arms still point at realm/r/kourtv2/quality.gno, deleted
+    # with the quality lane, and this file died at the first of them after
+    # exercising check-citations alone. One guard of thirty-one. The rotted
+    # browser-check arm and the broken guard it arms both sat below that line.
+    #
+    # Reported the same way an anchor that no longer matches is reported, and for
+    # the same reason: the arm proves nothing either way, and the run has to
+    # continue to say what else is broken.
+    if not os.path.exists(path):
+        print(f"  {label:<44} BROKEN CONTROL (no such file: {path})")
+        failures.append(label)
+        return
     backup = path + ".selftest-backup"
     shutil.copy(path, backup)
     try:
@@ -1304,8 +1319,14 @@ print("\ncheck-browser-checks-registered")
 # chat panel. chat_all.js was written to wrap them and says in its own header
 # that it was waiting for "one entry added to CHECKS later" — which never came.
 # 157 assertions went unrun, and two of them had gone false in the meantime.
+# RE-ANCHORED. The plant used to cut ',\n                "chat_all.js"', and the
+# list was later reflowed onto fewer lines when run.js gained ONLY= filtering —
+# so the plant matched nothing, `make controls` reported this arm SILENT, and the
+# guard it arms was meanwhile broken by the same edit for the same reason (the
+# literal moved from CHECKS to ALL). Two failures, one reflow, and the arm that
+# should have caught the first was disabled by it.
 control("a browser harness no runner runs", RUNJS,
-        ',\n                "chat_all.js"', "",
+        ', "chat_all.js"', "",
         "not reachable from run.js", argv=["python3", BROWREG])
 # A registration that points at nothing. `make web-visual` would say FAIL missing
 # at RUN time, but web-visual needs puppeteer and is not in `check` — which is
