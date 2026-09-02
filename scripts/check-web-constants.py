@@ -48,6 +48,18 @@ MIRRORS = {
     # would grey a button that works, or offer one that panics in the wallet.
     # It equals periodBlocks today; that is a coincidence, not a definition.
     "FINALIZE_GRACE": ("realm/r/kourtv2/dispute.gno", "finalizeGraceBlocks"),
+    # The bonding curve's denominator, and the strongest reason this file exists.
+    # curveCost() and unitsForSpend() divide by it to quote what a buyer pays
+    # BEFORE they sign, so a drift here misprices money rather than mislabelling
+    # a window. It was unregistered until now, and invisible to boot: MIRRORS
+    # demanded a bare integer ending in `;` and this is a BigInt sharing its
+    # statement with CURVE_CAP, so no entry could have worked (see main()).
+    "CURVE_D": ("realm/r/kourtv2/court.gno", "curveDenom"),
+    # The window an undisputed answer waits before it settles. The page works
+    # BACKWARDS from the settle deadline to place "answered" on the timeline, so
+    # if this moved, the page would put that event at the old height and go on
+    # calling it 72 hours. Same shape as FINALIZE_GRACE, which already says so.
+    "SETTLE_DELAY": ("realm/r/kourtv2/court.gno", "settleDelay"),
 }
 
 # A PHRASE THE OVERLAY MATCHES ON, and the realm string it has to be found in.
@@ -87,6 +99,30 @@ UNITS = {
     "MAX_COMMENT_CHARS": ("realm/r/kourtv2/board.gno",
                           "runeLen(text) > maxBoardTextLen",
                           "const commentChars = s => [...String(s == null ? \"\" : s)].length;"),
+    # CURVE_CAP CANNOT BE A MIRRORS ENTRY, and that is the point of putting it
+    # here. realm_value() reads `name = <int>`; curveCap is DERIVED:
+    #
+    #     curveCap = (int64(9223372036854775807) / grc20votes.Bps) / 2
+    #
+    # so there is no integer in court.gno to compare the overlay's literal
+    # against, and an entry in MIRRORS would report "no longer declares
+    # curveCap" for a constant that is declared perfectly.
+    #
+    # It agrees TODAY: with Bps = 10000 that expression is exactly
+    # 461168601842738, which is what the overlay carries. The hazard is that the
+    # value depends on Bps, which lives in a different package — change Bps to
+    # 1_000_000 and the realm's cap becomes 4611686018427 while the overlay's
+    # literal does not move, a factor of a hundred. Nobody editing p/grc20votes
+    # would think to look in web/index.html.
+    #
+    # CURVE_CAP clamps unitsForSpend, so an overstated cap lets the page quote
+    # units the realm will refuse to mint. Pinning the DERIVATION is the only
+    # thing that notices: if either side is rewritten the guard fires and a
+    # human recomputes. This is the same trade MAX_COMMENT_CHARS makes above,
+    # where the number stayed 2000 while the unit went from bytes to characters.
+    "CURVE_CAP": ("realm/r/kourtv2/court.gno",
+                  "curveCap   = (int64(9223372036854775807) / grc20votes.Bps) / 2",
+                  "const CURVE_D = 1000000000n, CURVE_CAP = 461168601842738n;"),
 }
 
 
@@ -104,7 +140,13 @@ def main():
     web = open(WEB, encoding="utf-8").read()
     bad = 0
     for sym, (relpath, name) in sorted(MIRRORS.items()):
-        m = re.search(r"^\s*const\s+%s\s*=\s*([0-9][0-9_]*)\s*;" % re.escape(sym),
+        # `n?` and `[;,]`: the overlay's curve constants are BigInt literals
+        # declared two to a statement — `const CURVE_D = 1000000000n, CURVE_CAP
+        # = ...;` — so a pattern demanding a bare integer terminated by `;`
+        # could not see them at all, and MIRRORS silently could not hold any
+        # BigInt constant. Still anchored to `^\s*const` so a comment quoting a
+        # declaration is not mistaken for one.
+        m = re.search(r"^\s*const\s+%s\s*=\s*([0-9][0-9_]*)n?\s*[;,]" % re.escape(sym),
                       web, re.M)
         if not m:
             print(f"check-web-constants: the overlay no longer declares "

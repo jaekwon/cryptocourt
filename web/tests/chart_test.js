@@ -33,6 +33,7 @@ code+=slice('function ratios(','function demoSeries(');
 // Round 28 split the literal: DEMO_CHAIN (generated) + DEMO_OVERLAY
 // (hand-written: desc, nested folders, relations, voteEndsAt), joined by
 // mergeDemo. Build the merged object the way the page does.
+code += slice('const SETTLE_DELAY', '\n').replace('const ','var ') + '\n';   // sliced, never retyped: a fourth copy of the number is the bug
 code += slice('const DEMO_OVERLAY = {', '/* ===== BEGIN GENERATED').replace('const DEMO_OVERLAY = {','var DEMO_OVERLAY = {') + '\n';
 code += slice('const DEMO_CHAIN = {', '/* ===== END GENERATED').replace('const DEMO_CHAIN = {','var DEMO_CHAIN = {') + '\n';
 code += slice('function mergeDemo(', 'const DEMO = mergeDemo') + '\n';
@@ -110,7 +111,7 @@ for(const k of Object.keys(claims)){
   ok("P8 "+k+" parses", !!m);
   const last=m.pts[m.pts.length-1];
   ok("P8 "+k+" last=pools", last[2]===d.yesStake && last[3]===d.noStake);
-  if(d.phase!=="open" && d.settleAt) ok("P8 "+k+" pre-freeze", last[0]<=d.settleAt-51840);
+  if(d.phase!=="open" && d.settleAt) ok("P8 "+k+" pre-freeze", last[0]<=d.settleAt-SETTLE_DELAY);
 }
 
 /* P8a: DATES COME FROM THE CHAIN'S ANCHORS, NOT FROM A NOMINAL BLOCK RATE.
@@ -205,7 +206,7 @@ for(const k of Object.keys(claims)){
 }
 
 /* P8c: THE MARKER SITS WHERE THE CHAIN SAYS, NOT WHERE THE PAGE DERIVED. The
-   answered height was always settleAt−51840 — the 72-hour window counted back
+   answered height was always settleAt−SETTLE_DELAY — the window counted back
    in blocks — while the ladder next to it uses the realm's own answered stamp.
    On a chain where those disagree the same event is on one page twice, at two
    moments; the reader saw an "answered yes" marker near the left edge of a
@@ -215,10 +216,10 @@ for(const k of Object.keys(claims)){
   const TL={ opened:{t:1600000000, h:1000},
              answered:{t:1600000000+1500*DAY, h:3000},
              now:{t:1600000000+1800*DAY, h:5000} };
-  // The chain answered at 3,000 — 300 days back on its own clock. settleAt−51840
+  // The chain answered at 3,000 — 300 days back on its own clock. settleAt−SETTLE_DELAY
   // lands at 4,990, ten blocks before now: the same event, a year apart.
   const c={title:"T", yesStake:10, noStake:3, statusText:"answered", phase:"answered",
-           answer:0, settleAt:5000+51840-10, yesConv:10, noConv:3};
+           answer:0, settleAt:5000+SETTLE_DELAY-10, yesConv:10, noConv:3};
   const SER={pts:[[4900,60],[4950,62]], firstH:4900};
   const zone = h => (h.match(/<div class="chartzone">([\s\S]*?)<\/div>/)||["",""])[1]
     .split(/<\/?span>/).map(t=>t.trim()).filter(Boolean);
@@ -287,7 +288,7 @@ for(const k of Object.keys(claims)){
   const SER={pts:[[4900,60],[4950,62],[4990,64]], firstH:4900};
   LIVE=true;
   const h=signalChart("orem",9,{title:"T",yesStake:10,noStake:3,statusText:"answered",
-                                phase:"answered",answer:0,settleAt:5000+51840},5000,SER,TL);
+                                phase:"answered",answer:0,settleAt:5000+SETTLE_DELAY},5000,SER,TL);
   const bare=signalChart("orem",9,{title:"T",yesStake:10,noStake:3,statusText:"open",
                                    phase:"open"},5000,null,TL);
   LIVE=false;
@@ -349,7 +350,7 @@ for(const k of Object.keys(claims)){
   const TL={ opened:{t:1600000000,h:1000}, answered:{t:1600000000+1500*DAY,h:3000},
              now:{t:1600000000+1800*DAY,h:5000} };
   const c={title:"T",yesStake:10,noStake:3,statusText:"answered",phase:"answered",
-           answer:0,settleAt:5000+51840};
+           answer:0,settleAt:5000+SETTLE_DELAY};
   LIVE=true;
   const h=signalChart("orem",9,c,5000,{pts:[[4900,60],[4990,64]],firstH:4900},TL);
   LIVE=false;
@@ -386,7 +387,7 @@ for(const k of Object.keys(claims)){
      && /max-width:820px\)\{[\s\S]*?\.bigchart \.tickL\.covered\{display:inline\}/.test(src));
   // and the case itself renders: a claim whose end share sits on the top tick
   const near=signalChart("orem",9,{title:"T",yesStake:99,noStake:1,statusText:"answered",
-                                   phase:"answered",answer:0,settleAt:5000+51840},5000,null,TL);
+                                   phase:"answered",answer:0,settleAt:5000+SETTLE_DELAY},5000,null,TL);
   ok("P8f ...and a claim that covers one actually marks it",
      /class="tickL covered"/.test(near));
 }

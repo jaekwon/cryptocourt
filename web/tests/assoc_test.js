@@ -10,6 +10,7 @@ const NOWm = src.match(/const NOW\s*=\s*([0-9_]+)/); global.NOW = Number(NOWm[1]
 const BSm = src.match(/const BLOCK_SECS\s*=\s*([0-9_]+)/); global.BLOCK_SECS = Number(BSm[1].replace(/_/g,''));
 
 let code = '';
+code += slice('const SETTLE_DELAY', '\n').replace('const ','var ') + '\n';   // sliced, never retyped: a fourth copy of the number is the bug
 code += slice('function esc(', '\n');
 code += slice('function fmtN(', 'function ugnot(');
 code += slice('const sideName', '\n');

@@ -2126,6 +2126,18 @@ const WEEK = 120960;       // one emission period, in blocks (trailing-ratio win
    day one moves is the day a page that assumed otherwise starts greying the
    wrong button. check-web-constants pins it to the realm's. */
 const FINALIZE_GRACE = 120960;
+/* The 72 hours an undisputed answer waits before it settles — settleDelay.
+   NAMED BECAUSE THE LITERAL WAS SPELLED OUT THREE TIMES, twice as live
+   arithmetic (`d.settleAt - <window>`, deriving the height an answer landed at)
+   and once in a comment explaining the subtraction. The digits now appear once,
+   in the declaration below, deliberately: a guard grepping for the bare literal
+   must not be satisfied by prose about it. The realm owns the window; the page only
+   works backwards from the settle deadline to put "answered" on the timeline.
+   So if settleDelay moved, the page would keep placing that event at the old
+   height AND keep calling it 72 hours, with nothing to notice — the same shape
+   as FINALIZE_GRACE above, which carries the same warning. Now one symbol,
+   pinned to the realm's by check-web-constants. */
+const SETTLE_DELAY = 51840;
 // The comment cap, in CHARACTERS — maxBoardTextLen, counted with runeLen.
 //
 // IT WAS BYTES, and this counter measured bytes to match. The realm now counts
@@ -10439,7 +10451,7 @@ function signalChart(slug,id,d,nowH,ser,tl){
   const ds = demo? demoSeries(slug,id,r) : null;
   // domain in block heights
   /* THE HEIGHT THE CHAIN ANSWERED AT, when the chain says so. This was always
-     settleAt−51840 — the 72-hour window counted backwards in blocks — which is
+     settleAt−SETTLE_DELAY — the 72-hour window counted backwards in blocks — which is
      a derivation, and the ladder beside it uses the realm's own answered stamp.
      Where the two disagree the same event appears twice on one page at two
      different moments, which is what a reader noticed: an "answered yes" marker
@@ -10447,7 +10459,7 @@ function signalChart(slug,id,d,nowH,ser,tl){
      said the answer was posted. The derived height stays as the fallback for a
      realm too old to publish a timeline. */
   const ansH = (tl && tl.answered && isFinite(tl.answered.h))? tl.answered.h
-             : (d.settleAt? d.settleAt-51840 : null);
+             : (d.settleAt? d.settleAt-SETTLE_DELAY : null);
   const cands=[now, d.settleAt||null, d.escrowUntil||null, d.voteEndsAt||null, ansH].filter(v=>v!=null&&isFinite(v));
   if(now==null || !cands.length) return "";
   const real = ser && ser.pts && ser.pts.length? ser : null;
@@ -11121,7 +11133,7 @@ function resolutionLadder(d, nowH, tl, narrow, bare){
     return `<div class="ticket${narrow?" clocknarrow":""}${bare?" clockbare":""}" style="margin-bottom:12px">
       <div class="clockrows">${body}${fut2?`<div class="ev">${esc(fut2)}</div><div class="dt">—</div>`:""}</div></div>`;
   }
-  if(d.answered && d.settleAt) rows.push([d.settleAt-51840, "answered"+(d.answer!=null?" "+sideName(d.answer):""), "derived: settle deadline − 72h"]);   // kept: this row's height is NOT the chain's
+  if(d.answered && d.settleAt) rows.push([d.settleAt-SETTLE_DELAY, "answered"+(d.answer!=null?" "+sideName(d.answer):""), "derived: settle deadline − 72h"]);   // kept: this row's height is NOT the chain's
   // SettleDeadline persists after freeze, but once a dispute/vote decided the
   // claim the old deadline is history that never happened — show it only
   // while it is the operative clock.
