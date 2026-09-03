@@ -1204,7 +1204,7 @@ func TestEveryBoardReadAnswersOnAClaimWithNoBoard(cur realm, t *testing.T) {
 	if !BoardOpen("nb", id) {
 		t.Fatal("a live claim with no comments is open to them")
 	}
-	if BoardPurgeOrdered("nb", id) || ClaimBoardFrozenUntil("nb", id) != 0 {
+	if BoardPurgeOrdered("nb", id) || claimFrozenHeightOf("nb", id) != 0 {
 		t.Fatal("no order and no freeze on an untouched board")
 	}
 	if HasUpvoted("nb", id, 1, alice) {

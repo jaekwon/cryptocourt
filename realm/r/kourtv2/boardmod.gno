@@ -137,17 +137,25 @@ func boardFrozen(c *Court, who address) bool {
 	return boardFreezeActive(r)
 }
 
-// boardFrozenAt is the height an address freeze lifts, or 0. Same relationship
-// to boardFrozen that claimBoardFrozenAt has to claimBoardFrozen.
-func boardFrozenAt(c *Court, who address) int64 {
+// boardFrozenAt is WHEN an address freeze lifts — the date the gate reads, with
+// its reference height beside it — or (0, 0). Same relationship to boardFrozen
+// that claimBoardFrozenAt has to claimBoardFrozen.
+//
+// Both, not either: the date is what the realm gates on and what a person can
+// plan around, and the height is the reference (clock.gno's pairing). A freeze
+// set before the stamps has no date, so `at` is 0 and only the height is
+// knowable — the caller shows the block and says so.
+func boardFrozenAt(c *Court, who address) (at, atHeight int64) {
 	if !boardFrozen(c, who) {
-		return 0
+		return 0, 0
 	}
-	return lookupStanding(c, who).frozenUntil
+	r := lookupStanding(c, who)
+	return r.frozenUntilTime, r.frozenUntil
 }
 
-// BoardFrozenUntil is the exported read: the height a freeze lifts, or 0.
-func BoardFrozenUntil(courtSlug string, who address) int64 {
+// BoardFrozenUntil is the exported read: the date a freeze lifts and the height
+// beside it, or (0, 0).
+func BoardFrozenUntil(courtSlug string, who address) (at, atHeight int64) {
 	return boardFrozenAt(mustCourt(courtSlug), who)
 }
 
@@ -192,15 +200,16 @@ func claimBoardFrozen(c *Court, claimID uint64) bool {
 // question claimBoardFrozen answers as a bool, for callers that must PRINT the
 // deadline. One expression, so the page and the gate cannot disagree about
 // whether a freeze is live.
-func claimBoardFrozenAt(c *Court, claimID uint64) int64 {
+func claimBoardFrozenAt(c *Court, claimID uint64) (at, atHeight int64) {
 	if !claimBoardFrozen(c, claimID) {
-		return 0
+		return 0, 0
 	}
-	return lookupClaimMod(c.mod, claimID).boardFrozenUntil
+	clm := lookupClaimMod(c.mod, claimID)
+	return clm.boardFrozenUntilTime, clm.boardFrozenUntil
 }
 
-// ClaimBoardFrozenUntil is the exported read.
-func ClaimBoardFrozenUntil(courtSlug string, claimID uint64) int64 {
+// ClaimBoardFrozenUntil is the exported read: the date, with its height beside it.
+func ClaimBoardFrozenUntil(courtSlug string, claimID uint64) (at, atHeight int64) {
 	return claimBoardFrozenAt(mustCourt(courtSlug), claimID)
 }
 

@@ -569,10 +569,16 @@ func renderStanding(slug, addrArg string) string {
 	// invited a purchase that would not work, never mentioned the freeze, and
 	// never said the pass they already held had been forfeited by the slash. The
 	// freeze reads existed with no caller at all.
-	frozenUntil := boardFrozenAt(c, who)
+	frozenAt, frozenUntil := boardFrozenAt(c, who)
 	if frozenUntil != 0 {
+		// The DATE first, the block as its reference. A freeze set before the
+		// stamps has no date and shows the block alone, which is all it ever had.
+		when := "block " + strconv.FormatInt(frozenUntil, 10)
+		if frozenAt != 0 {
+			when = strconv.FormatInt(frozenAt, 10) + " (" + when + ")"
+		}
 		b.WriteString("> **This court's moderators have frozen you out of its boards**\n" +
-			"> until block " + strconv.FormatInt(frozenUntil, 10) + ".\n>\n" +
+			"> until " + when + ".\n>\n" +
 			"> It reaches comments and upvotes and nothing else: you may still stake,\n" +
 			"> vote, answer, dispute, flag, open claims, withdraw, draw emission, and\n" +
 			"> take every election action. An entry pass will not lift it, and buying\n" +

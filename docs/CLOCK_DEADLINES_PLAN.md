@@ -246,6 +246,45 @@ that already had a corpus row per arm — the discipline being retrofitted
 elsewhere. `supEdge.at` is a height "for the record" that nothing reads and
 nothing renders.
 
+### The freeze projections — two reads, two banners, and the web
+
+`BoardFrozenUntil` and `ClaimBoardFrozenUntil` now return `(at, atHeight)`: the
+moment the gate reads, with its reference height beside it. Both banners lead
+with the date and fall back to the bare block for a freeze set before the stamps.
+The composer said *"paused until block 123456"* to a person, which is the whole
+complaint this plan started from, one screen from where a moderator acts.
+
+**The web reads both of these**, unlike the TTL pair, so this is the first
+iteration to touch `web/`. `one()` silently takes `[0]`, so reordering alone
+would have fed it a unix timestamp where it expected a height — a wrong number
+that renders without erroring. The two call sites use `tup()`, which already
+existed; a `pair()` helper I added first was redundant and is gone.
+
+**A CONCURRENT PROCESS'S UNCOMMITTED WORK IS IN web/index.html, and it broke
+`make web-test` in a way that looked like mine.** Two harnesses failed with
+`Identifier 'CONV_UNIT' has already been declared`. The A/B that should have
+settled it — `git checkout` the file, re-run — reported PASS and so accused my
+change, because the checkout discarded THEIR work as well as mine. What actually
+identified it was reading every hunk in `git diff`: hunks at 3546 and 10987 that
+I never wrote, one of them a new `const CONV_UNIT` sitting inside a region two
+polish_test slices both span.
+
+Verified by building an index.html of HEAD **plus my edits only** — `make
+web-test` and `make web-visual` both pass on it — and that blob is what was
+committed, staged with `git hash-object -w` + `git update-index --cacheinfo` so
+the working tree keeps their changes untouched.
+
+**A/B BY `git checkout` IS UNSOUND IN A SHARED WORKING TREE.** It answers "does
+the file without ANY uncommitted work behave", not "does it without MINE". When a
+diff contains hunks you did not write, reconstruct your own version from HEAD and
+test that.
+
+Verified: full kourtv2 suite green; six mutants compile and are killed (four only
+after the realm gained a test asserting the published DATE, not merely a number);
+`make anchors collisions staleguards guards`, check-read-purity/check-storage/
+check-render-text/check-web-selectors, and web-test + web-visual on the
+mine-only tree.
+
 ### `moderation.gno:1190` — the approval TTL's two projections (the inventory was wrong here)
 
 **This entry is not a stored future height.** The inventory listed it as one —

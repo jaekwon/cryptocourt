@@ -29,11 +29,17 @@ eval(slice('const GAS_WANTED', 'const CFG_DEFAULTS') + slice('function cliCmd(',
 const MAX_COMMENT_CHARS = parseInt(src.match(/^const MAX_COMMENT_CHARS = (\d+);/m)[1], 10);
 var CFG = {mode:"live", chainid:"kourt-1", rpc:"https://rpc.example.test"};
 var PKG = "gno.land/r/kourt/kourtv2";
+// stampShort and MON come along because composerState now prints a DATE when the
+// realm published one, and a test that stubbed its own formatter would stop
+// telling us what the page says.
+eval(V(slice('const MON=', '\n')));
+eval(slice('function stampShort(', '\nasync function claimTimeline('));
 eval(V(slice('function composerState(', '\n/* ---- the reads behind it ---- */')));
 
 let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else console.log("ok:",n); };
 const st = o => Object.assign({addr:"g1me", now:1000, boardOpen:true, claimFrozenUntil:0,
-  frozenUntil:0, level:1, posts:3, perDay:5, passPrice:0, supply:1}, o);
+  claimFrozenAt:0, frozenUntil:0, frozenAt:0, level:1, posts:3, perDay:5,
+  passPrice:0, supply:1}, o);
 
 // ---- the cap is the realm's ----------------------------------------------
 {
@@ -214,4 +220,23 @@ const st = o => Object.assign({addr:"g1me", now:1000, boardOpen:true, claimFroze
 }
 
 console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");
+// ---- THE FREEZE DEADLINE IS A DATE ---------------------------------------
+// "paused until block 123456" is not something a person can plan around. The
+// realm publishes the moment it gates on together with its reference height, so
+// the page says the date — and falls back to the block ONLY for a freeze set
+// before the stamps existed, where the block is genuinely all there is.
+{
+  const dated = composerState(st({claimFrozenUntil:2000, claimFrozenAt:1764547200, addr:null}));
+  ok("a paused board names the date, not a block number",
+     dated.can === false && !/block/.test(dated.why) && /paused this board until \d/.test(dated.why));
+
+  const preStamp = composerState(st({claimFrozenUntil:2000, claimFrozenAt:0, addr:null}));
+  ok("a freeze with no stamp still says which block it lifts at",
+     preStamp.can === false && /until block 2,000/.test(preStamp.why));
+
+  const mine = composerState(st({frozenUntil:2000, frozenAt:1764547200}));
+  ok("an address freeze names the date too",
+     mine.can === false && !/block/.test(mine.why) && /posting in this court is paused until \d/.test(mine.why));
+}
+
 process.exit(fail?1:0);

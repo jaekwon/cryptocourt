@@ -22,6 +22,20 @@ import (
 // both invisible when run with neighbours and both caught by the isolation
 // sweep. The fixture is where the trap lives, so the fix belongs here rather
 // than in each test.
+// frozenHeightOf and claimFrozenHeightOf keep the many "is it frozen at all"
+// assertions readable now that the exported reads publish a DATE with its
+// reference height beside it. The tests that care about the deadline itself read
+// both; these are for the ones that only ask whether a freeze exists.
+func frozenHeightOf(slug string, who address) int64 {
+	_, h := BoardFrozenUntil(slug, who)
+	return h
+}
+
+func claimFrozenHeightOf(slug string, id uint64) int64 {
+	_, h := ClaimBoardFrozenUntil(slug, id)
+	return h
+}
+
 func modFixture(cur realm, slug string, mod, poster address) (uint64, uint64) {
 	testCourt(cur, slug+"z", testutils.TestAddress("boot-"+slug), 10_000_000_000)
 	if d := DirectoryAdmin(); d == mod || d == poster {
@@ -248,7 +262,7 @@ func TestAFreezeBarsBoardWritesAndNothingElse(cur realm, t *testing.T) {
 
 	testing.SetRealm(testing.NewUserRealm(mod))
 	FreezeBoard(cross(cur), "bm3", poster, 100, boardCodeAbuse)
-	if BoardFrozenUntil("bm3", poster) == 0 {
+	if frozenHeightOf("bm3", poster) == 0 {
 		t.Fatal("the freeze must be visible to the person under it")
 	}
 
@@ -287,7 +301,7 @@ func TestAFreezeBarsBoardWritesAndNothingElse(cur realm, t *testing.T) {
 	if boardFrozen(c, poster) {
 		t.Fatal("a freeze must expire on its own, with no sweep")
 	}
-	if BoardFrozenUntil("bm3", poster) != 0 {
+	if frozenHeightOf("bm3", poster) != 0 {
 		t.Fatal("an expired freeze must read as no freeze")
 	}
 }
@@ -316,7 +330,7 @@ func TestTheFreezeCeilingIsNotAPerTransactionFormality(cur realm, t *testing.T) 
 	testing.SkipHeights(freezeGapBlocks + 1)
 	testing.SetRealm(testing.NewUserRealm(mod))
 	FreezeBoard(cross(cur), "bm4", poster, 10, boardCodeAbuse)
-	if BoardFrozenUntil("bm4", poster) == 0 {
+	if frozenHeightOf("bm4", poster) == 0 {
 		t.Fatal("past the gap a fresh freeze must be allowed, or the gap is a ban")
 	}
 }
@@ -378,7 +392,7 @@ func TestTheFreezeAndItsGapBothRunOnTheWallClock(cur realm, t *testing.T) {
 	uassert.Equal(t, frozenH, heightNow())
 	testing.SetRealm(testing.NewUserRealm(mod))
 	FreezeBoard(cross(cur), "bfw", poster, 10, boardCodeAbuse)
-	if BoardFrozenUntil("bfw", poster) == 0 {
+	if frozenHeightOf("bfw", poster) == 0 {
 		t.Fatal("past the gap on the wall clock a fresh freeze must be allowed")
 	}
 }
@@ -420,7 +434,7 @@ func TestAPreStampFreezeKeepsItsBlockWindows(cur realm, t *testing.T) {
 	uassert.Equal(t, r.frozenGapUntil, heightNow())
 	testing.SetRealm(testing.NewUserRealm(mod))
 	FreezeBoard(cross(cur), "bfg", poster, 10, boardCodeAbuse)
-	if BoardFrozenUntil("bfg", poster) == 0 {
+	if frozenHeightOf("bfg", poster) == 0 {
 		t.Fatal("a pre-stamp gap must expire on its exact block")
 	}
 }
@@ -524,7 +538,7 @@ func TestFreezingOneBoardLeavesTheClaimLive(cur realm, t *testing.T) {
 
 	testing.SetRealm(testing.NewUserRealm(mod))
 	FreezeClaimBoard(cross(cur), "bm5", id, 100, boardCodeOffTopic)
-	if ClaimBoardFrozenUntil("bm5", id) == 0 {
+	if claimFrozenHeightOf("bm5", id) == 0 {
 		t.Fatal("the freeze must be visible")
 	}
 	testing.SetRealm(testing.NewUserRealm(poster))
@@ -568,11 +582,11 @@ func TestFreezingOneBoardLeavesTheClaimLive(cur realm, t *testing.T) {
 	testing.SkipHeights(freezeMaxBlocks + freezeGapBlocks)
 	testing.SetRealm(testing.NewUserRealm(mod))
 	FreezeClaimBoard(cross(cur), "bm5", id, 5, boardCodeOffTopic)
-	if ClaimBoardFrozenUntil("bm5", id) == 0 {
+	if claimFrozenHeightOf("bm5", id) == 0 {
 		t.Fatal("past the gap a fresh board freeze must land, or the gap is a ban")
 	}
 	testing.SkipHeights(6)
-	if ClaimBoardFrozenUntil("bm5", id) != 0 {
+	if claimFrozenHeightOf("bm5", id) != 0 {
 		t.Fatal("a claim-board freeze must expire lazily")
 	}
 }
@@ -892,7 +906,7 @@ func TestUnfreezingDoesNotBuyAFreshFreezeWindow(cur realm, t *testing.T) {
 	testing.SkipHeights(freezeMaxBlocks + freezeGapBlocks)
 	testing.SetRealm(testing.NewUserRealm(mod))
 	FreezeBoard(cross(cur), "bmy", other, 10, boardCodeAbuse)
-	if BoardFrozenUntil("bmy", other) == 0 {
+	if frozenHeightOf("bmy", other) == 0 {
 		t.Fatal("past the full window a fresh freeze must land")
 	}
 }
@@ -1035,6 +1049,64 @@ func TestASuspendedSetCanStillClearItsOwnOverride(cur realm, t *testing.T) {
 
 // A page that tells a frozen person to buy a pass that will not work is worse
 // than a page that says nothing. Neither freeze read had a caller anywhere.
+// A FREEZE DEADLINE IS PUBLISHED AS A DATE, on both reads and both banners.
+//
+// "until block 123456" is not something a person can plan around, and it was what
+// every one of these said. They now publish the moment the gate actually reads,
+// with the block beside it as the reference — so what a reader is told and what
+// the chain will do cannot drift apart on a chain off 5s a block.
+//
+// Pinned to the STAMP, not to a recomputation: the assertion compares against the
+// record's own frozenUntilTime, so a reader planning around the published date
+// and the realm refusing at it are the same instant by construction.
+func TestTheFreezeDeadlinesArePublishedAsDates(cur realm, t *testing.T) {
+	mod := testutils.TestAddress("dfw-mod")
+	poster := testutils.TestAddress("dfw-poster")
+	id, _ := modFixture(cur, "dfw", mod, poster)
+	c := mustCourt("dfw")
+
+	testing.SetRealm(testing.NewUserRealm(mod))
+	FreezeBoard(cross(cur), "dfw", poster, 500, boardCodeAbuse)
+	testing.SetRealm(testing.NewUserRealm(mod))
+	FreezeClaimBoard(cross(cur), "dfw", id, 500, boardCodeOffTopic)
+
+	// ---- the two exported reads ----
+	r := lookupStanding(c, poster)
+	at, atH := BoardFrozenUntil("dfw", poster)
+	uassert.Equal(t, r.frozenUntilTime, at)
+	uassert.Equal(t, r.frozenUntil, atH)
+	if at == 0 {
+		t.Fatal("a freeze set now must publish a date, not only a height")
+	}
+
+	clm := lookupClaimMod(c.mod, id)
+	cat, catH := ClaimBoardFrozenUntil("dfw", id)
+	uassert.Equal(t, clm.boardFrozenUntilTime, cat)
+	uassert.Equal(t, clm.boardFrozenUntil, catH)
+
+	// ---- and the two banners a person actually reads ----
+	// The date leads and the block follows in parentheses, so asserting the
+	// rendered date is present is not the same as asserting "some number is".
+	standing := renderStanding("dfw", poster.String())
+	if !strings.Contains(standing, "until "+strconv.FormatInt(at, 10)+" (block ") {
+		t.Fatalf("the standing banner must lead with the date:\n%s", standing)
+	}
+	board := renderBoardPage("dfw", id)
+	if !strings.Contains(board, "until "+strconv.FormatInt(cat, 10)+" (block ") {
+		t.Fatalf("the paused-board banner must lead with the date:\n%s", board)
+	}
+
+	// ---- A PRE-STAMP FREEZE SHOWS THE BLOCK ALONE, which is all it ever had ----
+	r.frozenUntilTime = 0
+	pre, preH := BoardFrozenUntil("dfw", poster)
+	uassert.Equal(t, int64(0), pre)
+	uassert.Equal(t, r.frozenUntil, preH)
+	standing = renderStanding("dfw", poster.String())
+	if !strings.Contains(standing, "until block "+strconv.FormatInt(preH, 10)) {
+		t.Fatalf("with no stamp the banner must name the block:\n%s", standing)
+	}
+}
+
 func TestAFrozenAddressIsToldSoAndNotSoldAPass(cur realm, t *testing.T) {
 	mod := testutils.TestAddress("bmz-mod")
 	poster := testutils.TestAddress("bmz-poster")

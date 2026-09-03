@@ -10093,15 +10093,21 @@ async function claimTitleOf(slug, id){
 
    A person is never told they have spent something they have not. */
 function composerState(st){
-  const at = h => "block " + fmtN(h);
+  /* A DATE IF THE REALM PUBLISHED ONE, a block only if it did not. The freeze
+     reads return the moment the realm actually gates on together with its
+     reference height; a freeze set before the stamps existed has no date, and
+     then the block is genuinely all there is to say. "paused until block
+     123456" is not something a person can plan around, which is why the date
+     leads whenever it exists. */
+  const at = (t, h) => t ? stampShort(t, Math.floor(Date.now() / 1000)) : "block " + fmtN(h);
   if(!st.boardOpen)
     return {can:false, why:"This claim has a verdict, so its board is closed. The comments stay readable."};
   if(st.claimFrozenUntil > st.now)
-    return {can:false, why:"The court has paused this board until " + at(st.claimFrozenUntil) + "."};
+    return {can:false, why:"The court has paused this board until " + at(st.claimFrozenAt, st.claimFrozenUntil) + "."};
   if(!st.addr)
     return {can:false, why:"Connect a wallet to comment.", connect:true};
   if(st.frozenUntil > st.now)
-    return {can:false, why:"Your posting in this court is paused until " + at(st.frozenUntil) + "."};
+    return {can:false, why:"Your posting in this court is paused until " + at(st.frozenAt, st.frozenUntil) + "."};
   if(!(st.level > 0))
     return st.passPrice > 0
       ? {can:false, why:"You need standing in this court, or an entry pass.", buy:st.passPrice}
@@ -10151,7 +10157,7 @@ const commentChars = s => [...String(s == null ? "" : s)].length;
 /* ---- the reads behind it ---- */
 async function composerReads(slug, id){
   const s = gstr(slug), a = CFG.addr;
-  const base = {addr:a, now:0, boardOpen:true, claimFrozenUntil:0, frozenUntil:0,
+  const base = {addr:a, now:0, boardOpen:true, claimFrozenUntil:0, claimFrozenAt:0, frozenUntil:0, frozenAt:0,
                 level:0, posts:0, perDay:0, passPrice:0, supply:null};
   if(!isLive()){
     // The sample answers what it can and no more: a demo board is open or not,
@@ -10162,15 +10168,15 @@ async function composerReads(slug, id){
   const [now, open, claimFrozen] = await Promise.all([
     chainHeight().then(h => h || 0).catch(()=>0),
     boardOpenOf(slug, id).catch(()=>true),
-    one(`ClaimBoardFrozenUntil(${s},${id})`).catch(()=>0)]);
-  Object.assign(base, {now, boardOpen:open, claimFrozenUntil:claimFrozen});
+    tup(`ClaimBoardFrozenUntil(${s},${id})`).catch(()=>[0,0])]);
+  Object.assign(base, {now, boardOpen:open, claimFrozenAt:claimFrozen[0], claimFrozenUntil:claimFrozen[1]});
   if(!a) return base;
   const [frozen, level, posts, perDay] = await Promise.all([
-    one(`BoardFrozenUntil(${s},${gstr(a)})`).catch(()=>0),
+    tup(`BoardFrozenUntil(${s},${gstr(a)})`).catch(()=>[0,0]),
     one(`PostLevel(${s},${gstr(a)})`).catch(()=>0),
     one(`PostsAvailable(${s},${gstr(a)})`).catch(()=>0),
     one(`PostsPerDay(${s},${gstr(a)})`).catch(()=>0)]);
-  Object.assign(base, {frozenUntil:frozen, level, posts, perDay});
+  Object.assign(base, {frozenAt:frozen[0], frozenUntil:frozen[1], level, posts, perDay});
   // CONDITIONAL, both of them: a price only matters when there is no level to
   // spend, and the supply only when the allowance reads zero at a level above
   // zero — which is the one case the two zero-causes are indistinguishable in.

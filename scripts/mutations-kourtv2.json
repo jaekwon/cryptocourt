@@ -8403,6 +8403,34 @@
  {
   "pkg": "kourtv2",
   "file": "boardmod.gno",
+  "label": "BoardFrozenUntil: the published date is not the one the gate reads",
+  "find": "\tr := lookupStanding(c, who)\n\treturn r.frozenUntilTime, r.frozenUntil",
+  "replace": "\tr := lookupStanding(c, who)\n\treturn r.frozenUntilTime + 1, r.frozenUntil"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "ClaimBoardFrozenUntil: the published date is not the one the gate reads",
+  "find": "\tclm := lookupClaimMod(c.mod, claimID)\n\treturn clm.boardFrozenUntilTime, clm.boardFrozenUntil",
+  "replace": "\tclm := lookupClaimMod(c.mod, claimID)\n\treturn clm.boardFrozenUntilTime + 1, clm.boardFrozenUntil"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "posting.gno",
+  "label": "the freeze banner shows a bare block, with no date",
+  "find": "\t\tif frozenAt != 0 {",
+  "replace": "\t\tif false {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "board.gno",
+  "label": "the paused-board banner shows a bare block, with no date",
+  "find": "\t\tif at != 0 {",
+  "replace": "\t\tif false {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
   "label": "boardFreezeActive: a pre-stamp freeze loses its HEIGHT fallback",
   "find": "\treturn (known && !passed) || (!known && heightNow() < r.frozenUntil)",
   "replace": "\treturn known && !passed"
@@ -8614,15 +8642,15 @@
   "pkg": "kourtv2",
   "file": "posting.gno",
   "label": "REGRESSION: an address freeze is never displayed",
-  "find": "\tif frozenUntil != 0 {\n\t\tb.WriteString(\"> **This court's moderators have frozen you out of its boards**\\n\" +",
-  "replace": "\tif false {\n\t\tb.WriteString(\"> **This court's moderators have frozen you out of its boards**\\n\" +"
+  "find": "\tfrozenAt, frozenUntil := boardFrozenAt(c, who)\n\tif frozenUntil != 0 {",
+  "replace": "\tfrozenAt, frozenUntil := boardFrozenAt(c, who)\n\t_ = frozenAt\n\tif false {"
  },
  {
   "pkg": "kourtv2",
   "file": "board.gno",
   "label": "REGRESSION: a claim-board freeze is never displayed",
-  "find": "\tif until := claimBoardFrozenAt(c, claimID); until != 0 {",
-  "replace": "\tif until := int64(0); until != 0 {"
+  "find": "\tif at, until := claimBoardFrozenAt(c, claimID); until != 0 {",
+  "replace": "\tif at, until := int64(0), int64(0); until != 0 {"
  },
  {
   "pkg": "kourtv2",

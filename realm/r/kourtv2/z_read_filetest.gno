@@ -113,7 +113,8 @@ func main(cur realm) {
 	println("stranger level:    ", kourtv2.PostLevel("meta", stranger))
 	println("stranger per day:  ", kourtv2.PostsPerDay("meta", stranger))
 	println("stranger available:", kourtv2.PostsAvailable("meta", stranger))
-	println("stranger frozen:   ", kourtv2.BoardFrozenUntil("meta", stranger))
+	sfAt, sfH := kourtv2.BoardFrozenUntil("meta", stranger)
+	println("stranger frozen:   ", sfAt, sfH)
 
 	println("front page renders:", len(kourtv2.Render("")) > 0)
 	println("court page renders:", len(kourtv2.Render("meta")) > 0)
@@ -157,6 +158,6 @@ func main(cur realm) {
 // stranger level:     0
 // stranger per day:   0
 // stranger available: 0
-// stranger frozen:    0
+// stranger frozen:    0 0
 // front page renders: true
 // court page renders: true

@@ -784,9 +784,15 @@ func renderBoardIn(slug string, claimID uint64, ranked bool) string {
 		b.WriteString("> **The claim itself is withheld or removed on legal grounds.**\n" +
 			"> These comments are a separate record and are not covered by that act.\n\n")
 	}
-	if until := claimBoardFrozenAt(c, claimID); until != 0 {
+	if at, until := claimBoardFrozenAt(c, claimID); until != 0 {
+		// The date, with the block as its reference; a pre-stamp freeze has only
+		// the block. Same shape as the address-freeze banner in posting.gno.
+		when := "block " + strconv.FormatInt(until, 10)
+		if at != 0 {
+			when = strconv.FormatInt(at, 10) + " (" + when + ")"
+		}
 		b.WriteString("> **Comments are paused on this claim by this court's moderators**\n" +
-			"> until block " + strconv.FormatInt(until, 10) + ". The claim itself is\n" +
+			"> until " + when + ". The claim itself is\n" +
 			"> unaffected: answers, stakes and the verdict continue as normal.\n\n")
 	}
 	if cs.boardTop == nil || cs.boardTop.Size() == 0 {
