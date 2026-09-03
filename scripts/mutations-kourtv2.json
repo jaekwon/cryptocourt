@@ -5947,9 +5947,37 @@
  {
   "pkg": "kourtv2",
   "file": "moderation.gno",
-  "label": "approveAction: a pending approval goes stale one block late",
-  "find": "\t\tif now >= a.openedAt+pendingTTLBlocks {",
-  "replace": "\t\tif now > a.openedAt+pendingTTLBlocks {"
+  "label": "approvalStale: an entry goes stale one second late",
+  "find": "return (known && passed) || (!known && heightNow() >= a.openedAt+pendingTTLBlocks)",
+  "replace": "return (known && !passed) || (!known && heightNow() >= a.openedAt+pendingTTLBlocks)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "moderation.gno",
+  "label": "approvalStale: a pre-stamp entry goes stale one block late",
+  "find": "(!known && heightNow() >= a.openedAt+pendingTTLBlocks)",
+  "replace": "(!known && heightNow() > a.openedAt+pendingTTLBlocks)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "moderation.gno",
+  "label": "pendingOpenedAt: a stale proposal still bounds the burn",
+  "find": "\tif approvalStale(a) {\n\t\treturn 0\n\t}\n\treturn a.openedAt",
+  "replace": "\tif false {\n\t\treturn 0\n\t}\n\treturn a.openedAt"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "moderation.gno",
+  "label": "approvalStale: the TTL is never reached, so approvals live for ever",
+  "find": "\tpassed, known := pastDeadline(a.openedAtTime, blocksToSecs(pendingTTLBlocks))\n\treturn (known && passed) || (!known && heightNow() >= a.openedAt+pendingTTLBlocks)",
+  "replace": "\treturn false"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "moderation.gno",
+  "label": "approveAction: a fresh approval is opened without its wall-clock stamp",
+  "find": "openedAt: now, openedAtTime: nowTime()}",
+  "replace": "openedAt: now, openedAtTime: 0}"
  },
  {
   "pkg": "kourtv2",

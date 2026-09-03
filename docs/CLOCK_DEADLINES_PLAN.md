@@ -1,6 +1,6 @@
 # Deadlines in seconds, accounting in blocks
 
-**Status:** in progress. 4 of 11 gates converted; see the log at the end.
+**Status:** in progress. 5 of 11 gates converted (plus one found already done); see the log at the end.
 
 ## The problem, as observed
 
@@ -146,7 +146,7 @@ trailing ring; `pendingTTLBlocks` looks like accounting and is a deadline.
 | `dispute.gno:101,649` | escrow window | `escrowUntilAt` | half — stamp path exists |
 | `answer.gno:69` | `stakeOpenDelay + answerWindow + priorityWindow`, summed | `openedAtTime` | **converted** — as one duration |
 | `stake.gno:166` | `stakeOpenDelayBlocks` | `openedAtTime` | **converted** |
-| `moderation.gno:664,1187` | `pendingTTLBlocks` | needs a stamp | unconverted |
+| `moderation.gno:620,664,1187` | `pendingTTLBlocks` | `approval.openedAtTime` (added) | **converted** |
 | `moderation.gno:691` | `votingBlocks` after execute | needs a stamp | unconverted |
 | `modvote.gno:328` | `nominateEnd` | needs a stamp | unconverted |
 | `boardmod.gno:107,137` | `frozenUntil` | needs a stamp | unconverted |
@@ -231,6 +231,59 @@ of 1.2M.
   as a one-off for legacy params only.
 
 ## Log
+
+### `supersede.gno:82` — already done, and the order list was pointing at a fallback
+
+Nothing to convert. `supersedeOrdered` already prefers the wall clock and falls
+back to height; line 82 is the FALLBACK arm of a converted predicate, not an
+unconverted gate. The constants agree exactly (`deadClaimSecs` = 7,257,600 =
+`deadClaimTimeout` × 5), it requires BOTH stamps before trusting either (mixing
+units across two claims would be worse than falling back), and it is the one site
+that already had a corpus row per arm — the discipline being retrofitted
+elsewhere. `supEdge.at` is a height "for the record" that nothing reads and
+nothing renders.
+
+### `moderation.gno:620,664,1187` — the m-of-n approval TTL (first new field)
+
+Converted. The first site needing plan step 1: `approval` had no timestamp, so
+`openedAtTime` is added beside `openedAt` and written at the single writer.
+
+**No new constant, deliberately.** `pendingTTLBlocks` is not a number, it is
+`decideWindowBlocks` — "the realm's unit for a body gets this long to decide". A
+parallel `pendingTTLSecs` would keep its own copy of that duration and stop
+tracking a tune of the original, which is the coupling the constant's own comment
+already refuses ("one of the two eventually gets changed for the other's
+reasons"). It converts at the call site through `blocksToSecs`, as the polish
+window does.
+
+**Three readers, one predicate.** approveAction, pendingOpenedAt and
+PendingApproval each wrote the rule out. The file said so and named its guard:
+adjacency, "the two tests are eight lines apart and a reader changing either sees
+the other". That is sized for a one-line test; a stamp-then-height fallback in
+three copies is three chances to convert two. They now share `approvalStale`, and
+the test asserts the clock governs at all three.
+
+**A gap closed by accident, and the checks caught it.** `make anchors` failed on
+a SECOND corpus file — `mutations-kourtv2-KNOWN-GAPS.json`, which I had not been
+grepping. Its rows assert that NO test catches them, so a row there is wrong when
+it starts being caught. The row `pendingOpenedAt: a stale proposal still bounds
+the burn` had a long recorded argument for why no fixture could reach the branch
+(it needs the m-of-n threshold lowered between two calls). The wall-clock route
+reaches it trivially — the new test reads pendingOpenedAt on a stale entry
+directly — so the row is now caught and has been PROMOTED into the main corpus by
+move, not copy, as check-mutation-anchors warns.
+
+**Deferred, and tracked rather than silent:** two projections of this window
+still publish blocks — `PendingApproval`'s `expiresAt` return and modrender's
+"expires at block N". Completing them means publishing the timestamp WITH its
+reference height, the pairing ClaimTimeline already uses, which changes a public
+signature. Left for the projection pass rather than smuggled in as a silent
+change of unit. They are 2 of the plan's 6 projections.
+
+Verified: full kourtv2 suite green; five mutants compile and are killed (one
+second late, one block late, TTL never reached, stamp not written, and the
+promoted row); `make anchors collisions staleguards guards` and
+check-read-purity/check-storage pass.
 
 ### `answer.gno:69` — the qualified-answerer head start (the composite)
 

@@ -353,9 +353,29 @@ const pendingTTLBlocks = decideWindowBlocks
 // and could be completed in November by one careless colleague, on an
 // irreversible purge its author would have withdrawn if withdrawing existed.
 type approval struct {
-	approvers *bptree.BPTree // addr -> true
-	reason    string
-	openedAt  int64
+	approvers    *bptree.BPTree // addr -> true
+	reason       string
+	openedAt     int64
+	openedAtTime int64 // unix seconds; 0 on entries opened before the stamps
+}
+
+// approvalStale reports whether an unfired entry has outlived its TTL.
+//
+// ONE PREDICATE FOR THE THREE PLACES THAT ASK — approveAction, pendingOpenedAt
+// and PendingApproval. It was written out at each of them, kept honest by
+// adjacency (see pendingOpenedAt's note), which held while the test was one line
+// and stopped holding the moment it became a two-clock test: three copies of a
+// stamp-then-height fallback are three chances to convert two of them.
+//
+// The TTL converts at the CALL SITE rather than through a seconds constant of
+// its own, because pendingTTLBlocks is not a number here — it is
+// decideWindowBlocks, "the realm's unit for a body gets this long to decide". A
+// parallel constant would keep its own copy of that duration and stop tracking a
+// tune of the original, which is the coupling the const's own comment refuses
+// elsewhere ("one of the two eventually gets changed for the other's reasons").
+func approvalStale(a *approval) bool {
+	passed, known := pastDeadline(a.openedAtTime, blocksToSecs(pendingTTLBlocks))
+	return (known && passed) || (!known && heightNow() >= a.openedAt+pendingTTLBlocks)
 }
 
 // ensureMod lazily creates a court's moderation object with a 1-of-1 creator
@@ -617,12 +637,13 @@ func approveAction(pending *bptree.BPTree, key string, who address, reason strin
 	var a *approval
 	if v := pending.Get(key); v != nil {
 		a = v.(*approval)
-		if now >= a.openedAt+pendingTTLBlocks {
+		if approvalStale(a) {
 			a = nil // stale by rule; this caller opens a fresh proposal
 		}
 	}
 	if a == nil {
-		a = &approval{approvers: bptree.NewBPTree32(), reason: reason, openedAt: now}
+		a = &approval{approvers: bptree.NewBPTree32(), reason: reason,
+			openedAt: now, openedAtTime: nowTime()}
 	}
 	if a.approvers.Has(who.String()) {
 		return false, ""
@@ -640,13 +661,13 @@ func approveAction(pending *bptree.BPTree, key string, who address, reason strin
 // there is none — either because nobody has signed yet or because the one on
 // file has gone stale and approveAction is about to replace it.
 //
-// IT SITS HERE, TOUCHING approveAction, BECAUSE IT REPEATS THAT FUNCTION'S
-// STALENESS RULE. One rule in two places is how the second copy comes to
-// disagree with the first, and the cheapest available guard against it is
-// adjacency: the two `openedAt+pendingTTLBlocks` tests are eight lines apart and
-// a reader changing either sees the other. Returning it from approveAction would
-// be better still and was rejected on cost — eleven callers and their corpus
-// rows would move for one of them.
+// IT SITS HERE, TOUCHING approveAction, BECAUSE IT ASKS THAT FUNCTION'S
+// STALENESS QUESTION. It used to REPEAT it, guarded only by adjacency — the two
+// `openedAt+pendingTTLBlocks` tests were eight lines apart so a reader changing
+// either saw the other. That guard was sized for a one-line test. Converting the
+// TTL to the wall clock made it a stamp-then-height fallback, at which point
+// three copies were three chances to convert two, so both call sites and the
+// reader now share approvalStale. Adjacency is kept anyway; it costs nothing.
 //
 // WHAT NEEDS IT: a bulk act must consent to a FIXED set. DisapproveAllAssociations
 // burns money, and between the first signature and the m-th a stranger may post
@@ -661,7 +682,7 @@ func pendingOpenedAt(pending *bptree.BPTree, key string) int64 {
 		return 0
 	}
 	a := v.(*approval)
-	if heightNow() >= a.openedAt+pendingTTLBlocks {
+	if approvalStale(a) {
 		return 0
 	}
 	return a.openedAt
@@ -1184,9 +1205,14 @@ func PendingApproval(courtSlug, actionKey string) (approvals int, expiresAt int6
 		return 0, 0
 	}
 	a := v.(*approval)
-	if heightNow() >= a.openedAt+pendingTTLBlocks {
+	if approvalStale(a) {
 		return 0, 0
 	}
+	// expiresAt stays a HEIGHT. The gate above reads the clock, so this is now
+	// the reference height beside a deadline rather than the deadline itself —
+	// the pairing ClaimTimeline publishes in full. Completing it here means
+	// returning both, which changes this signature, so it is tracked as a
+	// projection rather than smuggled in as a silent change of unit.
 	return a.approvers.Size(), a.openedAt + pendingTTLBlocks
 }
 

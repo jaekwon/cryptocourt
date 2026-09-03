@@ -5,6 +5,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	testutils "gno.land/p/nt/testutils/v0"
 	uassert "gno.land/p/nt/uassert/v0"
@@ -646,6 +647,84 @@ func TestPendingApprovalsGoStale(cur realm, t *testing.T) {
 	HideItem(cross(cur), "ttlc", id, "two")
 	if !HiddenFromListing("ttlc", id) {
 		t.Fatal("two contemporaneous approvals must still fire immediately")
+	}
+}
+
+// THE SEVEN DAYS ARE SEVEN DAYS, ON ALL THREE READERS.
+//
+// TestPendingApprovalsGoStale above walks the TTL with SkipHeights, which moves
+// height and time together at exactly 5s a block, so it cannot say which clock
+// the rule read. Three places ask the staleness question — approveAction (the
+// write path), pendingOpenedAt (the bulk-act bound) and PendingApproval (the
+// read) — and they share approvalStale precisely so they cannot answer it
+// differently. This asserts the wall clock governs at ALL THREE, because a
+// convert-two-of-three is the exact failure the shared predicate exists to make
+// impossible, and a test touching only one would not have noticed it.
+func TestTheApprovalTTLExpiresOnWallClockNotOnBlocks(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("ttlw-alice")
+	m1 := testutils.TestAddress("ttlw-m1")
+	m2 := testutils.TestAddress("ttlw-m2")
+	c := testCourt(cur, "ttlw", alice, 10_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	AppointMods(cross(cur), "ttlw", 2, m1, m2)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "ttlw", "a claim")
+	key := "hide:" + strconv.FormatUint(id, 10)
+
+	testing.SetRealm(testing.NewUserRealm(m1))
+	HideItem(cross(cur), "ttlw", id, "one")
+
+	cm := c.mod
+	a := cm.pending.Get(key).(*approval)
+	if a.openedAtTime == 0 {
+		t.Fatal("fixture: no open stamp, so this would test the height fallback instead")
+	}
+	openedH := heightNow()
+
+	// A week and a day of wall clock, and not one block. On the block arithmetic
+	// this is still the entry's first block, so anything that expires here
+	// expired on the clock.
+	ctx := testing.GetContext()
+	ctx.Time = ctx.Time.Add(8 * 24 * time.Hour)
+	testing.SetContext(ctx)
+	uassert.Equal(t, openedH, heightNow())
+	uassert.True(t, heightNow() < a.openedAt+pendingTTLBlocks) // blocks still say "live"
+
+	// READER ONE: PendingApproval reports it absent.
+	if n, _ := PendingApproval("ttlw", key); n != 0 {
+		t.Fatal("an entry past its TTL in wall-clock time must read as absent")
+	}
+	// READER TWO: pendingOpenedAt, the bulk-act bound, agrees.
+	if got := pendingOpenedAt(cm.pending, key); got != 0 {
+		t.Fatalf("pendingOpenedAt must drop a wall-clock-stale entry, got %d", got)
+	}
+	// READER THREE: the write path restarts rather than completing the quorum —
+	// the assertion that actually costs money if it is wrong, since m2 signing a
+	// dead proposal would hide the claim on one live signature.
+	testing.SetRealm(testing.NewUserRealm(m2))
+	HideItem(cross(cur), "ttlw", id, "two")
+	if HiddenFromListing("ttlw", id) {
+		t.Fatal("a signature banked before the TTL elapsed completed the quorum")
+	}
+	if n, _ := PendingApproval("ttlw", key); n != 1 {
+		t.Fatal("the evictor's own signature should seed the fresh proposal")
+	}
+
+	// ---- AND A PRE-STAMP ENTRY STILL READS HEIGHT, TO ITS EXACT BLOCK ----
+	fresh := cm.pending.Get(key).(*approval)
+	fresh.openedAtTime = 0 // the pre-upgrade shape: a height, no stamp
+	target := fresh.openedAt + pendingTTLBlocks
+	if d := target - 1 - heightNow(); d > 0 {
+		testing.SkipHeights(d)
+	}
+	uassert.Equal(t, target-1, heightNow())
+	if n, _ := PendingApproval("ttlw", key); n != 1 {
+		t.Fatal("one block short, a pre-stamp entry is still live")
+	}
+	testing.SkipHeights(1)
+	uassert.Equal(t, target, heightNow())
+	if n, _ := PendingApproval("ttlw", key); n != 0 {
+		t.Fatal("a pre-stamp entry must still expire on its exact block")
 	}
 }
 
