@@ -110,11 +110,32 @@ trades a drift bug for a soundness hole. It stays.
 ## Inventory
 
 A sweep for height arithmetic (`+ …Blocks|Delay|Timeout|Window|Grace`) finds
-**34 sites across 16 files**. The table below is not all of them — it is the
-deadline subset, led by the two that produced the reports. Completing the
-inventory is step 0 of the plan, and it has to be done by reading each use
-rather than by name: `answerWindow` looks like a deadline and is a trailing
-ring, while `pendingTTLBlocks` looks like accounting and is a deadline.
+**34 sites across 16 files**, and reading each one gives FOUR kinds, not two.
+The extra kind is the one that matters most:
+
+| Kind | What it does | Count | Moves? |
+|---|---|---|---|
+| **Gate** | compares now against a deadline | 16 | yes |
+| **Stored future height** | writes `now + window` into state | 6 | yes — and it is persisted |
+| **Projection** | renders a deadline for display | 6 | follows its gate |
+| **Comment** | prose only | 5 | no |
+| **Accounting** | a duration used in arithmetic | 1 | no |
+
+**Stored future heights are the hard part** and were missing from the first
+draft. `boardmod.gno:387,444`, `modvote.gno:303,304,563` and
+`moderation.gno:1190` compute a block number in the future and persist it —
+`r.frozenGapUntil = now + freezeMaxBlocks + freezeGapBlocks`. A gate can be
+converted in place because it reads two live values; a stored future height is
+already wrong the moment cadence changes after it was written, and no fallback
+can recover the intent because the original `now` is gone. These need the
+timestamp written ALONGSIDE, at the same site, and the gate reading the pair.
+
+The one accounting use hiding among them: `crystallize.gno:59`,
+`cs.openBlocks = cs.frozenAt - (cs.openedAt + c.params.stakeOpenDelayBlocks)` —
+a duration fed into the draw, not a deadline. It stays on blocks.
+
+Classify by use, never by name: `answerWindow` looks like a deadline and is a
+trailing ring; `pendingTTLBlocks` looks like accounting and is a deadline.
 
 ### Move to seconds (deadlines)
 
@@ -150,10 +171,9 @@ stays on blocks. The name is the trap; check the use, not the suffix.
 
 ## Plan
 
-0. **Finish the inventory.** 34 height-arithmetic sites across 16 files; ~11 are
-   classified here. Each remaining one is read and put on one side of the
-   boundary, by its USE. This is the step that decides the size of the job, and
-   it is cheap next to guessing wrong about which side something belongs on.
+0. **Inventory — done.** All 34 sites read and classified above: 16 gates, 6
+   stored future heights, 6 projections, 5 comments, 1 accounting use. Eleven
+   gates are still unconverted; five already carry the stamp path.
 
 1. **A stamp beside every deadline.** Four sites have no timestamp to read
    (`moderation`, `modvote`, `boardmod`, governor proposals). Each needs one
