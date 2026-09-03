@@ -90,6 +90,7 @@ try {
    suite that quietly stops covering things. */
 const ALL = ["embed_layout.js", "tagrow_layout.js", "route_crawl.js",
              "rowscope_layout.js", "map_draws.js", "map_type.js", "map_boing.js", "chat_all.js",
+             "rail_sky.js",
              // the artifact deploy.sh actually uploads, with its comments gone
              "stripped_boot.js"];
 const only = (process.env.ONLY || process.argv.slice(2).join(",") || "").trim();

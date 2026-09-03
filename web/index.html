@@ -197,11 +197,121 @@ body::after{content:""; position:fixed; inset:0; pointer-events:none; z-index:60
 .tnum{font-variant-numeric:tabular-nums}
 code,.mono{font-family:var(--mono)}
 
+/* THE SKY OVER LEO ON 23 SEPTEMBER 2017, with the planets where they actually
+   were. Not a texture and not a generated scatter: every star and every planet
+   in the plate behind the rail is a real position for that date.
+
+   WHAT IS IN IT, and where each number came from:
+
+     277 stars  Hipparcos (VizieR I/239/hip_main), everything brighter than
+                V 6.3 in the frame RA 141-180 deg, Dec -20 to +50. Radius and
+                opacity fall together over six magnitude bins, 3.0px at .95
+                alpha for the brightest down to .55px at .30 for the faintest.
+     Leo's figure  the eleven standard lines over its ten named stars -- the
+                Sickle from Ras Elased through Adhafera and Algieba down to
+                Regulus, then the body out to Denebola and back by Chertan.
+     3 planets  JPL Horizons, geocentric astrometric, 2017-09-23 00:00 UT:
+                Venus 10h22m40.4s +11d14'07", Mars 10h51m24.3s +08d33'14",
+                Mercury 11h15m13.3s +06d46'26". Warm for Venus, orange for
+                Mars, pale for Mercury, each with a faint halo.
+
+   THE OTHER BODIES ARE ABSENT BECAUSE THEY WERE ELSEWHERE, not because they
+   were forgotten. At that instant Jupiter sat at 13h38m and the Sun at 11h59m,
+   both in Virgo, with the Moon at 14h10m below them -- all outside this frame.
+   Drawing them would have meant moving them.
+
+   CHECKED RATHER THAN TRUSTED, twice. The named-star coordinates were entered
+   by hand and then confirmed against the catalogue that filled the field:
+   Hipparcos gives Regulus as 152.0930 deg +11.9672 deg at V 1.36, which is the
+   value the figure uses, to four decimals. And the ephemeris reproduces the
+   configuration this date is known for without being asked to -- Venus 3.58
+   deg from Regulus, all three planets inside Leo, Jupiter and the Sun over in
+   Virgo. Two independent sources agreeing is what makes the plate worth
+   calling real.
+
+   EAST IS LEFT, which is why Denebola sits at the left edge and the Sickle at
+   the right: right ascension increases eastward, and this is drawn the way a
+   star map is, not the way a graph is.
+
+   THE FRAME IS PORTRAIT ON PURPOSE (0.538 wide to tall). Leo is a wide
+   constellation and the rail is a tall column, so the declination window is
+   deliberately much taller than Leo -- it runs from Hydra up past Leo Minor.
+   That is what lets one plate fill the panel with real sky instead of leaving
+   two thirds of it bare, and the neighbours it pulls in are real stars, not
+   filler.
+
+   AN SVG DATA URI, base64, and both halves of that matter. The overlay's one
+   promise is that it is self-contained and deploy.sh refuses any src or href
+   pointing at a remote host, so the plate has to travel inside this file
+   rather than be fetched. base64 rather than percent-encoding because the
+   latter inflates an SVG full of quotes and angle brackets by about 60%.
+
+   NO BACKTICK AND NO DOLLAR-BRACE ANYWHERE IN HERE. The whole block is one
+   template literal; a stray pair closes it early and takes every page with it,
+   not just the chat. */
+:root{--skyplate:url("data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NDAgMTE5MCI+PGcgc3Ryb2tlPSIjYjNhMmZmIiBzdHJva2Utb3BhY2l0eT0iLjIyIiBzdHJva2Utd2lkdGg9IjEiIGZpbGw9Im5vbmUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCI+PGxpbmUgeDE9IjU1MSIgeTE9IjQ0NiIgeDI9IjUyMiIgeTI9IjQwOCIvPjxsaW5lIHgxPSI1MjIiIHkxPSI0MDgiIHgyPSI0MjQiIHkyPSI0NTIiLz48bGluZSB4MT0iNDI0IiB5MT0iNDUyIiB4Mj0iNDExIiB5Mj0iNTEzIi8+PGxpbmUgeDE9IjQxMSIgeTE9IjUxMyIgeDI9IjQ2MyIgeTI9IjU2NSIvPjxsaW5lIHgxPSI0NjMiIHkxPSI1NjUiIHgyPSI0NTgiIHkyPSI2NDciLz48bGluZSB4MT0iNDExIiB5MT0iNTEzIiB4Mj0iMTg4IiB5Mj0iNTAxIi8+PGxpbmUgeDE9IjE4OCIgeTE9IjUwMSIgeDI9IjQ1IiB5Mj0iNjAyIi8+PGxpbmUgeDE9IjQ1IiB5MT0iNjAyIiB4Mj0iMTg4IiB5Mj0iNTg4Ii8+PGxpbmUgeDE9IjE4OCIgeTE9IjU4OCIgeDI9IjQ1OCIgeTI9IjY0NyIvPjxsaW5lIHgxPSIxODgiIHkxPSI1MDEiIHgyPSIxODgiIHkyPSI1ODgiLz48bGluZSB4MT0iNjA5IiB5MT0iNDYwIiB4Mj0iNTUxIiB5Mj0iNDQ2Ii8+PC9nPjxnIGZpbGw9IiNmZmYiIG9wYWNpdHk9IjAuOTUiPjxjaXJjbGUgY3g9IjQ1OCIgY3k9IjY0NyIgcj0iMy4wIi8+PGNpcmNsZSBjeD0iNjI2IiBjeT0iOTk3IiByPSIzLjAiLz48Y2lyY2xlIGN4PSI0MTEiIGN5PSI1MTMiIHI9IjMuMCIvPjxjaXJjbGUgY3g9IjQ1IiBjeT0iNjAyIiByPSIzLjAiLz48L2c+PGcgZmlsbD0iI2ZmZiIgb3BhY2l0eT0iMC44OCI+PGNpcmNsZSBjeD0iMTg4IiBjeT0iNTAxIiByPSIyLjIiLz48Y2lyY2xlIGN4PSI1NTEiIGN5PSI0NDYiIHI9IjIuMiIvPjxjaXJjbGUgY3g9IjIwNyIgY3k9Ijk0IiByPSIyLjIiLz48Y2lyY2xlIGN4PSI0MDEiIGN5PSIxNDUiIHI9IjIuMiIvPjxjaXJjbGUgY3g9IjI4OSIgY3k9IjExMjUiIHI9IjIuMiIvPjxjaXJjbGUgY3g9IjE4OCIgY3k9IjU4OCIgcj0iMi4yIi8+PGNpcmNsZSBjeD0iNDI0IiBjeT0iNDUyIiByPSIyLjIiLz48Y2lyY2xlIGN4PSI0MjIiIGN5PSIxMjAiIHI9IjIuMiIvPjxjaXJjbGUgY3g9IjQ2MyIgY3k9IjU2NSIgcj0iMi4yIi8+PGNpcmNsZSBjeD0iMTcwIiBjeT0iMjg3IiByPSIyLjIiLz48L2c+PGcgZmlsbD0iI2ZmZiIgb3BhY2l0eT0iMC43NCI+PGNpcmNsZSBjeD0iNTcwIiBjeT0iNjgyIiByPSIxLjYiLz48Y2lyY2xlIGN4PSIxNjciIGN5PSIxMTAxIiByPSIxLjYiLz48Y2lyY2xlIGN4PSIzOCIgY3k9IjgyMCIgcj0iMS42Ii8+PGNpcmNsZSBjeD0iNDQ5IiBjeT0iMTA2MCIgcj0iMS42Ii8+PGNpcmNsZSBjeD0iNTciIGN5PSIzOCIgcj0iMS42Ii8+PGNpcmNsZSBjeD0iMjc0IiBjeT0iMjY4IiByPSIxLjYiLz48Y2lyY2xlIGN4PSIzODYiIGN5PSIxMTM2IiByPSIxLjYiLz48Y2lyY2xlIGN4PSIzNTgiIGN5PSI2OTIiIHI9IjEuNiIvPjxjaXJjbGUgY3g9IjUyMiIgY3k9IjQwOCIgcj0iMS42Ii8+PGNpcmNsZSBjeD0iNTc1IiBjeT0iODY5IiByPSIxLjYiLz48Y2lyY2xlIGN4PSIxNDgiIGN5PSI2NzEiIHI9IjEuNiIvPjxjaXJjbGUgY3g9IjU4IiBjeT0iNzM5IiByPSIxLjYiLz48Y2lyY2xlIGN4PSIxNjAiIGN5PSI3NDgiIHI9IjEuNiIvPjxjaXJjbGUgY3g9IjE0NCIgY3k9IjExNTEiIHI9IjEuNiIvPjxjaXJjbGUgY3g9IjI0NyIgY3k9IjExNjEiIHI9IjEuNiIvPjxjaXJjbGUgY3g9IjUyOCIgY3k9IjExMDIiIHI9IjEuNiIvPjxjaXJjbGUgY3g9IjM3OCIgY3k9IjIyNiIgcj0iMS42Ii8+PC9nPjxnIGZpbGw9IiNmZmYiIG9wYWNpdHk9IjAuNTgiPjxjaXJjbGUgY3g9IjI2NCIgY3k9IjQyOSIgcj0iMS4xNSIvPjxjaXJjbGUgY3g9Ijk1IiBjeT0iODY0IiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iNjA5IiBjeT0iNDYwIiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iNDYwIiBjeT0iNjgwIiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iMjM3IiBjeT0iNTA3IiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iMTc4IiBjeT0iOTEyIiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iNjM4IiBjeT0iNDA1IiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iNDYwIiBjeT0iODU2IiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iNDYyIiBjeT0iMjUxIiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iNDkiIGN5PSI1MDYiIHI9IjEuMTUiLz48Y2lyY2xlIGN4PSI2MDgiIGN5PSI4NzAiIHI9IjEuMTUiLz48Y2lyY2xlIGN4PSI1OTgiIGN5PSIyMzEiIHI9IjEuMTUiLz48Y2lyY2xlIGN4PSIxODQiIGN5PSI0NTciIHI9IjEuMTUiLz48Y2lyY2xlIGN4PSI2MTkiIGN5PSI4OTciIHI9IjEuMTUiLz48Y2lyY2xlIGN4PSI0NzIiIGN5PSIxMDcyIiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iMjI2IiBjeT0iNzI1IiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iMjcxIiBjeT0iMTE2IiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iNTgxIiBjeT0iNzcxIiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iNDkyIiBjeT0iNzEzIiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iMzM0IiBjeT0iMzA2IiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iOTYiIGN5PSIxMDE3IiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iNjMiIGN5PSIxMTYyIiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iMzg2IiBjeT0iMjc1IiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iMzU2IiBjeT0iMTYzIiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iMjM5IiBjeT0iODkyIiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iMTY4IiBjeT0iMjAxIiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iMTIyIiBjeT0iOTAxIiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iNDEyIiBjeT0iNTE5IiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iNTk1IiBjeT0iMTc2IiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iMTQ1IiBjeT0iMTAzNSIgcj0iMS4xNSIvPjxjaXJjbGUgY3g9IjI0NCIgY3k9Ijc4OSIgcj0iMS4xNSIvPjxjaXJjbGUgY3g9IjYwIiBjeT0iNzEwIiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iMzM4IiBjeT0iMTA3OCIgcj0iMS4xNSIvPjxjaXJjbGUgY3g9IjMzNCIgY3k9IjExMzciIHI9IjEuMTUiLz48Y2lyY2xlIGN4PSI1MTQiIGN5PSIxMTczIiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iMTMyIiBjeT0iODAxIiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iMjQzIiBjeT0iNzQ2IiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iNjA4IiBjeT0iNjU4IiByPSIxLjE1Ii8+PGNpcmNsZSBjeD0iMTUzIiBjeT0iMTExIiByPSIxLjE1Ii8+PC9nPjxnIGZpbGw9IiNmZmYiIG9wYWNpdHk9IjAuNDQiPjxjaXJjbGUgY3g9IjU4NiIgY3k9IjczNCIgcj0iMC44Ii8+PGNpcmNsZSBjeD0iMjY0IiBjeT0iMjgwIiByPSIwLjgiLz48Y2lyY2xlIGN4PSIyNDkiIGN5PSIxNjMiIHI9IjAuOCIvPjxjaXJjbGUgY3g9IjI0MyIgY3k9IjE4MyIgcj0iMC44Ii8+PGNpcmNsZSBjeD0iNjA4IiBjeT0iNjg1IiByPSIwLjgiLz48Y2lyY2xlIGN4PSI1NzMiIGN5PSIxMDk0IiByPSIwLjgiLz48Y2lyY2xlIGN4PSI1MjMiIGN5PSI5ODgiIHI9IjAuOCIvPjxjaXJjbGUgY3g9IjM1MCIgY3k9IjczMiIgcj0iMC44Ii8+PGNpcmNsZSBjeD0iNTM5IiBjeT0iNjgiIHI9IjAuOCIvPjxjaXJjbGUgY3g9IjM2OCIgY3k9Ijg2MSIgcj0iMC44Ii8+PGNpcmNsZSBjeD0iMzE0IiBjeT0iNDU2IiByPSIwLjgiLz48Y2lyY2xlIGN4PSIxNTAiIGN5PSIxMTY5IiByPSIwLjgiLz48Y2lyY2xlIGN4PSI1MDIiIGN5PSIxNTIiIHI9IjAuOCIvPjxjaXJjbGUgY3g9IjE2IiBjeT0iMTE0MiIgcj0iMC44Ii8+PGNpcmNsZSBjeD0iMzE0IiBjeT0iNjUiIHI9IjAuOCIvPjxjaXJjbGUgY3g9IjE3NSIgY3k9IjgxNiIgcj0iMC44Ii8+PGNpcmNsZSBjeD0iMzcyIiBjeT0iODk3IiByPSIwLjgiLz48Y2lyY2xlIGN4PSI4OCIgY3k9IjcxMiIgcj0iMC44Ii8+PGNpcmNsZSBjeD0iNDIwIiBjeT0iOTg3IiByPSIwLjgiLz48Y2lyY2xlIGN4PSI1MDAiIGN5PSI2MzgiIHI9IjAuOCIvPjxjaXJjbGUgY3g9Ijc5IiBjeT0iNDg3IiByPSIwLjgiLz48Y2lyY2xlIGN4PSI1MTAiIGN5PSIzIiByPSIwLjgiLz48Y2lyY2xlIGN4PSI1ODEiIGN5PSIxNjYiIHI9IjAuOCIvPjxjaXJjbGUgY3g9IjUyNiIgY3k9IjQzNSIgcj0iMC44Ii8+PGNpcmNsZSBjeD0iNDUxIiBjeT0iMTA2OCIgcj0iMC44Ii8+PGNpcmNsZSBjeD0iMTI3IiBjeT0iMTgxIiByPSIwLjgiLz48Y2lyY2xlIGN4PSIxODEiIGN5PSI2MjQiIHI9IjAuOCIvPjxjaXJjbGUgY3g9Ijc4IiBjeT0iMjY5IiByPSIwLjgiLz48Y2lyY2xlIGN4PSI1MCIgY3k9IjcxMCIgcj0iMC44Ii8+PGNpcmNsZSBjeD0iMjkwIiBjeT0iNjcxIiByPSIwLjgiLz48Y2lyY2xlIGN4PSI1NTkiIGN5PSI2MTIiIHI9IjAuOCIvPjxjaXJjbGUgY3g9IjMwNCIgY3k9IjMyOCIgcj0iMC44Ii8+PGNpcmNsZSBjeD0iMCIgY3k9Ijc4OCIgcj0iMC44Ii8+PGNpcmNsZSBjeD0iNDg4IiBjeT0iMzA3IiByPSIwLjgiLz48Y2lyY2xlIGN4PSI2MjUiIGN5PSI5NTMiIHI9IjAuOCIvPjxjaXJjbGUgY3g9IjYwOSIgY3k9IjI1MyIgcj0iMC44Ii8+PGNpcmNsZSBjeD0iMTQ4IiBjeT0iODI2IiByPSIwLjgiLz48Y2lyY2xlIGN4PSI2MjIiIGN5PSI2OTYiIHI9IjAuOCIvPjxjaXJjbGUgY3g9IjYyMSIgY3k9Ijc1IiByPSIwLjgiLz48Y2lyY2xlIGN4PSI1OTMiIGN5PSIyNDEiIHI9IjAuOCIvPjxjaXJjbGUgY3g9IjE5MCIgY3k9Ijg1MSIgcj0iMC44Ii8+PGNpcmNsZSBjeD0iNDI0IiBjeT0iNjE3IiByPSIwLjgiLz48Y2lyY2xlIGN4PSIzNjAiIGN5PSI2MTAiIHI9IjAuOCIvPjxjaXJjbGUgY3g9IjMwMCIgY3k9IjExNDQiIHI9IjAuOCIvPjxjaXJjbGUgY3g9IjI3MiIgY3k9Ijg4NiIgcj0iMC44Ii8+PGNpcmNsZSBjeD0iMjQ1IiBjeT0iNzYiIHI9IjAuOCIvPjxjaXJjbGUgY3g9Ijg4IiBjeT0iMTA3NCIgcj0iMC44Ii8+PGNpcmNsZSBjeD0iNDI2IiBjeT0iMzUyIiByPSIwLjgiLz48Y2lyY2xlIGN4PSIzMDIiIGN5PSI2MDkiIHI9IjAuOCIvPjxjaXJjbGUgY3g9IjMwMiIgY3k9IjUyOSIgcj0iMC44Ii8+PGNpcmNsZSBjeD0iMzE2IiBjeT0iNDAyIiByPSIwLjgiLz48Y2lyY2xlIGN4PSIyMzMiIGN5PSIxMDQyIiByPSIwLjgiLz48Y2lyY2xlIGN4PSIzOTQiIGN5PSIyNzciIHI9IjAuOCIvPjxjaXJjbGUgY3g9IjIxOCIgY3k9IjgxNyIgcj0iMC44Ii8+PGNpcmNsZSBjeD0iMTgiIGN5PSI1ODQiIHI9IjAuOCIvPjxjaXJjbGUgY3g9IjEyMSIgY3k9IjUzNyIgcj0iMC44Ii8+PGNpcmNsZSBjeD0iNTk3IiBjeT0iOTUxIiByPSIwLjgiLz48Y2lyY2xlIGN4PSI4OSIgY3k9IjEwOCIgcj0iMC44Ii8+PGNpcmNsZSBjeD0iNTg4IiBjeT0iMzIwIiByPSIwLjgiLz48Y2lyY2xlIGN4PSIzNTUiIGN5PSIyNTUiIHI9IjAuOCIvPjxjaXJjbGUgY3g9IjE0MSIgY3k9IjU3MCIgcj0iMC44Ii8+PGNpcmNsZSBjeD0iMjAiIGN5PSI3MDYiIHI9IjAuOCIvPjxjaXJjbGUgY3g9IjQ2MyIgY3k9IjExNDEiIHI9IjAuOCIvPjxjaXJjbGUgY3g9IjM2NSIgY3k9IjEwODEiIHI9IjAuOCIvPjxjaXJjbGUgY3g9IjYzNSIgY3k9IjkzNyIgcj0iMC44Ii8+PGNpcmNsZSBjeD0iMzg3IiBjeT0iOTcwIiByPSIwLjgiLz48Y2lyY2xlIGN4PSI1NjYiIGN5PSIxNzQiIHI9IjAuOCIvPjxjaXJjbGUgY3g9IjM4OSIgY3k9IjcwMSIgcj0iMC44Ii8+PGNpcmNsZSBjeD0iMzciIGN5PSI5NDEiIHI9IjAuOCIvPjxjaXJjbGUgY3g9IjU2MCIgY3k9IjM0MCIgcj0iMC44Ii8+PGNpcmNsZSBjeD0iNDQ4IiBjeT0iOTkzIiByPSIwLjgiLz48Y2lyY2xlIGN4PSI1NDgiIGN5PSI4MjAiIHI9IjAuOCIvPjxjaXJjbGUgY3g9IjI3MCIgY3k9IjEwODQiIHI9IjAuOCIvPjxjaXJjbGUgY3g9IjU0OCIgY3k9IjY0OSIgcj0iMC44Ii8+PGNpcmNsZSBjeD0iMzQ5IiBjeT0iNzAzIiByPSIwLjgiLz48Y2lyY2xlIGN4PSI0ODEiIGN5PSI0NzciIHI9IjAuOCIvPjwvZz48ZyBmaWxsPSIjZmZmIiBvcGFjaXR5PSIwLjMiPjxjaXJjbGUgY3g9IjIxMCIgY3k9IjQzMSIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjM0MyIgY3k9IjEwNTgiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSIyMDgiIGN5PSIyMzMiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSI2MjIiIGN5PSI3MTEiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSI1ODciIGN5PSI1NzEiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSI0MDIiIGN5PSIxNDkiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSIyNjciIGN5PSIyNzEiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSI3NiIgY3k9IjMxMCIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjQyIiBjeT0iMjU2IiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iNjA2IiBjeT0iMTE4MCIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjEyNCIgY3k9IjU4OCIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjQ5NCIgY3k9IjM0NiIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjEwNSIgY3k9Ijc5OCIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjQ0MCIgY3k9Ijc3MiIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjMxNSIgY3k9Ijc2OSIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjM2OSIgY3k9IjE4OCIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjE4OSIgY3k9IjcxMyIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjU0OSIgY3k9IjczNiIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjI4NiIgY3k9IjEwMDEiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSIxNDQiIGN5PSI2NTYiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSI5NyIgY3k9IjM3OCIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjQyMiIgY3k9IjQ1NyIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjQyNCIgY3k9IjQxOSIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjMzMiIgY3k9IjIwNiIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjUwNyIgY3k9IjY5OCIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjI4OCIgY3k9IjEwMTciIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSI2MTQiIGN5PSIxMTE1IiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iNDQ3IiBjeT0iMjE0IiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iMjQ2IiBjeT0iMTA4OSIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjYxMyIgY3k9IjI3OCIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjI0OCIgY3k9IjExMjgiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSIxNzgiIGN5PSI5IiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iMzk4IiBjeT0iMjc0IiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iMjA3IiBjeT0iMTE1IiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iNTY4IiBjeT0iMzE4IiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iNTE4IiBjeT0iNzQ5IiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iMzYyIiBjeT0iMzAwIiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iMTY5IiBjeT0iODIyIiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iNDciIGN5PSI2MDciIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSI0NTEiIGN5PSI5OTMiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSIyNjQiIGN5PSI4MzciIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSIyNjMiIGN5PSI3NDUiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSIyOTMiIGN5PSI4ODMiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSIzOTYiIGN5PSI5MTkiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSIxMzUiIGN5PSIxMDYwIiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iMTIxIiBjeT0iMTE2IiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iMTEyIiBjeT0iOTgzIiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iNjA0IiBjeT0iMTA4MCIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjQyNSIgY3k9IjQ1MCIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjI4MyIgY3k9IjkwMyIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjIzMSIgY3k9Ijg1MCIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjEwNCIgY3k9IjU2NCIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjMiIGN5PSIyODYiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSIyNDgiIGN5PSIyMzYiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSI0MTMiIGN5PSIyNyIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjM4MCIgY3k9IjE0MyIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjYzMSIgY3k9Ijg3NSIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjUyOSIgY3k9IjkyMiIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjQxMyIgY3k9IjEwNjMiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSIzNzkiIGN5PSI2ODQiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSIzNDQiIGN5PSIxMTI4IiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iMjI4IiBjeT0iMjAwIiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iNTI1IiBjeT0iODA4IiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iNDMzIiBjeT0iNDkwIiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iMzE5IiBjeT0iMzExIiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iNjUiIGN5PSI0MjEiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSIyNjIiIGN5PSIxMzYiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSIyNDUiIGN5PSIxMjEiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSIzMzMiIGN5PSIxMDYyIiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iNTAwIiBjeT0iNzA5IiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iNDM2IiBjeT0iMzg5IiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iMzc1IiBjeT0iOTE0IiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iMjg4IiBjeT0iMzc0IiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iMTUxIiBjeT0iODQ4IiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iMTEwIiBjeT0iMTEyNyIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjY2IiBjeT0iOTY0IiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iNDQiIGN5PSI1NzQiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSIzOTgiIGN5PSI3MzkiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSI1MjUiIGN5PSIxMTMxIiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iNDI2IiBjeT0iMTA0MCIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjQ3OCIgY3k9IjEwMTMiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSIyMjMiIGN5PSIxMDM5IiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iODgiIGN5PSI1NCIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjUzNCIgY3k9IjQ5MCIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjYwNSIgY3k9IjgxOCIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjE5NSIgY3k9IjExNjQiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSIxNzciIGN5PSI5NzEiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSI2MDgiIGN5PSIxMDI2IiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iNjAzIiBjeT0iOTk1IiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iNTY0IiBjeT0iMjUzIiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iNDAxIiBjeT0iMTE4OCIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjI3MyIgY3k9Ijg4OCIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjIzMyIgY3k9Ijg2MyIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjYwOSIgY3k9IjEwMjkiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSI0MCIgY3k9IjExMjAiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSI2MTgiIGN5PSI4ODciIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSIzODIiIGN5PSI1MjEiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSIyOTIiIGN5PSIzNTAiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSI0NSIgY3k9Ijg1NSIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjQwMyIgY3k9IjU5NSIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjI2MiIgY3k9IjQ3MCIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjgzIiBjeT0iMTEzMyIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjkwIiBjeT0iNjk5IiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iNCIgY3k9Ijg0MSIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjYwMSIgY3k9IjIzMCIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjI2OCIgY3k9IjQxNyIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjQ2NSIgY3k9Ijc1NSIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjM2NSIgY3k9Ijk4MCIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjgzIiBjeT0iMTA5NiIgcj0iMC41NSIvPjxjaXJjbGUgY3g9Ijg5IiBjeT0iODkxIiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iNDU5IiBjeT0iMzEzIiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iNDQ2IiBjeT0iOTc0IiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iMTMyIiBjeT0iODc5IiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iNTMyIiBjeT0iNzc2IiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iNDUyIiBjeT0iMTA1NiIgcj0iMC41NSIvPjxjaXJjbGUgY3g9IjMxOCIgY3k9IjEwODgiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSI0OCIgY3k9IjEwMjUiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSI2MTgiIGN5PSI5MjIiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSI2MDIiIGN5PSI5NzIiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSI0NTciIGN5PSIxMTE1IiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iMzIzIiBjeT0iODgwIiByPSIwLjU1Ii8+PGNpcmNsZSBjeD0iMzYiIGN5PSIyODMiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSI1OTkiIGN5PSI0NTEiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSI1NjgiIGN5PSI0MDkiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSI2MjAiIGN5PSI4NzEiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSIzMTEiIGN5PSI1MTQiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSIzMDciIGN5PSI4MDgiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSIxMTYiIGN5PSI2MDYiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSIzNDMiIGN5PSIyMzIiIHI9IjAuNTUiLz48Y2lyY2xlIGN4PSI4OCIgY3k9IjI3OCIgcj0iMC41NSIvPjxjaXJjbGUgY3g9Ijg3IiBjeT0iODMiIHI9IjAuNTUiLz48L2c+PGNpcmNsZSBjeD0iNDAwIiBjeT0iNjU5IiByPSIxMSIgZmlsbD0iI2ZmZTZhZCIgb3BhY2l0eT0iLjEzIi8+PGNpcmNsZSBjeD0iNDAwIiBjeT0iNjU5IiByPSIzLjQiIGZpbGw9IiNmZmU2YWQiIG9wYWNpdHk9Ii45NyIvPjxjaXJjbGUgY3g9IjI4MiIgY3k9IjcwNSIgcj0iMTEiIGZpbGw9IiNmZjkxNjYiIG9wYWNpdHk9Ii4xMyIvPjxjaXJjbGUgY3g9IjI4MiIgY3k9IjcwNSIgcj0iMy40IiBmaWxsPSIjZmY5MTY2IiBvcGFjaXR5PSIuOTciLz48Y2lyY2xlIGN4PSIxODQiIGN5PSI3MzUiIHI9IjExIiBmaWxsPSIjZTJlNmZmIiBvcGFjaXR5PSIuMTMiLz48Y2lyY2xlIGN4PSIxODQiIGN5PSI3MzUiIHI9IjMuNCIgZmlsbD0iI2UyZTZmZiIgb3BhY2l0eT0iLjk3Ii8+PC9zdmc+")}
 /* ---- left rail ---------------------------------------------------------- */
+/* THE RAIL IS THE NIGHT SKY, and Leo is up by the throne.
+   WHY THE PLATE SITS WHERE IT DOES. --skyplate is real sky at one right-ascension
+   window, and that fixes Leo at 44% of the plate's height — it cannot be moved
+   without moving the constellation off its own coordinates. So the plate is sized
+   to the rail's width and pulled up 169px, which lands Leo's figure at y 16..124
+   at a 290px rail and y 8..100 at a 260px one: beside the throne (y 22..54) and
+   the wordmark, whole, at both widths.
+   THE STARFIELD IS NOT ASKED TO REACH THE FOOT, and this is a limit of real sky
+   rather than a choice. To put Leo at the throne AND fill a 900px column the plate
+   would have to be drawn 833px wide against a 290px rail — Leo cropped to its
+   middle third, Denebola and the Sickle's tip both cut. Leo whole and high is the
+   better trade, so the scrim below fades the field out instead: stars in the top
+   150px where the sky is darkest, gone by 300px, which is also what covers the
+   plate's own bottom edge (y 296..370 across rail widths) so it never reads as a
+   seam. A horizon glow washing out the faint stars is what a real sky does.
+   THE SCRIM IS THE FIRST LAYER because the first background-image paints on TOP:
+   it has to be over the plate to fade it. Its transparent stops are written in the
+   sky's own colour so the fade starts from nothing rather than from a grey.
+   AND THE RAIL CARRIES ITS OWN INK. Everything in here — brand, nav, the foot's
+   select — took its colour from the theme tokens, which on the light theme are
+   near-black: #16202a on a #0a0a14 sky is an invisible sidebar. The tokens below
+   are NOT a copy of the dark theme's block (a fourth palette that would drift from
+   the other three); they are a small palette chosen against this sky, violet-
+   tinted, and measured on it — 16.5:1 for --ink down to 6.2:1 for --muted at the
+   sky's brightest point, against a 4.5 floor. */
 .rail{
-  grid-row:1/-1; border-right:1px solid var(--rule); background:transparent;
+  grid-row:1/-1; border-right:1px solid var(--rule);
+  /* THE RAIL RE-RESOLVES ITS OWN INK, and this line is load-bearing. Overriding
+     --ink below does NOT retint anything that merely INHERITS a colour: what
+     inherits is body's computed rgb, resolved against :root's tokens long before
+     it reaches here. Measured — without this, .brand .mark stayed #16202a on the
+     light theme, near-black on the night sky, while every element that names
+     var(--ink) itself had already followed. */
+  color:var(--ink);
+  background-color:#0a0a14;
+  background-image:
+    linear-gradient(to bottom, rgba(10,10,20,0) 0, rgba(10,10,20,0) 150px,
+                    #130f26 300px, #181333 100%),
+    var(--skyplate, none);
+  background-size:100% 100%,100% auto;
+  background-position:0 0,center -169px;
+  background-repeat:no-repeat,no-repeat;
+  --ink:#ece9f7; --ink-2:#bfb8dd; --muted:#9b93bd; --gilt:#e2b552;
+  --accent:#a9b4f2; --accent-2:#c3cbf7; --edge:rgba(195,203,247,.9);
+  --line:rgba(179,170,230,.18); --line-2:rgba(179,170,230,.30);
+  --rule:rgba(179,170,230,.28);
+  --surface:rgba(22,18,46,.72); --surface-2:rgba(160,150,220,.14);
+  --inset:rgba(10,8,24,.55);
   display:flex; flex-direction:column; position:sticky; top:0; height:100vh; overflow:auto;
 }
+/* One sky for the column. The panel's own gradient started again halfway down the
+   rail with its own top stop, which read as a join; and its plate carries Leo, so
+   the rail showed the constellation TWICE — once at the throne and once in the
+   chat. Off, and the rail's single sky shows through.
+   .railchat.chatpanel, NOT .railchat .chatpanel. The rail's chat slot wears both
+   classes on ONE element, so the descendant form matched nothing and the second
+   Leo stayed on screen through a render that otherwise looked finished. The
+   descendant form is kept beside it because the slot is markup, not a promise:
+   if the panel is ever nested inside the slot this still holds.
+   Outside the rail .chatpanel keeps all of it — there it is a panel on a page. */
+.railchat.chatpanel,.railchat .chatpanel{background:none; color:inherit}
 .brand{padding:22px 22px 16px; border-bottom:1px solid var(--line)}
 .brand .mark{display:flex; align-items:center; gap:10px; text-decoration:none}
 .brand .scale{font-size:26px; filter:grayscale(.2)}
@@ -11589,19 +11699,6 @@ function resolutionLadder(d, nowH, tl, narrow, bare){
         ? {t:dt, h:(tl.dispute.h||null), what:`dispute opened · round ${(d.round||0)+1}`}
         : {t:nowT-0.4, nodate:true, what:`dispute opened · round ${(d.round||0)+1}`});
     }
-    /* THE CLOSE IS PUBLISHED NOW, so it is not estimated. ClaimTimeline carries
-       `voteclose:<unix>:<height>` — the moment the governor actually gates on —
-       and using it removes the projection that put this row five years out on a
-       claim answered in 2021: the old line derived the date from a height at an
-       assumed cadence, which is only right while the chain holds that pace.
-       The estimate stays as the fallback for a dispute opened before the stamps
-       existed, where a height is genuinely all there is; `est` marks which. */
-    if(tl.voteclose && tl.voteclose.t)
-      rows.push({h:tl.voteclose.h, t:tl.voteclose.t,
-        what:`vote closes · round ${(d.round||0)+1}`, future:true});
-    else if(d.voteEndsAt && nowH!=null)
-      rows.push({h:d.voteEndsAt, t:nowT+(d.voteEndsAt-nowH)*BLOCK_SECS,
-        what:`vote closes · round ${(d.round||0)+1}`, future:true, est:true});
     /* THE CLOSE IS PUBLISHED NOW, so it is not estimated. ClaimTimeline carries
        `voteclose:<unix>:<height>` — the moment the governor actually gates on —
        and using it removes the projection that put this row five years out on a
