@@ -112,7 +112,8 @@ type boardRow struct {
 	// clear the other.
 	global          bool   // all-surface redaction; the deep link withholds too
 	purged          bool   // text destroyed; the stub remains
-	globalClearedAt int64 // height a global act last cleared, for the re-set window
+	globalClearedAt     int64 // height a global act last cleared, for the re-set window
+	globalClearedAtTime int64 // unix seconds beside it; 0 on clears predating the stamps
 	// No legalCode here. One was carried and read by nothing: boardActCode
 	// already writes the category into the moderation log, and that copy is the
 	// durable one — PurgeModLogRow destroys reasons, not codes. A second home on

@@ -1,6 +1,6 @@
 # Deadlines in seconds, accounting in blocks
 
-**Status:** in progress. 9 of 11 gates converted (plus one found already done), and 2 of the 6 stored future heights; see the log at the end.
+**Status:** in progress. Every gate in the order list is converted (plus one found already done), and 2 of the 6 stored future heights. TWO GATES THE ORDER LIST OMITS remain — see the log.
 
 ## The problem, as observed
 
@@ -150,6 +150,7 @@ trailing ring; `pendingTTLBlocks` looks like accounting and is a deadline.
 | `moderation.gno:691` | `votingBlocks` after execute | `claimMod.executedAtTime` (added) | **converted** |
 | `moderation.gno:755` | `reSetWindowBlocks` (DMCA §512(g)) | `globalClearedAtTime` (added) | **converted** |
 | `modvote.gno:328,384,387,483` | `nominateEnd`, `voteEnd` | `nominateEndTime`/`voteEndTime` (added) | **converted** |
+| `boardlegal.gno:100` | `reSetWindowBlocks` (board row) | `globalClearedAtTime` (added) | **converted** |
 | `boardmod.gno:107,137` | `frozenUntil` | needs a stamp | unconverted |
 | `meta.gno:366` | `votingBlocks` after verdict | `verdictAtTime` | unconverted |
 | `p/governor` proposal `closes` | vote window | needs a stamp | unconverted — bug 1 |
@@ -243,6 +244,45 @@ units across two claims would be worse than falling back), and it is the one sit
 that already had a corpus row per arm — the discipline being retrofitted
 elsewhere. `supEdge.at` is a height "for the record" that nothing reads and
 nothing renders.
+
+### `boardlegal.gno:100` — the board row's counter-notice window (last in the order)
+
+Converted. `globalClearedAtTime` on the board row, written where the height is,
+and the gate calls `reSetWindowOpen` — the predicate iteration 7 built for the
+claim-level twin. One statutory period now has one implementation, so it cannot
+be retuned or converted in two halves.
+
+**A corpus row that had quietly become half a mutation.** `GlobalClearRow: arming
+the window` deleted the line that sets `globalClearedAt`. Its anchor still
+matched after the stamp was added, so `make anchors` said nothing — but the
+mutant now deleted only half the arming and left the stamp behind. It was still
+caught, by luck: the gate short-circuits on `globalClearedAt != 0`. Widened to
+delete both lines. **AN ANCHOR THAT STILL MATCHES IS NOT PROOF A ROW STILL MEANS
+WHAT IT SAID** — adding a line next to a mutated one silently narrows it.
+
+### Two gates the ORDER LIST does not name, found by sweeping after the last one
+
+The order list is complete as written; it is not complete as a list of gates.
+Sweeping for block arithmetic after finishing it turns up two more:
+
+- **`meta.gno:366`** — `now > cs.verdictAt+mc.params.votingBlocks`, the
+  meta-verdict execution expiry ("a verdict is not a sleeper round"). A real
+  unconverted gate. It IS in this document's table and was simply absent from the
+  order. `verdictAtTime` already exists, so it converts like the others.
+- **`dispute.gno:986`** — `Reopenable`, which answers whether the escrow window
+  is still open and which "a client gates the reopen txlink on". Its own gate
+  (dispute.gno:649) reads `escrowUntilAt` already, so the READ and the GATE now
+  disagree on a drifting chain: the button appears when the chain refuses, or
+  hides when it would accept. Same class as the election render's phase banner,
+  which is why that one was converted with its gates rather than deferred.
+
+Neither is a projection in the "renders a number" sense, so neither belongs in
+the projection pass. They are gates, and they should be done before the stored
+future heights.
+
+Verified: full kourtv2 suite green; six mutants compile and are killed, four
+boardlegal and both shared-predicate rows; `make anchors collisions staleguards
+guards` and check-read-purity/check-storage pass.
 
 ### `modvote.gno:328` — the ballot's phase clock (and the first stored future heights)
 

@@ -7865,7 +7865,7 @@
   "pkg": "kourtv2",
   "file": "boardlegal.gno",
   "label": "GlobalHideRow: the window is bounded (not forever)",
-  "find": "now < r.globalClearedAt+reSetWindowBlocks",
+  "find": "reSetWindowOpen(r.globalClearedAtTime, r.globalClearedAt, now)",
   "replace": "now >= 0"
  },
  {
@@ -7886,8 +7886,15 @@
   "pkg": "kourtv2",
   "file": "boardlegal.gno",
   "label": "GlobalClearRow: arming the window",
-  "find": "\tr.globalClearedAt = heightNow() // arms the re-set window\n",
+  "find": "\tr.globalClearedAt = heightNow() // arms the re-set window\n\tr.globalClearedAtTime = nowTime()\n",
   "replace": ""
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardlegal.gno",
+  "label": "GlobalClearRow: the row's window is armed without its wall-clock stamp",
+  "find": "\tr.globalClearedAtTime = nowTime()",
+  "replace": "\tr.globalClearedAtTime = 0"
  },
  {
   "pkg": "kourtv2",

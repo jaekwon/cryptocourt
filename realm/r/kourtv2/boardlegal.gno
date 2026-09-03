@@ -97,7 +97,11 @@ func GlobalHideRow(cur realm, courtSlug string, claimID, rowID uint64, categoryC
 		panic("kourtv2: that comment was already destroyed; there is nothing to withhold")
 	}
 	now := heightNow()
-	if !r.global && r.globalClearedAt != 0 && now < r.globalClearedAt+reSetWindowBlocks {
+	// The SAME §512(g) window the claim-level re-set reads (moderation.gno), on a
+	// board row instead of a claim, so it shares that gate's predicate rather than
+	// keeping a second copy of a statutory period.
+	if !r.global && r.globalClearedAt != 0 &&
+		reSetWindowOpen(r.globalClearedAtTime, r.globalClearedAt, now) {
 		d := ensureGlobalDAO()
 		fire, _ := approveAction(d.pending,
 			"boardreset:"+c.id+":"+strconv.FormatUint(claimID, 10)+":"+strconv.FormatUint(rowID, 10),
@@ -140,6 +144,7 @@ func GlobalClearRow(cur realm, courtSlug string, claimID, rowID uint64) {
 	}
 	r.global = false
 	r.globalClearedAt = heightNow() // arms the re-set window
+	r.globalClearedAtTime = nowTime()
 	scoreIndexPut(cs, r)
 	ensureClaimMod(c, ensureMod(c), claimID).
 		appendLog(who, boardActCode("board-global-clear", rowID, ""), "")

@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	sanitize "gno.land/p/nt/markdown/sanitize/v0"
 	testutils "gno.land/p/nt/testutils/v0"
@@ -218,6 +219,108 @@ func TestAClearRestoresOneRowAndArmsTheReSetWindow(cur realm, t *testing.T) {
 	}
 
 	// The restore, and it is load-bearing for every test that runs after this one.
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	SetPurgeThreshold(cross(cur), 1)
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	RemoveGlobalMod(cross(cur), mod2)
+}
+
+// THE ROW'S COUNTER-NOTICE WINDOW IS THE CLAIM'S, MEASURED THE SAME WAY.
+//
+// TestAClearRestoresOneRowAndArmsTheReSetWindow above walks it with SkipHeights,
+// which moves height and time together at 5s a block and so cannot say which
+// clock the gate read. §512(g) is written in days, and this is the second gate
+// enforcing it — on a board row rather than a claim. Both go through
+// reSetWindowOpen, so the statute has one implementation and not two that could
+// be converted separately or retuned apart.
+//
+// The bracket is the LITERAL 1_209_600 seconds and never the constant, for the
+// reason the claim-level pin gives: an assertion written as the constant moves
+// with the code it is supposed to hold still.
+func TestTheBoardReSetWindowRunsOnTheWallClock(cur realm, t *testing.T) {
+	const windowSecs = int64(1_209_600) // fourteen days
+	alice := testutils.TestAddress("blw-alice")
+	id, row := legalFixture(cur, "blw", alice)
+	dadmin := DirectoryAdmin()
+
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	GlobalHideRow(cross(cur), "blw", id, row, "dmca")
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	GlobalClearRow(cross(cur), "blw", id, row) // arms the window
+
+	c := mustCourt("blw")
+	cs := mustClaim(c, id)
+	r := mustBoardRow(cs, row)
+	if r.globalClearedAtTime == 0 {
+		t.Fatal("fixture: the clear must stamp the moment, or this pins the height arm")
+	}
+	clearedTime, clearedAt := r.globalClearedAtTime, r.globalClearedAt
+
+	// purgeM is 1 on the bootstrap DAO, so a lone key always fires and the
+	// windowed branch is invisible. Widen it — and PUT IT BACK, because the global
+	// DAO is package state and a stray threshold breaks tests in other files.
+	mod2 := testutils.TestAddress("blw-mod2")
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	AddGlobalMod(cross(cur), mod2)
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	SetPurgeThreshold(cross(cur), 2)
+
+	frozenH := heightNow()
+	bumpTo := func(target int64) {
+		d := target - nowTime()
+		if d < 0 {
+			t.Fatalf("fixture: %d is already behind us (now %d)", target, nowTime())
+		}
+		ctx := testing.GetContext()
+		ctx.Time = ctx.Time.Add(time.Duration(d) * time.Second)
+		testing.SetContext(ctx)
+	}
+
+	// ONE SECOND INSIDE: a lone key must not win the reversal race.
+	bumpTo(clearedTime + windowSecs - 1)
+	uassert.Equal(t, frozenH, heightNow())
+	uassert.True(t, heightNow() < clearedAt+reSetWindowBlocks) // blocks say "inside" throughout
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	GlobalHideRow(cross(cur), "blw", id, row, "dmca")
+	if BoardRowState("blw", id, row) != "." {
+		t.Fatalf("one key re-set the row %d seconds after the clear, still inside a "+
+			"%d-second window", nowTime()-clearedTime, windowSecs)
+	}
+
+	// ONE SECOND OUT, no block mined: the single key is enough again, which is
+	// what makes this a window rather than a permanent escalation.
+	bumpTo(clearedTime + windowSecs)
+	uassert.Equal(t, frozenH, heightNow())
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	GlobalHideRow(cross(cur), "blw", id, row, "dmca")
+	if BoardRowState("blw", id, row) != "g" {
+		t.Errorf("the window outlasted its stated %d seconds", windowSecs)
+	}
+
+	// ---- AND A PRE-STAMP ROW STILL READS HEIGHT, TO ITS EXACT BLOCK ----
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	GlobalClearRow(cross(cur), "blw", id, row)
+	r2 := mustBoardRow(cs, row)
+	r2.globalClearedAtTime = 0 // the pre-upgrade shape: a height, no stamp
+	target := r2.globalClearedAt + reSetWindowBlocks
+	if d := target - 1 - heightNow(); d > 0 {
+		testing.SkipHeights(d)
+	}
+	uassert.Equal(t, target-1, heightNow())
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	GlobalHideRow(cross(cur), "blw", id, row, "dmca")
+	if BoardRowState("blw", id, row) != "." {
+		t.Fatal("one key re-set a pre-stamp row one block short of its window")
+	}
+	testing.SkipHeights(1)
+	uassert.Equal(t, target, heightNow())
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	GlobalHideRow(cross(cur), "blw", id, row, "dmca")
+	if BoardRowState("blw", id, row) != "g" {
+		t.Errorf("a pre-stamp row's window outlasted its stated %d blocks", reSetWindowBlocks)
+	}
+
+	// The restore, load-bearing for every test that runs after this one.
 	testing.SetRealm(testing.NewUserRealm(dadmin))
 	SetPurgeThreshold(cross(cur), 1)
 	testing.SetRealm(testing.NewUserRealm(dadmin))
