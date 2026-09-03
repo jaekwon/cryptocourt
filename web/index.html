@@ -7773,7 +7773,22 @@ function mapTree(data, mode){
              size:mapClaimSize("#"+id+" "+((data.claims[id]||{}).title||""), mode,
                                mapNodeTiles(data.claims[id]).length)}); }
     }
-    (f.folders||[]).forEach((g,i)=>node.kids.push(folderNode(g, path==null? null : path+"."+i)));
+    /* A CHAIN SUBFOLDER IS ADDRESSED BY ITS OWN FID, exactly as a root one is.
+       The root walk below already reads `f.path!=null? String(f.path) : String(i)`
+       and chainFolders stamps every chain folder with `path:String(fid)`, so the
+       rule was already written once — this line threw the child's own path away
+       and appended an index to the parent's instead.
+       WHAT THAT COST, on the live covid court: FolderTree answers 3:2, 4:2, 5:2,
+       so Fauci's three subfolders have fids 3, 4 and 5, and the map linked them
+       as f/2.0, f/2.1 and f/2.2. resolveFolderPath rejects a dotted path on a
+       chain court outright — "one exact integer", deliberately, since 1.2 is not
+       an alias of 1 — so every subfolder on the map was a dead link that landed
+       on "No such folder on this court". The root folders worked, which is what
+       made it look like the map was fine.
+       The index path stays as the fallback for a curation folder, which has no
+       fid and for which position genuinely is the only handle it has. */
+    (f.folders||[]).forEach((g,i)=>node.kids.push(
+      folderNode(g, g.path!=null? String(g.path) : (path==null? null : path+"."+i))));
     return node;
   };
   const tops = (data.folders||[]).map((f,i)=>folderNode(f, f.path!=null? String(f.path) : String(i)));

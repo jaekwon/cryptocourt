@@ -309,6 +309,36 @@ ok("A-I pass on live 50-claim ring (both modes)", livepass);
   ok("a claim with no relations says so",
      mapSelCard(7, {claims:d.claims, relations:[]}, "covid").includes("no relations drawn"));
   ok("an unknown id renders nothing", mapSelCard(99, d, "covid")==="");
+}
+
+/* A CHAIN SUBFOLDER LINKS BY ITS OWN FID, and nothing pinned that until a live
+   folder on the map turned out to be a dead link. chainFolders stamps every chain
+   folder with path:String(fid); the root walk in mapTree has always read it, and
+   the recursion threw the child's own path away and appended an index to the
+   parent's instead. On the live covid court — FolderTree answers 3:2, 4:2, 5:2 —
+   that made f/2.0, f/2.1 and f/2.2 out of folders whose fids are 3, 4 and 5, and
+   resolveFolderPath rejects a dotted path on a chain court by design ("one exact
+   integer"), so every subfolder on the map landed on "No such folder".
+   BOTH SHAPES IN ONE FIXTURE, because the index path is not a bug for everyone:
+   a curation folder has no fid, position is the only handle it has, and it must
+   keep the dotted path. The chain folder carries one, the curation folder does
+   not, and the pair is what makes this an assertion about the RULE rather than
+   about one branch of it. */
+{
+  const d = {all:[1], claims:{1:{title:"A claim of fact.", statusText:"open — stake YES or NO"}},
+             relations:[], courtName:"C", linkFolders:true,
+             folders:[{name:"Fauci", path:"2", fid:2, chain:true, claims:[1], folders:[
+                        {name:"Proximal", path:"4", fid:4, chain:true, claims:[], folders:[]}]},
+                      {name:"Curated", claims:[], folders:[{name:"Nested", claims:[], folders:[]}]}]};
+  const svg = mapSvg(mapLayout(d,"titles"), d, "covid");
+  const hrefs = [...svg.matchAll(/class="mfold-a"[^>]*href="([^"]+)"/g)].map(m=>m[1]);
+  ok("a chain subfolder links by its own fid, not by an index under its parent",
+     hrefs.includes("#/c/covid/f/4"));
+  ok("...so no chain folder is addressed by a dotted path a chain court refuses",
+     !hrefs.some(h=>/\/f\/2\.\d/.test(h)));
+  ok("...and its parent still links by its fid", hrefs.includes("#/c/covid/f/2"));
+  ok("a curation subfolder keeps the dotted index it has no fid for",
+     hrefs.includes("#/c/covid/f/1.0"));
   /* THE CARD SAYS THE VERDICT THE WAY THE NODE AND THE CLAIM PAGE SAY IT: the
      side rides the sentence in its oval, the sentence is struck when the court
      ruled NO, and the phase pill that used to sit above it is gone — one fact
