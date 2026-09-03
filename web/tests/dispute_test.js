@@ -56,7 +56,7 @@ const html = disputeTicket("orem", 3, d, NOW);
 const ballotH3 = (/<h3>([\s\S]*?)<\/h3>/.exec(html) || [, null])[1];
 ok("the ballot names the answer on the record and asks about it",
    ballotH3 !== null
-   && /^Overturn the <span class="sidetag">(YES|NO)<\/span> answer\?$/.test(ballotH3));
+   && /^Overturn the <span class="sidetag vtag [yn]">(YES|NO)<\/span> answer\?$/.test(ballotH3));
 // It has to fit one line beside the clock, which is why it is four words and not
 // a sentence — the first version read "The answer on the record is YES. Should it
 // be overturned?" and wrapped.

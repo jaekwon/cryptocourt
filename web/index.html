@@ -813,19 +813,24 @@ html.embed .main{grid-column:1; grid-row:1; max-width:none; padding:0;
    ballot the tag is inside an <h3>, which is already bold — pinning 600 there
    would make the named side LIGHTER than the words around it. */
 .sbout .sidetag{margin-right:2px; font-weight:600}
-/* THE VERDICT'S OVAL, beside the claim title. SIZED AGAINST THE VIEWPORT, NOT
+/* THE ANSWER'S OVAL, beside the claim title and in the ballot. SIZED AGAINST
+   THE VIEWPORT, NOT
    THE HEADING: .page-h is clamp(26px,3.4vw,36px), so the shared .86em would set
    the side in 31px type inside a 40px pill and read as a second heading rather
    than a mark on the first. This tracks the ballot's oval, which is the size the
    mark was designed at, and stops growing when the heading does.
-   THE SIDE'S HUE HERE, unlike the ballot's ink. "Overturn the YES answer?" is a
-   neutral question about one side, so it takes the heading's colour; a verdict
-   IS a side. color, not border-color, because .sidetag draws in currentColor —
-   one declaration tints the border and the word together. */
+   THE SIDE'S HUE, here and in the ballot. Both name the same answer, so both
+   take its colour; two ovals for one answer in two colours read as two
+   different things. color, not border-color, because .sidetag draws in
+   currentColor — one declaration tints the border and the word together. */
 .page-h .vtag{font-size:clamp(12px,1.1vw,15px); vertical-align:.22em; margin-left:.12em;
   font-weight:600; letter-spacing:.1em}
-.page-h .vtag.y{color:var(--yes)}
-.page-h .vtag.n{color:var(--no)}
+/* COLOUR IS NOT SCOPED, sizing is. The oval appears in the page heading and in
+   the ballot's <h3>, which want very different type sizes — but the same answer
+   must be the same colour in both, so only the clamp above stays under
+   .page-h. */
+.vtag.y{color:var(--yes)}
+.vtag.n{color:var(--no)}
 /* The contested mark. Sized and coloured with the oval it follows rather than
    with the heading, so the two read as one subscript; muted because the oval is
    the statement and this only qualifies it. */
@@ -6456,12 +6461,15 @@ function disputeTicket(slug, id, d, nowH){
   const ansSide = (d.answer===0 || d.answer===1)? sideName(d.answer) : null;
   /* THE SAME OVAL AS THE SIGNAL BAR. The side's name is the same mark wherever
      it is named, so it carries the same hairline here as it does above the
-     percentages — <span class="sidetag"> rather than a bare <b>. The oval takes
-     currentColor, which in this <h3> is the heading's ink, so the question does
-     not acquire a green or red word in the middle of a sentence that is asking
-     about both sides. */
+     percentages — <span class="sidetag"> rather than a bare <b>.
+     IN THE SIDE'S HUE, which reverses the earlier call. The oval used to take
+     the heading's ink on the reasoning that the question asks about both sides
+     — but it does not name both: it names the ANSWER, the same one the title
+     now badges in green or red a few pixels above. Two ovals, one answer, two
+     colours read as two different things. The question mark is what says
+     nothing is decided; the colour only says which side is on the record. */
   const ballotQ = ansSide
-    ? `Overturn the <span class="sidetag">${ansSide}</span> answer?`   // one line at every width
+    ? `Overturn the <span class="sidetag vtag ${ansSide === "NO" ? "n" : "y"}">${ansSide}</span> answer?`
     : "Should this answer be overturned?";
   return `<div class="ticket" style="margin-top:12px"><h3>${ballotQ}</h3>
       <div class="hint">${ballotHint(slug, d, nowH)} <button type="button" class="helplink" data-help="help-vote">How this vote works →</button></div>
