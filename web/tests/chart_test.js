@@ -506,31 +506,35 @@ ok("every demo claim with a timeline parses", Object.entries(DEMO.claims).filter
   const t=parseTimeline(d.timeline); return t && t.now && t.opened && t.opened.t>0;}));
 ok("no claim is stamped in the future", Object.values(DEMO.claims).filter(d=>d.timeline).every(d=>{
   const t=parseTimeline(d.timeline); return t.opened.t<=t.now.t && (!t.answered||t.answered.t<=t.now.t) && (!t.verdict||t.verdict.t<=t.now.t);}));
-/* THE CONVICTION CHIP CARRIES ITS UNIT ONCE. It read
-   ccText(...).replace(/ [A-Z:]+$/, "") to drop the first symbol so the pair
-   could share one at the end — and in MICRO units the text is
-   "3,718 µKOURT:COVID", where the space sits before the µ and µ is not [A-Z:],
-   so the regex matched nothing and the symbol stayed. The chip then printed the
-   unit TWICE in one line, once as plain text and once as the gold bar, which is
-   how it was spotted. Taken from ccFigure now, so there is nothing to strip. */
+/* THE CONVICTION CHIP IS ONE FIXED UNIT NOW, and this block used to be seven
+   assertions about the three shapes it had before: a µ prefix under 0.01, whole
+   coin above, and a mixed pair that had to print the symbol TWICE to avoid
+   filing a whole figure under a micro label. The bug that earned those tests was
+   a strip regex — ccText(...).replace(/ [A-Z:]+$/, "") — which never matched in
+   micro units, because the space sits before the µ and µ is not [A-Z:], so the
+   unit printed twice in one line.
+   All three shapes are gone: the figure is CC·wk to four places whatever the
+   magnitude. What is worth keeping from the old block is the negative — that the
+   strip regex has not come back — and the new invariant that both sides are
+   always in the SAME unit, which is what the mixed case used to violate. */
 {
   const bare = h => String(h).replace(/<[^>]*>/g, "");
   const chip = (a, b) => bare(chartChips({convYes:a, convNo:b}, "covid"));
 
-  const micro = chip(3718, 3225);
-  ok("both figures in micro share one unit", /conviction 3,718 \/ 3,225 µ/.test(micro));
-  ok("...and the unit is not printed twice", (micro.match(/OURT:COVID|Kourt:COVID/gi) || []).length === 1);
-
-  const whole = chip(17_000_000, 15_000_000);
-  ok("both figures whole share one unit", /conviction 17\.0 \/ 15\.0 /.test(whole));
-  ok("...once", (whole.match(/OURT:COVID|Kourt:COVID/gi) || []).length === 1);
-
-  /* MIXED UNITS GET TWO SYMBOLS, deliberately. "3,718 / 15.0 µKOURT:COVID"
-     would put a micro figure and a whole one under one micro label — a wrong
-     number rather than a terse one. */
-  const mixed = chip(3718, 15_000_000);
-  ok("a micro figure beside a whole one keeps its own unit",
-     (mixed.match(/OURT:COVID|Kourt:COVID/gi) || []).length === 2);
+  ok("a micro-scale pair reads in CC·wk to four places",
+     /conviction 0\.0037 \/ 0\.0032 CC·wk/.test(chip(3718, 3225)));
+  ok("a whole-coin pair reads in the same unit, not a bigger one",
+     /conviction 17\.0000 \/ 15\.0000 CC·wk/.test(chip(17_000_000, 15_000_000)));
+  /* THE CASE THE OLD SHAPE COULD NOT STATE. 3,718 µ beside 17 whole coin used to
+     need two symbols to stay truthful; on a fixed scale it is one unit and the
+     pair is comparable by eye, which is the whole point of the change. */
+  ok("a micro figure beside a whole one shares one unit and stays honest",
+     /conviction 0\.0037 \/ 15\.0000 CC·wk/.test(chip(3718, 15_000_000)));
+  ok("...and the unit appears exactly once", (chip(3718, 15_000_000).match(/CC·wk/g) || []).length === 1);
+  /* NO COIN SYMBOL AT ALL, which is what removes the double-print by
+     construction rather than by getting a regex right. */
+  ok("...with no coin symbol left to print twice",
+     (chip(3718, 3225).match(/OURT:COVID|Kourt:COVID/gi) || []).length === 0);
   /* ASSERTED AGAINST CODE, NOT PROSE. Written against the raw source first, and
      it failed on the COMMENT beside the fix, which quotes the regex it replaced
      — the one place that pattern is worth keeping. The repo's own stripper is
@@ -540,7 +544,8 @@ ok("no claim is stamped in the future", Object.values(DEMO.claims).filter(d=>d.t
     const code = stripHtml(src).out;   // stripHtml, not stripJs: this is the page, not a script file
     ok("...and no regex strip survives in the code",
        !/replace\(\/ \[A-Z:\]\+\$\//.test(code));
-    ok("...the figure comes from ccFigure instead", /ccFigure\(d\.convYes\)/.test(code));
+    ok("...the figure is a fixed-point division, not a scale switch",
+       /\(Number\(n \|\| 0\) \/ 1e6\)\.toFixed\(4\)/.test(code));
   }
 }
 

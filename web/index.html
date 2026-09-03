@@ -10990,36 +10990,29 @@ function chartChips(d, slug){
        one gets its own, because "3,718 / 0.32 µKOURT:COVID" is two different
        units under one label. */
     (() => {
-      // DECLARED IN HERE, NOT AT TOP LEVEL, and that is not style. The test
-      // harnesses build a script by slicing several regions out of this file and
-      // eval'ing them, and two of those regions overlap around cc() — so a
-      // top-level `const` there is declared twice in one scope and every
-      // harness that pulls both slices dies with "Identifier already declared".
-      // polish_test and share_test did exactly that. Inside the IIFE it is
-      // function-scoped, so a region included twice costs nothing.
-      const CONV_UNIT = "·wk";
-      const cy = ccFigure(d.convYes), cn = ccFigure(d.convNo);
-      // THE UNIT CARRIES TIME, because the figure does. Conviction is
-      // Σ stake × Δ(rate × blocks), and convToCC divides by
-      // periodBlocks × 10000 × 1e6: the 10000×1e6 cancels the rate's
-      // fixed-point scale, but periodBlocks is a TIME normalisation, so what
-      // survives is coin × periods — and a period is one week
-      // (periodBlocks = 120,960). Labelling it "µKourt:COVID" alone said coin,
-      // which is a different quantity from the one printed: 3,718 here means
-      // 3,718 µ held for a week, or 7,436 µ held for half of one.
-      //
-      // Both figures take the suffix in the mixed-scale branch rather than one
-      // trailing copy governing the row, on the same grounds the shared-unit
-      // note above gives for falling back: busy and right beats tidy and wrong.
-      const t = cy.micro === cn.micro
-        ? `conviction ${cy.fig} / ${cc(d.convNo, slug)}${CONV_UNIT}`
-        : `conviction ${cc(d.convYes, slug)}${CONV_UNIT} / ${cc(d.convNo, slug)}${CONV_UNIT}`;
+      /* ONE FIXED UNIT, WITH DECIMALS. This chip used to switch scales the way
+         every other coin figure on the page does — a µ prefix under 0.01, whole
+         coin above — and share one trailing symbol when both sides landed on the
+         same side of that line. Three shapes to get right, and the mixed case
+         had to print the symbol twice to stay honest.
+         Conviction does not need any of it. It is not a balance anybody spends;
+         it is a weight, read against the other side, so a stable scale is worth
+         more than a short string. Fixed at CC·wk to four places: both figures
+         are always in the same unit, the pair is always comparable at a glance,
+         and the mixed case stops existing.
+         CC is the court's coin (6 decimals, so 1e6 base units to 1 CC) and the
+         week is the realm's own accounting period — periodBlocks, which
+         convToCC already divides by. So neither half of this unit is a
+         conversion invented for display: 1.0000 CC·wk is one whole coin staked
+         for one week. */
+      const wk = n => (Number(n || 0) / 1e6).toFixed(4);
+      const t = `conviction ${wk(d.convYes)} / ${wk(d.convNo)} CC·wk`;
       return {t, title: "Conviction is stake multiplied by the time it was held"
-        + " — YES / NO, in coin × weeks: 3,718 µ means 3,718 µ held for one"
-        + " week, or twice that held for half. It is the weight the accuracy"
-        + " reward is shared out by, so it rewards backing the right answer"
-        + " early. The stake bar above shows the coin itself; this is that coin"
-        + " times how long it stayed."};
+        + " — YES / NO, in CC·wk. 1.0000 is one whole coin staked for one week;"
+        + " 0.0037 is 3,718 µ for a week, or twice that for half. It is the"
+        + " weight the accuracy reward is shared out by, so it rewards backing"
+        + " the right answer early. The stake bar above shows the coin itself;"
+        + " this is that coin times how long it stayed."};
     })(),
     d.round? `${d.round} failed round${d.round>1?"s":""}`:null,
     d.disputeBondNext? `next dispute bond ${cc(d.disputeBondNext,slug)}`:null,
@@ -11394,8 +11387,19 @@ function resolutionLadder(d, nowH, tl, narrow, bare){
        Sorted after the failed rounds, which is when it opened. */
     if(d.phase==="disputed") rows.push({t:nowT-0.4, nodate:true,
       what:`dispute opened · round ${(d.round||0)+1}`});
-    if(d.voteEndsAt && nowH!=null) rows.push({h:d.voteEndsAt, t:nowT+(d.voteEndsAt-nowH)*BLOCK_SECS,
-      what:`vote closes · round ${(d.round||0)+1}`, future:true, est:true});
+    /* THE CLOSE IS PUBLISHED NOW, so it is not estimated. ClaimTimeline carries
+       `voteclose:<unix>:<height>` — the moment the governor actually gates on —
+       and using it removes the projection that put this row five years out on a
+       claim answered in 2021: the old line derived the date from a height at an
+       assumed cadence, which is only right while the chain holds that pace.
+       The estimate stays as the fallback for a dispute opened before the stamps
+       existed, where a height is genuinely all there is; `est` marks which. */
+    if(tl.voteclose && tl.voteclose.t)
+      rows.push({h:tl.voteclose.h, t:tl.voteclose.t,
+        what:`vote closes · round ${(d.round||0)+1}`, future:true});
+    else if(d.voteEndsAt && nowH!=null)
+      rows.push({h:d.voteEndsAt, t:nowT+(d.voteEndsAt-nowH)*BLOCK_SECS,
+        what:`vote closes · round ${(d.round||0)+1}`, future:true, est:true});
     rows.push({t:nowT, h:tl.now.h, what:"now", now:true});
     rows.sort((a,b)=>a.t-b.t);
     const body = rows.map(r=>{
