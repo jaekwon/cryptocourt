@@ -826,6 +826,11 @@ html.embed .main{grid-column:1; grid-row:1; max-width:none; padding:0;
   font-weight:600; letter-spacing:.1em}
 .page-h .vtag.y{color:var(--yes)}
 .page-h .vtag.n{color:var(--no)}
+/* The contested mark. Sized and coloured with the oval it follows rather than
+   with the heading, so the two read as one subscript; muted because the oval is
+   the statement and this only qualifies it. */
+.page-h .vq{font-size:clamp(12px,1.1vw,15px); vertical-align:.22em; margin-left:.1em;
+  font-weight:600; color:var(--muted)}
 /* THE STRIKE IS THE COURT'S, so it is drawn in the losing side's hue rather than
    in ink — a grey rule through a title reads as "deleted", and nothing here was
    deleted. Thickness in em so it tracks the clamped heading instead of going
@@ -11160,6 +11165,20 @@ function focusStakeSide(side){
    the pill beside it already refuse an unreadable side. */
 function claimTitleHtml(d){
   const t = safeInline(d && d.title);
+  /* A CONTESTED ANSWER IS SHOWN, AND QUESTIONED. The oval only appeared once a
+     claim SETTLED, so a claim under dispute — the one moment a reader most
+     wants to know what is being argued about — carried a bare title. It wears
+     the answered side's oval now, followed by a question mark, because that
+     answer is on the record and is exactly what the vote is contesting.
+     NOT STRUCK, even when the answer is NO: the strike says "no longer
+     accurate", which is a verdict, and nothing has been decided yet. */
+  if(d && d.phase === "disputed"){
+    const a = d.answer;
+    if(a !== 0 && a !== 1) return `<h1 class="page-h">${t}</h1>`;
+    return `<h1 class="page-h">${t}`
+      + ` <span class="sidetag vtag ${a === 1 ? "n" : "y"}">${sideName(a)}</span>`
+      + `<span class="vq" title="under dispute — this answer is being contested">?</span></h1>`;
+  }
   if(!d || d.phase !== "settled") return `<h1 class="page-h">${t}</h1>`;
   const v = (d.verdict != null ? d.verdict : d.answer);
   if(v !== 0 && v !== 1) return `<h1 class="page-h">${t}</h1>`;

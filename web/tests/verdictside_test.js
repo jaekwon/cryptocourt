@@ -229,10 +229,30 @@ const run = async (rows, v, mode) => {
      can still come back. "closed" and "provClose" ended with no decision at
      all, which is not a NO. Every phase the page can be in is listed, so a new
      one cannot quietly inherit the mark. */
-  for(const ph of ["open","answered","disputed","provisional","closed","provClose"]){
+  for(const ph of ["open","answered","provisional","closed","provClose"]){
     const h = claimTitleHtml({phase:ph, title:T, verdict:1, answer:1});
     ok(`a ${ph} claim is neither struck nor badged`,
        !h.includes("<s>") && !h.includes("sidetag"));
+  }
+  /* DISPUTED IS THE ONE EXCEPTION, and only half of it. The rule above exists
+     because a strike says "no longer accurate" about a sentence that can still
+     come back — that reasoning is about the STRIKE, and it still holds here: a
+     disputed claim is never struck, whichever way it was answered.
+     The BADGE is different. Under dispute the answered side is on the record and
+     is precisely what the vote is contesting, so hiding it left a bare title at
+     the one moment a reader most wants to know what is being argued about. It
+     wears the oval followed by a question mark, and the question mark is what
+     keeps it from reading as a decision. */
+  {
+    const dn = claimTitleHtml({phase:"disputed", title:T, verdict:1, answer:1});
+    const dy = claimTitleHtml({phase:"disputed", title:T, answer:0});
+    ok("a disputed claim is badged with the answered side", dn.includes('vtag n">NO<'));
+    ok("...taken from the ANSWER, not a provisional verdict", dy.includes('vtag y">YES<'));
+    ok("...marked as contested", dn.includes('class="vq"') && dn.includes(">?<"));
+    ok("...and still never struck, either way",
+       !dn.includes("<s>") && !dy.includes("<s>"));
+    ok("...and an unreadable side still prints no mark",
+       !claimTitleHtml({phase:"disputed", title:T, answer:null}).includes("sidetag"));
   }
   /* AN UNREADABLE SIDE PRINTS NO MARK rather than sideName's dash, the way
      statusText and the pill beside it already refuse. An oval reading "—" makes
