@@ -155,7 +155,11 @@ ok("...the vote buttons are marked for the click-time check",
   // Greyed, not deleted: the question and the two outcomes are still what the
   // round was about.
   ok("...with the buttons still there to read",
-     (shut.match(/data-act="1"/g)||[]).length >= 3 && shut.includes("Vote to overturn"));
+   // All three still rendered, and named for the side each lands on now rather
+   // than for the action. The count matters as much as the labels: greyed, not
+   // deleted, is the whole point of this branch.
+   (shut.match(/data-act="1"/g)||[]).length >= 3
+   && /Keep \((YES|NO)\)/.test(shut) && /Flip \((YES|NO)\)/.test(shut));
   ok("...and dimmed by a rule that fires on the block",
      src.includes(".actions[data-voteblocked] .btn{opacity:.5; cursor:not-allowed}"));
   // RESOLVE IS NOT A VOTE, so it stays outside the marked block: somebody who

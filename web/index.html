@@ -6468,6 +6468,18 @@ function disputeTicket(slug, id, d, nowH){
      now badges in green or red a few pixels above. Two ovals, one answer, two
      colours read as two different things. The question mark is what says
      nothing is decided; the colour only says which side is on the record. */
+  /* KEEP AND FLIP, NAMING THE SIDE EACH ONE LANDS ON. "Vote to overturn" and
+     "Vote to uphold" describe an action on a proposal; a voter is choosing
+     between two answers, and had to hold in their head that overturn=yes and
+     uphold=no while the buttons said neither. The button names the side it
+     produces now, so the choice is read off the face rather than reconstructed.
+     THE CHOICE VALUES DO NOT MOVE: keep is still choice "no" (do not overturn)
+     and flip is still "yes". Only the labels changed, and they are the crossed
+     pair — getting it backwards would cast every vote the wrong way, and no
+     test would catch it because both are valid calls.
+     THE COLOUR FOLLOWS THE NAMED SIDE, not the action, so Flip is red only when
+     it lands on NO. The old pair coloured overturn red always, which was right
+     for a YES answer and backwards for a NO one. */
   const ballotQ = ansSide
     ? `Overturn the <span class="sidetag vtag ${ansSide === "NO" ? "n" : "y"}">${ansSide}</span> answer?`
     : "Should this answer be overturned?";
@@ -6475,8 +6487,10 @@ function disputeTicket(slug, id, d, nowH){
       <div class="hint">${ballotHint(slug, d, nowH)} <button type="button" class="helplink" data-help="help-vote">How this vote works →</button></div>
       <div class="actions" id="voteactions" style="margin-top:10px"${
         closed? ` data-voteblocked="Voting has closed for this round. All that is left is to resolve it."` : ""}>
-        ${btn("Vote to overturn","VoteDispute",{courtSlug:slug,claimID:id,choice:"yes"},"no")}
-        ${btn("Vote to uphold","VoteDispute",{courtSlug:slug,claimID:id,choice:"no"},"yes")}
+        ${btn(`Keep (${ansSide || "as answered"})`,"VoteDispute",
+              {courtSlug:slug,claimID:id,choice:"no"}, ansSide === "NO" ? "no" : "yes")}
+        ${btn(`Flip (${ansSide ? (ansSide === "NO" ? "YES" : "NO") : "the answer"})`,"VoteDispute",
+              {courtSlug:slug,claimID:id,choice:"yes"}, ansSide === "NO" ? "yes" : "no")}
         ${btn("Spam","VoteDispute",{courtSlug:slug,claimID:id,choice:"spam"},"mute mini","",null,null,null,null,ICN_BIN)}</div>
       <!-- RESOLVE IS NOT A VOTE, so it sits outside the block the eligibility
            check marks: somebody who staked on this claim may not judge it and may
