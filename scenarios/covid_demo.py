@@ -364,19 +364,30 @@ D = [
        cast=("journo", "foia", "oversight", "virology"),
        body='Settles on the grant record: the subawards from EcoHealth Alliance to the Wuhan Institute of Virology, and the NIH acknowledgements of them.',
        title="US federal grants funded coronavirus research at the Wuhan Institute of Virology."),
-  dict(key="p3co", on="2021-10-20", arc="dispute", shape=short_grind,
+  # A LIVE DISPUTE HAS TO BE RECENT, and these three are the only claims that end
+# with one running. The scenario compresses 2,379 narrative days into a clock
+# budget of 1,209,600 blocks — 70 days of block time, a 34x squeeze — so a date
+# and a block deadline can never both be right across the whole story. They can
+# be right NEAR THE END, where the two clocks have not had time to diverge: a
+# dispute opened four days before the story's now has a vote closing ~7 days out
+# by block count, which is what a reader is told and what the chain enforces.
+# Dated in 2021 the same claim showed an answer from five years ago beside a
+# vote closing next week, which is the state that was reported as nonsense.
+# The subjects are unchanged — a court files a claim about a 2021 event whenever
+# somebody raises it, and the filing date is when it was raised.
+dict(key="p3co", on="2026-11-18", arc="dispute", shape=short_grind,
        path=("Fauci", "Gain-of-function funding"),
        cast=("biosafety", "virology", "oversight", "epi"),
        body='Settles on a determination by HHS or another authorised body that the funded work did or did not meet the P3CO definition.\n\nThe sharpest claim in this folder, because it is the one thing everybody is actually arguing about: nobody disputes that the money reached the work. NIH conceded in 2021 that a limited experiment met some criteria while rejecting the label.',
        title="The NIAID-funded work at the Wuhan Institute of Virology met the federal P3CO definition of gain-of-function research."),
-  dict(key="perjury", on="2026-06-22", arc="dispute", shape=short_grind,
+  dict(key="perjury", on="2026-11-20", arc="dispute", shape=short_grind,
        path=("Fauci", "Gain-of-function funding"),
        cast=("oversight", "virology", "skeptic", "foia"),
        body='Settles on a perjury referral producing a finding, or an authoritative determination by a body with subpoena power. An accusation attached to a document release is not a finding.',
        title="Testimony given to Congress in 2024 denying participation in intelligence discussions about Wuhan research was false."),
 
   # ------------------------------------------------- Fauci / Proximal Origin
-  dict(key="prompted", on="2023-07-11", arc="dispute", shape=short_grind,
+  dict(key="prompted", on="2026-11-19", arc="dispute", shape=short_grind,
        path=("Fauci", "Proximal Origin"),
        cast=("foia", "virology", "oversight", "epi"),
        body='Settles on the correspondence together with sworn testimony from the participants. The 1 February 2020 teleconference and the drafting timeline are documented; whether they amount to prompting is what is contested.',
