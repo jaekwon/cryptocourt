@@ -3544,16 +3544,6 @@ function ccFigure(n){ const u=n||0, v=u/1e6;
   return {fig:(v>=1000? fmtN(v): v.toFixed(v<10?2:1)), micro:false}; }
 function cc(n, slug){ const {fig,micro}=ccFigure(n);
   return fig+" "+(micro?"µ":"")+ccSymHtml(slug); }
-/* The time half of conviction's unit. convToCC divides the accumulator by
-   periodBlocks, which court.gno calls "1 week — the emission accounting
-   period", so what the page prints is coin × WEEKS and not coin.
-
-   ALREADY PINNED, so this needs no registration of its own: MIRRORS maps this
-   file's WEEK to the realm's periodBlocks, and WEEK is 120960 here. Move the
-   period and that mirror fails, which is the same edit that would strand this
-   label — so a second entry naming the same fact would be two guards owning
-   one invariant, and the one that drifts is the one nobody reruns. */
-const CONV_UNIT = "·wk";
 /* ONE UNIT FOR A ROW OF FIGURES. Four amounts each carrying "µKourt:COVID"
    spent four times the width to say the same thing once, and the repetition
    crowded out the numbers, which are the point. The unit goes after all of
@@ -11000,6 +10990,14 @@ function chartChips(d, slug){
        one gets its own, because "3,718 / 0.32 µKOURT:COVID" is two different
        units under one label. */
     (() => {
+      // DECLARED IN HERE, NOT AT TOP LEVEL, and that is not style. The test
+      // harnesses build a script by slicing several regions out of this file and
+      // eval'ing them, and two of those regions overlap around cc() — so a
+      // top-level `const` there is declared twice in one scope and every
+      // harness that pulls both slices dies with "Identifier already declared".
+      // polish_test and share_test did exactly that. Inside the IIFE it is
+      // function-scoped, so a region included twice costs nothing.
+      const CONV_UNIT = "·wk";
       const cy = ccFigure(d.convYes), cn = ccFigure(d.convNo);
       // THE UNIT CARRIES TIME, because the figure does. Conviction is
       // Σ stake × Δ(rate × blocks), and convToCC divides by
