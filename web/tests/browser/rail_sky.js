@@ -23,17 +23,26 @@
 //      edge reads as a seam across the sidebar. The scrim over it is opaque from
 //      300px; the plate ends between 296px and 370px across rail widths.
 //
-// HOW 2 AND 4 ARE MEASURED. Not by reading CSS — by turning the plate layer off
+// HOW 4 IS MEASURED. Not by reading CSS — by turning the RAIL's plate layer off
 // and comparing screenshot bytes strip by strip. A strip whose bytes change is a
 // strip with stars in it. That is what settled where the field actually ends,
-// after reading a downscaled screenshot suggested stars near the foot that were
-// really the demo dot and some punctuation.
+// after a downscaled screenshot suggested stars near the foot that were really
+// the demo dot and some punctuation.
+//
+// AND WHAT THAT MEASUREMENT CANNOT SEE, which an ablation had to teach it: the
+// override it injects names `.rail`, so a sky painted by the PANEL survives in
+// both shots and the strips come out identical. The strip diff is blind to case
+// 2 by construction — reverting the reset to `.railchat .chatpanel` leaves every
+// strip unchanged and only the slot-background arm above fires. Two arms for two
+// facts, and the header used to claim the wrong one caught it.
 //
 // Ablated, and each fires on the arm named: dropping `color:var(--ink)` from
-// .rail fails the light-theme ink arm at rgb(22,32,42); writing the chat reset as
-// `.railchat .chatpanel` fails the one-sky arm (stars reappear at y 520 and 660);
-// moving the plate offset to -34px fails the Leo-at-the-throne arm; pulling the
-// scrim's opaque stop to 500px fails the no-seam arm.
+// .rail fails both light-theme arms (rail color rgb(22,32,42), worst contrast
+// 1.08:1); writing the chat reset as `.railchat .chatpanel` fails the slot arm
+// alone, for the reason just given; moving the plate offset back to the chat
+// panel's -34px fails the Leo arm (figure at y 151..259, well below the throne's
+// 22..54); pushing the scrim's opaque stop to 700px fails the no-seam arm with
+// stars at every strip down to 870.
 const {PAGE, demoPage} = require('./harness');
 const crypto = require('crypto');
 
