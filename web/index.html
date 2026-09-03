@@ -3373,6 +3373,7 @@ async function fillWithdrawSides(slug, id, d, nowH, vAt){
      verdict height, an unread author, an unread position — any of those and the
      button stands, because withholding a control from somebody who could have
      used it is the worse error. */
+  let graceLocked = false;   // set below; read by the no-stake note at the end
   const crys = document.querySelector(".stakewrap .ticket [data-crys] .btn");
   const party = crys? await claimParties(slug, id, d) : null;
   if(crys && !crys.getAttribute("data-blocked") && vAt && nowH!=null
@@ -3383,6 +3384,7 @@ async function fillWithdrawSides(slug, id, d, nowH, vAt){
     crys.setAttribute("data-blocked",
       "Only this claim's author, its answerer and its stakers can open the rewards in the first week after the verdict. Anyone can after that.");
     crys.setAttribute("aria-disabled","true");
+    graceLocked = true;
   }
   await fillTicketPulls(slug, id, d, p);
   let shown = 0;
@@ -3409,7 +3411,18 @@ async function fillWithdrawSides(slug, id, d, nowH, vAt){
   if(box && !box.querySelector(".txnote")){
     const n = document.createElement("div");
     n.className = "txnote"; n.setAttribute("role","status");
-    n.textContent = "You have no stake on this claim.";
+    /* AND WHY THAT MATTERS HERE, when it does. The greyed "Open the rewards"
+       beside this note carries the same fact, but only on the click — blocked
+       buttons stay pressable precisely so the press can explain itself. A
+       reader who has no stake is being told two things at once and had to
+       press a disabled-looking control to connect them.
+       Only when the week is actually running: after it anyone may open the
+       rewards, and the sentence would be false. */
+    n.textContent = "You have no stake on this claim."
+      + (graceLocked
+         ? " For the first week after the verdict only those with stake may pick"
+           + " the moment of settlement."
+         : "");
     box.appendChild(n);
   }
 }

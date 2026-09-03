@@ -145,6 +145,17 @@ ok("offered when the court opted into one", polishLink("orem",7,open,null,null,1
      /data-crys="1"/.test(clear));
   ok("...the guard is gated on the mirrored window, not a literal",
      /\(nowH - vAt\) < FINALIZE_GRACE/.test(src));
+  /* AND THE NOTE BESIDE IT SAYS THE SAME THING WITHOUT A CLICK. The greyed
+     button carries the reason in data-blocked, which blocked buttons reveal only
+     when pressed — so a reader with no stake was told two facts a press apart.
+     TIED TO THE SAME CONDITION, not re-derived: the sentence is appended off the
+     flag the greying sets, so it cannot appear after the week has lapsed, when
+     anyone may open the rewards and it would be false. */
+  ok("...and the no-stake note explains the week when the week is running",
+     /graceLocked = true;/.test(src)
+     && /graceLocked[\s\S]{0,120}only those with stake may pick/.test(src));
+  ok("...and says nothing extra once the week has lapsed",
+     /graceLocked\s*\?[\s\S]{0,220}:\s*""/.test(src));
   /* BOTH HEIGHTS FROM THE SAME CLOCK. chainHeight() asks the RPC for the latest
      block; a verdict height comes from ClaimTimeline, which the realm answers
      from heightNow() — chain height PLUS the test skew. On a seeded chain those
