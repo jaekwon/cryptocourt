@@ -6107,6 +6107,27 @@
  },
  {
   "pkg": "kourtv2",
+  "file": "clock.gno",
+  "label": "ClaimTimeline: the vote's close is not published",
+  "find": "\t\tout += \";voteclose:\" + itoa(closesTime) + \":\" + itoa(closes)",
+  "replace": "\t\tout += itoa(closes*0 + closesTime*0)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "clock.gno",
+  "label": "ClaimTimeline: the vote's close is published as a zero, forcing an estimate",
+  "find": "\t\t_, closesTime := c.gov.TimingsAt(cs.proposalID)",
+  "replace": "\t\tclosesTime := int64(0)"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "TimingsAt: the published close is not the one the gate reads",
+  "find": "\treturn p.openedTime, p.closesTime\n}",
+  "replace": "\treturn p.openedTime, p.closesTime + 1\n}"
+ },
+ {
+  "pkg": "kourtv2",
   "file": "moderation.gno",
   "label": "PendingApproval: the published deadline is not the one the gate reads",
   "find": "\t\tdeadlineTime(a.openedAtTime, blocksToSecs(pendingTTLBlocks)),",

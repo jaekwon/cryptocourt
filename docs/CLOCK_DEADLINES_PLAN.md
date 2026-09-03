@@ -1,6 +1,6 @@
 # Deadlines in seconds, accounting in blocks
 
-**Status:** in progress. EVERY GATE IS CONVERTED — the order list's, plus the two it omitted. the stored-future-height batch is done (5 real ones; the 6th was a mis-classified projection, now also done); the rest of the remaining work is stored future heights, projections, and the governor.
+**Status:** COMPLETE. Every gate is converted — the order list's, plus the two it omitted. the stored-future-height batch is done (5 real ones; the 6th was a mis-classified projection, now also done); the rest of the remaining work is stored future heights, projections, and the governor.
 
 ## The problem, as observed
 
@@ -154,7 +154,7 @@ trailing ring; `pendingTTLBlocks` looks like accounting and is a deadline.
 | `boardmod.gno:107,373` | address freeze + its re-freeze gap | `frozenUntilTime`/`frozenGapUntilTime` (added) | **converted** |
 | `boardmod.gno:137,433` | claim-board freeze + its gap | `boardFrozenUntilTime`/`boardFrozenGapUntilTime` (added) | **converted** |
 | `meta.gno:366` | `votingBlocks` after verdict | `verdictAtTime` | **converted** |
-| `p/governor` proposal `closes` | vote window | `closesTime` (added) | **converted** — consumers still publish heights |
+| `p/governor` proposal `closes` | vote window | `closesTime` (added) | **converted**, consumers included |
 
 ### Stay on blocks (accounting)
 
@@ -245,6 +245,45 @@ units across two claims would be worse than falling back), and it is the one sit
 that already had a corpus row per arm — the discipline being retrofitted
 elsewhere. `supEdge.at` is a height "for the record" that nothing reads and
 nothing renders.
+
+### The governor's consumers — bug 1, closed
+
+`TimingsAt(id) (openedTime, closesTime)` lands with its first reader, per the
+ADR: a sibling rather than a wider `Timings`, because `Timings` is consumed by
+two realms and arity should arrive with its readers. `ClaimTimeline` publishes
+`voteclose:<unix>:<height>`, and the web reads it.
+
+**This is the line the report was about.** The page derived the close date as
+`nowT + (voteEndsAt - nowH) * BLOCK_SECS` — a projection at an assumed cadence,
+which is exactly why a vote showed "closing in ~7 days" beside an answer dated
+2021. It reads the published moment now and drops the `est` marker; the estimate
+survives only as the fallback for a dispute opened before the stamps, where a
+height genuinely is all there is.
+
+`DisputeVoteCloses` deliberately stays a HEIGHT: it is a positional field in the
+packed claim head, where a change of unit is invisible to every reader. Its
+comment argued "A HEIGHT, NOT A TIME, because that is what the governor gates
+on" — true when written, false since the governor was converted, and now
+corrected to point at the timeline.
+
+**A CIRCULAR ASSERTION, CAUGHT BY MUTATION.** The first version of the realm test
+compared the timeline against `TimingsAt` — the same accessor the timeline is
+built from. Mutating `TimingsAt` to return `closesTime + 1` moved both sides
+equally and SURVIVED. The fix is a second assertion in `p/governor`, against the
+field `wouldBe` actually reads: comparing a publisher to itself proves only that
+it is consistent, never that it is right.
+
+Verified: all four packages green; three realm mutants and two web mutants
+killed; `make anchors collisions staleguards guards`, `web-test` and
+`web-visual` pass.
+
+## Done
+
+Every deadline in this realm now gates on a date and keeps its height as the
+reference: 11 gates in the order list, 2 more the order omitted, 5 stored future
+heights, 6 projections, and the governor with its consumers. Every one keeps the
+`(known && passed) || (!known && <blocks>)` fallback, so a record written before
+its stamp existed still behaves exactly as it did.
 
 ### `p/governor` — converted on the second attempt
 

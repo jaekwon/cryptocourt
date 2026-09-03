@@ -2,8 +2,10 @@
 
 **Status:** IMPLEMENTED in the governor. The decision below stands as written;
 the second attempt found the cause the first could not, and it was not in the
-conversion at all. Consumers (`DisputeVoteCloses`, `ClaimTimeline`, the web)
-still publish heights and are the remaining work.
+conversion at all. Consumers followed in the next commit: `TimingsAt` publishes the
+pair, `ClaimTimeline` carries `voteclose:<unix>:<height>`, and the web reads it
+instead of projecting. `DisputeVoteCloses` stays a height by design — it is a
+positional field in the packed claim head.
 
 **Scope:** `p/governor`'s `closes`, the `Electorate` interface it reads its clock
 from, and the consumers that publish that deadline — `r/kourtv2`'s

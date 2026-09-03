@@ -109,4 +109,23 @@ func TestTheTimelineCarriesTheDisputeOpening(cur realm, t *testing.T) {
 	if !strings.Contains(got, want) {
 		t.Errorf("dispute line is not the governor's own opening:\n got %s\nwant %s", got, want)
 	}
+
+	// AND THE CLOSE, which is the row a reader plans around and the one the page
+	// used to ESTIMATE from a height at an assumed cadence — the projection that
+	// showed a vote "closing in ~7 days" beside an answer dated five years
+	// earlier. The governor gates on a stamp now, so the deadline is knowable.
+	//
+	// Compared against the GOVERNOR'S OWN numbers rather than a recomputation: a
+	// deadline the page prints and a deadline the vote enforces have to be the
+	// same value, and asserting a re-derivation would pass even if they parted.
+	_, closes, _, _ := c.gov.Timings(cs.proposalID)
+	_, closesTime := c.gov.TimingsAt(cs.proposalID)
+	if closesTime == 0 {
+		t.Fatal("the governor must stamp the close, or the page has nothing to read")
+	}
+	if wantClose := ";voteclose:" + itoa(closesTime) + ":" + itoa(closes); !strings.Contains(got, wantClose) {
+		t.Fatalf("the timeline must publish the vote's close as a date with its "+
+			"height beside it (%s): %s", wantClose, got)
+	}
 }
+

@@ -213,6 +213,28 @@ ok("the unexposed-close note names its round too", L3n.includes("round 2 is voti
   const D = Object.assign({}, d3l, {round:2, phase:"disputed", voteEndsAt:NOW+70000});
   const L = resolutionLadder(D, NOW, tl);
   ok("dated ladder: the close row names the round", L.includes("vote closes · round 3"));
+
+  /* THE CLOSE IS READ, NOT ESTIMATED. ClaimTimeline publishes
+     `voteclose:<unix>:<height>` — the moment the governor gates on — and the row
+     must use it. The old code derived the date from a height at an assumed
+     cadence, and that projection is what put this row five years out on a claim
+     answered in 2021. A published close is exact, so it carries no ≈. */
+  {
+    const exact = Object.assign({}, tl, {voteclose:{t:T0+123456, h:9999}});
+    const E = resolutionLadder(D, NOW, exact);
+    ok("dated ladder: a published close is used verbatim, not projected",
+       E.includes(stampDate(T0+123456)));
+    ok("dated ladder: ...and is not marked as an estimate",
+       !/≈[^<]*vote closes/.test(E) && E.includes("vote closes · round 3"));
+
+    /* AND THE ESTIMATE SURVIVES for a dispute opened before the stamps, where a
+       height is genuinely all there is. Dropping the fallback would blank the
+       row for every pre-upgrade claim. */
+    const noStamp = Object.assign({}, tl); delete noStamp.voteclose;
+    const N = resolutionLadder(D, NOW, noStamp);
+    ok("dated ladder: with no published close the row still appears, estimated",
+       N.includes("vote closes · round 3"));
+  }
   // The gloss went with every other row's. What the round COST is still on the
   // page — the notice above the ballot names the failed rounds and the ballot
   // itself quotes the next bond — and the ladder is a ladder of WHEN, not a

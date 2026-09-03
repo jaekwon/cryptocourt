@@ -1299,6 +1299,13 @@ func TestTheVotingWindowClosesOnItsExactMoment(t *testing.T) {
 	if p.closesTime == 0 {
 		t.Fatal("fixture: the proposal must be stamped, or this pins the height arm")
 	}
+	// TimingsAt publishes the SAME moment the gate below compares against. Not a
+	// tautology from the page's side: kourtv2's timeline is built from TimingsAt,
+	// so a reader is promised whatever this returns, and only an assertion here —
+	// against the field wouldBe actually reads — can catch the two parting.
+	if _, ct := g.TimingsAt(id); ct != p.closesTime {
+		t.Fatalf("TimingsAt publishes %d, the gate enforces %d", ct, p.closesTime)
+	}
 
 	// One block short of the close — and, in lockstep, one window short of
 	// closesTime — it is still taking votes.

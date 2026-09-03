@@ -949,10 +949,17 @@ func EscrowUntil(courtSlug string, claimID uint64) int64 {
 // close by hand for its sample data and said, in live mode, that no read
 // published one. This is that read.
 //
-// A HEIGHT, NOT A TIME, because that is what the governor gates on: Vote
-// refuses once heightNow() >= closes. Projecting it into a date is the
-// consumer's job and its projection is an estimate — the chain's cadence is
-// not a promise — so this returns the number the court will actually check.
+// A HEIGHT, and no longer because it is what the governor gates on — the
+// governor gates on a STAMP now (p/governor, closesTime). This stays a height
+// because it is a positional field in the packed claim head, where a change of
+// unit is invisible to every reader, and because the height is still the honest
+// reference beside the deadline.
+//
+// THE DATE IS PUBLISHED, just not here: ClaimTimeline carries it as
+// `voteclose:<unix>:<height>`, the channel that already pairs the two. A
+// consumer wanting to say "closes in four days" reads that and does not
+// estimate. The estimate is what this comment used to call the consumer's job,
+// and it was wrong by five years on a real claim page.
 //
 // 0 rather than a panic on a claim with no open round: a client asks this on
 // every claim page it draws, and "no round is open" is an answer, not an error.

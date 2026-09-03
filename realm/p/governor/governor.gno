@@ -1526,6 +1526,23 @@ func (g *Governor) votingClosed(p *proposal, now int64) bool {
 	return now >= p.closes
 }
 
+// TimingsAt is Timings' wall-clock half: when the proposal opened and when
+// voting closes, as unix seconds, or 0 for a proposal opened before the stamps.
+//
+// A SIBLING RATHER THAN A WIDER Timings, because Timings is consumed by more
+// than one realm and arity is the kind of change that should arrive with its
+// readers rather than ahead of them. Its first reader lands in the same commit
+// as this method — kourtv2's ClaimTimeline — which is the rule the clock plan
+// applies to constants and which holds just as well for a read.
+//
+// The heights stay on Timings and are still the reference; this is the number
+// the gate actually compares against, so a page built from it cannot promise a
+// close the governor will not honour.
+func (g *Governor) TimingsAt(id int64) (openedTime, closesTime int64) {
+	p := g.mustProposal(id)
+	return p.openedTime, p.closesTime
+}
+
 // Timings is a proposal's clock: when it opened, when voting closes, when it
 // becomes executable, and when that chance lapses. The companion to Tally —
 // without it, anything showing a countdown parsed the page, which is prose

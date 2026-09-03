@@ -147,8 +147,17 @@ func ClaimTimeline(courtSlug string, claimID uint64) string {
 	// Carried here rather than in a reader of its own so the chart gets it in
 	// the read it already makes, at no extra round trip.
 	if cs.disputeOpen && cs.proposalID != 0 {
-		opened, _, _, _ := c.gov.Timings(cs.proposalID)
+		opened, closes, _, _ := c.gov.Timings(cs.proposalID)
 		out += ";dispute:" + itoa(cs.disputeOpenedTime) + ":" + itoa(opened)
+		// AND WHEN THE VOTE SHUTS, which is the row a reader plans around and
+		// the one the page had to ESTIMATE: with only a height to work from, a
+		// client projected the date at an assumed cadence, and that projection
+		// is what showed a vote "closing in ~7 days" beside an answer dated
+		// five years earlier. The governor gates on the stamp now, so the
+		// deadline is knowable rather than guessable — published here, in the
+		// read the chart already makes, at no extra round trip.
+		_, closesTime := c.gov.TimingsAt(cs.proposalID)
+		out += ";voteclose:" + itoa(closesTime) + ":" + itoa(closes)
 	}
 	out += ";now:" + itoa(nowTime()) + ":" + itoa(heightNow())
 	// Fabricated, not Active: the marker has to survive sealing, or a seeded
