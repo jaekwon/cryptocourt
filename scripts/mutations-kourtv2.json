@@ -8166,7 +8166,7 @@
   "pkg": "kourtv2",
   "file": "boardmod.gno",
   "label": "claimBoardFrozen: the lazy expiry",
-  "find": "\treturn heightNow() < clm.boardFrozenUntil\n}",
+  "find": "\treturn claimFreezeActive(clm)\n}",
   "replace": "\treturn true\n}"
  },
  {
@@ -8628,15 +8628,36 @@
   "pkg": "kourtv2",
   "file": "boardmod.gno",
   "label": "FreezeClaimBoard: the re-freeze gap",
-  "find": "\tif prev := lookupClaimMod(cm, claimID); prev != nil && now < prev.boardFrozenGapUntil {\n\t\tpanic(\"kourtv2: this board was frozen too recently; the ceiling is not a formality\")\n\t}\n",
+  "find": "\tif prev := lookupClaimMod(cm, claimID); prev != nil && claimFreezeGapOpen(prev) {\n\t\tpanic(\"kourtv2: this board was frozen too recently; the ceiling is not a formality\")\n\t}\n",
   "replace": ""
  },
  {
   "pkg": "kourtv2",
   "file": "boardmod.gno",
   "label": "FreezeClaimBoard: the gap is stamped at the full ceiling",
-  "find": "\tclm.boardFrozenGapUntil = now + freezeMaxBlocks + freezeGapBlocks\n",
-  "replace": "\tclm.boardFrozenGapUntil = now + blocks + freezeGapBlocks\n"
+  "find": "\tclm.boardFrozenGapUntil = now + freezeMaxBlocks + freezeGapBlocks\n\tclm.boardFrozenGapUntilTime = nowTime() + blocksToSecs(freezeMaxBlocks+freezeGapBlocks)\n",
+  "replace": "\tclm.boardFrozenGapUntil = now + blocks + freezeGapBlocks\n\tclm.boardFrozenGapUntilTime = nowTime() + blocksToSecs(blocks+freezeGapBlocks)\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "claimFreezeActive: a pre-stamp board freeze loses its HEIGHT fallback",
+  "find": "\treturn (known && !passed) || (!known && heightNow() < clm.boardFrozenUntil)",
+  "replace": "\treturn known && !passed"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "claimFreezeGapOpen: a pre-stamp board gap loses its HEIGHT fallback",
+  "find": "\treturn (known && !passed) || (!known && heightNow() < clm.boardFrozenGapUntil)",
+  "replace": "\treturn known && !passed"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "FreezeClaimBoard: the board freeze is stamped without its wall-clock twin",
+  "find": "\tclm.boardFrozenUntilTime = nowTime() + blocksToSecs(blocks)",
+  "replace": "\tclm.boardFrozenUntilTime = 0"
  },
  {
   "pkg": "kourtv2",

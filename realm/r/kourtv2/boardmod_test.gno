@@ -425,6 +425,97 @@ func TestAPreStampFreezeKeepsItsBlockWindows(cur realm, t *testing.T) {
 	}
 }
 
+// AND THE SAME FOR ONE CLAIM'S BOARD, which is a separate record with a separate
+// pair of clocks. Mirror of TestTheFreezeAndItsGapBothRunOnTheWallClock: the
+// ceiling argument is identical (freezeGapBlocks equals freezeMaxBlocks so a set
+// cannot re-close a board indefinitely in twelve-hour steps), so the assertion is
+// the same ORDERING — the freeze lifts, the gap still bites, then a re-freeze is
+// allowed — driven on the wall clock with no block mined.
+func TestTheClaimBoardFreezeAndItsGapBothRunOnTheWallClock(cur realm, t *testing.T) {
+	mod := testutils.TestAddress("cfw-mod")
+	poster := testutils.TestAddress("cfw-poster")
+	id, _ := modFixture(cur, "cfw", mod, poster)
+
+	testing.SetRealm(testing.NewUserRealm(mod))
+	FreezeClaimBoard(cross(cur), "cfw", id, freezeMaxBlocks, boardCodeOffTopic)
+
+	c := mustCourt("cfw")
+	clm := lookupClaimMod(c.mod, id)
+	if clm.boardFrozenUntilTime == 0 || clm.boardFrozenGapUntilTime == 0 {
+		t.Fatal("fixture: both stamps must be written, or this pins the height arms")
+	}
+	frozenH := heightNow()
+	bump := func(secs int64) {
+		ctx := testing.GetContext()
+		ctx.Time = ctx.Time.Add(time.Duration(secs) * time.Second)
+		testing.SetContext(ctx)
+	}
+	if !claimBoardFrozen(c, id) {
+		t.Fatal("the board freeze must be live the moment it is set")
+	}
+
+	bump(blocksToSecs(freezeMaxBlocks) + 1)
+	uassert.Equal(t, frozenH, heightNow())                  // no block mined
+	uassert.True(t, heightNow() < clm.boardFrozenUntil)     // blocks still say "frozen"
+	if claimBoardFrozen(c, id) {
+		t.Fatal("past its length on the wall clock the board freeze must lift")
+	}
+
+	// The gap still bites: the board is open again but may not be re-closed.
+	testing.SetRealm(testing.NewUserRealm(mod))
+	uassert.AbortsContains(t, cur, "frozen too recently", func() {
+		FreezeClaimBoard(cross(cur), "cfw", id, 10, boardCodeOffTopic)
+	})
+
+	bump(blocksToSecs(freezeGapBlocks) + 1)
+	uassert.Equal(t, frozenH, heightNow())
+	testing.SetRealm(testing.NewUserRealm(mod))
+	FreezeClaimBoard(cross(cur), "cfw", id, 10, boardCodeOffTopic)
+	if !claimBoardFrozen(c, id) {
+		t.Fatal("past the gap on the wall clock a fresh board freeze must be allowed")
+	}
+}
+
+// A CLAIM-BOARD FREEZE SET BEFORE THE STAMPS keeps its block windows, both of them.
+func TestAPreStampClaimBoardFreezeKeepsItsBlockWindows(cur realm, t *testing.T) {
+	mod := testutils.TestAddress("cfg-mod")
+	poster := testutils.TestAddress("cfg-poster")
+	id, _ := modFixture(cur, "cfg", mod, poster)
+
+	testing.SetRealm(testing.NewUserRealm(mod))
+	FreezeClaimBoard(cross(cur), "cfg", id, freezeMaxBlocks, boardCodeOffTopic)
+	c := mustCourt("cfg")
+	clm := lookupClaimMod(c.mod, id)
+	clm.boardFrozenUntilTime, clm.boardFrozenGapUntilTime = 0, 0 // the pre-upgrade shape
+
+	if d := clm.boardFrozenUntil - 1 - heightNow(); d > 0 {
+		testing.SkipHeights(d)
+	}
+	uassert.Equal(t, clm.boardFrozenUntil-1, heightNow())
+	if !claimBoardFrozen(c, id) {
+		t.Fatal("one block short, a pre-stamp board freeze is still live")
+	}
+	testing.SkipHeights(1)
+	uassert.Equal(t, clm.boardFrozenUntil, heightNow())
+	if claimBoardFrozen(c, id) {
+		t.Fatal("a pre-stamp board freeze must lift on its exact block")
+	}
+
+	testing.SetRealm(testing.NewUserRealm(mod))
+	uassert.AbortsContains(t, cur, "frozen too recently", func() {
+		FreezeClaimBoard(cross(cur), "cfg", id, 10, boardCodeOffTopic)
+	})
+	if d := clm.boardFrozenGapUntil - heightNow(); d > 0 {
+		testing.SkipHeights(d)
+	}
+	uassert.Equal(t, clm.boardFrozenGapUntil, heightNow())
+	testing.SetRealm(testing.NewUserRealm(mod))
+	FreezeClaimBoard(cross(cur), "cfg", id, 10, boardCodeOffTopic)
+	if !claimBoardFrozen(c, id) {
+		t.Fatal("a pre-stamp board gap must expire on its exact block")
+	}
+}
+
 // One claim's board closes; the claim itself stays fully live.
 func TestFreezingOneBoardLeavesTheClaimLive(cur realm, t *testing.T) {
 	mod := testutils.TestAddress("bm5-mod")

@@ -151,6 +151,27 @@ func BoardFrozenUntil(courtSlug string, who address) int64 {
 	return boardFrozenAt(mustCourt(courtSlug), who)
 }
 
+// claimFreezeActive and claimFreezeGapOpen are the claim-board freeze's two
+// clocks — the exact mirror of boardFreezeActive/boardFreezeGapOpen above, on a
+// claimMod instead of a standingRow. Same reasoning throughout: both are stored
+// future moments, so both carry a twin written at the same instant; and they
+// convert TOGETHER because freezeGapBlocks equals freezeMaxBlocks so that a set
+// cannot re-close a board indefinitely in twelve-hour steps, which is a claim
+// about the two windows' relative lengths and fails if only one moves.
+//
+// Two near-identical pairs rather than one generic pair: the records have no
+// common type, and giving them one purely to share four lines would put a shape
+// in the type system to serve a comment. The mirror is stated instead.
+func claimFreezeActive(clm *claimMod) bool {
+	passed, known := pastDeadline(clm.boardFrozenUntilTime, 0)
+	return (known && !passed) || (!known && heightNow() < clm.boardFrozenUntil)
+}
+
+func claimFreezeGapOpen(clm *claimMod) bool {
+	passed, known := pastDeadline(clm.boardFrozenGapUntilTime, 0)
+	return (known && !passed) || (!known && heightNow() < clm.boardFrozenGapUntil)
+}
+
 // claimBoardFrozen reports whether ONE claim's board is closed by a moderator
 // act. Same lazy expiry, same epoch stamp.
 func claimBoardFrozen(c *Court, claimID uint64) bool {
@@ -164,7 +185,7 @@ func claimBoardFrozen(c *Court, claimID uint64) bool {
 	if clm.boardFrozenEpoch != c.mod.boardSanctionEpoch {
 		return false
 	}
-	return heightNow() < clm.boardFrozenUntil
+	return claimFreezeActive(clm)
 }
 
 // claimBoardFrozenAt is the height a claim-board freeze lifts, or 0 — the same
@@ -464,7 +485,7 @@ func FreezeClaimBoard(cur realm, courtSlug string, claimID uint64, blocks int64,
 	// The gap, read before the m-of-n so a refused proposal cannot probe it —
 	// and stamped at the full ceiling below, so a one-block freeze does not buy
 	// a one-block cooldown.
-	if prev := lookupClaimMod(cm, claimID); prev != nil && now < prev.boardFrozenGapUntil {
+	if prev := lookupClaimMod(cm, claimID); prev != nil && claimFreezeGapOpen(prev) {
 		panic("kourtv2: this board was frozen too recently; the ceiling is not a formality")
 	}
 	fire, _ := approveAction(cm.pending,
@@ -474,8 +495,10 @@ func FreezeClaimBoard(cur realm, courtSlug string, claimID uint64, blocks int64,
 	}
 	clm := ensureClaimMod(c, cm, claimID)
 	clm.boardFrozenUntil = now + blocks
+	clm.boardFrozenUntilTime = nowTime() + blocksToSecs(blocks)
 	clm.boardFrozenEpoch = cm.boardSanctionEpoch
 	clm.boardFrozenGapUntil = now + freezeMaxBlocks + freezeGapBlocks
+	clm.boardFrozenGapUntilTime = nowTime() + blocksToSecs(freezeMaxBlocks+freezeGapBlocks)
 	clm.appendLog(actor, "freezeboard:"+strconv.FormatInt(blocks, 10)+":"+code, "")
 	emitModAct(c.id, claimID, "freezeboard", actor)
 }
@@ -497,7 +520,9 @@ func ThawClaimBoard(cur realm, courtSlug string, claimID uint64) {
 	if !fire {
 		return
 	}
-	lookupClaimMod(cm, claimID).boardFrozenUntil = 0
+	thawed := lookupClaimMod(cm, claimID)
+	thawed.boardFrozenUntil = 0
+	thawed.boardFrozenUntilTime = 0
 	ensureClaimMod(c, cm, claimID).appendLog(actor, "thawboard", "")
 	emitModAct(c.id, claimID, "thawboard", actor)
 }

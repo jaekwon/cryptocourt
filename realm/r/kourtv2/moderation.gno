@@ -274,15 +274,17 @@ type claimMod struct {
 	// (boardmod.gno). The CLAIM stays fully live — answers, stakes, votes and the
 	// verdict are untouched; only comments stop. Expiry is lazy, and the epoch
 	// stamp is what lets the global recovery verb clear it in one write.
-	boardFrozenUntil int64
-	boardFrozenEpoch int64
+	boardFrozenUntil     int64
+	boardFrozenUntilTime int64 // unix seconds beside it; 0 on freezes predating the stamps
+	boardFrozenEpoch     int64
 	// The re-freeze gap, for the same reason an address freeze has one: without
 	// it freezeMaxBlocks bounds nothing, because the set re-freezes in the next
 	// block. This verb shipped with the ceiling and without the gap — so the one
 	// freeze that could be held at a 100% duty cycle was the one aimed at a whole
 	// claim's board rather than at one person. Neither the undo nor the sanction
 	// epoch clears it; see standing.gno's frozenGapUntil.
-	boardFrozenGapUntil int64
+	boardFrozenGapUntil     int64
+	boardFrozenGapUntilTime int64 // its wall-clock twin, written at the same moment
 
 	// boardPurgeAll: the global DAO has decided this claim's whole board goes.
 	// The DECISION is voted once; the mechanical completion is not re-voted,
