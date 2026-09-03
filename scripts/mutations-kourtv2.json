@@ -6094,6 +6094,27 @@
  {
   "pkg": "kourtv2",
   "file": "moderation.gno",
+  "label": "PendingApproval: the published deadline is not the one the gate reads",
+  "find": "\t\tdeadlineTime(a.openedAtTime, blocksToSecs(pendingTTLBlocks)),",
+  "replace": "\t\tdeadlineTime(a.openedAtTime, blocksToSecs(pendingTTLBlocks))+1,"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "moderation.gno",
+  "label": "PendingApproval: the reference height beside the date is wrong",
+  "find": "\t\ta.openedAt + pendingTTLBlocks\n}",
+  "replace": "\t\ta.openedAt\n}"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "modrender.gno",
+  "label": "pending list: the deadline is shown as a bare block, with no date",
+  "find": "\t\t\t\tif at := deadlineTime(a.openedAtTime, blocksToSecs(pendingTTLBlocks)); at != 0 {",
+  "replace": "\t\t\t\tif at := deadlineTime(a.openedAtTime, blocksToSecs(pendingTTLBlocks)); false {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "moderation.gno",
   "label": "approvalStale: an entry goes stale one second late",
   "find": "return (known && passed) || (!known && heightNow() >= a.openedAt+pendingTTLBlocks)",
   "replace": "return (known && !passed) || (!known && heightNow() >= a.openedAt+pendingTTLBlocks)"

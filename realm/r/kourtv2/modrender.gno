@@ -526,6 +526,13 @@ func renderModLog(slug string) string {
 		pendingSeen++
 		if a, ok := v.(*approval); ok {
 			if deadline := a.openedAt + pendingTTLBlocks; now < deadline {
+				// The DATE is what the realm gates on; the block is the
+				// reference beside it (clock.gno). An entry opened before the
+				// stamps has no date, and shows only the block it will lift at.
+				when := " (block " + strconv.FormatInt(deadline, 10) + ")"
+				if at := deadlineTime(a.openedAtTime, blocksToSecs(pendingTTLBlocks)); at != 0 {
+					when = " " + strconv.FormatInt(at, 10) + when
+				}
 				pendingRows = append(pendingRows,
 					// InlineCode, not backticks around InlineText. A backslash
 					// escape is INERT inside a CommonMark code span, so
@@ -541,8 +548,7 @@ func renderModLog(slug string) string {
 					// and a future key that carries a reason or a name would make
 					// it exploitable with no failing test.
 					"- "+sanitize.InlineCode(key)+" — "+strconv.Itoa(a.approvers.Size())+
-						" of "+strconv.Itoa(cm.m)+" approved, expires at block "+
-						strconv.FormatInt(deadline, 10))
+						" of "+strconv.Itoa(cm.m)+" approved, expires at"+when)
 			}
 		}
 		if len(pendingRows) >= renderPageSize || pendingSeen >= renderPageSize {

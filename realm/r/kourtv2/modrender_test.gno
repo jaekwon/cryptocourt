@@ -280,8 +280,16 @@ func TestPendingProposalsRenderWithoutTheirReason(cur realm, t *testing.T) {
 	if !strings.Contains(page, "1 of 2 approved") {
 		t.Fatal("the tally so far must render")
 	}
-	if !strings.Contains(page, "expires at block") {
+	// "expires at <unix> (block <height>)" — the date first, because that is what
+	// the realm gates on, with the height beside it as the reference.
+	if !strings.Contains(page, "approved, expires at ") || !strings.Contains(page, "(block ") {
 		t.Fatal("the deadline must render — an unseen 7-day clock is a trap")
+	}
+	// AND THE DATE IS ACTUALLY THERE. Asserting the two fragments above is not
+	// enough: suppress the date and the row still reads "expires at (block N)",
+	// which contains both. Measured — that mutant survived until this line.
+	if strings.Contains(page, "expires at (block") {
+		t.Fatal("the row printed its reference height with no date before it")
 	}
 	if strings.Contains(page, "SECRETSMEAR") {
 		t.Fatal("an UNAPPROVED reason must not render: that is a publication channel for one member")

@@ -1,6 +1,6 @@
 # Deadlines in seconds, accounting in blocks
 
-**Status:** in progress. EVERY GATE IS CONVERTED — the order list's, plus the two it omitted. 5 of the 6 stored future heights are done; the rest of the remaining work is stored future heights, projections, and the governor.
+**Status:** in progress. EVERY GATE IS CONVERTED — the order list's, plus the two it omitted. the stored-future-height batch is done (5 real ones; the 6th was a mis-classified projection, now also done); the rest of the remaining work is stored future heights, projections, and the governor.
 
 ## The problem, as observed
 
@@ -245,6 +245,38 @@ units across two claims would be worse than falling back), and it is the one sit
 that already had a corpus row per arm — the discipline being retrofitted
 elsewhere. `supEdge.at` is a height "for the record" that nothing reads and
 nothing renders.
+
+### `moderation.gno:1190` — the approval TTL's two projections (the inventory was wrong here)
+
+**This entry is not a stored future height.** The inventory listed it as one —
+"compute a block number in the future and persist it" — but `a.openedAt +
+pendingTTLBlocks` is computed at READ time in `PendingApproval` and never stored.
+It is a projection, and it is one of the two this plan deferred in iteration 5.
+Both are done here.
+
+`PendingApproval` now returns `(approvals, expiresAt, expiresAtHeight)`: the date
+the write path actually gates on, with its reference height beside it — the
+pairing `ClaimTimeline` already publishes. The third value is why the signature
+grew rather than the second one quietly changing units, which is the failure this
+whole plan exists to remove. A caller telling "nothing pending" from "no stamp"
+reads `approvals`: it is 0 only in the first case. Twelve call sites and the
+filetest golden updated; no web or txtar consumer exists, so the API change is
+contained to this package.
+
+The render row now reads `expires at <unix> (block <height>)`, date first, and
+falls back to the bare block for an entry opened before the stamps.
+
+**A test that named the right thing and still could not see it.** The render
+assertion checked for `"approved, expires at "` and `"(block "`. Suppress the date
+and the row reads `expires at (block N)` — which contains both fragments, so the
+mutant SURVIVED. Fixed by asserting the absent-date form is NOT present.
+**Two substring checks that each pass do not prove the thing between them exists.**
+
+Verified: full kourtv2 suite green including the filetest golden; three mutants
+compile and are killed, one only after the render assertion was sharpened; `make
+anchors collisions staleguards guards` and
+check-read-purity/check-storage/check-render-text pass. (`check-live-reads` needs
+a running node and is not part of this loop's set.)
 
 ### `modvote.gno:563` — the post-election cooldown
 

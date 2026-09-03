@@ -65,10 +65,10 @@ func main(cur realm) {
 	// in the realm and the one most likely to allocate by accident: it reaches
 	// through c.mod and through globalDAO, each created lazily, and each with an
 	// ensure* function sitting right beside the accessor it must NOT call.
-	pa, pexp := kourtv2.PendingApproval("meta", "hide:1")
-	println("pending approvals: ", pa, pexp)
-	ga, gexp := kourtv2.PendingApproval("", "purge:meta:1")
-	println("global pending:    ", ga, gexp)
+	pa, pexp, pexpH := kourtv2.PendingApproval("meta", "hide:1")
+	println("pending approvals: ", pa, pexp, pexpH)
+	ga, gexp, gexpH := kourtv2.PendingApproval("", "purge:meta:1")
+	println("global pending:    ", ga, gexp, gexpH)
 	m, n := kourtv2.ModThreshold("meta")
 	println("meta threshold:    ", m, n)
 
@@ -140,8 +140,8 @@ func main(cur realm) {
 // folders:            0
 // election open:      false
 // election cooldown:  0
-// pending approvals:  0 0
-// global pending:     0 0
+// pending approvals:  0 0 0
+// global pending:     0 0 0
 // meta threshold:     1 1
 // supply raw/esc/vot: 0 0 0
 // strip size:         0

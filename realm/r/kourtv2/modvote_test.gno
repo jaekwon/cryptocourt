@@ -725,7 +725,7 @@ func TestInstallModSetDiscardsTheDeposedSetsApprovals(cur realm, t *testing.T) {
 	}
 	hideAt := runtime.ChainHeight()
 	hideKey := "hide:" + strconv.FormatUint(id, 10)
-	if n, _ := PendingApproval("deposed", hideKey); n != 1 {
+	if n, _, _ := PendingApproval("deposed", hideKey); n != 1 {
 		t.Fatalf("fixture: the old set must have ONE banked approval, got %d", n)
 	}
 

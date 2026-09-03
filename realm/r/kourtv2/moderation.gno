@@ -1220,34 +1220,38 @@ func PurgeModLogRow(cur realm, courtSlug string, claimID, rowID uint64, category
 // Non-allocating, and reports an already-expired entry as absent — the same
 // answer approveAction will act on, so the read cannot disagree with the write
 // path (the v0.19 rule). courtSlug "" reads the global DAO's tree.
-func PendingApproval(courtSlug, actionKey string) (approvals int, expiresAt int64) {
+// THE DEADLINE IS A DATE, WITH ITS HEIGHT BESIDE IT — the pairing ClaimTimeline
+// publishes, and the reason this signature gained a third value rather than
+// quietly changing what the second one measures. expiresAt is unix seconds and is
+// what the write path actually gates on; expiresAtHeight is the reference, and is
+// all a caller gets for an entry opened before the stamps existed (expiresAt 0).
+// A caller distinguishing "nothing pending" from "no stamp" reads approvals: it
+// is 0 only in the first case.
+func PendingApproval(courtSlug, actionKey string) (approvals int, expiresAt, expiresAtHeight int64) {
 	var pending *bptree.BPTree
 	if courtSlug == "" {
 		if globalDAO == nil {
-			return 0, 0
+			return 0, 0, 0
 		}
 		pending = globalDAO.pending
 	} else {
 		c := mustCourt(courtSlug)
 		if c.mod == nil {
-			return 0, 0
+			return 0, 0, 0
 		}
 		pending = c.mod.pending
 	}
 	v := pending.Get(actionKey)
 	if v == nil {
-		return 0, 0
+		return 0, 0, 0
 	}
 	a := v.(*approval)
 	if approvalStale(a) {
-		return 0, 0
+		return 0, 0, 0
 	}
-	// expiresAt stays a HEIGHT. The gate above reads the clock, so this is now
-	// the reference height beside a deadline rather than the deadline itself —
-	// the pairing ClaimTimeline publishes in full. Completing it here means
-	// returning both, which changes this signature, so it is tracked as a
-	// projection rather than smuggled in as a silent change of unit.
-	return a.approvers.Size(), a.openedAt + pendingTTLBlocks
+	return a.approvers.Size(),
+		deadlineTime(a.openedAtTime, blocksToSecs(pendingTTLBlocks)),
+		a.openedAt + pendingTTLBlocks
 }
 
 // CourtSuspended reports whether a court's moderator set is suspended (masked).

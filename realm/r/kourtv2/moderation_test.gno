@@ -613,7 +613,7 @@ func TestPendingApprovalsGoStale(cur realm, t *testing.T) {
 	alice := testutils.TestAddress("ttl-alice")
 	m1 := testutils.TestAddress("ttl-m1")
 	m2 := testutils.TestAddress("ttl-m2")
-	testCourt(cur, "ttlc", alice, 10_000_000_000)
+	c := testCourt(cur, "ttlc", alice, 10_000_000_000)
 	testing.SetRealm(testing.NewUserRealm(alice))
 	AppointMods(cross(cur), "ttlc", 2, m1, m2)
 	testing.SetRealm(testing.NewUserRealm(alice))
@@ -622,15 +622,22 @@ func TestPendingApprovalsGoStale(cur realm, t *testing.T) {
 
 	testing.SetRealm(testing.NewUserRealm(m1))
 	HideItem(cross(cur), "ttlc", id, "one")
-	n, expires := PendingApproval("ttlc", key)
-	if n != 1 || expires == 0 {
-		t.Fatalf("the deadline must be visible: %d approvals, expires %d", n, expires)
+	n, expires, expiresH := PendingApproval("ttlc", key)
+	if n != 1 || expires == 0 || expiresH == 0 {
+		t.Fatalf("the deadline must be visible as a DATE with its reference height: "+
+			"%d approvals, expires %d (block %d)", n, expires, expiresH)
 	}
+	// And the date is the one the write path gates on, not a re-derivation: it is
+	// the entry's own stamp plus the TTL, so a reader planning around it and the
+	// realm refusing at it cannot disagree.
+	a := c.mod.pending.Get(key).(*approval)
+	uassert.Equal(t, a.openedAtTime+blocksToSecs(pendingTTLBlocks), expires)
+	uassert.Equal(t, a.openedAt+pendingTTLBlocks, expiresH)
 
 	// One block past the window: m2's approval starts a NEW proposal rather
 	// than completing the old one.
 	testing.SkipHeights(pendingTTLBlocks + 1)
-	if n, _ := PendingApproval("ttlc", key); n != 0 {
+	if n, _, _ := PendingApproval("ttlc", key); n != 0 {
 		t.Fatal("an expired entry must read as absent, matching what the write path will do")
 	}
 	testing.SetRealm(testing.NewUserRealm(m2))
@@ -638,7 +645,7 @@ func TestPendingApprovalsGoStale(cur realm, t *testing.T) {
 	if HiddenFromListing("ttlc", id) {
 		t.Fatal("a stale signature completed the quorum")
 	}
-	if n, _ := PendingApproval("ttlc", key); n != 1 {
+	if n, _, _ := PendingApproval("ttlc", key); n != 1 {
 		t.Fatal("the evictor's own signature should seed the fresh proposal")
 	}
 
@@ -786,7 +793,7 @@ func TestTheApprovalTTLExpiresOnWallClockNotOnBlocks(cur realm, t *testing.T) {
 	uassert.True(t, heightNow() < a.openedAt+pendingTTLBlocks) // blocks still say "live"
 
 	// READER ONE: PendingApproval reports it absent.
-	if n, _ := PendingApproval("ttlw", key); n != 0 {
+	if n, _, _ := PendingApproval("ttlw", key); n != 0 {
 		t.Fatal("an entry past its TTL in wall-clock time must read as absent")
 	}
 	// READER TWO: pendingOpenedAt, the bulk-act bound, agrees.
@@ -801,7 +808,7 @@ func TestTheApprovalTTLExpiresOnWallClockNotOnBlocks(cur realm, t *testing.T) {
 	if HiddenFromListing("ttlw", id) {
 		t.Fatal("a signature banked before the TTL elapsed completed the quorum")
 	}
-	if n, _ := PendingApproval("ttlw", key); n != 1 {
+	if n, _, _ := PendingApproval("ttlw", key); n != 1 {
 		t.Fatal("the evictor's own signature should seed the fresh proposal")
 	}
 
@@ -813,12 +820,12 @@ func TestTheApprovalTTLExpiresOnWallClockNotOnBlocks(cur realm, t *testing.T) {
 		testing.SkipHeights(d)
 	}
 	uassert.Equal(t, target-1, heightNow())
-	if n, _ := PendingApproval("ttlw", key); n != 1 {
+	if n, _, _ := PendingApproval("ttlw", key); n != 1 {
 		t.Fatal("one block short, a pre-stamp entry is still live")
 	}
 	testing.SkipHeights(1)
 	uassert.Equal(t, target, heightNow())
-	if n, _ := PendingApproval("ttlw", key); n != 0 {
+	if n, _, _ := PendingApproval("ttlw", key); n != 0 {
 		t.Fatal("a pre-stamp entry must still expire on its exact block")
 	}
 }
@@ -936,7 +943,7 @@ func TestAppointModsDiscardsTheOutgoingSetsApprovals(cur realm, t *testing.T) {
 	}
 	hideAt := runtime.ChainHeight()
 	hideKey := "hide:" + strconv.FormatUint(id, 10)
-	if n, _ := PendingApproval("apnt", hideKey); n != 1 {
+	if n, _, _ := PendingApproval("apnt", hideKey); n != 1 {
 		t.Fatalf("fixture: the old set must have ONE banked approval, got %d", n)
 	}
 
@@ -1009,13 +1016,13 @@ func TestGlobalDAODiscardsApprovalsOnMembershipChange(cur realm, t *testing.T) {
 		if CourtSuspended(slug) {
 			t.Fatalf("fixture: one of two must not fire on %s", slug)
 		}
-		if n, _ := PendingApproval("", "gsuspend:"+slug); n != 1 {
+		if n, _, _ := PendingApproval("", "gsuspend:"+slug); n != 1 {
 			t.Fatalf("fixture: %s must have ONE banked approval, got %d", slug, n)
 		}
 		return runtime.ChainHeight()
 	}
 	gone := func(slug, what string) {
-		if n, _ := PendingApproval("", "gsuspend:"+slug); n != 0 {
+		if n, _, _ := PendingApproval("", "gsuspend:"+slug); n != 0 {
 			t.Fatalf("%s left %d banked approval(s) standing; a member who no "+
 				"longer counts can still complete the threshold", what, n)
 		}
@@ -1024,7 +1031,7 @@ func TestGlobalDAODiscardsApprovalsOnMembershipChange(cur realm, t *testing.T) {
 	// THE CONTROL, first: with no membership change the approval survives. Every
 	// zero below means something only because this one is not zero.
 	at := bank("gdao1")
-	if n, _ := PendingApproval("", "gsuspend:gdao1"); n != 1 {
+	if n, _, _ := PendingApproval("", "gsuspend:gdao1"); n != 1 {
 		t.Fatal("control: an untouched approval must still be banked")
 	}
 	if runtime.ChainHeight() >= at+pendingTTLBlocks {
@@ -1069,7 +1076,7 @@ func TestGlobalDAODiscardsApprovalsOnMembershipChange(cur realm, t *testing.T) {
 	_ = at3
 	testing.SetRealm(testing.NewUserRealm(memE))
 	TransferGlobalAdmin(cross(cur), dadmin)
-	if n, _ := PendingApproval("", "gsuspend:gdao2"); n != 1 {
+	if n, _, _ := PendingApproval("", "gsuspend:gdao2"); n != 1 {
 		t.Fatalf("a seat moving between existing members must NOT clear: got %d", n)
 	}
 
