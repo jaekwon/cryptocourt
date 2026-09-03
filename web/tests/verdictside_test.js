@@ -276,16 +276,28 @@ const run = async (rows, v, mode) => {
      "✓ settled NO · undisputed". --good and --yes are the same green, so a
      settled NO wore the palette of the side that lost it. */
   const banner = (over) => verdictBanner(Object.assign({phase:"settled"}, over));
-  ok("a settled NO is not painted in the winning side's green",
-     /class="pill verdict-no"/.test(banner({verdict:1}))
-     && !/pill good/.test(banner({verdict:1})));
-  ok("...a settled YES still is", /class="pill good"/.test(banner({verdict:0})));
-  ok("...and a side that did not read gets neither colour",
-     /class="pill decided"/.test(banner({})));
-  /* ONE CONVENTION, NOT TWO. The docket pill and the claim pill pick their class
-     from the same three names; asserted against phaseClass so the two cannot
-     drift into disagreeing about what colour a verdict is. */
-  ok("the claim pill and the docket pill agree on every side",
+  /* THE SETTLED PILL IS GONE ENTIRELY, and these three assertions replace five
+     that described its colour and its route. It printed the verdict a few pixels
+     from a title that already carries the verdict in an oval — and strikes the
+     sentence when the answer is NO — so "SETTLED · UNDISPUTED" beside a struck
+     title wearing (NO) said one fact three ways. The oval wins because it is
+     attached to the sentence the verdict is about.
+     PINNED AS EMPTY, not as "no colour". An empty string is the whole contract;
+     asserting the absence of a class would still pass for a pill that came back
+     wearing none. */
+  ok("a settled claim gets no pill — the title's oval carries the verdict",
+     banner({verdict:1}) === "" && banner({verdict:0}) === "");
+  ok("...including a side that did not read", banner({}) === "");
+  /* THE ROUTE WENT WITH IT, deliberately: it was the second half of the phrase
+     called unnecessary, and it is now on no surface. Pinned so its loss is a
+     decision on the record rather than something to be re-added by reflex. */
+  ok("...and the route is not printed anywhere in the pill",
+     !/undisputed|by vote/.test(banner({verdict:1, route:"undisputed"})));
+  /* ONE CONVENTION STILL, for the two surfaces that DO carry a pill. The docket
+     and the map have no title beside their rows, so they keep both the side and
+     the colour; this pins them to phaseClass so they cannot drift apart. The
+     claim page is no longer one of them. */
+  ok("the docket and map pills agree on every side",
      phaseClass("settled YES — x").cls === "good"
      && phaseClass("settled NO — x").cls === "verdict-no"
      && phaseClass("settled — x").cls === "decided");
@@ -296,15 +308,6 @@ const run = async (rows, v, mode) => {
      !["settled","provClose","closed","disputed","provisional","answered","open"]
        .some(ph => verdictBanner({phase:ph, verdict:1, answer:1, provisional:1}).includes("✓")));
 
-  /* THE SIDE WORD IS GONE FROM THIS PILL, because the struck title two lines
-     above carries it in its own oval. What is left is the phase and the ROUTE,
-     which appears nowhere else on the page. */
-  ok("the claim pill no longer repeats the side",
-     !/settled (YES|NO)/.test(banner({verdict:1})) && !/settled (YES|NO)/.test(banner({verdict:0})));
-  ok("...but the route survives, since nothing else prints it",
-     banner({verdict:1, route:"undisputed"}).includes("settled · undisputed"));
-  ok("...and a claim with no route says only that it settled",
-     />settled<\/span>/.test(banner({verdict:1})));
   /* THE DOCKET KEEPS ITS SIDE. There is no title beside those rows, so dropping
      the word there would leave a coloured pill as the only clue — and colour
      alone is not a reading. Pinned so the two surfaces are not "unified". */

@@ -66,7 +66,10 @@ ok("map link gated to the drawn window", src.includes('(!isLive() || (ccount!=nu
 // label. That inline colour is exactly what had to go: it beats any author
 // rule, so no :hover or :focus-visible on these links could ever apply. The
 // pin is the route now, not the paint.
-ok("map link carries ?focus", src.includes('map?focus=${id}">on the map'));
+// The LABEL moved to the shared convention — icon, noun, arrow — so this pins
+// the route plus the new label. "on the map" became "map" beside the
+// constellation mark, the way the chain link reads "⚖ chain →".
+ok("map link carries ?focus", src.includes('map?focus=${id}">${ICN_CONSTEL}map<span'));
 ok("and no inline colour survives in a tagrow link",
    !/class="small" href="[^"]*" style="color:var\(--accent-2\)">(on the map|as the chain|docket|curate|map|moderation)/.test(src));
 

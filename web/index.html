@@ -1964,7 +1964,7 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
   <div class="foot">
     <div class="node">
       <div class="row"><span class="dot" id="dot"></span> <b id="nodelab">Demo data</b></div>
-      <a class="small" id="gwrealm" target="_blank" rel="noopener" style="display:none; margin:2px 0 4px" title="the chain's own view — every screen here can be served by the court itself">⚖ this court on the chain →</a>
+      <a class="small" id="gwrealm" target="_blank" rel="noopener" style="display:none; margin:2px 0 4px" title="the chain's own view — every screen here can be served by the court itself">⚖ chain <span aria-hidden="true">→</span></a>
       <label for="modesel">Source</label>
       <select id="modesel">
         <option value="demo">Demo (offline sample)</option>
@@ -9672,7 +9672,7 @@ on(/^\/c\/([a-z0-9-]+)\/f\/([0-9.]+)$/, async (slug,fpath)=>{
        three elements down. Inline after the seal it reads as part of the title:
        "Fauci · COVID · on the map". */
     + `<h1 class="page-h">${ICN_FOLDER} ${safeInline(f.name)} <span class="seal">${esc(slug)}</span> `
-      + `<a class="hjump" href="#/c/${esc(slug)}/map?ffocus=${esc(fpath)}">${ICN_CONSTEL}on the map</a></h1>`
+      + `<a class="hjump" href="#/c/${esc(slug)}/map?ffocus=${esc(fpath)}">${ICN_CONSTEL}map</a></h1>`
     /* THE FOLDER'S ONE PICTURE, at a size worth looking at. On the map it is a
        tint under a label, which is right there and not enough anywhere else:
        this is the page a reader lands on when they follow the folder, and the
@@ -9855,7 +9855,7 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
   const fmClaim = cu && cu.folders && cu.folders.length? folderMeta(cu.folders,"",{}) : {};
   const chip = fmClaim[id]? `<a class="tlink" href="#/c/${esc(slug)}/f/${esc(fmClaim[id].path)}" title="${cu.source==="local"? esc(CUR_LABEL) : "sample curation"}">filed under <span class="tname">${safeInline(fmClaim[id].label)}</span> · ${cu.source==="local"? "local":"sample"}</a>` : "";
   // live maps draw only the newest window — do not offer a link that dead-ends
-  const mapLink = (mHidden!==true && (!isLive() || (ccount!=null && id>ccount-50)))? `<a class="tlink" href="#/c/${esc(slug)}/map?focus=${id}">on the map<span aria-hidden="true">→</span></a>` : "";
+  const mapLink = (mHidden!==true && (!isLive() || (ccount!=null && id>ccount-50)))? `<a class="tlink" href="#/c/${esc(slug)}/map?focus=${id}">${ICN_CONSTEL}map<span aria-hidden="true">→</span></a>` : "";
   const polish = polishLink(slug, id, d, mPurged, mRedacted, polishBlocks);
   main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:courtCrumb(slug, cs&&cs.name),href:"#/c/"+slug},{label:"Claim #"+id}])
     + claimTitleHtml(d)
@@ -11265,11 +11265,20 @@ function verdictBanner(d){
      phase and the ROUTE — "undisputed", "by vote" — which is the part that
      appears nowhere else on the page. The docket and map pills keep their side,
      because there is no title beside them to carry it. */
-  if(d.phase==="settled"){
-    const v = (d.verdict!=null? d.verdict : d.answer);
-    const cls = v===0? "good" : v===1? "verdict-no" : "decided";
-    return `<span class="pill ${cls}">settled${d.route? " · "+esc(d.route) : ""}</span>`;
-  }
+  /* NO PILL AT ALL FOR A SETTLED CLAIM. The title immediately above carries the
+     verdict in its own oval, and strikes the sentence when the answer is NO, so
+     a pill beside it said the same thing twice — "SETTLED · UNDISPUTED" next to
+     a struck title wearing (NO). The oval is the better of the two: it is
+     attached to the sentence the verdict is about.
+     THE ROUTE GOES WITH IT, and that is the owner's call rather than an
+     oversight: "SETTLED · UNDISPUTED" was named as the unnecessary part, and
+     the route is the second half of it. It appears on no other surface now.
+     Putting it in the oval's title attribute was tried and backed out — it
+     broke four assertions that pin the oval's exact markup, for a string
+     nobody asked to keep. One line brings it back if it is missed.
+     The docket and map pills keep their side and phase, because there is no
+     title beside those rows to carry either. */
+  if(d.phase==="settled") return "";
   /* NO "tally sealed". The pill asserted a property the chain does not have: the
      ballots are on chain and anyone can add them up, so the only thing that is
      true is that THIS PAGE does not sum them mid-vote. A status chip is the

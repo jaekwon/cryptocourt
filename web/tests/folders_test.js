@@ -323,7 +323,7 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
      arrow character. */
   ok("the folder's map jump is inside the heading",
      src.includes('<span class="seal">${esc(slug)}</span> `')
-     && src.includes('<a class="hjump" href="#/c/${esc(slug)}/map?ffocus=${esc(fpath)}">${ICN_CONSTEL}on the map</a></h1>'));
+     && src.includes('<a class="hjump" href="#/c/${esc(slug)}/map?ffocus=${esc(fpath)}">${ICN_CONSTEL}map</a>'));
   ok("...and the paragraph it used to live in is gone",
      !src.includes('<p class="tacts" style="margin:0 0 10px"><a class="tlink" href="#/c/${esc(slug)}/map?ffocus='));
   ok("...with no arrow glyph left on the folder heading",
