@@ -120,6 +120,14 @@ type election struct {
 	openedAt    int64
 	nominateEnd int64
 	voteEnd     int64
+	// The two deadlines again as unix seconds. A STORED FUTURE HEIGHT CANNOT BE
+	// REPAIRED LATER: it is already wrong the moment cadence changes after it was
+	// written, and the `now` it was derived from is gone, so unlike an event stamp
+	// there is nothing a fallback could reconstruct. They are therefore written
+	// together with their heights and never derived afterwards. Zero on ballots
+	// opened before the stamps, where the heights are still the rule.
+	nominateEndTime int64
+	voteEndTime     int64
 	floor       int64 // quorum floor AND margin floor (escrow-netted 5%)
 	bond        int64 // per-candidate bond, fixed at open
 	lines       *bptree.BPTree
@@ -274,6 +282,30 @@ func (cm *courtMod) mustCandidate(id uint64) *modCandidate {
 	return v.(*modCandidate)
 }
 
+// nominationClosed and votingClosed are the ballot's PHASE, asked in one place
+// each. Six sites ask them — three gates in modvote, one in ResolveElection and
+// the two the render derives its phase banner from — and the phases are adjacent,
+// which is why they convert together and share these two functions.
+//
+// A HALF-CONVERTED PHASE MACHINE HAS AN INCOHERENT MIDDLE. `approve` tests both
+// boundaries back to back: if nomination closed on the clock while voting closed
+// on blocks, a drifting chain gets instants where neither window is open, or
+// where a ballot accepts votes the render calls closed. That is not a smaller
+// version of the same bug, it is a different one, so nominateEnd and voteEnd
+// move in one commit.
+//
+// secs is 0 because these stamps ARE the deadline, not an event to add a window
+// to — the same shape escrowUntilAt uses in dispute.gno.
+func nominationClosed(e *election) bool {
+	passed, known := pastDeadline(e.nominateEndTime, 0)
+	return (known && passed) || (!known && heightNow() >= e.nominateEnd)
+}
+
+func votingClosed(e *election) bool {
+	passed, known := pastDeadline(e.voteEndTime, 0)
+	return (known && passed) || (!known && heightNow() >= e.voteEnd)
+}
+
 // OpenElection opens the ballot AND nominates the opener's candidate in one
 // call. Opening is deliberately NOT free: a free open would let a griefer burn
 // a court's governance for ~15 days a cycle (1d nomination + 7d vote + 7d
@@ -302,6 +334,9 @@ func OpenElection(cur realm, courtSlug string, candidateID uint64) uint64 {
 		openedAt:    now,
 		nominateEnd: now + nominationWindow,
 		voteEnd:     now + nominationWindow + c.params.votingBlocks,
+
+		nominateEndTime: nowTime() + blocksToSecs(nominationWindow),
+		voteEndTime:     nowTime() + blocksToSecs(nominationWindow+c.params.votingBlocks),
 		floor:       electionFloor(c, at),
 		bond:        electionBond(c, at),
 		lines:       bptree.NewBPTree32(),
@@ -325,7 +360,7 @@ func NominateCandidate(cur realm, courtSlug string, candidateID uint64) {
 	c := mustCourt(courtSlug)
 	cm := ensureMod(c)
 	e := cm.mustOpenElection()
-	if heightNow() >= e.nominateEnd {
+	if nominationClosed(e) {
 		panic("kourtv2: the nomination window has closed")
 	}
 	cand := cm.mustCandidate(candidateID)
@@ -380,11 +415,10 @@ func approve(who address, courtSlug string, candidateID uint64, retain bool) {
 	c := mustCourt(courtSlug)
 	cm := ensureMod(c)
 	e := cm.mustOpenElection()
-	now := heightNow()
-	if now < e.nominateEnd {
+	if !nominationClosed(e) {
 		panic("kourtv2: voting opens when the nomination window closes")
 	}
-	if now >= e.voteEnd {
+	if votingClosed(e) {
 		panic("kourtv2: voting has closed")
 	}
 	// Weighed at the epoch OpenElection pinned, floored by what the voter still
@@ -480,7 +514,7 @@ func ResolveElection(cur realm, courtSlug string) {
 	cm := ensureMod(c)
 	e := cm.mustOpenElection()
 	now := heightNow()
-	if now < e.voteEnd {
+	if !votingClosed(e) {
 		panic("kourtv2: the voting window has not closed")
 	}
 	e.resolved = true

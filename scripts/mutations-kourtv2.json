@@ -5276,8 +5276,8 @@
   "pkg": "kourtv2",
   "file": "modvote.gno",
   "label": "ResolveElection: only a sitting mod may resolve (a voter's coin is stranded)",
-  "find": "\tif now < e.voteEnd {\n\t\tpanic(\"kourtv2: the voting window has not closed\")\n\t}",
-  "replace": "\tif !IsCourtMod(courtSlug, cur.Previous().Address()) {\n\t\tpanic(\"kourtv2: only a sitting mod may resolve\")\n\t}\n\tif now < e.voteEnd {\n\t\tpanic(\"kourtv2: the voting window has not closed\")\n\t}"
+  "find": "\tif !votingClosed(e) {\n\t\tpanic(\"kourtv2: the voting window has not closed\")\n\t}",
+  "replace": "\tif !IsCourtMod(courtSlug, cur.Previous().Address()) {\n\t\tpanic(\"kourtv2: only a sitting mod may resolve\")\n\t}\n\tif !votingClosed(e) {\n\t\tpanic(\"kourtv2: the voting window has not closed\")\n\t}"
  },
  {
   "pkg": "kourtv2",
@@ -5943,6 +5943,41 @@
   "label": "CreateFolderIn: the parent is ignored, so every subfolder is filed at the root",
   "find": "\tcm.folders.Set(beClaimKey(id), &folder{id: id, name: name, desc: desc, parent: parentID})",
   "replace": "\tcm.folders.Set(beClaimKey(id), &folder{id: id, name: name, desc: desc, parent: 0})"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "modvote.gno",
+  "label": "nominationClosed: the nomination window shuts one second late",
+  "find": "\tpassed, known := pastDeadline(e.nominateEndTime, 0)",
+  "replace": "\tpassed, known := pastDeadline(e.nominateEndTime, 1)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "modvote.gno",
+  "label": "votingClosed: the ballot shuts one second late",
+  "find": "\tpassed, known := pastDeadline(e.voteEndTime, 0)",
+  "replace": "\tpassed, known := pastDeadline(e.voteEndTime, 1)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "modvote.gno",
+  "label": "nominationClosed: a pre-stamp ballot's phase shifts one block",
+  "find": "(!known && heightNow() >= e.nominateEnd)",
+  "replace": "(!known && heightNow() >= e.nominateEnd+1)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "modvote.gno",
+  "label": "votingClosed: a pre-stamp ballot's close shifts one block",
+  "find": "(!known && heightNow() >= e.voteEnd)",
+  "replace": "(!known && heightNow() >= e.voteEnd+1)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "modvote.gno",
+  "label": "OpenElection: the ballot is opened without its wall-clock deadlines",
+  "find": "\t\tnominateEndTime: nowTime() + blocksToSecs(nominationWindow),",
+  "replace": "\t\tnominateEndTime: 0,"
  },
  {
   "pkg": "kourtv2",
@@ -10161,14 +10196,14 @@
   "pkg": "kourtv2",
   "file": "electionrender.gno",
   "label": "v0.58 ballot: ballot: the phase is not derived",
-  "find": "\tcase now < e.nominateEnd:\n\t\tb.WriteString(\"**Nominating.**",
+  "find": "\tcase !nominationClosed(e):\n\t\tb.WriteString(\"**Nominating.**",
   "replace": "\tcase false:\n\t\tb.WriteString(\"**Nominating.**"
  },
  {
   "pkg": "kourtv2",
   "file": "electionrender.gno",
   "label": "v0.58 ballot: ballot: the voting phase is never announced",
-  "find": "\tcase now < e.voteEnd:\n\t\tb.WriteString(\"**Voting.**",
+  "find": "\tcase !votingClosed(e):\n\t\tb.WriteString(\"**Voting.**",
   "replace": "\tcase false:\n\t\tb.WriteString(\"**Voting.**"
  },
  {

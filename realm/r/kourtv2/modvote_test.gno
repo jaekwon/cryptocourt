@@ -4,6 +4,7 @@ import (
 	"chain/runtime"
 	"strconv"
 	"testing"
+	"time"
 
 	testutils "gno.land/p/nt/testutils/v0"
 	uassert "gno.land/p/nt/uassert/v0"
@@ -249,6 +250,166 @@ func TestElectionNominationGuards(cur realm, t *testing.T) {
 	uassert.AbortsContains(t, cur, "already approved", func() {
 		ApproveCandidate(cross(cur), "ev5", a)
 	})
+}
+
+// THE BALLOT'S PHASES ARE HOURS, NOT BLOCK COUNTS — AND THEY MEET EXACTLY.
+//
+// nominateEnd and voteEnd are STORED FUTURE HEIGHTS, which is the kind that
+// cannot be repaired after the fact: the `now` they were derived from is gone, so
+// unlike an event stamp there is nothing a fallback could reconstruct. They are
+// written as seconds at the same moment as their heights, and the three gates and
+// the render's phase banner all read them through nominationClosed/votingClosed.
+//
+// WHAT THIS TEST IS REALLY FOR is the boundary BETWEEN the phases, not either one
+// alone. `approve` tests both back to back, so a half-conversion — nomination on
+// the clock, voting on blocks — would open instants where neither window accepts
+// anything, or where the ballot takes votes the render calls closed. Asserting
+// each phase separately would pass in that state. So this walks the seam: the
+// last second of nominating and the first second of voting, with no block mined
+// between them, and checks that BOTH verbs flip together.
+func TestTheBallotPhasesMeetExactlyOnTheWallClock(cur realm, t *testing.T) {
+	creator := testutils.TestAddress("evw-creator")
+	voter := testutils.TestAddress("evw-voter")
+	m1 := testutils.TestAddress("evw-m1")
+	m2 := testutils.TestAddress("evw-m2")
+	c := electionCourt(cur, "evw", creator, []address{voter}, []int64{900_000_000})
+
+	testing.SetRealm(testing.NewUserRealm(voter))
+	a := RegisterModCandidate(cross(cur), "evw", 1, m1)
+	testing.SetRealm(testing.NewUserRealm(voter))
+	b := RegisterModCandidate(cross(cur), "evw", 1, m2)
+	testing.SetRealm(testing.NewUserRealm(voter))
+	OpenElection(cross(cur), "evw", a)
+
+	e := c.mod.election
+	if e.nominateEndTime == 0 || e.voteEndTime == 0 {
+		t.Fatal("fixture: the ballot must stamp both deadlines, or this pins the height arm")
+	}
+	openedH := heightNow()
+	bumpTo := func(target int64) {
+		d := target - nowTime()
+		if d < 0 {
+			t.Fatalf("fixture: %d is already behind us (now %d)", target, nowTime())
+		}
+		ctx := testing.GetContext()
+		ctx.Time = ctx.Time.Add(time.Duration(d) * time.Second)
+		testing.SetContext(ctx)
+	}
+
+	// ---- THE LAST SECOND OF NOMINATING ----
+	bumpTo(e.nominateEndTime - 1)
+	uassert.Equal(t, openedH, heightNow())
+	uassert.True(t, heightNow() < e.nominateEnd) // blocks agree it is early, either way
+	other := testutils.TestAddress("evw-other")
+	c.coin.Mint(other, 50_000_000)
+	testing.SetRealm(testing.NewUserRealm(other))
+	NominateCandidate(cross(cur), "evw", b) // still open
+	testing.SetRealm(testing.NewUserRealm(voter))
+	uassert.AbortsContains(t, cur, "voting opens", func() { // and voting is not
+		ApproveCandidate(cross(cur), "evw", a)
+	})
+
+	// ---- THE FIRST SECOND OF VOTING, one second later, no block mined ----
+	// BOTH verbs flip on the same instant. That is the seam: nominating must shut
+	// exactly when voting opens, with no gap and no overlap.
+	bumpTo(e.nominateEndTime)
+	uassert.Equal(t, openedH, heightNow())
+	uassert.True(t, heightNow() < e.nominateEnd) // the block arm still says "nominating"
+	third := testutils.TestAddress("evw-third")
+	c.coin.Mint(third, 50_000_000)
+	testing.SetRealm(testing.NewUserRealm(third))
+	uassert.AbortsContains(t, cur, "nomination window has closed", func() {
+		NominateCandidate(cross(cur), "evw", b)
+	})
+	testing.SetRealm(testing.NewUserRealm(voter))
+	ApproveCandidate(cross(cur), "evw", a) // voting is open on the same second
+
+	// ---- AND THE FAR EDGE: voting shuts exactly when resolution opens ----
+	bumpTo(e.voteEndTime - 1)
+	testing.SetRealm(testing.NewUserRealm(voter))
+	uassert.AbortsContains(t, cur, "voting window has not closed", func() {
+		ResolveElection(cross(cur), "evw")
+	})
+	bumpTo(e.voteEndTime)
+	uassert.Equal(t, openedH, heightNow())
+	testing.SetRealm(testing.NewUserRealm(other))
+	uassert.AbortsContains(t, cur, "voting has closed", func() {
+		ApproveCandidate(cross(cur), "evw", b)
+	})
+	testing.SetRealm(testing.NewUserRealm(voter))
+	ResolveElection(cross(cur), "evw") // and resolution is open on that same second
+	if ElectionOpen("evw") {
+		t.Fatal("the ballot must resolve once its voting window closes on the clock")
+	}
+}
+
+// A BALLOT OPENED BEFORE THE STAMPS still runs on its heights, at both seams.
+func TestAPreStampBallotKeepsItsBlockPhases(cur realm, t *testing.T) {
+	creator := testutils.TestAddress("evp-creator")
+	voter := testutils.TestAddress("evp-voter")
+	m1 := testutils.TestAddress("evp-m1")
+	m2 := testutils.TestAddress("evp-m2")
+	c := electionCourt(cur, "evp", creator, []address{voter}, []int64{900_000_000})
+
+	testing.SetRealm(testing.NewUserRealm(voter))
+	a := RegisterModCandidate(cross(cur), "evp", 1, m1)
+	testing.SetRealm(testing.NewUserRealm(voter))
+	b := RegisterModCandidate(cross(cur), "evp", 1, m2)
+	testing.SetRealm(testing.NewUserRealm(voter))
+	OpenElection(cross(cur), "evp", a)
+
+	e := c.mod.election
+	e.nominateEndTime, e.voteEndTime = 0, 0 // the pre-upgrade shape: heights only
+
+	// One block short of the nomination edge, both verbs answer as before.
+	if d := e.nominateEnd - 1 - heightNow(); d > 0 {
+		testing.SkipHeights(d)
+	}
+	uassert.Equal(t, e.nominateEnd-1, heightNow())
+	other := testutils.TestAddress("evp-other")
+	c.coin.Mint(other, 50_000_000)
+	testing.SetRealm(testing.NewUserRealm(other))
+	NominateCandidate(cross(cur), "evp", b)
+	testing.SetRealm(testing.NewUserRealm(voter))
+	uassert.AbortsContains(t, cur, "voting opens", func() {
+		ApproveCandidate(cross(cur), "evp", a)
+	})
+
+	// And on the block itself they flip together, exactly as the clock arm does.
+	testing.SkipHeights(1)
+	uassert.Equal(t, e.nominateEnd, heightNow())
+	third := testutils.TestAddress("evp-third")
+	c.coin.Mint(third, 50_000_000)
+	testing.SetRealm(testing.NewUserRealm(third))
+	uassert.AbortsContains(t, cur, "nomination window has closed", func() {
+		NominateCandidate(cross(cur), "evp", b)
+	})
+	testing.SetRealm(testing.NewUserRealm(voter))
+	ApproveCandidate(cross(cur), "evp", a)
+
+	// ---- AND THE FAR SEAM, which the nomination half does not reach ----
+	// Walked because it was measured unpinned: mutating votingClosed's height arm
+	// SURVIVED while only the nomination seam was covered. Two deadlines share one
+	// shape, and sharing a shape is not sharing a test.
+	if d := e.voteEnd - 1 - heightNow(); d > 0 {
+		testing.SkipHeights(d)
+	}
+	uassert.Equal(t, e.voteEnd-1, heightNow())
+	testing.SetRealm(testing.NewUserRealm(voter))
+	uassert.AbortsContains(t, cur, "voting window has not closed", func() {
+		ResolveElection(cross(cur), "evp")
+	})
+	testing.SkipHeights(1)
+	uassert.Equal(t, e.voteEnd, heightNow())
+	testing.SetRealm(testing.NewUserRealm(other))
+	uassert.AbortsContains(t, cur, "voting has closed", func() {
+		ApproveCandidate(cross(cur), "evp", b)
+	})
+	testing.SetRealm(testing.NewUserRealm(voter))
+	ResolveElection(cross(cur), "evp")
+	if ElectionOpen("evp") {
+		t.Fatal("a pre-stamp ballot must still close on its exact block")
+	}
 }
 
 // Approving several lines counts the voter's weight ONCE toward turnout

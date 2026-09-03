@@ -1,6 +1,6 @@
 # Deadlines in seconds, accounting in blocks
 
-**Status:** in progress. 7 of 11 gates converted (plus one found already done); see the log at the end.
+**Status:** in progress. 9 of 11 gates converted (plus one found already done), and 2 of the 6 stored future heights; see the log at the end.
 
 ## The problem, as observed
 
@@ -149,7 +149,7 @@ trailing ring; `pendingTTLBlocks` looks like accounting and is a deadline.
 | `moderation.gno:620,664,1187` | `pendingTTLBlocks` | `approval.openedAtTime` (added) | **converted** |
 | `moderation.gno:691` | `votingBlocks` after execute | `claimMod.executedAtTime` (added) | **converted** |
 | `moderation.gno:755` | `reSetWindowBlocks` (DMCA §512(g)) | `globalClearedAtTime` (added) | **converted** |
-| `modvote.gno:328` | `nominateEnd` | needs a stamp | unconverted |
+| `modvote.gno:328,384,387,483` | `nominateEnd`, `voteEnd` | `nominateEndTime`/`voteEndTime` (added) | **converted** |
 | `boardmod.gno:107,137` | `frozenUntil` | needs a stamp | unconverted |
 | `meta.gno:366` | `votingBlocks` after verdict | `verdictAtTime` | unconverted |
 | `p/governor` proposal `closes` | vote window | needs a stamp | unconverted — bug 1 |
@@ -243,6 +243,44 @@ units across two claims would be worse than falling back), and it is the one sit
 that already had a corpus row per arm — the discipline being retrofitted
 elsewhere. `supEdge.at` is a height "for the record" that nothing reads and
 nothing renders.
+
+### `modvote.gno:328` — the ballot's phase clock (and the first stored future heights)
+
+Converted, and it took `voteEnd` with it — two of the plan's six stored future
+heights land here, ahead of their batch, for a reason worth stating.
+
+**A half-converted phase machine has an incoherent middle.** `approve` tests both
+boundaries back to back: voting is refused before `nominateEnd` and after
+`voteEnd`. Convert one and not the other and a drifting chain gets instants where
+neither window accepts anything, or where the ballot takes votes the render calls
+closed. That is not a smaller version of the same bug, it is a new one — so the
+two deadlines move together even though the order list separates them.
+
+**This is the first kind that cannot be repaired afterwards.** A stored future
+height is wrong the moment cadence changes after it was written, and the `now` it
+came from is gone, so unlike an event stamp there is nothing a fallback could
+reconstruct. The stamps are therefore written AT the same site, in the same struct
+literal, and never derived later.
+
+Six sites read the pair — three gates in modvote, one in ResolveElection, and the
+two the render derives its phase banner from — and all six go through
+`nominationClosed`/`votingClosed`. The render's PHASE follows the gates
+deliberately: a banner reading "Nominating" while the chain refuses a nomination
+is the reported bug wearing different clothes. The block numbers it prints are
+still heights; converting what they SAY belongs to the projection pass.
+
+**A survivor, and what it taught.** `votingClosed`'s height arm SURVIVED its
+mutant while the pre-stamp test walked only the nomination seam. Two deadlines
+sharing one shape do not share a test — the far seam had to be walked explicitly.
+Fixed and re-measured; the row is killed now.
+
+Also repointed three pre-existing rows whose anchors this rewrote (ResolveElection's
+mod check and both render phase cases), and corrected a new row that had silently
+inherited the previous row's `file` field — `make anchors` caught that, not review.
+
+Verified: full kourtv2 suite green; eight mutants compile and are killed, five new
+and three repointed; `make anchors collisions staleguards guards` and
+check-read-purity/check-storage/check-render-text pass.
 
 ### `moderation.gno:755` — the DMCA §512(g) counter-notice window
 

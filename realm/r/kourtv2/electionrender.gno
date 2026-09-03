@@ -107,13 +107,17 @@ func writeOpenElection(b *strings.Builder, c *Court, cm *courtMod, base string) 
 	// WHICH PHASE, FIRST. The two windows govern different actions, and a reader
 	// who nominates during the vote window or votes during nomination gets a
 	// panic. The phase is derived rather than left for the reader to compare two
-	// block numbers against a third.
+	// block numbers against a third — and derived through the SAME predicates the
+	// gates use, so the banner cannot say "Nominating" while the chain refuses a
+	// nomination. The block numbers printed below are still heights: they are the
+	// reference beside the deadline, and converting what they SAY is the
+	// projection pass, not this one.
 	switch {
-	case now < e.nominateEnd:
+	case !nominationClosed(e):
 		b.WriteString("**Nominating.** Candidate sets may be added until block **" +
 			strconv.FormatInt(e.nominateEnd, 10) + "**; voting runs from then " +
 			"until block **" + strconv.FormatInt(e.voteEnd, 10) + "**.\n\n")
-	case now < e.voteEnd:
+	case !votingClosed(e):
 		b.WriteString("**Voting.** Nominations closed at block " +
 			strconv.FormatInt(e.nominateEnd, 10) + "; the ballot closes at block **" +
 			strconv.FormatInt(e.voteEnd, 10) + "**.\n\n")
