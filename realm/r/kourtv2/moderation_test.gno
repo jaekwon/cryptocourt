@@ -650,6 +650,101 @@ func TestPendingApprovalsGoStale(cur realm, t *testing.T) {
 	}
 }
 
+// THE I8 RE-HIDE COOLDOWN, WHICH HAD NO TEST AT ALL.
+//
+// The guard exists because a moderator who LOST an unhide appeal — after the
+// appellant spent weeks and real bonds — could re-hide in the very next block for
+// free, "nullifying the restorative half of the appeals layer". Nothing pinned
+// it: no test in this package produced its panic and neither corpus file carried
+// a row for it, so deleting the whole branch left the suite GREEN — measured, by
+// deleting it. Found while converting it to the wall clock; the conversion is the
+// smaller half of this test.
+//
+// The cooldown is the VOTE'S OWN LENGTH (votingBlocks), which is why the unit
+// matters rather than being a nicety: counted in blocks it is one vote long only
+// at 5s a block, and on a faster chain the loser of an appeal waits less than the
+// appeal itself took.
+func TestTheReHideCooldownIsEnforcedAndRunsOnTheWallClock(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("rh-alice")
+	c := testCourt(cur, "rh", alice, 10_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "rh", "a claim to hide and unhide")
+
+	// ensureMod seats the creator as a 1-of-1 set, so alice's single call fires.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	HideItem(cross(cur), "rh", id, "first hide")
+	if !HiddenFromListing("rh", id) {
+		t.Fatal("fixture: the court bit must be set before a meta verdict can clear it")
+	}
+
+	// The appeal succeeds: module 7 clears the court bit and stamps the cooldown.
+	// Called directly rather than through the whole meta voting apparatus — this
+	// IS the writer the guard reads, so it is the honest anchor.
+	cm := c.mod
+	clearCourtBitByMeta(c, id, alice)
+	clm := lookupClaimMod(cm, id)
+	if clm == nil || clm.executedAt == 0 {
+		t.Fatal("fixture: the meta clear must stamp executedAt")
+	}
+	if clm.executedAtTime == 0 {
+		t.Fatal("fixture: no wall-clock stamp, so this would test the height fallback instead")
+	}
+	if HiddenFromListing("rh", id) {
+		t.Fatal("fixture: the meta clear must actually unhide")
+	}
+
+	// THE GUARD ITSELF, asserted for the first time: the set may not re-hide.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "may not re-hide yet", func() {
+		HideItem(cross(cur), "rh", id, "straight back up")
+	})
+
+	// One second short of the cooldown, on the clock, with no block mined.
+	openedH := heightNow()
+	bump := func(d int64) {
+		ctx := testing.GetContext()
+		ctx.Time = ctx.Time.Add(time.Duration(d) * time.Second)
+		testing.SetContext(ctx)
+	}
+	bump(blocksToSecs(c.params.votingBlocks) - 1)
+	uassert.Equal(t, openedH, heightNow())
+	uassert.True(t, heightNow() < clm.executedAt+c.params.votingBlocks) // blocks still say "wait"
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "may not re-hide yet", func() {
+		HideItem(cross(cur), "rh", id, "one second early")
+	})
+
+	// The second itself: the cooldown is over on the clock alone.
+	bump(1)
+	uassert.Equal(t, openedH, heightNow())
+	testing.SetRealm(testing.NewUserRealm(alice))
+	HideItem(cross(cur), "rh", id, "after the cooldown")
+	if !HiddenFromListing("rh", id) {
+		t.Fatal("past the cooldown on the wall clock the set may re-hide")
+	}
+
+	// ---- AND A PRE-STAMP VERDICT STILL READS HEIGHT, TO ITS EXACT BLOCK ----
+	clearCourtBitByMeta(c, id, alice)
+	clm2 := lookupClaimMod(cm, id)
+	clm2.executedAtTime = 0 // the pre-upgrade shape: a height, no stamp
+	target := clm2.executedAt + c.params.votingBlocks
+	if d := target - 1 - heightNow(); d > 0 {
+		testing.SkipHeights(d)
+	}
+	uassert.Equal(t, target-1, heightNow())
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "may not re-hide yet", func() {
+		HideItem(cross(cur), "rh", id, "one block early")
+	})
+	testing.SkipHeights(1)
+	uassert.Equal(t, target, heightNow())
+	testing.SetRealm(testing.NewUserRealm(alice))
+	HideItem(cross(cur), "rh", id, "on the exact block")
+	if !HiddenFromListing("rh", id) {
+		t.Fatal("a pre-stamp verdict's cooldown must still end on its exact block")
+	}
+}
+
 // THE SEVEN DAYS ARE SEVEN DAYS, ON ALL THREE READERS.
 //
 // TestPendingApprovalsGoStale above walks the TTL with SkipHeights, which moves

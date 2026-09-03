@@ -1,6 +1,6 @@
 # Deadlines in seconds, accounting in blocks
 
-**Status:** in progress. 5 of 11 gates converted (plus one found already done); see the log at the end.
+**Status:** in progress. 6 of 11 gates converted (plus one found already done); see the log at the end.
 
 ## The problem, as observed
 
@@ -147,7 +147,7 @@ trailing ring; `pendingTTLBlocks` looks like accounting and is a deadline.
 | `answer.gno:69` | `stakeOpenDelay + answerWindow + priorityWindow`, summed | `openedAtTime` | **converted** — as one duration |
 | `stake.gno:166` | `stakeOpenDelayBlocks` | `openedAtTime` | **converted** |
 | `moderation.gno:620,664,1187` | `pendingTTLBlocks` | `approval.openedAtTime` (added) | **converted** |
-| `moderation.gno:691` | `votingBlocks` after execute | needs a stamp | unconverted |
+| `moderation.gno:691` | `votingBlocks` after execute | `claimMod.executedAtTime` (added) | **converted** |
 | `modvote.gno:328` | `nominateEnd` | needs a stamp | unconverted |
 | `boardmod.gno:107,137` | `frozenUntil` | needs a stamp | unconverted |
 | `meta.gno:366` | `votingBlocks` after verdict | `verdictAtTime` | unconverted |
@@ -242,6 +242,38 @@ units across two claims would be worse than falling back), and it is the one sit
 that already had a corpus row per arm — the discipline being retrofitted
 elsewhere. `supEdge.at` is a height "for the record" that nothing reads and
 nothing renders.
+
+### `moderation.gno:691` — the I8 re-hide cooldown, which had no test at all
+
+Converted. Second new field: `executedAtTime` beside `executedAt`, written at
+both writers (`setMetaBit`, `clearCourtBitByMeta`). No new constant — the window
+is `c.params.votingBlocks`, a court parameter, so it converts at the call site.
+
+**The unit is the point here, not a nicety.** The cooldown is the VOTE'S OWN
+LENGTH. Counted in blocks it is one vote long only at 5s a block; on a faster
+chain the loser of an appeal waits less than the appeal itself took, which is
+precisely the asymmetry the guard was written to remove.
+
+**THE GUARD WAS COMPLETELY UNPINNED, and that is the bigger find.** No test in
+the package produced its panic and neither corpus file carried a row for it. Not
+inferred — measured: deleting the whole branch and running the full suite with
+the new test excised comes back GREEN. A moderator who lost an unhide appeal
+could have been let straight back in by a one-line edit and nothing would have
+objected. It now has the first test it has ever had, plus four corpus rows (not
+enforced, one second early, one block early, stamp not written), all confirmed
+killed.
+
+**A process note worth keeping.** Running that proof cost the new test: I used
+`git checkout --` to undo a temporary excision, which also discarded the file's
+other uncommitted changes. Re-added and re-verified from scratch — full suite and
+all four mutants re-run against the restored tree rather than trusting the
+earlier runs, which no longer described it. **`git checkout --` is not an undo
+for a scripted edit when the file has uncommitted work in it; copy the file
+aside first, as the mutation harness does.**
+
+Verified: full kourtv2 suite green; four mutants compile and are killed; the
+guard proven unpinned beforehand; `make anchors collisions staleguards guards`
+and check-read-purity/check-storage pass.
 
 ### `moderation.gno:620,664,1187` — the m-of-n approval TTL (first new field)
 

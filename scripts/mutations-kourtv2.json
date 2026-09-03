@@ -5947,6 +5947,34 @@
  {
   "pkg": "kourtv2",
   "file": "moderation.gno",
+  "label": "HideItem: the I8 re-hide cooldown is not enforced",
+  "find": "\t\tif passed, known := pastDeadline(clm.executedAtTime, blocksToSecs(c.params.votingBlocks)); (known && !passed) ||\n\t\t\t(!known && heightNow() < clm.executedAt+c.params.votingBlocks) {",
+  "replace": "\t\tif false {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "moderation.gno",
+  "label": "HideItem: the re-hide cooldown ends one second early",
+  "find": "pastDeadline(clm.executedAtTime, blocksToSecs(c.params.votingBlocks))",
+  "replace": "pastDeadline(clm.executedAtTime, blocksToSecs(c.params.votingBlocks)-1)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "moderation.gno",
+  "label": "HideItem: a pre-stamp verdict's cooldown ends one block early",
+  "find": "(!known && heightNow() < clm.executedAt+c.params.votingBlocks)",
+  "replace": "(!known && heightNow() < clm.executedAt+c.params.votingBlocks-1)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "moderation.gno",
+  "label": "clearCourtBitByMeta: the cooldown is armed without its wall-clock stamp",
+  "find": "\tclm.court = false\n\tclm.executedAt = heightNow()\n\tclm.executedAtTime = nowTime()",
+  "replace": "\tclm.court = false\n\tclm.executedAt = heightNow()\n\tclm.executedAtTime = 0"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "moderation.gno",
   "label": "approvalStale: an entry goes stale one second late",
   "find": "return (known && passed) || (!known && heightNow() >= a.openedAt+pendingTTLBlocks)",
   "replace": "return (known && !passed) || (!known && heightNow() >= a.openedAt+pendingTTLBlocks)"

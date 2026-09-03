@@ -296,6 +296,7 @@ type claimMod struct {
 	// the strip key already encodes the deadline it would have duplicated.
 	globalClearedAt int64 // for the windowed-m-of-n re-set rule
 	executedAt      int64 // meta-verdict cooldown anchor (module 7)
+	executedAtTime  int64 // unix seconds beside it; 0 on verdicts predating the stamps
 
 	logSeq uint64
 	log    []modAct
@@ -708,9 +709,17 @@ func HideItem(cur realm, courtSlug string, claimID uint64, reason string) {
 	// re-hid in the very next block for free, nullifying the restorative half of
 	// the appeals layer. Global-DAO verbs and meta executions do not route here.
 	// Read through lookupClaimMod: an absent row means no verdict ever landed.
-	if clm := lookupClaimMod(cm, claimID); clm != nil && clm.executedAt != 0 &&
-		heightNow() < clm.executedAt+c.params.votingBlocks {
-		panic("kourtv2: a review verdict just cleared this; the set may not re-hide yet")
+	//
+	// THE COOLDOWN IS THE VOTE'S OWN LENGTH, so it has to be measured in the same
+	// unit the appellant experienced. Counted in blocks it was one vote long only
+	// at 5s a block: faster, and the loser of an appeal waits less than the appeal
+	// itself took. votingBlocks is a court parameter denominated in blocks, so it
+	// converts at the call site rather than through a constant of its own.
+	if clm := lookupClaimMod(cm, claimID); clm != nil && clm.executedAt != 0 {
+		if passed, known := pastDeadline(clm.executedAtTime, blocksToSecs(c.params.votingBlocks)); (known && !passed) ||
+			(!known && heightNow() < clm.executedAt+c.params.votingBlocks) {
+			panic("kourtv2: a review verdict just cleared this; the set may not re-hide yet")
+		}
 	}
 	fire, r := approveAction(cm.pending, "hide:"+strconv.FormatUint(claimID, 10), who, reason, cm.m)
 	if !fire {
@@ -1015,6 +1024,7 @@ func setMetaBit(c *Court, claimID uint64, by address) {
 	clm := ensureClaimMod(c, cm, claimID)
 	clm.meta = true
 	clm.executedAt = heightNow()
+	clm.executedAtTime = nowTime()
 	clm.appendLog(by, "meta-hide", "")
 	emitModAct(c.id, claimID, "meta-hide", by)
 }
@@ -1043,6 +1053,7 @@ func clearCourtBitByMeta(c *Court, claimID uint64, by address) {
 	}
 	clm.court = false
 	clm.executedAt = heightNow()
+	clm.executedAtTime = nowTime()
 	clm.appendLog(by, "meta-unhide", "")
 	emitModAct(c.id, claimID, "meta-unhide", by)
 }
