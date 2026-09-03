@@ -3373,7 +3373,19 @@ async function fillTicketPulls(slug, id, d, p){
     el.appendChild(sm);
   }
 }
-async function fillWithdrawSides(slug, id, d, nowH, vAt){
+/* Has the participant-only week after the verdict ended?
+   A function, not four lines inside fillWithdrawSides, because that function
+   needs a rendered ticket and a wallet to reach and this rule is worth pinning
+   on its own — the same reason metaVerdictExpired is a function in the realm.
+   Stamps first, heights only for a verdict recorded before ClaimTimeline
+   carried them. Unknowable (no stamps, no heights) reads as NOT over, which
+   keeps the note rather than offering a control the chain may refuse. */
+function finalizeGraceOver(vT, nowT, vAt, nowH){
+  if(vT && nowT) return (nowT - vT) >= FINALIZE_GRACE * BLOCK_SECS;
+  if(vAt && nowH != null) return (nowH - vAt) >= FINALIZE_GRACE;
+  return false;
+}
+async function fillWithdrawSides(slug, id, d, nowH, vAt, nowT, vT){
   if(!CFG.addr) return;
   /* KEYED ON data-wside, WHICH stakeTicket WRITES, not on the button's own
      data-func: the demo branch of btn() renders an inert button with none of
@@ -3398,8 +3410,19 @@ async function fillWithdrawSides(slug, id, d, nowH, vAt){
   let graceLocked = false;   // set below; read by the no-stake note at the end
   const crys = document.querySelector(".stakewrap .ticket [data-crys] .btn");
   const party = crys? await claimParties(slug, id, d) : null;
+  /* THE WEEK IS A WEEK, AND THE REALM ALREADY SAYS SO. This asked whether
+     120,960 BLOCKS had passed since the verdict, which is a week only while the
+     chain holds 5s a block — and on kourt-1 it does not: claim covid/10 was
+     settled 7 Apr 2022 and read 53,280 blocks of a 120,960-block window in
+     December 2026, so the page told a reader the "first week" was still running
+     1,713 days later while crystallize.gno would have let them straight through.
+     A page that greys a control the chain would accept is the same defect as
+     the reopen link that contradicted its own gate, on a third surface.
+     Stamps first, blocks only for a verdict recorded before ClaimTimeline
+     carried them — the same fallback the realm keeps. */
+  const graceOver = finalizeGraceOver(vT, nowT, vAt, nowH);
   if(crys && !crys.getAttribute("data-blocked") && vAt && nowH!=null
-     && (nowH - vAt) < FINALIZE_GRACE
+     && !graceOver
      && party && party.author!=null && party.answerer!=null
      && party.author!==CFG.addr && party.answerer!==CFG.addr
      && !(+p.yes > 0) && !(+p.no > 0)){
@@ -10030,7 +10053,12 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
   fillUnstakeSides(slug, id);
   fillWithdrawSides(slug, id, d,
     tline && tline.now? tline.now.h : nowH,
-    tline && tline.verdict? tline.verdict.h : null);
+    tline && tline.verdict? tline.verdict.h : null,
+    // ...and the same two moments as DATES, which is what the grace window is
+    // actually measured in. Zero/absent means the record predates the stamps and
+    // the heights above are all there is.
+    tline && tline.now? tline.now.t : null,
+    tline && tline.verdict? tline.verdict.t : null);
   fillClaimComments(slug, id);
   if(isLive() && CFG.addr && d.disputeOpen) fillVoteEligibility(slug,id,d);
   if(isLive() && CFG.addr) fillVoteCommitment(slug,id);

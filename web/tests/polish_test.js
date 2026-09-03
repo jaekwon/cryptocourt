@@ -143,8 +143,15 @@ ok("offered when the court opted into one", polishLink("orem",7,open,null,null,1
      week is the only one greyed. */
   ok("...the button is marked so the filler can find it in the sample too",
      /data-crys="1"/.test(clear));
+  /* The comparison moved into finalizeGraceOver when the window stopped being
+     counted in blocks — the page was telling readers the first week was still
+     running 1,713 days after the verdict. The guard this assertion exists for is
+     unchanged: the window must come from the mirrored constant, never a literal.
+     Both arms are checked, because the height arm is still the rule for a
+     verdict recorded before ClaimTimeline carried stamps. */
   ok("...the guard is gated on the mirrored window, not a literal",
-     /\(nowH - vAt\) < FINALIZE_GRACE/.test(src));
+     /\(nowT - vT\) >= FINALIZE_GRACE \* BLOCK_SECS/.test(src)
+     && /\(nowH - vAt\) >= FINALIZE_GRACE/.test(src));
   /* AND THE NOTE BESIDE IT SAYS THE SAME THING WITHOUT A CLICK. The greyed
      button carries the reason in data-blocked, which blocked buttons reveal only
      when pressed — so a reader with no stake was told two facts a press apart.
