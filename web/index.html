@@ -840,7 +840,12 @@ html.embed .main{grid-column:1; grid-row:1; max-width:none; padding:0;
    in ink — a grey rule through a title reads as "deleted", and nothing here was
    deleted. Thickness in em so it tracks the clamped heading instead of going
    hairline at 36px and heavy at 26px. */
-.page-h s{text-decoration-thickness:.05em; text-decoration-color:var(--no)}
+/* BOTH SURFACES THAT STRIKE A SENTENCE IN HTML, because verdictSentence builds
+   one <s> for the claim page's heading and the map's selection card, and a hue
+   scoped to the heading would have left the card's rule drawn in ink — which
+   reads as "deleted", the one thing this mark must not say. Thickness in em, so
+   it tracks the clamped heading and the card's 13px alike. */
+.page-h s,.mapsel-t s{text-decoration-thickness:.05em; text-decoration-color:var(--no)}
 /* NO FILL, A HAIRLINE, AND REGISTRATION MARKS AT THE CORNERS. A court of record
    is rules and type; a filled card is a slab floating over a page. Taking the
    fill away is what makes the one glowing line on the page mean something.
@@ -8045,12 +8050,29 @@ function mapSelCard(id, data, slug, L){
       + (near.length>showRel.length
          ? `<p class="small muted">…and ${near.length-showRel.length} more</p>` : "")
     : "";
+  /* THE CARD SAYS IT THE WAY THE CLAIM PAGE AND THE NODE SAY IT. The side rides
+     the sentence, in its oval, and the sentence is struck when the court ruled
+     against it — so the phase pill beside it goes, exactly as
+     "SETTLED · UNDISPUTED" went from the claim page's heading for saying the
+     same thing twice. This was the last surface where a decided claim wore a
+     plain title with the verdict parked in a chip above it.
+     THE PILL STAYS FOR EVERY OTHER PHASE, and that is why this reads the SIDE
+     rather than the phase. "open", "in dispute", "provisional YES" are not
+     carried by the sentence — nothing strikes an undecided claim and nothing
+     rings it — so there the pill is the only signal on the card and dropping it
+     would take the phase off the card altogether. A settled claim whose side the
+     status line does not name counts as undecided here for the same reason: it
+     keeps its pill, because the sentence has nothing to say for it. */
+  const pc = phaseClass(c.statusText);
+  const side = pc.short === "settled" ? pc.side : "";
   return `<div class="mapsel-h"><span class="mono">#${id}</span>`
-    + statusPill(c.statusText)   /* ONE pill builder: this card hand-rolled its own and
-                                    so silently dropped the verdict side the day the
-                                    shared one started printing it */
+    + (side ? "" : statusPill(c.statusText))
+                                 /* ONE pill builder, when there is a pill: this card
+                                    hand-rolled its own and so silently dropped the
+                                    verdict side the day the shared one started
+                                    printing it */
     + `<button type="button" class="mapsel-x" id="msel-x" aria-label="Clear selection">×</button></div>`
-    + `<p class="mapsel-t">${safeInline(c.title)}</p>`
+    + `<p class="mapsel-t">${verdictSentence(c.title, side)}</p>`
     /* THE CLAIM'S OWN STATEMENT OF WHAT IT MEANS, which is the thing a reader
        opened the card to read. The card showed a title they had already read on
        the node, then relations and a link off the map — so the body, the one part
@@ -11345,6 +11367,27 @@ function focusStakeSide(side){
    same fact a few pixels apart and must not disagree about which field it is
    in. sideName's dash is filtered rather than printed, the way statusText and
    the pill beside it already refuse an unreadable side. */
+/* THE SENTENCE WEARING ITS VERDICT: struck through when the court ruled against
+   it, with the side in its own oval. Extracted because THREE surfaces print this
+   one fact — the claim page's heading, the map's node, and the map's selection
+   card — and the card was the one still saying it as a phase pill beside a plain
+   title. The node builds its own in SVG, where there is no <s> and no
+   border-radius to be had; these two are HTML and can share the markup exactly.
+   SIDE, NOT PHASE, is the argument, because the two callers learn it differently:
+   the claim page reads a `verdict` field off the claim and the map reads
+   phaseClass off the realm's status line. Deciding whether the claim is settled
+   stays with the caller; all this does is dress the sentence.
+   AN UNKNOWN SIDE RETURNS THE BARE SENTENCE rather than an empty oval — a ring
+   with nothing in it would assert a decision nobody can read. */
+function verdictSentence(title, side){
+  const t = safeInline(title);
+  if(side !== "YES" && side !== "NO") return t;
+  // <s>, not a class on the caller's element: the element means "no longer
+  // accurate", which is the claim about the sentence — and it keeps the oval
+  // outside the strike, since the verdict is not itself struck.
+  return (side === "NO" ? `<s>${t}</s>` : t)
+    + ` <span class="sidetag vtag ${side === "NO" ? "n" : "y"}">${side}</span>`;
+}
 function claimTitleHtml(d){
   const t = safeInline(d && d.title);
   /* A CONTESTED ANSWER IS SHOWN, AND QUESTIONED. The oval only appeared once a
@@ -11363,13 +11406,10 @@ function claimTitleHtml(d){
   }
   if(!d || d.phase !== "settled") return `<h1 class="page-h">${t}</h1>`;
   const v = (d.verdict != null ? d.verdict : d.answer);
-  if(v !== 0 && v !== 1) return `<h1 class="page-h">${t}</h1>`;
-  const no = v === 1;
-  // <s>, not a class on the h1: the element means "no longer accurate", which is
-  // the claim about the sentence — and it keeps the oval outside the strike,
-  // since the verdict is not itself struck.
-  return `<h1 class="page-h">${no ? `<s>${t}</s>` : t}`
-    + ` <span class="sidetag vtag ${no ? "n" : "y"}">${sideName(v)}</span></h1>`;
+  // The unknown-side guard is verdictSentence's now, and it is the same guard:
+  // sideName returns "—" for anything that is not 0 or 1, which is not a side,
+  // so the sentence comes back bare.
+  return `<h1 class="page-h">${verdictSentence(d && d.title, sideName(v))}</h1>`;
 }
 function verdictBanner(d){
   if(d.phase==="provClose") return `<span class="pill void">closed · no decision</span>`;

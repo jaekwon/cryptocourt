@@ -14,7 +14,7 @@
 // dependency, and this repo's harnesses are standalone node scripts with none.
 const fs = require('fs');
 const src = fs.readFileSync(require('path').join(__dirname,'..','index.html'),'utf8');
-const { slice } = require("./srcslice");
+const { slice, fn } = require("./srcslice");
 
 // ---- the shim ------------------------------------------------------------
 let NODES = [];
@@ -118,6 +118,9 @@ eval(slice('function phaseClass(', 'function statusPill('));
 eval(slice('function statusPill(', 'function docketRow('));
 // ...and the real body renderer, for the same reason: the card renders it.
 eval(slice('function claimBody(', '/* ==='));
+// ...and the shared verdict-sentence builder, which mapSelCard's title goes
+// through: a decided claim's card strikes the sentence and rings the side.
+eval(fn('verdictSentence'));
 // claimExhibits lives inside that same region deliberately: the card renders a
 // claim's statement and its evidence together, so a harness that has one and
 // not the other is testing half a card.

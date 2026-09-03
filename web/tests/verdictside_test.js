@@ -32,7 +32,10 @@ eval(slice('async function nameTheSide(', '/* A deeper docket window'));
 // The claim page's own title, which carries the verdict. safeInline is esc, so
 // the real function goes in rather than a stub.
 eval(slice('function safeInline(', '\n'));
-eval(slice('function claimTitleHtml(', '\nfunction verdictBanner('));
+// The slice starts at verdictSentence, not claimTitleHtml: the heading calls it
+// for the settled branch, so a slice that began one function later would eval a
+// title builder whose verdict arm throws.
+eval(slice('function verdictSentence(', '\nfunction verdictBanner('));
 eval(fn('verdictBanner'));   // fn takes the closing brace with it
 
 // ---- stubs: the chain, and the batcher that talks to it ----
@@ -124,8 +127,44 @@ const run = async (rows, v, mode) => {
   //    a second pill builder is a second place to forget.
   const selCard = slice('function mapSelCard(', '\nfunction ');
   ok("the map's selection card uses the shared pill",
-     /\+ statusPill\(c\.statusText\)/.test(selCard));
+     /statusPill\(c\.statusText\)/.test(selCard));
   ok("and hand-rolls no pill of its own", !/class="pill \$\{/.test(selCard));
+
+  // 7b. AND A DECIDED CLAIM'S CARD DROPS THAT PILL, because its sentence now
+  //     carries the verdict — struck when the court ruled NO, with the side in
+  //     its oval. The same removal the claim page's heading got: a chip reading
+  //     "settled NO" above a struck title wearing (NO) is one fact twice, and
+  //     the oval is the better of the two, because it is attached to the
+  //     sentence the verdict is about.
+  //     ASSERTED ON THE SOURCE HERE, and on the RENDERED card in map_test.js,
+  //     which is the harness that evals mapSelCard and its body renderer. This
+  //     one has the two title builders in scope and not the card, so it pins the
+  //     shape of the branch; that one pins what the branch produces. Neither is
+  //     the other's substitute: a conditional written the right way round can
+  //     still print the wrong markup, and correct markup can be reached from a
+  //     condition that reads the phase instead of the side.
+  ok("the card's pill is conditional on the verdict side",
+     /\+ \(side \? "" : statusPill\(c\.statusText\)\)/.test(selCard));
+  ok("...and the side it reads is a SETTLED side, not any phase's",
+     /const side = pc\.short === "settled" \? pc\.side : "";/.test(selCard));
+  ok("...and its title goes through the shared sentence builder",
+     /<p class="mapsel-t">\$\{verdictSentence\(c\.title, side\)\}<\/p>/.test(selCard));
+
+  // 7c. THE SHARED BUILDER ITSELF, which both surfaces now depend on.
+  ok("a NO strikes the sentence and rings the side",
+     verdictSentence("It is so.", "NO")
+       === '<s>It is so.</s> <span class="sidetag vtag n">NO</span>');
+  ok("a YES rings the side and leaves the sentence standing",
+     verdictSentence("It is so.", "YES")
+       === 'It is so. <span class="sidetag vtag y">YES</span>');
+  ok("an unknown side returns the bare sentence, not an empty oval",
+     verdictSentence("It is so.", "—") === "It is so."
+     && verdictSentence("It is so.", "") === "It is so.");
+  ok("the sentence is escaped on the way in",
+     !verdictSentence("<b>x</b>", "NO").includes("<b>"));
+  ok("the claim page's heading is that builder in an h1, and nothing more",
+     claimTitleHtml({phase:"settled", verdict:1, title:"It is so."})
+       === `<h1 class="page-h">${verdictSentence("It is so.", "NO")}</h1>`);
 
   // 8. wired at BOTH sources of claim rows — the free newest-50 render and the
   //    deeper pages, which read ClaimStatus directly and would otherwise differ.
@@ -322,9 +361,15 @@ const run = async (rows, v, mode) => {
   ok("the title's oval does not inherit the shared em size",
      /\.page-h \.vtag\{font-size:clamp\(/.test(src));
   /* And the strike is drawn in the losing side's hue: a grey rule through a
-     title reads as "deleted", and nothing here was deleted. */
+     title reads as "deleted", and nothing here was deleted.
+     BOTH SURFACES THAT STRIKE IN HTML. verdictSentence builds one <s> for the
+     claim page's heading and for the map's selection card, so a hue scoped to
+     .page-h alone would leave the card's rule in ink — the one thing this mark
+     must not say. The selector is read as a whole rather than by substring: the
+     shape being pinned is that the card is IN the rule, and a bare
+     /.page-h s/ matched before the card existed. */
   ok("the strike carries the verdict's colour, not ink",
-     /\.page-h s\{[^}]*text-decoration-color:var\(--no\)/.test(src));
+     /\.page-h s,\.mapsel-t s\{[^}]*text-decoration-color:var\(--no\)/.test(src));
 
   console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");
   process.exit(fail?1:0);

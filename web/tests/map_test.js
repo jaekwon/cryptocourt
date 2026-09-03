@@ -26,7 +26,7 @@
 // useless here, where it would have reported every spoke as hitting every node.
 const fs = require('fs');
 const src = fs.readFileSync(require('path').join(__dirname,'..','index.html'),'utf8');
-const { slice } = require("./srcslice");
+const { slice, fn } = require("./srcslice");
 global.document = { addEventListener: ()=>{}, getElementById: ()=>null };
 global.CFG = { mode:'demo' };
 /* THE EVIDENCE STRIP IS GEOMETRY, so the real resolver is loaded rather than
@@ -240,6 +240,9 @@ ok("A-I pass on live 50-claim ring (both modes)", livepass);
 // in source, which is the weaker check and labelled as such.
 {
   global.safeInline = x => esc(String(x));
+  // The card dresses its title with the shared builder now — the same one the
+  // claim page's heading uses — so it has to be in scope here too.
+  eval(fn('verdictSentence'));
   eval(slice('function mapSelCard(', 'function mapDotClass'));
   /* THE CARD DESCRIBES THE DRAWING, so the fixture has to be one. This was a
      bare claims dict holding only #7, with relations pointing at 5, 6, 8 and 9 —
@@ -306,6 +309,34 @@ ok("A-I pass on live 50-claim ring (both modes)", livepass);
   ok("a claim with no relations says so",
      mapSelCard(7, {claims:d.claims, relations:[]}, "covid").includes("no relations drawn"));
   ok("an unknown id renders nothing", mapSelCard(99, d, "covid")==="");
+  /* THE CARD SAYS THE VERDICT THE WAY THE NODE AND THE CLAIM PAGE SAY IT: the
+     side rides the sentence in its oval, the sentence is struck when the court
+     ruled NO, and the phase pill that used to sit above it is gone — one fact
+     twice was the reason it went from the claim page's heading too.
+     THE PILL IS KEPT FOR EVERY OTHER PHASE, which is the load-bearing half:
+     nothing strikes an undecided claim and nothing rings it, so there the pill
+     is the card's only signal and dropping it would take the phase off the card
+     altogether. Asserted as the pair, on the rendered card. */
+  const card = st => mapSelCard(1, {claims:{1:{title:"A claim of fact.", statusText:st}},
+                                    all:[1], folders:[], relations:[]}, "covid", {edges:[]});
+  const cNo = card("settled NO — every stake withdraws 1×");
+  const cYes = card("settled YES — every stake withdraws 1×");
+  const cOpen = card("open — stake YES or NO; unstake freely");
+  const cUnk = card("settled — every stake withdraws 1×");
+  ok("a settled-NO card strikes the sentence and rings the side",
+     cNo.includes("<s>A claim of fact.</s>") && cNo.includes('vtag n">NO<'));
+  ok("...and names the phase nowhere else on the card", !/class="pill/.test(cNo));
+  ok("a settled-YES card rings the side and leaves the sentence standing",
+     cYes.includes('vtag y">YES<') && !cYes.includes("<s>") && !/class="pill/.test(cYes));
+  ok("an open card keeps its pill and wears no oval",
+     /class="pill [^"]*">open</.test(cOpen)
+     && !cOpen.includes("sidetag") && !cOpen.includes("<s>"));
+  ok("a settled card whose side is unnamed keeps its pill, not an empty oval",
+     /class="pill/.test(cUnk) && !cUnk.includes("sidetag") && !cUnk.includes("<s>"));
+  // The sentence is the shared builder's output verbatim — not merely similar to
+  // it — which is what keeps this surface from drifting from the claim page's.
+  ok("the card's sentence is the shared builder's, verbatim",
+     cNo.includes(verdictSentence("A claim of fact.", "NO")));
 
   // Source-level, because these live in the route's listeners.
   const mount = slice('function mountMap(', '/* Folder page');
