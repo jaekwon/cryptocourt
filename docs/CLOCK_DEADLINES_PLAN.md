@@ -1,6 +1,6 @@
 # Deadlines in seconds, accounting in blocks
 
-**Status:** in progress. Every gate in the order list is converted (plus one found already done), 2 of the 6 stored future heights, and one of the two gates the order omits. `meta.gno:366` is the last gate.
+**Status:** in progress. EVERY GATE IS CONVERTED — the order list's, plus the two it omitted. 2 of the 6 stored future heights are done; the rest of the remaining work is stored future heights, projections, and the governor.
 
 ## The problem, as observed
 
@@ -152,7 +152,7 @@ trailing ring; `pendingTTLBlocks` looks like accounting and is a deadline.
 | `modvote.gno:328,384,387,483` | `nominateEnd`, `voteEnd` | `nominateEndTime`/`voteEndTime` (added) | **converted** |
 | `boardlegal.gno:100` | `reSetWindowBlocks` (board row) | `globalClearedAtTime` (added) | **converted** |
 | `boardmod.gno:107,137` | `frozenUntil` | needs a stamp | unconverted |
-| `meta.gno:366` | `votingBlocks` after verdict | `verdictAtTime` | unconverted |
+| `meta.gno:366` | `votingBlocks` after verdict | `verdictAtTime` | **converted** |
 | `p/governor` proposal `closes` | vote window | needs a stamp | unconverted — bug 1 |
 
 ### Stay on blocks (accounting)
@@ -244,6 +244,49 @@ units across two claims would be worse than falling back), and it is the one sit
 that already had a corpus row per arm — the discipline being retrofitted
 elsewhere. `supEdge.at` is a height "for the record" that nothing reads and
 nothing renders.
+
+### `meta.gno:366` — the meta-verdict execution expiry (the last gate)
+
+Converted, and extracted to `metaVerdictExpired`.
+
+**The `>` was carrying real behaviour with nothing holding it.** Execution expiry
+had exactly one kind of coverage: deleting the guard was caught. Shortening the
+window by ONE UNIT survived on BOTH arms — measured by mutating it before writing
+anything. So the inclusive edge, which lets a verdict execute exactly AT
+`verdictAt+votingBlocks`, was unpinned, and converting to seconds could have moved
+it a second either way with the suite still green. `pastDeadline` answers `>=`, so
+the seconds arm asks for `blocksToSecs(votingBlocks)+1` to keep that last instant —
+a `+1` that is the edge, not a longer window, and is commented as such.
+
+**Pinned on the predicate, and that was a retreat.** The first test drove the real
+`ExecuteMetaVerdict` path — court, hidden target, matured ring, answer,
+settlement, four appeals because execution is exactly-once. It failed on state
+belonging to the meta lane rather than on anything this window does: first a
+deposit drawn from an address that turned out to be the REALM's own
+(`g1ulvf0h…`, the KOURTV2 address from the txtars) rather than the caller, then
+`checkpoint: the clock went backwards` once it ran after other tests. Two
+restructurings did not shift it.
+
+Extracting the rule made it directly testable with a hand-built `claimState` and
+no fixture at all. The wiring — that the guard is reached — stays held by the
+existing corpus row `meta: an expired verdict may still execute`, which the suite
+kills. What was missing, and is now pinned, is the edge.
+
+**WHEN A FIXTURE FIGHTS BACK, ASK WHETHER THE RULE WANTS TO BE A FUNCTION.** Three
+of these conversions ended in a shared predicate (`approvalStale`,
+`reSetWindowOpen`, `escrowPassed`) because two callers had drifted. This one ended
+in a predicate because one caller was unreachable from a test.
+
+### Gates: complete
+
+A sweep for block arithmetic now returns only reads of STORED FUTURE HEIGHTS —
+`frozenUntil`, `boardFrozenUntil`, `frozenGapUntil`, `boardFrozenGapUntil`,
+`electionCooldownUntil` — which is the next batch, plus the fallback arms of
+converted gates. No plain gate is left on blocks.
+
+Verified: full kourtv2 suite green; four mutants compile and are killed, including
+the two edges that survived beforehand; `make anchors collisions staleguards
+guards` and check-read-purity/check-storage pass.
 
 ### `dispute.gno:986` — Reopenable, the read that contradicted its own gate
 

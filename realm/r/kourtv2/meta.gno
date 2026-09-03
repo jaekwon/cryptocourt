@@ -268,6 +268,26 @@ func poisonMetaParse(claimID uint64) {
 
 // ---- execution ------------------------------------------------------------
 
+// metaVerdictExpired reports whether a decided appeal has outlived its execution
+// window. Pure but for the clock, and a function rather than four inline lines
+// because the fixture that reaches ExecuteMetaVerdict is expensive — a court, a
+// hidden target, a matured ring, an answer and a settlement — and the edge below
+// is worth pinning directly rather than through all of that.
+//
+// THE WINDOW IS ONE VOTE LONG, so it is measured in the unit the vote was
+// promised in; votingBlocks is a court parameter in blocks and converts here.
+//
+// THE `+1` IS THE INCLUSIVE EDGE, NOT A LONGER WINDOW. The height form expires
+// on `>`, so executing exactly AT verdictAt+votingBlocks has always been allowed;
+// pastDeadline answers `>=`, so the seconds arm asks for one unit more to keep
+// that last instant. Dropping it shortens every appeal window by a second, and
+// nothing would have said so: mutating either edge SURVIVED the whole suite
+// before this was pinned.
+func metaVerdictExpired(cs *claimState, votingBlocks int64) bool {
+	passed, known := pastDeadline(cs.verdictAtTime, blocksToSecs(votingBlocks)+1)
+	return (known && passed) || (!known && heightNow() > cs.verdictAt+votingBlocks)
+}
+
 // ExecuteMetaVerdict applies a decided appeal. Permissionless: the verdict is
 // the authority, not the caller.
 //
@@ -362,8 +382,16 @@ func ExecuteMetaVerdict(cur realm, metaClaimID uint64) {
 	// 6. Execution expiry: a verdict is not a sleeper round. Without this a
 	//    party could bank K decided appeals and discharge one after each local
 	//    election, inverting last-writer-wins into oldest-ammunition-wins.
-	now := heightNow()
-	if now > cs.verdictAt+mc.params.votingBlocks {
+	//    THE WINDOW IS ONE VOTE LONG, so it is measured in the unit the vote was
+	//    promised in. mc.params.votingBlocks is a court parameter in blocks and
+	//    converts at the call site.
+	//
+	//    THE `+1` IS THE INCLUSIVE EDGE, NOT A LONGER WINDOW. The height form
+	//    expires on `>`, so executing exactly AT verdictAt+votingBlocks has always
+	//    been allowed; pastDeadline answers `>=`, so the seconds arm has to ask
+	//    for one unit more to keep that last instant. Dropping it would shorten
+	//    every appeal window by a second on the quiet.
+	if metaVerdictExpired(cs, mc.params.votingBlocks) {
 		panic("kourtv2: this verdict has expired; re-appeal")
 	}
 

@@ -458,6 +458,27 @@
  {
   "pkg": "kourtv2",
   "file": "meta.gno",
+  "label": "metaVerdictExpired: the appeal window loses its inclusive last second",
+  "find": "pastDeadline(cs.verdictAtTime, blocksToSecs(votingBlocks)+1)",
+  "replace": "pastDeadline(cs.verdictAtTime, blocksToSecs(votingBlocks))"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "meta.gno",
+  "label": "metaVerdictExpired: a pre-stamp verdict loses its inclusive last block",
+  "find": "(!known && heightNow() > cs.verdictAt+votingBlocks)",
+  "replace": "(!known && heightNow() >= cs.verdictAt+votingBlocks)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "meta.gno",
+  "label": "metaVerdictExpired: a pre-stamp verdict never expires",
+  "find": "\treturn (known && passed) || (!known && heightNow() > cs.verdictAt+votingBlocks)",
+  "replace": "\treturn known && passed"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "meta.gno",
   "label": "meta: a suspension changed under the appeal is ignored (suspend/unsuspend arm)",
   "find": "\t\tif cm.suspendActByGlobal > cs.openedAt &&\n\t\t\tcm.suspended == (p.verb == verbUnsuspend) {\n\t\t\tpanic(\"kourtv2: the global DAO changed this court's suspension under this appeal; re-appeal\")\n\t\t}\n",
   "replace": ""

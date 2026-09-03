@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	testutils "gno.land/p/nt/testutils/v0"
 	uassert "gno.land/p/nt/uassert/v0"
@@ -899,5 +900,72 @@ func TestMetaEscrowIsThisRealm(cur realm, t *testing.T) {
 	}
 	if fromConstant == "" {
 		t.Fatal("the review court's escrow must not be the zero address")
+	}
+}
+
+// THE APPEAL WINDOW IS ONE VOTE LONG, AND ITS LAST INSTANT STILL COUNTS.
+//
+// Execution expiry stops a party banking K decided appeals and discharging one
+// after each local election. It was covered only in the crudest way: deleting the
+// guard was caught, but shortening the window by ONE UNIT survived on both arms —
+// measured, by mutating it. So the `>` that makes the deadline inclusive carried
+// real behaviour with nothing holding it, and converting to seconds could have
+// moved it a second in either direction unnoticed.
+//
+// Pinned on the predicate rather than through ExecuteMetaVerdict, deliberately.
+// Reaching that function needs a court, a hidden target, a matured ring, an
+// answer and a settlement, and the resulting fixture is coupled to the meta
+// lane's own clock — a first attempt at it failed on state left by other tests
+// rather than on anything this window does. The wiring (that the guard is
+// reached at all) is held by the corpus row `meta: an expired verdict may still
+// execute`, which the suite already kills; what was missing, and is here, is the
+// EDGE.
+func TestTheMetaExecutionWindowKeepsItsInclusiveEdge(cur realm, t *testing.T) {
+	const votingBlocks = int64(120_960) // the default, as a literal on purpose
+	window := blocksToSecs(votingBlocks)
+
+	// ---- THE STAMP GOVERNS ----
+	cs := &claimState{verdictAt: heightNow(), verdictAtTime: nowTime()}
+	bumpTo := func(target int64) {
+		d := target - nowTime()
+		if d < 0 {
+			t.Fatalf("fixture: %d is already behind us (now %d)", target, nowTime())
+		}
+		ctx := testing.GetContext()
+		ctx.Time = ctx.Time.Add(time.Duration(d) * time.Second)
+		testing.SetContext(ctx)
+	}
+	frozenH := heightNow()
+
+	if metaVerdictExpired(cs, votingBlocks) {
+		t.Fatal("a verdict stamped this instant cannot already have expired")
+	}
+	// AT the deadline it is still live — this is the `>` and the whole point.
+	bumpTo(cs.verdictAtTime + window)
+	uassert.Equal(t, frozenH, heightNow()) // no block mined
+	if metaVerdictExpired(cs, votingBlocks) {
+		t.Fatalf("at verdictAtTime+%d the window must still be open: the guard is `>`, "+
+			"so its last instant counts", window)
+	}
+	// One second later it is not.
+	bumpTo(cs.verdictAtTime + window + 1)
+	uassert.Equal(t, frozenH, heightNow())
+	if !metaVerdictExpired(cs, votingBlocks) {
+		t.Fatalf("one second past verdictAtTime+%d the window must be shut", window)
+	}
+
+	// ---- AND A PRE-STAMP VERDICT READS HEIGHT, TO ITS EXACT BLOCK ----
+	old := &claimState{verdictAt: heightNow(), verdictAtTime: 0}
+	if metaVerdictExpired(old, votingBlocks) {
+		t.Fatal("a pre-stamp verdict recorded this block cannot already have expired")
+	}
+	testing.SkipHeights(votingBlocks)
+	uassert.Equal(t, old.verdictAt+votingBlocks, heightNow())
+	if metaVerdictExpired(old, votingBlocks) {
+		t.Fatalf("at verdictAt+%d the height arm must still be open", votingBlocks)
+	}
+	testing.SkipHeights(1)
+	if !metaVerdictExpired(old, votingBlocks) {
+		t.Fatalf("one block past verdictAt+%d the height arm must be shut", votingBlocks)
 	}
 }
