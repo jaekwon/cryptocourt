@@ -56,7 +56,7 @@ const html = disputeTicket("orem", 3, d, NOW);
 const ballotH3 = (/<h3>([\s\S]*?)<\/h3>/.exec(html) || [, null])[1];
 ok("the ballot names the answer on the record and asks about it",
    ballotH3 !== null
-   && /^Overturn the <span class="sidetag vtag [yn]">(YES|NO)<\/span> answer\?$/.test(ballotH3));
+   && /^Keep or Flip the <span class="sidetag vtag [yn]">(YES|NO)<\/span> answer\?$/.test(ballotH3));
 // It has to fit one line beside the clock, which is why it is four words and not
 // a sentence — the first version read "The answer on the record is YES. Should it
 // be overturned?" and wrapped.
@@ -68,7 +68,7 @@ ok("the ballot names the answer on the record and asks about it",
 ok("...in a heading short enough not to wrap",
    ballotH3 !== null && ballotH3.replace(/<[^>]+>/g, "").length < 30);
 ok("...and falls back to the unnamed question when the answer is unknown",
-   src.includes('"Should this answer be overturned?"'));
+   src.includes('"Keep or flip this answer?"'));
 ok("the hint is one line, and it is the clock",
    html.includes('<div class="hint">Closes in about'));
 // THE ROUND WENT TO THE TIMELINE, where the claim's other events are. The

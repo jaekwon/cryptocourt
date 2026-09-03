@@ -606,7 +606,7 @@ ok("...at no cost to the line it sits in",
    inside an already-bold heading would render the named side LIGHTER than the
    sentence around it — so the weight cannot live on the shared rule. */
 ok("the ballot question names the side in the same oval",
-   src.includes('Overturn the <span class="sidetag vtag ${ansSide === "NO" ? "n" : "y"}">${ansSide}</span> answer?'));
+   src.includes('Keep or Flip the <span class="sidetag vtag ${ansSide === "NO" ? "n" : "y"}">${ansSide}</span> answer?'));
 ok("...and no longer in a bare bold", !/Overturn the <b>\$\{ansSide\}<\/b>/.test(src));
 ok("the gap and the weight are the signal bar's alone, not the shared rule",
    /^\.sbout \.sidetag\{margin-right:2px; font-weight:600\}/m.test(src)

@@ -6479,10 +6479,13 @@ function disputeTicket(slug, id, d, nowH){
      test would catch it because both are valid calls.
      THE COLOUR FOLLOWS THE NAMED SIDE, not the action, so Flip is red only when
      it lands on NO. The old pair coloured overturn red always, which was right
-     for a YES answer and backwards for a NO one. */
+     for a YES answer and backwards for a NO one.
+     THE QUESTION USES THE BUTTONS' OWN WORDS. It asked "Overturn the YES
+     answer?" above buttons that say Keep and Flip — a third verb for the same
+     choice, so a reader had to map it onto the two below before answering. */
   const ballotQ = ansSide
-    ? `Overturn the <span class="sidetag vtag ${ansSide === "NO" ? "n" : "y"}">${ansSide}</span> answer?`
-    : "Should this answer be overturned?";
+    ? `Keep or Flip the <span class="sidetag vtag ${ansSide === "NO" ? "n" : "y"}">${ansSide}</span> answer?`
+    : "Keep or flip this answer?";
   return `<div class="ticket" style="margin-top:12px"><h3>${ballotQ}</h3>
       <div class="hint">${ballotHint(slug, d, nowH)} <button type="button" class="helplink" data-help="help-vote">How this vote works →</button></div>
       <div class="actions" id="voteactions" style="margin-top:10px"${
