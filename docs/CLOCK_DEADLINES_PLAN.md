@@ -305,8 +305,20 @@ Execute refusal both state the moment in seconds with the block beside it.
 **A ONE-SECOND ERROR HIDES BETWEEN WHOLE BLOCKS.** `advanceTo` steps five seconds
 at a time, so shifting the delay or the grace by a single second SURVIVED
 block-stepped assertions. Both edges are now driven on the wall clock directly.
-That applies to every seconds edge in this plan; the ones pinned earlier used
-`bumpTo` for other reasons and were lucky.
+
+I guessed the earlier edges "were lucky" and then checked, because a guess about
+coverage is worth exactly nothing: **all 13 seconds-edge mutants in kourtv2 were
+re-run against the full suite and every one is killed.** The reason is a real
+asymmetry rather than luck. A test that samples EXACTLY the boundary catches a
+shift in either direction. The governor's survived because it sampled
+`ready - 1 block` and `ready` — five seconds apart — and the mutation moved the
+boundary EARLIER by one second, into the gap between the samples, where nothing
+looks. A later shift would have been caught at the boundary sample.
+
+**So the rule is about sampling, not units:** an edge is pinned when a test stands
+ON it, and a block-stepped test stands on it only when the deadline is
+block-aligned. Every kourtv2 deadline is, because each seconds constant is its
+block constant times five.
 
 **And the circularity again**, in the same shape as `TimingsAt` a commit ago: the
 expiry assertion took its target from `expiresAtTime`, the function under test, so
@@ -321,10 +333,20 @@ looked like survivors until they were run against `r/govern` as well as
 ordering ("the target must strictly predate the appeal"), with no duration
 involved. They stay.
 
-### The sweep is clean
+### The sweep is clean — every package, not two
 
-Block arithmetic in `r/kourtv2` and `p/governor` now returns only the `!known`
-fallback arms of converted gates, and comments. No deadline is left on blocks.
+Block arithmetic in `r/kourtv2` and `p/governor` returns only the `!known`
+fallback arms of converted gates, and comments.
+
+The first version of this section swept those two packages and claimed the plan
+complete. `r/govern`, `p/grc20votes`, `p/twap`, `p/cshares`, `p/tickbook`,
+`p/curve` and `p/checkpoint` were not looked at. They have since been swept for
+deadline-shaped height arithmetic and carry NONE — what they hold is the
+accounting this plan never touches: epoch quantisation, twap buckets, checkpoint
+epochs. **Two packages is not "the realm", and the difference is a sweep that
+takes a minute.**
+
+No deadline is left on blocks.
 
 ## Done so far
 
