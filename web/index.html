@@ -11641,6 +11641,25 @@ function timelineFold(d, rH, tl, narrow){
   return `<details id="timeline" class="tlfold" tabindex="-1">`
     + `<summary>Timeline</summary>${ladder}</details>`;
 }
+/* "· round N" ONLY ONCE A ROUND HAS FAILED, on every row that carries it.
+   d.round is FailedRounds (claimhead.gno hands back that reader, not the realm's
+   own cs.round), so it is 0 for the whole of a first dispute and the running
+   round is d.round+1. Nearly every dispute there has ever been is a first one:
+   the number was therefore printed on almost every claim that showed these rows,
+   said "1" every time, and distinguished nothing. It earns its place the moment
+   there is a second round to tell from a first, which is exactly when d.round
+   stops being 0 — and then it appears on the failed-rounds row beside it, so the
+   two agree about how many there have been.
+   The same rule the settled pill got, for the same reason: a label that never
+   varies is decoration, and this one sat on the surface whose whole job is to say
+   what happened when.
+   TWO SHAPES, because the round is a suffix on the dated rows and the SUBJECT of
+   the undated note. "the vote is running" rather than "round 1 is voting": with
+   no number to carry, the sentence needs a subject that is not a number. */
+function roundTag(d){ return d.round? " · round " + (d.round + 1) : ""; }
+function roundVoting(d){
+  return d.round? "round " + (d.round + 1) + " is voting" : "the vote is running";
+}
 function resolutionLadder(d, nowH, tl, narrow, bare){
   const rows=[];
   if(tl){
@@ -11696,8 +11715,8 @@ function resolutionLadder(d, nowH, tl, narrow, bare){
     if(d.phase==="disputed"){
       const dt = tl.dispute && tl.dispute.t ? tl.dispute.t : null;
       rows.push(dt
-        ? {t:dt, h:(tl.dispute.h||null), what:`dispute opened · round ${(d.round||0)+1}`}
-        : {t:nowT-0.4, nodate:true, what:`dispute opened · round ${(d.round||0)+1}`});
+        ? {t:dt, h:(tl.dispute.h||null), what:`dispute opened${roundTag(d)}`}
+        : {t:nowT-0.4, nodate:true, what:`dispute opened${roundTag(d)}`});
     }
     /* THE CLOSE IS PUBLISHED NOW, so it is not estimated. ClaimTimeline carries
        `voteclose:<unix>:<height>` — the moment the governor actually gates on —
@@ -11708,10 +11727,10 @@ function resolutionLadder(d, nowH, tl, narrow, bare){
        existed, where a height is genuinely all there is; `est` marks which. */
     if(tl.voteclose && tl.voteclose.t)
       rows.push({h:tl.voteclose.h, t:tl.voteclose.t,
-        what:`vote closes · round ${(d.round||0)+1}`, future:true});
+        what:`vote closes${roundTag(d)}`, future:true});
     else if(d.voteEndsAt && nowH!=null)
       rows.push({h:d.voteEndsAt, t:nowT+(d.voteEndsAt-nowH)*BLOCK_SECS,
-        what:`vote closes · round ${(d.round||0)+1}`, future:true, est:true});
+        what:`vote closes${roundTag(d)}`, future:true, est:true});
     rows.push({t:nowT, h:tl.now.h, what:"now", now:true});
     rows.sort((a,b)=>a.t-b.t);
     const body = rows.map(r=>{
@@ -11736,7 +11755,7 @@ function resolutionLadder(d, nowH, tl, narrow, bare){
     }).join("");
     let fut2=null;
     if(d.phase==="open") fut2="awaiting an answer — anyone may post one with a bond";
-    else if(d.phase==="disputed" && !d.voteEndsAt) fut2=`round ${(d.round||0)+1} is voting — its close height could not be read`;
+    else if(d.phase==="disputed" && !d.voteEndsAt) fut2=`${roundVoting(d)} — its close height could not be read`;
     else if(d.phase==="settled") fut2="settled — every stake withdraws 1×";
     else if(d.phase==="provClose") fut2="closed without a decision — everyone 1×";
     else if(d.phase==="closed") fut2="closed — never answered";
@@ -11755,7 +11774,7 @@ function resolutionLadder(d, nowH, tl, narrow, bare){
   // claim the old deadline is history that never happened — show it only
   // while it is the operative clock.
   if(d.settleAt && d.phase==="answered") rows.push([d.settleAt, "settle deadline"]);
-  if(d.voteEndsAt) rows.push([d.voteEndsAt, `vote closes · round ${(d.round||0)+1}`]);
+  if(d.voteEndsAt) rows.push([d.voteEndsAt, `vote closes${roundTag(d)}`]);
   if(d.escrowUntil) rows.push([d.escrowUntil, "reopen closes"]);
   if(nowH!=null) rows.push([nowH, "now"]);
   // SORTED INTO PLACE, not appended. Rendered after the body it came out below
@@ -11768,11 +11787,11 @@ function resolutionLadder(d, nowH, tl, narrow, bare){
     "quorum was not met — half of each disputer's bond burned, half returned", true]);
   // Same row, same reason, on the branch that has no timeline to date from.
   if(d.phase==="disputed") rows.push([(nowH!=null? nowH : 0)-0.4,
-    `dispute opened · round ${(d.round||0)+1}`, "", true]);
+    `dispute opened${roundTag(d)}`, "", true]);
   rows.sort((a,b)=>a[0]-b[0]);
   let fut=null;
   if(d.phase==="open") fut="awaiting an answer — anyone may post one with a bond";
-  else if(d.phase==="disputed" && !d.voteEndsAt) fut=`round ${(d.round||0)+1} is voting — its close height could not be read, and Resolve refuses until it has passed`;
+  else if(d.phase==="disputed" && !d.voteEndsAt) fut=`${roundVoting(d)} — its close height could not be read, and Resolve refuses until it has passed`;
   else if(d.phase==="settled") fut="settled — every stake withdraws 1×";
   else if(d.phase==="provClose") fut="closed without a decision — everyone 1×";
   else if(d.phase==="closed") fut="closed — never answered";

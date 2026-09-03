@@ -196,6 +196,23 @@ ok("...singular at one, plural above it",
 ok("...and a claim with no failed round says nothing at all",
    !resolutionLadder(Object.assign({}, d3l, {round:0}), NOW).includes("failed round"));
 ok("the unexposed-close note names its round too", L3n.includes("round 2 is voting"));
+/* "· round N" ONLY ONCE A ROUND HAS FAILED. Asserted as the PAIR, because the
+   rule is a conditional and only the pair can catch it being inverted or
+   dropped: a first-round dispute names no number, a later one still does. The
+   fixtures above are all round:1, so every assertion in this file passed both
+   before and after the change — this is the arm that was missing. */
+const L0 = resolutionLadder(Object.assign({}, d3l, {round:0}), NOW);
+ok("a first-round dispute names no round number",
+   L0.includes("dispute opened") && !/dispute opened \u00b7 round/.test(L0)
+   && L0.includes("vote closes") && !/vote closes \u00b7 round/.test(L0));
+ok("...and says nothing about failed rounds either", !L0.includes("failed round"));
+ok("...while a second round still says which round it is",
+   L3.includes("vote closes \u00b7 round 2") && L3.includes("1 failed round"));
+const L0n = resolutionLadder(Object.assign({}, d3n, {round:0}), NOW);
+ok("the unexposed-close note takes a subject when it has no number",
+   L0n.includes("the vote is running") && !/round 1 is voting/.test(L0n));
+ok("...and keeps the number on a later round", L3n.includes("round 2 is voting"));
+
 // The em-dash is the assertion. The failed-rounds row must not acquire a height.
 {
   const row = L3.split("failed round")[0].split('<div class="line">').pop();
@@ -285,14 +302,22 @@ ok("the unexposed-close note names its round too", L3n.includes("round 2 is voti
      && L.indexOf("dispute opened") < L.indexOf(">now<"));
   // A FIRST ROUND IS THE CASE THAT WAS BARE: no failed rounds to imply a
   // dispute, so the rung is the only thing that names one.
+  // WHAT THESE TWO ARE ABOUT IS THE ROW, NOT THE NUMBER. They read
+  // "dispute opened \u00b7 round 1" until the number was dropped from a first
+  // round — d.round is 0 for the whole of one, so that suffix said "1" on nearly
+  // every claim that ever showed the row. The intent above is unchanged and the
+  // absent number is asserted beside it, so neither arm can pass on a row that
+  // has gone missing OR on the number coming back.
   {
     const first = Object.assign({}, d3l, {round:0, phase:"disputed", voteEndsAt:NOW+70000});
     const F = resolutionLadder(first, NOW, tl);
     ok("dated ladder: a first-round dispute is named too",
-       F.includes("dispute opened · round 1") && !F.includes("failed round"));
+       F.includes("dispute opened") && !/dispute opened \u00b7 round/.test(F)
+       && !F.includes("failed round"));
     // and the flat branch, which is a separate renderer and drifts if unasked
     const G = resolutionLadder(first, NOW, null);
-    ok("flat ladder: it names the dispute as well", G.includes("dispute opened · round 1"));
+    ok("flat ladder: it names the dispute as well",
+       G.includes("dispute opened") && !/dispute opened \u00b7 round/.test(G));
     // Neither names one when there is no dispute to name.
     const calm = Object.assign({}, d3l, {round:0, phase:"answered", voteEndsAt:null});
     ok("neither ladder invents a dispute on a claim that has none",
