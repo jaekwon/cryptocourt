@@ -1,6 +1,7 @@
 package kourtv2
 
 import (
+	"time"
 	"strconv"
 	"strings"
 	"testing"
@@ -246,6 +247,72 @@ func TestModLogReportsItsOwnTruncation(cur realm, t *testing.T) {
 	HideItem(cross(cur), "mdr9b", small, "spam")
 	if strings.Contains(Render("mdr9b/mod"), "older acts are not shown") {
 		t.Fatal("a log that fits on one page must not claim to be truncated")
+	}
+}
+
+// THE PENDING LIST AND THE WRITE PATH AGREE ABOUT WHAT IS STALE.
+//
+// The list used to recompute the TTL in blocks while approveAction, the bulk-act
+// bound and the exported read had all moved to the stamp. On a chain off 5s a
+// block those disagree, and the page then shows a set an entry the chain will
+// discard, or hides one the next signature would complete — the reopen link's
+// bug (dispute.gno) on a different surface.
+//
+// Driven on the wall clock ALONE, because that is the only way the two answers
+// can differ: SkipHeights moves both together and would agree either way.
+func TestThePendingListAgreesWithTheWritePathAboutStaleness(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("mrs-alice")
+	m2 := testutils.TestAddress("mrs-m2")
+	c := testCourt(cur, "mrs", alice, 10_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	AppointMods(cross(cur), "mrs", 2, alice, m2)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "mrs", "a claim")
+	key := "hide:" + strconv.FormatUint(id, 10)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	HideItem(cross(cur), "mrs", id, "one") // one of two: it waits
+
+	if !strings.Contains(Render("mrs/mod"), key) {
+		t.Fatal("fixture: a live pending entry must be listed")
+	}
+	a := c.mod.pending.Get(key).(*approval)
+	if a.openedAtTime == 0 {
+		t.Fatal("fixture: no stamp, so this would compare two height answers")
+	}
+
+	// A week and a day of wall clock, no blocks. The block arithmetic still says
+	// the entry is live; the stamp says it is stale.
+	frozenH := heightNow()
+	ctx := testing.GetContext()
+	ctx.Time = ctx.Time.Add(8 * 24 * time.Hour)
+	testing.SetContext(ctx)
+	uassert.Equal(t, frozenH, heightNow())
+	uassert.True(t, heightNow() < a.openedAt+pendingTTLBlocks)
+
+	// THE DISCRIMINATING MOMENT IS HERE, BEFORE THE SECOND SIGNATURE.
+	//
+	// approveAction OVERWRITES at the same key, so once m2 signs there is one
+	// entry either way and the page looks identical whichever clock it read —
+	// the first version of this test asserted exactly that and passed against
+	// the bug. What separates the two answers is the window in between: the
+	// chain has already discarded this entry, so the page must not still be
+	// offering it to a set deciding whether to add the signature that would
+	// "complete" it.
+	if page := Render("mrs/mod"); strings.Contains(page, key) {
+		t.Fatalf("the page still lists an entry the write path treats as stale, "+
+			"so a moderator is being shown a quorum that no longer exists:\n%s", page)
+	}
+
+	// And the write path agrees, which is the claim the page is now making:
+	// m2's signature starts a FRESH proposal rather than completing the old one.
+	testing.SetRealm(testing.NewUserRealm(m2))
+	HideItem(cross(cur), "mrs", id, "two")
+	if HiddenFromListing("mrs", id) {
+		t.Fatal("a signature banked before the TTL elapsed completed the quorum")
+	}
+	if page := Render("mrs/mod"); !strings.Contains(page, key) {
+		t.Fatalf("the fresh proposal must be listed:\n%s", page)
 	}
 }
 

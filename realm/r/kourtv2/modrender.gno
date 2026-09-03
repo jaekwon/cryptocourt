@@ -521,11 +521,18 @@ func renderModLog(slug string) string {
 	pendingRows := []string{}
 	pendingSeen := 0
 	pendingMore := false
-	now := heightNow()
 	cm.pending.Iterate("", "", func(key string, v any) bool {
 		pendingSeen++
 		if a, ok := v.(*approval); ok {
-			if deadline := a.openedAt + pendingTTLBlocks; now < deadline {
+			// LIVE OR NOT IS approvalStale's ANSWER, not a second opinion. This
+			// filter used to recompute the window in blocks while the write path
+			// and every reader had moved to the stamp — so on a chain off 5s a
+			// block the page could list an entry approveAction treats as stale,
+			// or hide one that is still live. That is the reopen link's bug
+			// (dispute.gno) on a different surface, and the fix is the same: one
+			// predicate. `deadline` stays for the block it PRINTS beside the date.
+			deadline := a.openedAt + pendingTTLBlocks
+			if !approvalStale(a) {
 				// The DATE is what the realm gates on; the block is the
 				// reference beside it (clock.gno). An entry opened before the
 				// stamps has no date, and shows only the block it will lift at.

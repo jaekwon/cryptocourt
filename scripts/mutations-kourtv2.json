@@ -6143,6 +6143,13 @@
  {
   "pkg": "kourtv2",
   "file": "modrender.gno",
+  "label": "pending list: staleness is recomputed in blocks, not asked of approvalStale",
+  "find": "\t\t\tif !approvalStale(a) {",
+  "replace": "\t\t\tif heightNow() < deadline {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "modrender.gno",
   "label": "pending list: the deadline is shown as a bare block, with no date",
   "find": "\t\t\t\tif at := deadlineTime(a.openedAtTime, blocksToSecs(pendingTTLBlocks)); at != 0 {",
   "replace": "\t\t\t\tif at := deadlineTime(a.openedAtTime, blocksToSecs(pendingTTLBlocks)); false {"

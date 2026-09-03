@@ -1,6 +1,6 @@
 # Deadlines in seconds, accounting in blocks
 
-**Status:** COMPLETE. Every gate is converted — the order list's, plus the two it omitted. the stored-future-height batch is done (5 real ones; the 6th was a mis-classified projection, now also done); the rest of the remaining work is stored future heights, projections, and the governor.
+**Status:** in progress. Every gate is converted — the order list's, plus the two it omitted. the stored-future-height batch is done (5 real ones; the 6th was a mis-classified projection, now also done); the rest of the remaining work is stored future heights, projections, and the governor.
 
 ## The problem, as observed
 
@@ -277,13 +277,39 @@ Verified: all four packages green; three realm mutants and two web mutants
 killed; `make anchors collisions staleguards guards`, `web-test` and
 `web-visual` pass.
 
-## Done
+### `modrender.gno:528` — the pending list read blocks while the rule read seconds
 
-Every deadline in this realm now gates on a date and keeps its height as the
-reference: 11 gates in the order list, 2 more the order omitted, 5 stored future
-heights, 6 projections, and the governor with its consumers. Every one keeps the
-`(known && passed) || (!known && <blocks>)` fallback, so a record written before
-its stamp existed still behaves exactly as it did.
+**I called this plan complete last iteration. It was not**, and the sweep that
+should have preceded that claim is what found this: the moderation page filtered
+its pending list on `heightNow() < a.openedAt+pendingTTLBlocks` while
+approveAction, the bulk-act bound and the exported read had all moved to
+`approvalStale`. Off 5s a block the page offers a set an entry the chain has
+already discarded — the reopen link's bug on a third surface. One predicate now.
+
+**A test that passed against the bug.** The first version asserted the row count
+after the second signature, which is 1 either way because approveAction
+OVERWRITES at the same key. Reverting the filter left it green. The discriminating
+moment is BEFORE that signature, while the chain has discarded the entry and the
+page is still offering it — measured, not reasoned: the corrected test kills the
+revert.
+
+### Still open, found by the same sweep
+
+`p/governor` has a second family of block deadlines the ADR did not scope:
+`p.ready` (`DelayBlocks`, the execution delay) and `expiresAt` (`GraceBlocks`,
+the expiry) — gated at `governor.gno:1172`, `:1810` and `:1852`. Same shape as
+`closes`, same fix, and the stamps to hang them on already exist.
+
+`meta.gno:319/325/335` are NOT deadlines: they compare two stored heights for
+ordering ("the target must strictly predate the appeal"), with no duration
+involved. They stay.
+
+## Done so far
+
+11 gates in the order list, 2 more the order omitted, 5 stored future heights,
+7 projections, and the governor's `closes` with its consumers. Every one keeps
+the `(known && passed) || (!known && <blocks>)` fallback, so a record written
+before its stamp existed still behaves exactly as it did.
 
 ### `p/governor` — converted on the second attempt
 
