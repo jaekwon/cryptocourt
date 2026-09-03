@@ -12,14 +12,14 @@ import (
 //
 // Two functions carry the same shape with different bases:
 //
-//	Crystallize  participant-only until verdictAtTime+finalizeGraceSecs (blocks as fallback)
-//	Finalize     if now < cs.escrowUntil+finalizeGraceBlocks && !isParticipant(…)
+//	Crystallize  participant-only until verdictAtTime+finalizeGraceSecs   (blocks as fallback)
+//	Finalize     participant-only until escrowUntilAt+finalizeGraceSecs   (blocks as fallback)
 //
-// Crystallize reads seconds since the conversion; Finalize is still on blocks and
-// converts next. Both edges still land on the same block HERE, because
-// testing.SkipHeights advances time by exactly 5s per block and finalizeGraceSecs
-// is exactly finalizeGraceBlocks×5 — which is precisely why this test cannot tell
-// the two clocks apart, and why the one below exists to separate them.
+// Both read seconds since the conversion. Their edges still land on the same block
+// HERE, because testing.SkipHeights advances time by exactly 5s per block and
+// finalizeGraceSecs is exactly finalizeGraceBlocks×5 — which is precisely why this
+// test cannot tell the two clocks apart, and why the ones below exist to separate
+// them. The block arithmetic in this test is now a landmark, not the subject.
 //
 // An operator sweep flipped `<` to `<=` and nothing failed: every existing use of
 // finalizeGraceBlocks skips a week PAST the edge, so the edge itself was never visited.
@@ -32,6 +32,11 @@ import (
 // everybody would satisfy the refusal half on its own.
 func TestTheParticipantOnlyWindowsEndOnTheirExactBlock(cur realm, t *testing.T) {
 	// ---- HALF ONE: Finalize, based on cs.escrowUntil ----
+	// Reads the SECONDS arm since the conversion, for the same reason HALF TWO
+	// does: parkedClaim goes through ResolveDispute, which writes escrowUntilAt
+	// beside escrowUntil, so `known` is true and the arithmetic below is a
+	// landmark rather than the gate. Its height arm is pinned separately, by the
+	// pre-stamp half of TestTheFinalizeGraceIsAWeekOfWallClockNotOfBlocks.
 	author := testutils.TestAddress("gb-author")
 	staker := testutils.TestAddress("gb-staker")
 	stranger := testutils.TestAddress("gb-stranger")
@@ -69,8 +74,8 @@ func TestTheParticipantOnlyWindowsEndOnTheirExactBlock(cur realm, t *testing.T) 
 		Finalize(cross(cur), "gb", edge)
 	})
 
-	// And on the block itself the stranger may act. `<` and `<=` differ here and
-	// nowhere else.
+	// And on the edge itself the stranger may act. One unit either way differs
+	// here and nowhere else.
 	testing.SkipHeights(1)
 	uassert.Equal(t, target, heightNow())
 	testing.SetRealm(testing.NewUserRealm(stranger))
@@ -191,6 +196,64 @@ func TestTheCrystallizeGraceIsAWeekOfWallClockNotOfBlocks(cur realm, t *testing.
 	testing.SetRealm(testing.NewUserRealm(stranger))
 	Crystallize(cross(cur), "gw", old)
 	uassert.True(t, mustClaim(c, old).crystallized)
+}
+
+// THE SAME WEEK, THE SAME DRIFT, ON THE OTHER TERMINAL PATH.
+//
+// Finalize's grace is the twin of Crystallize's — same constant, different base —
+// so it drifted identically and is separated identically. The one difference worth
+// naming: escrowUntilAt is a FUTURE stamp, written as `nowTime()+blocksToSecs(w)`
+// when the escrow opens, where verdictAtTime is stamped at the moment it happens.
+// The grace therefore runs from a deadline rather than from an event, which is why
+// the fixture below asserts against escrowUntilAt and not against "when we parked".
+func TestTheFinalizeGraceIsAWeekOfWallClockNotOfBlocks(cur realm, t *testing.T) {
+	author := testutils.TestAddress("gf-author")
+	staker := testutils.TestAddress("gf-staker")
+	stranger := testutils.TestAddress("gf-stranger")
+	c := testCourt(cur, "gf", author, 60_000_000_000)
+	c.coin.Mint(staker, 20_000_000_000)
+
+	// ---- THE STAMP GOVERNS ----
+	id := parkedClaim(cur, c, "gf", author, staker)
+	cs := mustClaim(c, id)
+	if cs.escrowUntilAt == 0 {
+		t.Fatal("fixture: no escrow stamp, so this would test the height fallback instead")
+	}
+	if heightNow() >= cs.escrowUntil+finalizeGraceBlocks {
+		t.Fatal("fixture: already past the grace window in blocks, nothing is being tested")
+	}
+
+	beforeH := heightNow()
+	ctx := testing.GetContext()
+	ctx.Time = ctx.Time.Add(8 * 24 * time.Hour)
+	testing.SetContext(ctx)
+	uassert.Equal(t, beforeH, heightNow()) // time moved, height did not
+
+	testing.SetRealm(testing.NewUserRealm(stranger))
+	Finalize(cross(cur), "gf", id)
+	uassert.True(t, mustClaim(c, id).verdictAt != 0)
+
+	// ---- AND A PRE-STAMP CLAIM STILL READS HEIGHT, TO ITS EXACT BLOCK ----
+	// Inherited from HALF ONE of the test above, which can no longer hold `<`
+	// against `<=` now that a stamped claim never reaches that comparison.
+	old := parkedClaim(cur, c, "gf", author, staker)
+	ocs := mustClaim(c, old)
+	ocs.escrowUntilAt = 0 // the pre-upgrade shape: a height, no stamp
+	target := ocs.escrowUntil + finalizeGraceBlocks
+	if d := target - 1 - heightNow(); d > 0 {
+		testing.SkipHeights(d)
+	}
+	uassert.Equal(t, target-1, heightNow())
+
+	testing.SetRealm(testing.NewUserRealm(stranger))
+	uassert.AbortsContains(t, cur, "participant-only", func() {
+		Finalize(cross(cur), "gf", old)
+	})
+	testing.SkipHeights(1)
+	uassert.Equal(t, target, heightNow())
+	testing.SetRealm(testing.NewUserRealm(stranger))
+	Finalize(cross(cur), "gf", old)
+	uassert.True(t, mustClaim(c, old).verdictAt != 0)
 }
 
 // settledClaim returns a claim settled undisputed, so verdictAt is set and no quality

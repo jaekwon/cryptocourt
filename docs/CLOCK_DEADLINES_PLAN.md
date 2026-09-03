@@ -1,6 +1,6 @@
 # Deadlines in seconds, accounting in blocks
 
-**Status:** in progress. 1 of 11 gates converted; see the log at the end.
+**Status:** in progress. 2 of 11 gates converted; see the log at the end.
 
 ## The problem, as observed
 
@@ -142,7 +142,7 @@ trailing ring; `pendingTTLBlocks` looks like accounting and is a deadline.
 | Site | Window | Stamp to use | Status |
 |---|---|---|---|
 | `crystallize.gno:46` | `finalizeGraceBlocks` after verdict | `verdictAtTime` | **converted — bug 2 fixed** |
-| `dispute.gno:652` | `finalizeGraceBlocks` after escrow | `escrowUntilAt` | unconverted |
+| `dispute.gno:652` | `finalizeGraceBlocks` after escrow | `escrowUntilAt` | **converted** |
 | `dispute.gno:101,649` | escrow window | `escrowUntilAt` | half — stamp path exists |
 | `answer.gno:69` | `stakeOpenDelay + answerWindow + priorityWindow`, summed | `openedAtTime` | unconverted — composite, converts as one duration |
 | `stake.gno:166` | `stakeOpenDelayBlocks` | `openedAtTime` | unconverted |
@@ -231,6 +231,40 @@ of 1.2M.
   as a one-off for legacy params only.
 
 ## Log
+
+### `dispute.gno:652` — Finalize's grace, the twin
+
+Converted. Same constant, same shape, different base — and no new constant, since
+`finalizeGraceSecs` landed with its twin last commit.
+
+One difference worth recording: `escrowUntilAt` is a **stored future timestamp**
+(`nowTime() + blocksToSecs(w)`, written beside `escrowUntil` when the escrow
+opens), where `verdictAtTime` stamps an event as it happens. `pastDeadline` takes
+both without caring — it adds `secs` to whatever it is given — so the grace runs
+from a deadline here and from an event there, and the call site reads identically.
+That is worth knowing before the stored-future-height batch: those six sites are
+this shape, and this one shows it already works.
+
+**The trap from the last entry repeated exactly**, as predicted: HALF ONE of
+`graceboundary_test.gno` pinned this gate's block edge and stopped pinning
+anything the moment the stamp won. Same fix — corpus row split per arm, and the
+new test's pre-stamp half sits on the height edge.
+
+**And a second corpus row that the first conversion did not have.** Finalize
+carried TWO rows, not one: an edge row and a `guard is not enforced` row whose
+anchor was the whole `if` line. `make anchors` found it only after the edge row
+was already fixed, so the lesson is to grep the corpus for every row naming a
+site BEFORE editing it, rather than fixing the one the checker names first. Its
+replacement also had to keep the `passed, known :=` init, or the mutant fails to
+compile and silently measures nothing.
+
+Crystallize had no such row — an asymmetry between twins that predates this work.
+Added it in this commit and confirmed it is killed, so both gates now have three
+rows: exact second, exact block, and not enforced at all.
+
+Verified: full kourtv2 suite green; all four Finalize mutants (seconds edge, block
+edge, polarity, guard disabled) compile and are killed, as is the new Crystallize
+one; `make anchors collisions staleguards guards` pass.
 
 ### `crystallize.gno:46` — the participant-only week (bug 2)
 

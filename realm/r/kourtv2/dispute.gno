@@ -649,7 +649,13 @@ func Finalize(cur realm, courtSlug string, claimID uint64) {
 		(cs.escrowUntilAt == 0 && now < cs.escrowUntil) {
 		panic("kourtv2: the escrow window has not passed")
 	}
-	if now < cs.escrowUntil+finalizeGraceBlocks && !isParticipant(cs, who) {
+	/* THE TWIN OF crystallize.gno's GATE, and it drifts the same way: counted in
+	   blocks the week outlasts itself on any chain slower than 5s, so a claim
+	   parked in 2022 was still refusing strangers years later. escrowUntilAt is
+	   already a FUTURE stamp (set beside escrowUntil above), so the grace runs
+	   from it directly. Blocks only for a claim parked before the stamp existed. */
+	if passed, known := pastDeadline(cs.escrowUntilAt, finalizeGraceSecs); ((known && !passed) ||
+		(!known && now < cs.escrowUntil+finalizeGraceBlocks)) && !isParticipant(cs, who) {
 		panic("kourtv2: Finalize is participant-only for its first week")
 	}
 	touch(c)

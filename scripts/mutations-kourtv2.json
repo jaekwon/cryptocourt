@@ -1775,8 +1775,8 @@
   "pkg": "kourtv2",
   "file": "dispute.gno",
   "label": "Finalize: the participant-only grace week is not enforced",
-  "find": "\tif now < cs.escrowUntil+finalizeGraceBlocks && !isParticipant(cs, who) {",
-  "replace": "\tif false && !isParticipant(cs, who) {"
+  "find": "if passed, known := pastDeadline(cs.escrowUntilAt, finalizeGraceSecs); ((known && !passed) ||\n\t\t(!known && now < cs.escrowUntil+finalizeGraceBlocks)) && !isParticipant(cs, who) {",
+  "replace": "if false && !isParticipant(cs, who) {"
  },
  {
   "pkg": "kourtv2",
@@ -4554,6 +4554,13 @@
  {
   "pkg": "kourtv2",
   "file": "crystallize.gno",
+  "label": "Crystallize: the participant-only grace week is not enforced",
+  "find": "if passed, known := pastDeadline(cs.verdictAtTime, finalizeGraceSecs); ((known && !passed) ||\n\t\t(!known && now < cs.verdictAt+finalizeGraceBlocks)) && !isParticipant(cs, who) {",
+  "replace": "if false && !isParticipant(cs, who) {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "crystallize.gno",
   "label": "Crystallize: a pre-stamp claim's grace ends on its exact block",
   "find": "(!known && now < cs.verdictAt+finalizeGraceBlocks)",
   "replace": "(!known && now <= cs.verdictAt+finalizeGraceBlocks)"
@@ -5310,9 +5317,16 @@
  {
   "pkg": "kourtv2",
   "file": "dispute.gno",
-  "label": "Finalize: the participant-only window is one block long at its edge",
-  "find": "if now < cs.escrowUntil+finalizeGraceBlocks && !isParticipant(cs, who) {",
-  "replace": "if now <= cs.escrowUntil+finalizeGraceBlocks && !isParticipant(cs, who) {"
+  "label": "Finalize: the participant-only week ends on its exact second",
+  "find": "pastDeadline(cs.escrowUntilAt, finalizeGraceSecs)",
+  "replace": "pastDeadline(cs.escrowUntilAt, finalizeGraceSecs+1)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "dispute.gno",
+  "label": "Finalize: a pre-stamp claim's grace ends on its exact block",
+  "find": "(!known && now < cs.escrowUntil+finalizeGraceBlocks)",
+  "replace": "(!known && now <= cs.escrowUntil+finalizeGraceBlocks)"
  },
  {
   "pkg": "kourtv2",
