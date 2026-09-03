@@ -1,6 +1,6 @@
 # Deadlines in seconds, accounting in blocks
 
-**Status:** in progress. EVERY GATE IS CONVERTED — the order list's, plus the two it omitted. 2 of the 6 stored future heights are done; the rest of the remaining work is stored future heights, projections, and the governor.
+**Status:** in progress. EVERY GATE IS CONVERTED — the order list's, plus the two it omitted. 3 of the 6 stored future heights are done; the rest of the remaining work is stored future heights, projections, and the governor.
 
 ## The problem, as observed
 
@@ -151,7 +151,8 @@ trailing ring; `pendingTTLBlocks` looks like accounting and is a deadline.
 | `moderation.gno:755` | `reSetWindowBlocks` (DMCA §512(g)) | `globalClearedAtTime` (added) | **converted** |
 | `modvote.gno:328,384,387,483` | `nominateEnd`, `voteEnd` | `nominateEndTime`/`voteEndTime` (added) | **converted** |
 | `boardlegal.gno:100` | `reSetWindowBlocks` (board row) | `globalClearedAtTime` (added) | **converted** |
-| `boardmod.gno:107,137` | `frozenUntil` | needs a stamp | unconverted |
+| `boardmod.gno:107,373` | address freeze + its re-freeze gap | `frozenUntilTime`/`frozenGapUntilTime` (added) | **converted** |
+| `boardmod.gno:137,433` | claim-board freeze + its gap | needs stamps | unconverted |
 | `meta.gno:366` | `votingBlocks` after verdict | `verdictAtTime` | **converted** |
 | `p/governor` proposal `closes` | vote window | needs a stamp | unconverted — bug 1 |
 
@@ -244,6 +245,47 @@ units across two claims would be worse than falling back), and it is the one sit
 that already had a corpus row per arm — the discipline being retrofitted
 elsewhere. `supEdge.at` is a height "for the record" that nothing reads and
 nothing renders.
+
+### `boardmod.gno:382,387` — the address board freeze and its re-freeze gap
+
+Converted together, and the together is the point. `freezeGapBlocks` EQUALS
+`freezeMaxBlocks` precisely so a set cannot hold an address frozen indefinitely
+in twelve-hour increments — an argument about the two windows' RELATIVE lengths.
+Convert one and not the other and on a drifting chain the gap lapses while the
+freeze is still live, which is the stacking the ceiling exists to prevent,
+reachable without a single suspicious call. So the test drives the wall clock
+alone and asserts the ORDERING: freeze lifts, gap still bites, then a re-freeze
+becomes possible.
+
+The freeze's length is CALLER-SUPPLIED in blocks (`FreezeBoard(…, blocks, …)`,
+bounded by `freezeMaxBlocks`), so it converts at the write site.
+
+**The presence check stays on the height.** `boardFrozen` returns false on
+`frozenUntil == 0` before consulting either clock — that zero means "there is no
+freeze", not "the freeze expired", and it is what lets `UnfreezeBoard` lift one
+with a single assignment. The stamp is cleared beside it for tidiness, which no
+test can see; that row is recorded in KNOWN-GAPS with its reasoning rather than
+left in the main corpus pretending to measure something.
+
+**A NEW WAY TO SILENTLY DEFANG THE CORPUS, and this time it cost real coverage.**
+Two pre-existing rows mutate `r.frozenGapUntil = now + …`. Their anchors still
+matched after I added the seconds twin on the next line, so `make anchors` was
+silent — but the mutants now changed only the height while the untouched stamp
+kept the gap correct, and both SURVIVED. Iteration 9 recorded the shape of this
+("an anchor that still matches is not proof a row still means what it said");
+here it actually removed coverage rather than merely narrowing it. Both widened
+to mutate the pair, both confirmed killed.
+
+Swept the whole corpus for the same pattern afterwards — rows whose `find`
+touches a height assignment that has since gained a `…Time` twin. Exactly one
+more: `FreezeClaimBoard: the gap is stamped at the full ceiling`, which is still
+honest today because the claim-board half is not converted yet. **It must be
+widened in the same commit as that half.**
+
+Verified: full kourtv2 suite green; nine mutants run, seven killed, the two
+survivors chased to ground — one a defanged pre-existing row (fixed) and one a
+deliberate survivor (moved to KNOWN-GAPS); `make anchors collisions staleguards
+guards` and check-read-purity/check-storage pass.
 
 ### `meta.gno:366` — the meta-verdict execution expiry (the last gate)
 

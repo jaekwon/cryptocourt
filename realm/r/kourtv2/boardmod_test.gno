@@ -4,6 +4,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	sanitize "gno.land/p/nt/markdown/sanitize/v0"
 	testutils "gno.land/p/nt/testutils/v0"
@@ -317,6 +318,110 @@ func TestTheFreezeCeilingIsNotAPerTransactionFormality(cur realm, t *testing.T) 
 	FreezeBoard(cross(cur), "bm4", poster, 10, boardCodeAbuse)
 	if BoardFrozenUntil("bm4", poster) == 0 {
 		t.Fatal("past the gap a fresh freeze must be allowed, or the gap is a ban")
+	}
+}
+
+// THE FREEZE AND ITS GAP KEEP THEIR RATIO WHEN THE CLOCKS DIVERGE.
+//
+// TestTheFreezeCeilingIsNotAPerTransactionFormality above walks both with
+// SkipHeights, which moves height and time together at 5s a block, so it cannot
+// say which clock either one reads. That matters more here than at a lone
+// deadline: freezeGapBlocks EQUALS freezeMaxBlocks precisely so a set cannot hold
+// an address frozen indefinitely in twelve-hour increments, and that argument is
+// about the two windows' RELATIVE lengths. Convert one and not the other and on a
+// drifting chain the gap lapses while the freeze is still live — the stacking the
+// ceiling exists to prevent, reachable without a single suspicious call.
+//
+// So this drives the wall clock alone, with no block mined, and asserts the
+// ordering the ceiling depends on: the freeze lifts FIRST, the gap still bites
+// after it, and only then does a re-freeze become possible.
+func TestTheFreezeAndItsGapBothRunOnTheWallClock(cur realm, t *testing.T) {
+	mod := testutils.TestAddress("bfw-mod")
+	poster := testutils.TestAddress("bfw-poster")
+	modFixture(cur, "bfw", mod, poster)
+
+	testing.SetRealm(testing.NewUserRealm(mod))
+	FreezeBoard(cross(cur), "bfw", poster, freezeMaxBlocks, boardCodeAbuse)
+
+	c := mustCourt("bfw")
+	r := lookupStanding(c, poster)
+	if r.frozenUntilTime == 0 || r.frozenGapUntilTime == 0 {
+		t.Fatal("fixture: both stamps must be written, or this pins the height arms")
+	}
+	frozenH := heightNow()
+	bump := func(secs int64) {
+		ctx := testing.GetContext()
+		ctx.Time = ctx.Time.Add(time.Duration(secs) * time.Second)
+		testing.SetContext(ctx)
+	}
+	if !boardFrozen(c, poster) {
+		t.Fatal("the freeze must be live the moment it is set")
+	}
+
+	// PAST THE FREEZE, on the clock alone: it lifts.
+	bump(blocksToSecs(freezeMaxBlocks) + 1)
+	uassert.Equal(t, frozenH, heightNow())            // no block mined
+	uassert.True(t, heightNow() < r.frozenUntil)      // blocks still say "frozen"
+	if boardFrozen(c, poster) {
+		t.Fatal("past its length on the wall clock the freeze must lift")
+	}
+
+	// AND THE GAP STILL BITES, which is the whole ceiling argument: the freeze is
+	// over but the address may not be re-frozen yet.
+	testing.SetRealm(testing.NewUserRealm(mod))
+	uassert.AbortsContains(t, cur, "frozen too recently", func() {
+		FreezeBoard(cross(cur), "bfw", poster, 10, boardCodeAbuse)
+	})
+
+	// PAST THE GAP TOO: a fresh freeze is allowed again, or the ceiling is a ban.
+	bump(blocksToSecs(freezeGapBlocks) + 1)
+	uassert.Equal(t, frozenH, heightNow())
+	testing.SetRealm(testing.NewUserRealm(mod))
+	FreezeBoard(cross(cur), "bfw", poster, 10, boardCodeAbuse)
+	if BoardFrozenUntil("bfw", poster) == 0 {
+		t.Fatal("past the gap on the wall clock a fresh freeze must be allowed")
+	}
+}
+
+// A FREEZE SET BEFORE THE STAMPS still runs on its heights, and so does its gap.
+func TestAPreStampFreezeKeepsItsBlockWindows(cur realm, t *testing.T) {
+	mod := testutils.TestAddress("bfg-mod")
+	poster := testutils.TestAddress("bfg-poster")
+	modFixture(cur, "bfg", mod, poster)
+
+	testing.SetRealm(testing.NewUserRealm(mod))
+	FreezeBoard(cross(cur), "bfg", poster, freezeMaxBlocks, boardCodeAbuse)
+	c := mustCourt("bfg")
+	r := lookupStanding(c, poster)
+	r.frozenUntilTime, r.frozenGapUntilTime = 0, 0 // the pre-upgrade shape
+
+	// One block short of the freeze's end it is still live; on the block it lifts.
+	if d := r.frozenUntil - 1 - heightNow(); d > 0 {
+		testing.SkipHeights(d)
+	}
+	uassert.Equal(t, r.frozenUntil-1, heightNow())
+	if !boardFrozen(c, poster) {
+		t.Fatal("one block short, a pre-stamp freeze is still live")
+	}
+	testing.SkipHeights(1)
+	uassert.Equal(t, r.frozenUntil, heightNow())
+	if boardFrozen(c, poster) {
+		t.Fatal("a pre-stamp freeze must lift on its exact block")
+	}
+
+	// And its gap still bites afterwards, on the height arm.
+	testing.SetRealm(testing.NewUserRealm(mod))
+	uassert.AbortsContains(t, cur, "frozen too recently", func() {
+		FreezeBoard(cross(cur), "bfg", poster, 10, boardCodeAbuse)
+	})
+	if d := r.frozenGapUntil - heightNow(); d > 0 {
+		testing.SkipHeights(d)
+	}
+	uassert.Equal(t, r.frozenGapUntil, heightNow())
+	testing.SetRealm(testing.NewUserRealm(mod))
+	FreezeBoard(cross(cur), "bfg", poster, 10, boardCodeAbuse)
+	if BoardFrozenUntil("bfg", poster) == 0 {
+		t.Fatal("a pre-stamp gap must expire on its exact block")
 	}
 }
 

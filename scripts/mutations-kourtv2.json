@@ -8124,7 +8124,7 @@
   "pkg": "kourtv2",
   "file": "boardmod.gno",
   "label": "FreezeBoard: the re-freeze gap",
-  "find": "\tif r := lookupStanding(c, who); r != nil && now < r.frozenGapUntil {",
+  "find": "\tif r := lookupStanding(c, who); r != nil && boardFreezeGapOpen(r) {",
   "replace": "\tif r := lookupStanding(c, who); r != nil && false {"
  },
  {
@@ -8152,7 +8152,7 @@
   "pkg": "kourtv2",
   "file": "boardmod.gno",
   "label": "boardFrozen: the lazy expiry (a freeze that never lifts)",
-  "find": "\treturn heightNow() < r.frozenUntil\n}",
+  "find": "\treturn boardFreezeActive(r)\n}",
   "replace": "\treturn true\n}"
  },
  {
@@ -8341,21 +8341,49 @@
   "pkg": "kourtv2",
   "file": "boardmod.gno",
   "label": "REGRESSION: the freeze gap reads frozenUntil, which the undo clears",
-  "find": "\tif r := lookupStanding(c, who); r != nil && now < r.frozenGapUntil {",
-  "replace": "\tif r := lookupStanding(c, who); r != nil && r.frozenUntil != 0 &&\n\t\tnow < r.frozenUntil+freezeGapBlocks {"
+  "find": "\tif r := lookupStanding(c, who); r != nil && boardFreezeGapOpen(r) {",
+  "replace": "\tif r := lookupStanding(c, who); r != nil && boardFreezeActive(r) {"
  },
  {
   "pkg": "kourtv2",
   "file": "boardmod.gno",
   "label": "FreezeBoard: the gap is stamped at the full ceiling, not the asked length",
-  "find": "\tr.frozenGapUntil = now + freezeMaxBlocks + freezeGapBlocks\n",
-  "replace": "\tr.frozenGapUntil = now + blocks + freezeGapBlocks\n"
+  "find": "\tr.frozenGapUntil = now + freezeMaxBlocks + freezeGapBlocks\n\tr.frozenGapUntilTime = nowTime() + blocksToSecs(freezeMaxBlocks+freezeGapBlocks)\n",
+  "replace": "\tr.frozenGapUntil = now + blocks + freezeGapBlocks\n\tr.frozenGapUntilTime = nowTime() + blocksToSecs(blocks+freezeGapBlocks)\n"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "boardFreezeActive: a pre-stamp freeze loses its HEIGHT fallback",
+  "find": "\treturn (known && !passed) || (!known && heightNow() < r.frozenUntil)",
+  "replace": "\treturn known && !passed"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "boardFreezeGapOpen: a pre-stamp gap loses its HEIGHT fallback",
+  "find": "\treturn (known && !passed) || (!known && heightNow() < r.frozenGapUntil)",
+  "replace": "\treturn known && !passed"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "FreezeBoard: the freeze is stamped without its wall-clock twin",
+  "find": "\tr.frozenUntilTime = nowTime() + blocksToSecs(blocks)",
+  "replace": "\tr.frozenUntilTime = 0"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "FreezeBoard: the GAP is stamped without its wall-clock twin",
+  "find": "\tr.frozenGapUntilTime = nowTime() + blocksToSecs(freezeMaxBlocks+freezeGapBlocks)",
+  "replace": "\tr.frozenGapUntilTime = 0"
  },
  {
   "pkg": "kourtv2",
   "file": "boardmod.gno",
   "label": "FreezeBoard: the gap stamp exists at all",
-  "find": "\tr.frozenGapUntil = now + freezeMaxBlocks + freezeGapBlocks\n",
+  "find": "\tr.frozenGapUntil = now + freezeMaxBlocks + freezeGapBlocks\n\tr.frozenGapUntilTime = nowTime() + blocksToSecs(freezeMaxBlocks+freezeGapBlocks)\n",
   "replace": ""
  },
  {

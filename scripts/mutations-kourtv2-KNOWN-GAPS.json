@@ -173,7 +173,6 @@
   "replace": "\tif budgetWeeklyBps*52 > 2000000 {",
   "why": "UNPINNABLE BY CONSTRUCTION, IN BOTH DIRECTIONS, and this row stands for the whole class rather than thirteen copies of it. mustInvariants and the tier loop beside it compare CONSTANTS ONLY, at init. Measured: loosening this gate so it can never fire leaves the suite at exit 0 with ZERO failing tests, because the constants satisfy the tighter bound anyway and the gate never fired in the first place. Tightening it instead panics at init, so the realm does not load and the run exits 1 with zero NAMED failures - every test dies and none discriminates, which is a broken measurement rather than a catch. The same argument covers court.gno's other twelve constant gates (the curveCap bounds, the slash-multiple and dispute-arm checks, the 93-way split, the maxBondBps and slashXBps relations, the maxAnswerBondBps drift check, and the meta/ordinary floor loop). Their value is that a future constant change cannot ship silently - which is exactly what a deploy gate is for, and exactly what mutation testing cannot see. It also explains court.gno's low row density: 43 operator lines read as uncovered and most of them are these."
  },
-
  {
   "pkg": "kourtv2",
   "file": "standing.gno",
@@ -261,5 +260,13 @@
   "find": "\tcs.boardScore.Remove(r.scoreKey)\n",
   "replace": "\tcs.boardScore.Remove(boardScoreKey(r.score, r.id))\n",
   "why": "EQUIVALENT UNDER THE CURRENT SINGLE SCORE WRITER, and the guard is the reason that stays safe. r.score is written in exactly one place (UpvoteComment) and the drop there runs BEFORE the mutation, so the stored key and a recomputed one are identical at that moment. They diverge the instant anyone writes `r.score += w` before dropping: the stored key still names the entry that exists, a recomputed one names an entry that does not, and the old row is orphaned in the index at a stale rank. The field is the defence against that ordering, which is why it is stored at all."
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "boardmod.gno",
+  "label": "UnfreezeBoard: the undo leaves the wall-clock stamp behind",
+  "find": "\tlifted.frozenUntilTime = 0",
+  "replace": "\t_ = lifted",
+  "why": "A DELIBERATE SURVIVOR. boardFrozen returns false on `frozenUntil == 0` BEFORE it consults either clock, so that zero means \"there is no freeze\" rather than \"the freeze expired\" \u2014 which is exactly what lets UnfreezeBoard lift a freeze with one assignment. Clearing frozenUntilTime beside it is therefore defensive tidiness, not load-bearing, and no test can see its absence. It is written anyway because a lifted freeze that still carries a future wall-clock stamp is a record that contradicts itself, and the next reader to add a stamp-first path would inherit the contradiction. IF THIS COMES BACK CAUGHT, some reader now consults frozenUntilTime without the presence check first: find it and decide whether the presence check or the stamp is the authority."
  }
 ]

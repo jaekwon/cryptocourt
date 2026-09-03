@@ -406,11 +406,13 @@ type standingRow struct {
 	// disputes, flags, opens claims, withdraws, draws emission and takes every
 	// election action; the election is the remedy for a capturing set, so a
 	// freeze that reached any of those could silence the vote that removes it.
-	frozenUntil int64
-	frozenEpoch int64
+	frozenUntil     int64
+	frozenUntilTime int64 // unix seconds beside it; 0 on freezes predating the stamps
+	frozenEpoch     int64
 
 	// frozenGapUntil is the height before which this address may not be frozen
 	// AGAIN, and it is deliberately a separate stamp from frozenUntil.
+	// frozenGapUntilTime is its wall-clock twin, written at the same moment.
 	//
 	// The gap used to be computed from frozenUntil, and two things defeated it.
 	// UnfreezeBoard sets frozenUntil = 0, so freeze -> unfreeze -> freeze slipped
@@ -424,7 +426,8 @@ type standingRow struct {
 	// de-escalating must not buy the set a fresh window, and not by the epoch,
 	// because the backstop exists to protect the address rather than to re-arm
 	// the power against it.
-	frozenGapUntil int64
+	frozenGapUntil     int64
+	frozenGapUntilTime int64 // unix seconds beside it; 0 on gaps predating the stamps
 
 	// from[i] is what category standingCats[i] contributed. An ARRAY, not four
 	// fields and not a slice: fixed width persists inline and cannot be nil, so

@@ -94,6 +94,36 @@ func boardSanctionEpochOf(c *Court) int64 {
 	return c.mod.boardSanctionEpoch
 }
 
+// boardFreezeActive and boardFreezeGapOpen are the address freeze's two clocks.
+//
+// BOTH ARE STORED FUTURE MOMENTS, so both carry a seconds twin written at the
+// same instant as the height — the kind that cannot be reconstructed later,
+// because the `now` they were derived from is gone.
+//
+// THEY CONVERT TOGETHER because the gap only bounds the freeze if the two are
+// measured the same way. freezeGapBlocks equals freezeMaxBlocks precisely so a
+// set cannot hold an address frozen indefinitely in twelve-hour increments; let
+// one run on the clock and the other on blocks, and on a drifting chain the gap
+// expires while the freeze is still live, which is the stacking the ceiling
+// exists to prevent.
+//
+// The freeze's own duration is CALLER-SUPPLIED in blocks (FreezeBoard takes
+// `blocks`, bounded by freezeMaxBlocks), so it converts at the write site.
+//
+// secs is 0 in both: these stamps ARE the deadline, not an event to add a window
+// to. And note the PRESENCE check stays on frozenUntil in boardFrozen — that
+// zero is "there is no freeze", not "the freeze expired", which is what makes
+// UnfreezeBoard's single assignment still lift it.
+func boardFreezeActive(r *standingRow) bool {
+	passed, known := pastDeadline(r.frozenUntilTime, 0)
+	return (known && !passed) || (!known && heightNow() < r.frozenUntil)
+}
+
+func boardFreezeGapOpen(r *standingRow) bool {
+	passed, known := pastDeadline(r.frozenGapUntilTime, 0)
+	return (known && !passed) || (!known && heightNow() < r.frozenGapUntil)
+}
+
 // boardFrozen reports whether who is frozen out of this court's boards. Expiry
 // is LAZY — nothing sweeps, exactly as every other clock in this realm.
 func boardFrozen(c *Court, who address) bool {
@@ -104,7 +134,7 @@ func boardFrozen(c *Court, who address) bool {
 	if r.frozenEpoch != boardSanctionEpochOf(c) {
 		return false // cleared wholesale; the stamp is stale
 	}
-	return heightNow() < r.frozenUntil
+	return boardFreezeActive(r)
 }
 
 // boardFrozenAt is the height an address freeze lifts, or 0. Same relationship
@@ -370,7 +400,7 @@ func FreezeBoard(cur realm, courtSlug string, who address, blocks int64, code st
 	// Both of those were wrong: the undo clears frozenUntil, and the recovery verb
 	// bumps the epoch, so either one handed the set a fresh window. See the
 	// field's own note in standing.gno.
-	if r := lookupStanding(c, who); r != nil && now < r.frozenGapUntil {
+	if r := lookupStanding(c, who); r != nil && boardFreezeGapOpen(r) {
 		panic("kourtv2: this address was frozen too recently; the ceiling is not a formality")
 	}
 	fire, voted := approveAction(cm.pending, "freeze:"+who.String(), actor, code,
@@ -380,11 +410,13 @@ func FreezeBoard(cur realm, courtSlug string, who address, blocks int64, code st
 	}
 	r := getStanding(c, who)
 	r.frozenUntil = now + blocks
+	r.frozenUntilTime = nowTime() + blocksToSecs(blocks)
 	r.frozenEpoch = boardSanctionEpochOf(c)
 	// Stamped at the FULL ceiling, not at the requested length: a set that asks
 	// for one block must not thereby earn a shorter cooldown than one that asks
 	// for twelve hours, or the gap is bought off with short freezes.
 	r.frozenGapUntil = now + freezeMaxBlocks + freezeGapBlocks
+	r.frozenGapUntilTime = nowTime() + blocksToSecs(freezeMaxBlocks+freezeGapBlocks)
 	cm.appendCourtLog(actor, "freeze:"+strconv.FormatInt(blocks, 10), voted)
 	emitModAct(c.id, 0, "freeze", actor)
 }
@@ -406,7 +438,9 @@ func UnfreezeBoard(cur realm, courtSlug string, who address) {
 	if !fire {
 		return
 	}
-	lookupStanding(c, who).frozenUntil = 0
+	lifted := lookupStanding(c, who)
+	lifted.frozenUntil = 0
+	lifted.frozenUntilTime = 0
 	cm.appendCourtLog(actor, "unfreeze", "")
 	emitModAct(c.id, 0, "unfreeze", actor)
 }
