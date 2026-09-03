@@ -181,6 +181,11 @@ type realmClock struct{}
 // Electorate.
 func (realmClock) Height() int64 { return heightNow() }
 
+// Now satisfies the same two interfaces with this realm's wall clock, so the
+// governor's voting deadlines move with a fast-forwarded test chain exactly as
+// its heights do. nowTime() is the test-clock shim, not runtime directly.
+func (realmClock) Now() int64 { return nowTime() }
+
 // eventHeight is the height an EMITTED EVENT should carry, as a string.
 //
 // It is heightNow() — the realm's own clock, so an event agrees with the state

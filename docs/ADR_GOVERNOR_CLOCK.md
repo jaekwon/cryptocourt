@@ -1,8 +1,9 @@
 # ADR: the governor's voting deadline
 
-**Status:** accepted, not yet implemented. One attempt was made and reverted;
-what it cost is recorded below so the next one starts from measurement rather
-than from the same guesses.
+**Status:** IMPLEMENTED in the governor. The decision below stands as written;
+the second attempt found the cause the first could not, and it was not in the
+conversion at all. Consumers (`DisputeVoteCloses`, `ClaimTimeline`, the web)
+still publish heights and are the remaining work.
 
 **Scope:** `p/governor`'s `closes`, the `Electorate` interface it reads its clock
 from, and the consumers that publish that deadline — `r/kourtv2`'s
@@ -86,6 +87,34 @@ and store the voting window as a stamped pair.
   in this plan already is. On kourt-1 — a single validator — this concedes
   nothing; the argument is in the plan's Risks section.
 
+## What the obstacle actually was
+
+Neither failure was in the conversion. Both were TEST HARNESSES DRIVING ONE
+CLOCK.
+
+`r/govern`'s `advanceBlocks` and `p/governor`'s both call `testing.SetHeight`,
+which moves height and leaves block time alone. That is invisible while every
+window gates on height, and stops being invisible the moment a deadline is a
+date: a fixture advancing 200 blocks left `closesTime` unreached, so proposals
+never closed and two tests reported "active, want defeated" for a reason with
+nothing to do with what they tested.
+
+Both harnesses now derive time FROM height (`setClock`), which makes the lockstep
+structural — no sequence of calls can desynchronise them.
+
+**And a second, sharper one underneath it.** The VM's default test context is
+internally inconsistent: it starts at **height 123 with the time still at
+genesis**. A proposal stamped from that context carries a deadline 615 seconds
+behind its own height, and the first `setClock` then appears to jump past it.
+`p/governor` gained a `resumeClock()` for this, and it is required of any test
+that writes before it advances — the same discipline `r/govern` already had for
+its checkpoints, now for the clock.
+
+**THE LESSON GENERALISES BEYOND THIS ADR.** Every fixture in this repo that
+fabricates a height is a candidate for the same defect, and it only surfaces once
+something reads both clocks. The first attempt's failure was blamed on the gate;
+it was the fixture, twice.
+
 ## What the first attempt cost, measured
 
 The implementation above was written in full and reverted. Both `p/grc20votes`
@@ -109,9 +138,8 @@ for them:
    placed in the predicate did not fire on the governor's own failing test, so
    the probe belongs in `r/govern`'s failing tests specifically.
 
-**Do not re-derive this from scratch.** The full patch is kept at
-`scratchpad/gov-attempt/governor-clock.patch` (241 lines) and applies to the
-tree as of this commit.
+The patch kept at `scratchpad/gov-attempt/governor-clock.patch` is what landed,
+plus the two harness fixes and the tests above.
 
 ## Why this ADR exists at all
 

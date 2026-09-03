@@ -46,6 +46,7 @@ import (
 	"chain/runtime"
 	"math/overflow"
 	"strconv"
+	"time"
 
 	checkpoint "gno.land/p/kourt/checkpoint/v0"
 	bptree "gno.land/p/nt/bptree/v0"
@@ -129,6 +130,12 @@ type account struct {
 type Clock interface {
 	// Height is the block height this ledger should quantise epochs by.
 	Height() int64
+
+	// Now is the same block's wall-clock time, unix seconds. The ledger itself
+	// quantises by HEIGHT and always will — epoch quantisation is what makes the
+	// anti-flash-loan property structural — but it passes this through to the
+	// governor on the Electorate interface, where a voting DEADLINE lives.
+	Now() int64
 }
 
 type Ledger struct {
@@ -362,6 +369,17 @@ func (l *Ledger) Height() int64 {
 		return l.clock.Height()
 	}
 	return runtime.ChainHeight()
+}
+
+// Now is this ledger's wall clock, forwarded to the governor through the
+// Electorate interface. It is NOT used to quantise anything here: epochs are
+// height-quantised by design (see Clock), and this exists only so a deadline
+// the governor publishes can be a date.
+func (l *Ledger) Now() int64 {
+	if l.clock != nil {
+		return l.clock.Now()
+	}
+	return time.Now().Unix()
 }
 
 // EpochBlocks is the quantisation this ledger was built with, so a consumer

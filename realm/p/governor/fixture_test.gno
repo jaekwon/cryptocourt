@@ -1,6 +1,7 @@
 package governor
 
 import (
+	"time"
 	"chain/runtime"
 	"testing"
 
@@ -72,7 +73,46 @@ func dispatch(k Kind, subpath, payload string) error {
 // test allocates its own, so there is no earlier checkpoint to contradict and
 // nothing to remember — which is just as well, since a package-level int64
 // could not be written to anyway.
-func advanceBlocks(n int64) { testing.SetHeight(runtime.ChainHeight() + n) }
+// clockBaseUnix is gno's own test-genesis timestamp, and it has to be THAT
+// number rather than any convenient one. The harness fabricates a height, so it
+// must fabricate the matching time — but a base that disagrees with the clock
+// the VM starts at makes the first advance a discontinuity: a proposal stamped
+// before any advance carries the VM's time, and the first setClock then jumps
+// the clock 465 million seconds past its deadline. Anchoring here means the
+// fabricated clock is the same clock, moved forward.
+const clockBaseUnix = int64(1_234_567_890)
+
+// setClock moves BOTH clocks, and that is the whole point of it.
+//
+// testing.SetHeight moves height alone. That was invisible while every window
+// here gated on height, and stopped being invisible the moment a voting deadline
+// became a date: a fixture advancing past a proposal's deadline in blocks left
+// the proposal permanently open, because its closesTime had not been reached.
+// A REAL CHAIN CANNOT ADVANCE ONE WITHOUT THE OTHER, so neither may this.
+//
+// The time is DERIVED from the height rather than tracked separately, which
+// makes the lockstep structural: no sequence of calls can desynchronise them.
+func setClock(h int64) {
+	ctx := testing.GetContext()
+	ctx.Height = h
+	ctx.Time = time.Unix(clockBaseUnix+h*5, 0)
+	testing.SetContext(ctx)
+}
+
+func advanceBlocks(n int64) { setClock(runtime.ChainHeight() + n) }
+
+// resumeClock ties the two clocks together before a test writes anything.
+//
+// The VM's default context is internally INCONSISTENT: it starts at height 123
+// with the time still at genesis, i.e. 123 blocks in and no seconds elapsed.
+// That was harmless while nothing read both. It is not harmless now — a proposal
+// stamped from that context carries a deadline 615 seconds behind its own
+// height, and the first advance then appears to jump past it.
+//
+// Any test that proposes before advancing must call this first. r/govern's
+// harness has always required the same thing for the same shape of reason (its
+// checkpoints refuse a backwards write); this is that rule, for the clock.
+func resumeClock() { advanceBlocks(0) }
 
 func advanceEpochs(n int64) { advanceBlocks(n * testEpochBlocks) }
 
@@ -80,7 +120,7 @@ func advanceTo(h int64) {
 	if now := runtime.ChainHeight(); h < now {
 		panic("advanceTo: the clock only moves forward")
 	}
-	testing.SetHeight(h)
+	setClock(h)
 }
 
 // mustPanicContains is uassert.AbortsContains without the realm argument, which

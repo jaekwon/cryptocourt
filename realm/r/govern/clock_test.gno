@@ -5,6 +5,7 @@ import (
 	grc20votes "gno.land/p/kourt/grc20votes/v0"
 	"chain/runtime"
 	"testing"
+	"time"
 
 )
 
@@ -20,12 +21,43 @@ import (
 // than from whatever the harness last reset to.
 var testHeight int64
 
+// clockBaseUnix is gno's own test-genesis timestamp, and it has to be THAT
+// number rather than any convenient one. The harness fabricates a height, so it
+// must fabricate the matching time — but a base that disagrees with the clock
+// the VM starts at makes the first advance a discontinuity: a proposal stamped
+// before any advance carries the VM's time, and the first setClock then jumps
+// the clock 465 million seconds past its deadline. Anchoring here means the
+// fabricated clock is the same clock, moved forward.
+const clockBaseUnix = int64(1_234_567_890)
+
+// setClock moves BOTH clocks, and that is the whole point of it.
+//
+// The harness used to fabricate a height with testing.SetHeight and leave block
+// time alone. That was invisible while the governor gated on height, and stopped
+// being invisible the moment a voting deadline became a date: a proposal's
+// closesTime is written from the wall clock, so a fixture that advanced 200
+// blocks without advancing time left every proposal permanently open, and two
+// tests reported "active, want defeated" for a reason that had nothing to do
+// with what they were testing.
+//
+// A REAL CHAIN CANNOT ADVANCE ONE WITHOUT THE OTHER, so neither may this. The
+// time is derived from the height rather than tracked separately, which makes
+// the lockstep structural: there is no sequence of calls that can desynchronise
+// them, and the forward-only guarantee the checkpoints depend on carries to the
+// clock for free.
+func setClock(h int64) {
+	ctx := testing.GetContext()
+	ctx.Height = h
+	ctx.Time = time.Unix(clockBaseUnix+h*5, 0)
+	testing.SetContext(ctx)
+}
+
 func advanceBlocks(n int64) {
 	if h := runtime.ChainHeight(); h > testHeight {
 		testHeight = h
 	}
 	testHeight += n
-	testing.SetHeight(testHeight)
+	setClock(testHeight)
 }
 
 // resumeClock puts the height back where the last test left it.
@@ -54,7 +86,7 @@ func advanceTo(h int64) {
 		panic("advanceTo: the clock only moves forward")
 	}
 	testHeight = h
-	testing.SetHeight(testHeight)
+	setClock(testHeight)
 }
 
 // resetLedger gives a test an empty token and an empty governor.

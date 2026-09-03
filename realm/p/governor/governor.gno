@@ -145,7 +145,13 @@ type proposal struct {
 
 	opened int64
 	closes int64
-	ready  int64 // set when it succeeds
+	// The same two moments in unix seconds, written beside the heights and never
+	// derived afterwards. A VOTING WINDOW IS A PROMISE TO A VOTER, and a height
+	// only means a date if the chain's pace never changes; a proposal opened
+	// before these existed carries 0 and keeps the height it was opened under.
+	openedTime int64
+	closesTime int64
+	ready      int64 // set when it succeeds
 	state  int8
 	reason string
 
@@ -809,6 +815,8 @@ func (g *Governor) propose(who address, kind, payload, title string, quorumFloor
 		rules: rules, epoch: at, total: total, engaged: engaged,
 		quorumFloor: quorumFloor,
 		opened:      now, closes: now + rules.VotingBlocks,
+		openedTime:  g.voters.Now(),
+		closesTime:  g.voters.Now() + rules.VotingBlocks*secsPerBlock,
 		// The voter roll is bought here, by the proposer, including its first
 		// node — see rollSentinel just below the Set. Whoever asks, pays.
 		//
@@ -1149,7 +1157,7 @@ func (g *Governor) wouldBe(p *proposal, now int64) (int8, string) {
 		if (p.yes+rest)*bps < (p.yes+rest+p.no)*p.rules.ThresholdBps {
 			return stateDefeated, "threshold can no longer be reached"
 		}
-		if now >= p.closes {
+		if g.votingClosed(p, now) {
 			if quorum && p.yes > 0 && p.yes*bps >= forAndAgainst(p)*p.rules.ThresholdBps {
 				return stateSucceeded, ""
 			}
@@ -1500,6 +1508,24 @@ func (g *Governor) HasVoted(id int64, who address) bool {
 	return p.voted != nil && who != rollSentinel && p.voted.Has(string(who))
 }
 
+// secsPerBlock converts a VotingBlocks rule — configured in blocks, as every
+// governor rule is — into the wall-clock window it was chosen to mean.
+const secsPerBlock = int64(5)
+
+// votingClosed reports whether a proposal has stopped taking votes.
+//
+// THE DEADLINE IS THE PROMISE, THE HEIGHT IS THE FALLBACK. Counted in blocks a
+// window advertised as "four days" is four days only while the chain holds its
+// assumed pace; the report that started this work showed a vote "closing in ~7
+// days" beside an answer dated five years earlier. A proposal opened before the
+// stamps existed has closesTime 0 and keeps the height it was opened under.
+func (g *Governor) votingClosed(p *proposal, now int64) bool {
+	if p.closesTime != 0 {
+		return g.voters.Now() >= p.closesTime
+	}
+	return now >= p.closes
+}
+
 // Timings is a proposal's clock: when it opened, when voting closes, when it
 // becomes executable, and when that chance lapses. The companion to Tally —
 // without it, anything showing a countdown parsed the page, which is prose
@@ -1719,8 +1745,24 @@ func (g *Governor) renderOne(path string) string {
 	// The subtraction is safe. wouldBe returns a terminal state once now has
 	// reached p.closes, so a proposal reading active has not.
 	if st == stateActive {
-		out += ufmt.Sprintf("\n_Voting closes in %d blocks, at height %d._\n",
-			p.closes-g.voters.Height(), p.closes)
+		// THE DATE, not a block count. "closes in 120,960 blocks" is a promise
+		// only a reader who knows the chain's pace can check, and the pace is not
+		// a promise — that mismatch is what put a vote "closing in ~7 days" beside
+		// an answer dated five years earlier. A proposal opened before the stamps
+		// has no date and keeps the block form it was opened under.
+		if p.closesTime != 0 {
+			// A COUNTDOWN AND AN ABSOLUTE, because they answer different
+			// questions: the count tells a reader how long they have, and the
+			// date is what the gate will actually compare against, so a page
+			// read at one moment is still checkable at the next. The old line
+			// gave a count in BLOCKS, which is only a duration to a reader who
+			// knows the chain's pace — and the pace is what was wrong.
+			out += ufmt.Sprintf("\n_Voting closes in %d seconds, at %d (block %d)._\n",
+				p.closesTime-g.voters.Now(), p.closesTime, p.closes)
+		} else {
+			out += ufmt.Sprintf("\n_Voting closes in %d blocks, at height %d._\n",
+				p.closes-g.voters.Height(), p.closes)
+		}
 	}
 
 	// What happens next, for a decision that has been taken and not yet done.

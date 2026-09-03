@@ -1,6 +1,7 @@
 package govern
 
 import (
+	"time"
 	"chain/runtime"
 	governor "gno.land/p/kourt/governor/v0"
 	grc20votes "gno.land/p/kourt/grc20votes/v0"
@@ -45,6 +46,7 @@ func (f *fakeVotes) Epoch() uint32 { return f.epoch }
 // testing.SkipHeights, so the chain's own height is the right answer; the
 // interface method exists so a REALM can substitute its own clock.
 func (f *fakeVotes) Height() int64 { return runtime.ChainHeight() }
+func (f *fakeVotes) Now() int64  { return int64(time.Now().Unix()) }
 
 // Quorum and threshold are counted at their exact boundaries, at the deadline.
 //
@@ -172,6 +174,7 @@ func (c *council) Epoch() uint32                { return c.epoch }
 
 // Height satisfies governor.Electorate; see the note on fakeVotes.
 func (c *council) Height() int64 { return runtime.ChainHeight() }
+func (c *council) Now() int64  { return int64(time.Now().Unix()) }
 
 func TestTheGovernorWorksOnAnElectorateThatIsNotAToken(cur realm, t *testing.T) {
 	resumeClock()

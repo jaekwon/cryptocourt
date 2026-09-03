@@ -154,7 +154,7 @@ trailing ring; `pendingTTLBlocks` looks like accounting and is a deadline.
 | `boardmod.gno:107,373` | address freeze + its re-freeze gap | `frozenUntilTime`/`frozenGapUntilTime` (added) | **converted** |
 | `boardmod.gno:137,433` | claim-board freeze + its gap | `boardFrozenUntilTime`/`boardFrozenGapUntilTime` (added) | **converted** |
 | `meta.gno:366` | `votingBlocks` after verdict | `verdictAtTime` | **converted** |
-| `p/governor` proposal `closes` | vote window | needs a stamp | **designed, not implemented** — see `ADR_GOVERNOR_CLOCK.md` |
+| `p/governor` proposal `closes` | vote window | `closesTime` (added) | **converted** — consumers still publish heights |
 
 ### Stay on blocks (accounting)
 
@@ -245,6 +245,35 @@ units across two claims would be worse than falling back), and it is the one sit
 that already had a corpus row per arm — the discipline being retrofitted
 elsewhere. `supEdge.at` is a height "for the record" that nothing reads and
 nothing renders.
+
+### `p/governor` — converted on the second attempt
+
+The gate reads `closesTime`, the page states a countdown in SECONDS beside the
+absolute moment and the block, and `Electorate`/`grc20votes.Clock` carry `Now()`
+through all seven implementers.
+
+**The obstacle was never the conversion.** Both failures the first attempt
+recorded came from TEST HARNESSES DRIVING ONE CLOCK — `testing.SetHeight` moves
+height and leaves block time alone, so fixtures advanced past a deadline in
+blocks while `closesTime` stood still. Both harnesses now derive time from
+height, which makes the lockstep structural. Underneath that sat a sharper one:
+the VM's default test context starts at **height 123 with the time at genesis**,
+so anything stamped before the first advance carries a deadline 615 seconds
+behind its own height. `p/governor` gained `resumeClock()` for it.
+
+**Writing the ADR first paid for itself.** Its instruction was to isolate the
+r/govern failure before rewriting anything; following that found a fixture bug in
+two packages instead of producing a second wrong theory about the gate.
+
+Verified: `p/governor`, `p/grc20votes`, `r/kourtv2`, `r/govern` all green; five
+mutants killed (exact second, pre-stamp fallback, stamp not written, wrong window
+length, render falls back always); two pre-existing corpus rows repointed and two
+added; `make anchors collisions staleguards guards` and `web-test` pass.
+
+**Remaining:** the consumers. `DisputeVoteCloses` and `ClaimTimeline`'s dispute
+row still publish heights, and the web still estimates a date from one — which is
+the half of bug 1 a reader actually sees. The governor now knows the answer; the
+next commit is teaching those three to ask for it.
 
 ### `p/governor` — designed, attempted, reverted; see ADR_GOVERNOR_CLOCK.md
 

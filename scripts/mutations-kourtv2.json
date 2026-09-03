@@ -2896,8 +2896,8 @@
   "pkg": "governor",
   "file": "governor.gno",
   "label": "wouldBe: the deadline is exclusive, so a proposal never closes on it",
-  "find": "\t\tif now >= p.closes {",
-  "replace": "\t\tif now > p.closes {"
+  "find": "\t\treturn g.voters.Now() >= p.closesTime",
+  "replace": "\t\treturn g.voters.Now() > p.closesTime"
  },
  {
   "pkg": "governor",
@@ -3925,8 +3925,22 @@
   "pkg": "governor",
   "file": "governor.gno",
   "label": "renderOne: an active proposal never says when voting closes",
-  "find": "\tif st == stateActive {\n\t\tout += ufmt.Sprintf(\"\\n_Voting closes in %d blocks, at height %d._\\n\",\n\t\t\tp.closes-g.voters.Height(), p.closes)\n\t}",
-  "replace": ""
+  "find": "\tif st == stateActive {\n\t\t// THE DATE, not a block count.",
+  "replace": "\tif false {\n\t\t// THE DATE, not a block count."
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "wouldBe: a pre-stamp proposal loses its HEIGHT fallback and never closes",
+  "find": "\t}\n\treturn now >= p.closes\n}",
+  "replace": "\t}\n\treturn false\n}"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "propose: the voting window is stamped without its wall-clock deadline",
+  "find": "\t\tclosesTime:  g.voters.Now() + rules.VotingBlocks*secsPerBlock,",
+  "replace": "\t\tclosesTime:  0,"
  },
  {
   "pkg": "governor",

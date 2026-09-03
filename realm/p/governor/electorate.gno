@@ -81,6 +81,17 @@ type Electorate interface {
 	// everything except the one thing a dispute waits on, and would let the
 	// governor and the ledger disagree about what epoch it is.
 	Height() int64
+
+	// Now is the block's wall-clock time in unix seconds, from the same source
+	// as Height and for the same reason: a realm that can fast-forward its clock
+	// must move the VOTES with it, and a pure package may not read the chain
+	// directly without leaving a test chain able to age everything except the
+	// one thing a dispute waits on.
+	//
+	// It exists because a voting window is a PROMISE TO A VOTER — "this closes
+	// in four days" — and a height only means a date if the chain's pace never
+	// changes. The governor gates on this and keeps the height beside it.
+	Now() int64
 }
 
 // Token is what a page needs to name the thing being voted: an identity and a

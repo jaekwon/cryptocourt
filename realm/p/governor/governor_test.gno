@@ -1,6 +1,7 @@
 package governor
 
 import (
+	"time"
 	"chain/runtime"
 	"strconv"
 	"strings"
@@ -33,6 +34,7 @@ func (c *council) Epoch() uint32                { return c.epoch }
 
 // Height satisfies Electorate; see the note in changes_test.gno.
 func (c *council) Height() int64 { return runtime.ChainHeight() }
+func (c *council) Now() int64  { return int64(time.Now().Unix()) }
 
 // coin is the minimum a page needs to name what is being voted.
 type coin struct{ supply int64 }
@@ -1272,14 +1274,91 @@ func TestAProposalRowIsItsOwnListItem(t *testing.T) {
 // An active proposal's countdown counts DOWN, found surviving. The existing test
 // asserts the line is present; nothing asserted the number on it, so reversing the
 // subtraction — printing how long ago voting would have closed — read as fine.
+// THE VOTING WINDOW CLOSES ON ITS EXACT SECOND, and a proposal from before the
+// stamps still closes on its exact block.
+//
+// Both arms were measured unpinned: mutating `>=` to `>` in the close gate, and
+// deleting the height fallback outright, BOTH SURVIVED the suite. A window that
+// closed a second late or a proposal that never closed at all would have shipped
+// without a failing test.
+//
+// The fixture clock is in lockstep now (setClock derives time from height), so
+// reaching the closing HEIGHT is the same instant as reaching closesTime — which
+// is what makes "the exact second" reachable through the ordinary harness.
+func TestTheVotingWindowClosesOnItsExactMoment(t *testing.T) {
+	g, _, _ := armed(t, gAlice, gBob, gCarl)
+	resumeClock() // the VM's default height and time disagree; see fixture_test
+	id := g.Propose(gAlice, "fee", "1", "closes when it says")
+	// ONE yes and nothing else. With no votes at all wouldBe defeats a proposal
+	// early on the arithmetic ("nobody voted in favour"), which would decide it
+	// before the deadline and leave the deadline untested; one yes among three
+	// members keeps both quorum and threshold reachable, so the outcome is
+	// genuinely undecided until the clock runs out.
+	g.Vote(gAlice, id, "yes")
+	p := g.mustProposal(id)
+	if p.closesTime == 0 {
+		t.Fatal("fixture: the proposal must be stamped, or this pins the height arm")
+	}
+
+	// One block short of the close — and, in lockstep, one window short of
+	// closesTime — it is still taking votes.
+	advanceTo(p.closes - 1)
+	if got := g.State(id); got != "active" {
+		t.Fatalf("one block short of its deadline the proposal reads %q", got)
+	}
+	// And ON the moment it stops. The gate is `>=`, so the closing instant is
+	// already closed; `>` would leave it open for one more second.
+	advanceTo(p.closes)
+	if got := g.State(id); got == "active" {
+		t.Fatalf("at its deadline the proposal still reads %q", got)
+	}
+
+	// ---- AND A PRE-STAMP PROPOSAL CLOSES ON ITS BLOCK ----
+	// Zeroed by hand because propose() cannot produce one any more. Without the
+	// height fallback this proposal would never close at all.
+	id2 := g.Propose(gAlice, "fee", "2", "opened before the stamps")
+	g.Vote(gAlice, id2, "yes")
+	p2 := g.mustProposal(id2)
+	p2.closesTime = 0
+	advanceTo(p2.closes - 1)
+	if got := g.State(id2); got != "active" {
+		t.Fatalf("one block short, a pre-stamp proposal reads %q", got)
+	}
+	advanceTo(p2.closes)
+	if got := g.State(id2); got == "active" {
+		t.Fatalf("at its block deadline a pre-stamp proposal still reads %q", got)
+	}
+}
+
 func TestTheCountdownToCloseCountsDown(t *testing.T) {
 	g, _, _ := armed(t, gAlice, gBob, gCarl)
 	id := g.Propose(gAlice, "fee", "1", "asked just now")
 	// The fixture's kind votes for 100 blocks and nothing has advanced the clock,
-	// so the whole window is still ahead.
+	// so the whole window is still ahead. It is stated in SECONDS now: a count in
+	// blocks is a duration only to a reader who already knows the chain's pace,
+	// and the pace is exactly what this cannot assume.
 	page := g.Render(strconv.FormatInt(id, 10), "")
-	if !contains(page, "closes in 100 blocks") {
-		t.Errorf("the page does not count down from the full voting window:\n%s", page)
+	if !contains(page, "closes in 500 seconds") {
+		t.Errorf("the page does not count down from the full voting window "+
+			"(100 blocks x 5s):\n%s", page)
+	}
+	// AND THE ABSOLUTE MOMENT beside it, because a countdown read at one instant
+	// is wrong at the next while a date is not — and because the date is what
+	// the gate compares against, so a reader can check the page against the rule.
+	p := g.mustProposal(id)
+	if !contains(page, strconv.FormatInt(p.closesTime, 10)) {
+		t.Errorf("the page does not name the closing moment %d:\n%s", p.closesTime, page)
+	}
+	if !contains(page, strconv.FormatInt(p.closes, 10)) {
+		t.Errorf("the page does not name the closing block %d:\n%s", p.closes, page)
+	}
+
+	// A PROPOSAL FROM BEFORE THE STAMPS keeps the block form, which is all it
+	// ever had. Zeroed by hand because propose() cannot produce one any more.
+	p.closesTime = 0
+	old := g.Render(strconv.FormatInt(id, 10), "")
+	if !contains(old, "closes in 100 blocks") {
+		t.Errorf("a pre-stamp proposal must still count down in blocks:\n%s", old)
 	}
 }
 
@@ -1386,6 +1465,7 @@ func (e *weighted) PastTotal(at uint32) int64              { return e.total }
 func (e *weighted) EngagedTotal(at uint32) int64           { return e.total }
 func (e *weighted) Epoch() uint32                          { return e.epoch }
 func (e *weighted) Height() int64                          { return runtime.ChainHeight() }
+func (e *weighted) Now() int64  { return int64(time.Now().Unix()) }
 
 func weightedGov(t *testing.T, w map[string]int64, total int64) *Governor {
 	t.Helper()

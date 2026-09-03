@@ -2,6 +2,8 @@ package governor
 
 import "chain/runtime"
 
+import "time"
+
 import "testing"
 
 // stated is an electorate whose totals are declared outright, for the boundary
@@ -21,6 +23,7 @@ func (s stated) Epoch() uint32                        { return s.epoch }
 // so the chain's own height is the right answer here — the point of the interface
 // method is that a REALM may substitute its own, not that every caller must.
 func (s stated) Height() int64 { return runtime.ChainHeight() }
+func (s stated) Now() int64  { return int64(time.Now().Unix()) }
 
 func govFor(e Electorate) *Governor {
 	g := New(e, coin{supply: 1})
