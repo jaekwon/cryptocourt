@@ -154,7 +154,7 @@ trailing ring; `pendingTTLBlocks` looks like accounting and is a deadline.
 | `boardmod.gno:107,373` | address freeze + its re-freeze gap | `frozenUntilTime`/`frozenGapUntilTime` (added) | **converted** |
 | `boardmod.gno:137,433` | claim-board freeze + its gap | `boardFrozenUntilTime`/`boardFrozenGapUntilTime` (added) | **converted** |
 | `meta.gno:366` | `votingBlocks` after verdict | `verdictAtTime` | **converted** |
-| `p/governor` proposal `closes` | vote window | needs a stamp | unconverted — bug 1 |
+| `p/governor` proposal `closes` | vote window | needs a stamp | **designed, not implemented** — see `ADR_GOVERNOR_CLOCK.md` |
 
 ### Stay on blocks (accounting)
 
@@ -245,6 +245,28 @@ units across two claims would be worse than falling back), and it is the one sit
 that already had a corpus row per arm — the discipline being retrofitted
 elsewhere. `supEdge.at` is a height "for the record" that nothing reads and
 nothing renders.
+
+### `p/governor` — designed, attempted, reverted; see ADR_GOVERNOR_CLOCK.md
+
+The last site, and the only one that produced a document instead of a commit.
+
+The plan called it "the hard one" because `p/governor` is a `/p/` package shared
+with other consumers. That understated it: the change is not to the governor's
+own signature but to **an interface it consumes** — `Electorate`, and through it
+`grc20votes.Clock` — so every implementer of a clock moves with it, including
+test fakes in `r/govern`, a realm with nothing to do with kourtv2. Seven
+implementers in total.
+
+The full implementation was written and REVERTED rather than left half-applied
+in a shared package. `p/grc20votes` and `r/kourtv2` passed with it;
+`p/governor`'s countdown test failed on text I had deliberately changed (expected,
+and it must be rewritten rather than deleted), and `r/govern` failed two tests
+with proposals not closing at all — a real failure whose cause is NOT isolated.
+The patch is kept and the ADR records exactly where to resume.
+
+**Stopping was the call.** A shared `/p/` package left half-converted, with two
+unexplained failures in a realm downstream of it, is worse than a documented
+design and a green tree.
 
 ### The freeze projections — two reads, two banners, and the web
 

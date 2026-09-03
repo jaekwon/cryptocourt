@@ -1,0 +1,241 @@
+diff --git a/realm/p/governor/changes_test.gno b/realm/p/governor/changes_test.gno
+index 5f4bfcf..bdc2ffa 100644
+--- a/realm/p/governor/changes_test.gno
++++ b/realm/p/governor/changes_test.gno
+@@ -2,6 +2,8 @@ package governor
+ 
+ import "chain/runtime"
+ 
++import "time"
++
+ import "testing"
+ 
+ // stated is an electorate whose totals are declared outright, for the boundary
+@@ -21,6 +23,7 @@ func (s stated) Epoch() uint32                        { return s.epoch }
+ // so the chain's own height is the right answer here — the point of the interface
+ // method is that a REALM may substitute its own, not that every caller must.
+ func (s stated) Height() int64 { return runtime.ChainHeight() }
++func (s stated) Now() int64  { return int64(time.Now().Unix()) }
+ 
+ func govFor(e Electorate) *Governor {
+ 	g := New(e, coin{supply: 1})
+diff --git a/realm/p/governor/electorate.gno b/realm/p/governor/electorate.gno
+index c08337c..0f3efcd 100644
+--- a/realm/p/governor/electorate.gno
++++ b/realm/p/governor/electorate.gno
+@@ -81,6 +81,17 @@ type Electorate interface {
+ 	// everything except the one thing a dispute waits on, and would let the
+ 	// governor and the ledger disagree about what epoch it is.
+ 	Height() int64
++
++	// Now is the block's wall-clock time in unix seconds, from the same source
++	// as Height and for the same reason: a realm that can fast-forward its clock
++	// must move the VOTES with it, and a pure package may not read the chain
++	// directly without leaving a test chain able to age everything except the
++	// one thing a dispute waits on.
++	//
++	// It exists because a voting window is a PROMISE TO A VOTER — "this closes
++	// in four days" — and a height only means a date if the chain's pace never
++	// changes. The governor gates on this and keeps the height beside it.
++	Now() int64
+ }
+ 
+ // Token is what a page needs to name the thing being voted: an identity and a
+diff --git a/realm/p/governor/governor.gno b/realm/p/governor/governor.gno
+index 78c125c..7354012 100644
+--- a/realm/p/governor/governor.gno
++++ b/realm/p/governor/governor.gno
+@@ -145,7 +145,13 @@ type proposal struct {
+ 
+ 	opened int64
+ 	closes int64
+-	ready  int64 // set when it succeeds
++	// The same two moments in unix seconds, written beside the heights and never
++	// derived afterwards. A VOTING WINDOW IS A PROMISE TO A VOTER, and a height
++	// only means a date if the chain's pace never changes; a proposal opened
++	// before these existed carries 0 and keeps the height it was opened under.
++	openedTime int64
++	closesTime int64
++	ready      int64 // set when it succeeds
+ 	state  int8
+ 	reason string
+ 
+@@ -809,6 +815,8 @@ func (g *Governor) propose(who address, kind, payload, title string, quorumFloor
+ 		rules: rules, epoch: at, total: total, engaged: engaged,
+ 		quorumFloor: quorumFloor,
+ 		opened:      now, closes: now + rules.VotingBlocks,
++		openedTime:  g.voters.Now(),
++		closesTime:  g.voters.Now() + rules.VotingBlocks*secsPerBlock,
+ 		// The voter roll is bought here, by the proposer, including its first
+ 		// node — see rollSentinel just below the Set. Whoever asks, pays.
+ 		//
+@@ -1149,7 +1157,7 @@ func (g *Governor) wouldBe(p *proposal, now int64) (int8, string) {
+ 		if (p.yes+rest)*bps < (p.yes+rest+p.no)*p.rules.ThresholdBps {
+ 			return stateDefeated, "threshold can no longer be reached"
+ 		}
+-		if now >= p.closes {
++		if g.votingClosed(p, now) {
+ 			if quorum && p.yes > 0 && p.yes*bps >= forAndAgainst(p)*p.rules.ThresholdBps {
+ 				return stateSucceeded, ""
+ 			}
+@@ -1500,6 +1508,24 @@ func (g *Governor) HasVoted(id int64, who address) bool {
+ 	return p.voted != nil && who != rollSentinel && p.voted.Has(string(who))
+ }
+ 
++// secsPerBlock converts a VotingBlocks rule — configured in blocks, as every
++// governor rule is — into the wall-clock window it was chosen to mean.
++const secsPerBlock = int64(5)
++
++// votingClosed reports whether a proposal has stopped taking votes.
++//
++// THE DEADLINE IS THE PROMISE, THE HEIGHT IS THE FALLBACK. Counted in blocks a
++// window advertised as "four days" is four days only while the chain holds its
++// assumed pace; the report that started this work showed a vote "closing in ~7
++// days" beside an answer dated five years earlier. A proposal opened before the
++// stamps existed has closesTime 0 and keeps the height it was opened under.
++func (g *Governor) votingClosed(p *proposal, now int64) bool {
++	if p.closesTime != 0 {
++		return g.voters.Now() >= p.closesTime
++	}
++	return now >= p.closes
++}
++
+ // Timings is a proposal's clock: when it opened, when voting closes, when it
+ // becomes executable, and when that chance lapses. The companion to Tally —
+ // without it, anything showing a countdown parsed the page, which is prose
+@@ -1719,8 +1745,18 @@ func (g *Governor) renderOne(path string) string {
+ 	// The subtraction is safe. wouldBe returns a terminal state once now has
+ 	// reached p.closes, so a proposal reading active has not.
+ 	if st == stateActive {
+-		out += ufmt.Sprintf("\n_Voting closes in %d blocks, at height %d._\n",
+-			p.closes-g.voters.Height(), p.closes)
++		// THE DATE, not a block count. "closes in 120,960 blocks" is a promise
++		// only a reader who knows the chain's pace can check, and the pace is not
++		// a promise — that mismatch is what put a vote "closing in ~7 days" beside
++		// an answer dated five years earlier. A proposal opened before the stamps
++		// has no date and keeps the block form it was opened under.
++		if p.closesTime != 0 {
++			out += ufmt.Sprintf("\n_Voting closes at %d (block %d)._\n",
++				p.closesTime, p.closes)
++		} else {
++			out += ufmt.Sprintf("\n_Voting closes in %d blocks, at height %d._\n",
++				p.closes-g.voters.Height(), p.closes)
++		}
+ 	}
+ 
+ 	// What happens next, for a decision that has been taken and not yet done.
+diff --git a/realm/p/governor/governor_test.gno b/realm/p/governor/governor_test.gno
+index b2fa508..f954087 100644
+--- a/realm/p/governor/governor_test.gno
++++ b/realm/p/governor/governor_test.gno
+@@ -1,6 +1,7 @@
+ package governor
+ 
+ import (
++	"time"
+ 	"chain/runtime"
+ 	"strconv"
+ 	"strings"
+@@ -33,6 +34,7 @@ func (c *council) Epoch() uint32                { return c.epoch }
+ 
+ // Height satisfies Electorate; see the note in changes_test.gno.
+ func (c *council) Height() int64 { return runtime.ChainHeight() }
++func (c *council) Now() int64  { return int64(time.Now().Unix()) }
+ 
+ // coin is the minimum a page needs to name what is being voted.
+ type coin struct{ supply int64 }
+@@ -1386,6 +1388,7 @@ func (e *weighted) PastTotal(at uint32) int64              { return e.total }
+ func (e *weighted) EngagedTotal(at uint32) int64           { return e.total }
+ func (e *weighted) Epoch() uint32                          { return e.epoch }
+ func (e *weighted) Height() int64                          { return runtime.ChainHeight() }
++func (e *weighted) Now() int64  { return int64(time.Now().Unix()) }
+ 
+ func weightedGov(t *testing.T, w map[string]int64, total int64) *Governor {
+ 	t.Helper()
+diff --git a/realm/p/grc20votes/grc20votes.gno b/realm/p/grc20votes/grc20votes.gno
+index 9666589..b5e4a86 100644
+--- a/realm/p/grc20votes/grc20votes.gno
++++ b/realm/p/grc20votes/grc20votes.gno
+@@ -46,6 +46,7 @@ import (
+ 	"chain/runtime"
+ 	"math/overflow"
+ 	"strconv"
++	"time"
+ 
+ 	checkpoint "gno.land/p/kourt/checkpoint/v0"
+ 	bptree "gno.land/p/nt/bptree/v0"
+@@ -129,6 +130,12 @@ type account struct {
+ type Clock interface {
+ 	// Height is the block height this ledger should quantise epochs by.
+ 	Height() int64
++
++	// Now is the same block's wall-clock time, unix seconds. The ledger itself
++	// quantises by HEIGHT and always will — epoch quantisation is what makes the
++	// anti-flash-loan property structural — but it passes this through to the
++	// governor on the Electorate interface, where a voting DEADLINE lives.
++	Now() int64
+ }
+ 
+ type Ledger struct {
+@@ -364,6 +371,17 @@ func (l *Ledger) Height() int64 {
+ 	return runtime.ChainHeight()
+ }
+ 
++// Now is this ledger's wall clock, forwarded to the governor through the
++// Electorate interface. It is NOT used to quantise anything here: epochs are
++// height-quantised by design (see Clock), and this exists only so a deadline
++// the governor publishes can be a date.
++func (l *Ledger) Now() int64 {
++	if l.clock != nil {
++		return l.clock.Now()
++	}
++	return time.Now().Unix()
++}
++
+ // EpochBlocks is the quantisation this ledger was built with, so a consumer
+ // rendering a deadline in hours does not have to be told twice.
+ func (l *Ledger) EpochBlocks() int64 { return l.epochBlocks }
+diff --git a/realm/r/govern/quorum_test.gno b/realm/r/govern/quorum_test.gno
+index 4e609c0..adbc47b 100644
+--- a/realm/r/govern/quorum_test.gno
++++ b/realm/r/govern/quorum_test.gno
+@@ -1,6 +1,7 @@
+ package govern
+ 
+ import (
++	"time"
+ 	"chain/runtime"
+ 	governor "gno.land/p/kourt/governor/v0"
+ 	grc20votes "gno.land/p/kourt/grc20votes/v0"
+@@ -45,6 +46,7 @@ func (f *fakeVotes) Epoch() uint32 { return f.epoch }
+ // testing.SkipHeights, so the chain's own height is the right answer; the
+ // interface method exists so a REALM can substitute its own clock.
+ func (f *fakeVotes) Height() int64 { return runtime.ChainHeight() }
++func (f *fakeVotes) Now() int64  { return int64(time.Now().Unix()) }
+ 
+ // Quorum and threshold are counted at their exact boundaries, at the deadline.
+ //
+@@ -172,6 +174,7 @@ func (c *council) Epoch() uint32                { return c.epoch }
+ 
+ // Height satisfies governor.Electorate; see the note on fakeVotes.
+ func (c *council) Height() int64 { return runtime.ChainHeight() }
++func (c *council) Now() int64  { return int64(time.Now().Unix()) }
+ 
+ func TestTheGovernorWorksOnAnElectorateThatIsNotAToken(cur realm, t *testing.T) {
+ 	resumeClock()
+diff --git a/realm/r/kourtv2/clock.gno b/realm/r/kourtv2/clock.gno
+index 687d726..d4ec6bb 100644
+--- a/realm/r/kourtv2/clock.gno
++++ b/realm/r/kourtv2/clock.gno
+@@ -181,6 +181,11 @@ type realmClock struct{}
+ // Electorate.
+ func (realmClock) Height() int64 { return heightNow() }
+ 
++// Now satisfies the same two interfaces with this realm's wall clock, so the
++// governor's voting deadlines move with a fast-forwarded test chain exactly as
++// its heights do. nowTime() is the test-clock shim, not runtime directly.
++func (realmClock) Now() int64 { return nowTime() }
++
+ // eventHeight is the height an EMITTED EVENT should carry, as a string.
+ //
+ // It is heightNow() — the realm's own clock, so an event agrees with the state
