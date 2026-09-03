@@ -43,7 +43,14 @@ func Crystallize(cur realm, courtSlug string, claimID uint64) {
 	// that can only fire in the first day of a chain's life. Deleted rather than
 	// left reading a field nobody writes.
 	now := heightNow()
-	if now < cs.verdictAt+finalizeGraceBlocks && !isParticipant(cs, who) {
+	/* THE WEEK IS A WEEK, NOT 120,960 BLOCKS. Counted in blocks this gate held
+	   long past its own week whenever the chain ran slower than 5s — measured on
+	   kourt-1, a claim settled in April 2022 was still inside its grace in
+	   December 2026, because 1,713 days had passed but only 53,280 blocks.
+	   Seconds first, blocks only for a claim whose verdict predates the stamp,
+	   so a record keeps the deadline it was decided under. */
+	if passed, known := pastDeadline(cs.verdictAtTime, finalizeGraceSecs); ((known && !passed) ||
+		(!known && now < cs.verdictAt+finalizeGraceBlocks)) && !isParticipant(cs, who) {
 		panic("kourtv2: Crystallize is participant-only for its first week")
 	}
 	touch(c)

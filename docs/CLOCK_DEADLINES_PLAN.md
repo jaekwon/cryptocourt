@@ -1,6 +1,6 @@
 # Deadlines in seconds, accounting in blocks
 
-**Status:** draft for review. Nothing here is implemented.
+**Status:** in progress. 1 of 11 gates converted; see the log at the end.
 
 ## The problem, as observed
 
@@ -141,7 +141,7 @@ trailing ring; `pendingTTLBlocks` looks like accounting and is a deadline.
 
 | Site | Window | Stamp to use | Status |
 |---|---|---|---|
-| `crystallize.gno:46` | `finalizeGraceBlocks` after verdict | `verdictAtTime` | **unconverted — bug 2** |
+| `crystallize.gno:46` | `finalizeGraceBlocks` after verdict | `verdictAtTime` | **converted — bug 2 fixed** |
 | `dispute.gno:652` | `finalizeGraceBlocks` after escrow | `escrowUntilAt` | unconverted |
 | `dispute.gno:101,649` | escrow window | `escrowUntilAt` | half — stamp path exists |
 | `answer.gno:69` | `stakeOpenDelay + answerWindow + priorityWindow`, summed | `openedAtTime` | unconverted — composite, converts as one duration |
@@ -229,3 +229,35 @@ of 1.2M.
   conversion assumes a cadence — the very assumption this plan exists to remove.
   Court params should move to seconds too, or the conversion should be documented
   as a one-off for legacy params only.
+
+## Log
+
+### `crystallize.gno:46` — the participant-only week (bug 2)
+
+Converted. `finalizeGraceSecs = 7*86400` added to `clock.gno` in the same commit,
+per rule 4. Shape as planned, inverted because this gate asks whether the window
+is still SHUT: `(known && !passed) || (!known && now < verdictAt+finalizeGraceBlocks)`.
+
+**A test the old code cannot pass.** `testing.SkipHeights` moves height and time
+together at exactly 5s a block, and `finalizeGraceSecs` is exactly
+`finalizeGraceBlocks × 5` — so under SkipHeights the two clocks are the same clock
+and no existing test could tell which one the gate read. The new test uses
+`GetContext`/`SetContext` to move time WITHOUT height, reproducing the live
+divergence directly: on the pre-conversion code it panics with the reported
+message, on the converted code the stranger is let in.
+
+**What the conversion cost, and what paid it back.** `graceboundary_test.gno`
+HALF TWO pinned this gate's `<` against `<=`. A stamped claim no longer reaches
+that comparison, so that coverage would have evaporated silently — the check
+suite caught it as a stale mutation anchor rather than as a test failure, because
+the test still passed for the wrong reason. Resolved by pinning each arm
+separately: the corpus row became two (exact second, exact block), and the new
+test's second half sits on the height edge with a zeroed stamp so the fallback
+keeps its own killer. **Converting a gate can silently retire the test that
+pinned it — check the mutation corpus, not just the suite.**
+
+Verified: full kourtv2 suite green; both new mutants compile and are killed; the
+polarity mutant is killed; `make anchors collisions staleguards guards` pass.
+`make height-shim` fails on `check-curation-reachable` (Set/ClearCourtImage not
+named by any web file) — confirmed pre-existing by re-running it on the
+unmodified tree, unrelated to the clock.

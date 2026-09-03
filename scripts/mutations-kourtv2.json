@@ -4547,9 +4547,16 @@
  {
   "pkg": "kourtv2",
   "file": "crystallize.gno",
-  "label": "Crystallize: the participant-only window is one block long at its edge",
-  "find": "if now < cs.verdictAt+finalizeGraceBlocks && !isParticipant(cs, who) {",
-  "replace": "if now <= cs.verdictAt+finalizeGraceBlocks && !isParticipant(cs, who) {"
+  "label": "Crystallize: the participant-only week ends on its exact second",
+  "find": "pastDeadline(cs.verdictAtTime, finalizeGraceSecs)",
+  "replace": "pastDeadline(cs.verdictAtTime, finalizeGraceSecs+1)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "crystallize.gno",
+  "label": "Crystallize: a pre-stamp claim's grace ends on its exact block",
+  "find": "(!known && now < cs.verdictAt+finalizeGraceBlocks)",
+  "replace": "(!known && now <= cs.verdictAt+finalizeGraceBlocks)"
  },
  {
   "pkg": "kourtv2",

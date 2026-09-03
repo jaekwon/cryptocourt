@@ -40,14 +40,18 @@ import (
 
 // Durations in seconds, each the wall-clock meaning its block constant was
 // chosen to express (at the 5s cadence those constants assumed).
-// ONLY THE TWO THAT ARE READ. Two more sat here for gates that never converted:
-// the qualified-answerer head start (still `priorityWindowBlocks`, see above) and
-// Finalize's participant-only week (still `finalizeGraceBlocks`, dispute.gno).
-// Both were dead the whole time, and a seconds constant nothing reads is worse
-// than absent — it asserts a deadline is wall-clock when the gate is height.
+// ONLY THE ONES THAT ARE READ, still — a seconds constant nothing reads is worse
+// than absent, because it asserts a deadline is wall-clock when the gate is
+// height. Each arrives in the same commit as the gate that reads it.
+// One remains unconverted: the qualified-answerer head start, still
+// `priorityWindowBlocks` (answer.gno).
 const (
 	settleSecs    = int64(72 * 3600)      // 72h: an undisputed answer settles
 	deadClaimSecs = int64(12 * 7 * 86400) // 12 weeks: an unanswered claim dies
+	// finalizeGraceSecs is the week Crystallize and Finalize stay
+	// participant-only. Read by crystallize.gno; dispute.gno's Finalize still
+	// counts blocks and converts next.
+	finalizeGraceSecs = int64(7 * 86400)
 )
 
 // nowTime is the block's timestamp in unix seconds — through the test-clock
