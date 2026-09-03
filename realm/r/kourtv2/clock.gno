@@ -3,20 +3,18 @@ package kourtv2
 // The two clocks, and which one governs what (owner ruling, v0.46).
 //
 // A PUBLISHED DEADLINE — the settle window, the reopen window, the dead-claim
-// timeout, the polish window — now gates on BLOCK TIME and is stored as a unix
-// timestamp. Heights are kept beside every one of them for reference, but they
-// no longer decide anything a user plans around. The reason is that a height
-// only means a date if the chain's pace never changes, and pace changes: a
-// halt, an upgrade, or a parameter tune silently re-times every deadline
+// timeout, the polish window, the participant-only week on both terminal paths,
+// the qualified-answerer head start — now gates on BLOCK TIME and is stored as
+// a unix timestamp. Heights are kept beside every one of them for reference, but
+// they no longer decide anything a user plans around. The reason is that a
+// height only means a date if the chain's pace never changes, and pace changes:
+// a halt, an upgrade, or a parameter tune silently re-times every deadline
 // denominated in blocks. A date does not move.
 //
-// THE QUALIFIED-ANSWERER HEAD START IS NOT IN THAT LIST, and this line is here
-// because it used to be. answer.gno gates it on `priorityWindowBlocks`, pure
-// height, and the seconds twin this file declared beside settleSecs was read by
-// nothing — so the list promised a conversion that had not happened. That is
-// not a harmless overstatement: someone planned a wall-clock test of the head
-// start from a txtar on the strength of it, and the test could not exist. If
-// the gate does move, put it back in the list and give it a constant then.
+// THE LIST IS LOAD-BEARING, so add to it only as each gate actually converts.
+// It once named the head start while answer.gno still counted blocks, and a
+// wall-clock test planned from a txtar on the strength of it could not be
+// written. An entry here is a promise about what the code does.
 //
 // An ACCOUNTING CLOCK stays on height, deliberately: conviction accrues per
 // block (rate × blocks), emission periods are counted in blocks, the coin's
@@ -43,8 +41,6 @@ import (
 // ONLY THE ONES THAT ARE READ, still — a seconds constant nothing reads is worse
 // than absent, because it asserts a deadline is wall-clock when the gate is
 // height. Each arrives in the same commit as the gate that reads it.
-// One remains unconverted: the qualified-answerer head start, still
-// `priorityWindowBlocks` (answer.gno).
 const (
 	settleSecs    = int64(72 * 3600)      // 72h: an undisputed answer settles
 	deadClaimSecs = int64(12 * 7 * 86400) // 12 weeks: an unanswered claim dies
@@ -52,6 +48,13 @@ const (
 	// participant-only. Read by both now — crystallize.gno from verdictAtTime,
 	// dispute.gno from escrowUntilAt.
 	finalizeGraceSecs = int64(7 * 86400)
+	// priorityWindowSecs is the qualified-answerer head start (answer.gno). It
+	// is the LAST term of a sum: the head start runs from the earliest moment a
+	// claim could have been answerable, which is the polish window plus the
+	// trailing ring's width after opening. Those two are block-denominated —
+	// one a court parameter, one the ring itself — so they convert at the call
+	// site through blocksToSecs while this term is a wall-clock promise outright.
+	priorityWindowSecs = int64(24 * 3600)
 )
 
 // nowTime is the block's timestamp in unix seconds — through the test-clock

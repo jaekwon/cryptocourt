@@ -65,8 +65,29 @@ func PostAnswer(cur realm, courtSlug string, claimID uint64, verdict int) {
 	// mature until staking opens. Without this the priority phase silently
 	// shrinks — and at the 24h maximum delay it would vanish entirely, since
 	// the delay cap equals priorityWindowBlocks. Default delay 0 → unchanged.
+	// The 24h IS 24H NOW, and the sum is what makes that safe to say. The anchor
+	// is deliberately a PROJECTION from opening — "the earliest the claim could
+	// have been answerable" — not the moment the ring actually matured, which is
+	// why the note above can call priority a perk rather than a guarantee. A
+	// projected age converts whole: the two block-denominated terms through
+	// blocksToSecs, as the polish window already does in stake.gno, and the head
+	// start as itself.
+	//
+	// WHAT THIS GIVES UP, stated because it is a real trade and not a free win:
+	// counted in blocks the window stretched with cadence, so a slow chain handed
+	// a late-maturing ring more room to mature inside the window. It no longer
+	// does. That is the same "may have no priority phase left" the design already
+	// accepts, now reached by a clock instead of by a block rate — and in exchange
+	// the head start is 24 hours on every chain rather than 24 hours only on one
+	// that holds 5s a block.
+	//
+	// answerWindow appears here as a DURATION, not as the trailing ring it is on
+	// line 49; that use is accounting and stays in blocks, untouched.
 	inPriority := false
-	if priorityGateActive(c) && now < cs.openedAt+c.params.stakeOpenDelayBlocks+answerWindow+priorityWindowBlocks {
+	if passed, known := pastDeadline(cs.openedAtTime,
+		blocksToSecs(c.params.stakeOpenDelayBlocks+answerWindow)+priorityWindowSecs); priorityGateActive(c) &&
+		((known && !passed) ||
+			(!known && now < cs.openedAt+c.params.stakeOpenDelayBlocks+answerWindow+priorityWindowBlocks)) {
 		if !mayAnswerInPriority(c, who) {
 			panic("kourtv2: the priority window is open — a qualified answerer may act first (wait ~24h)")
 		}

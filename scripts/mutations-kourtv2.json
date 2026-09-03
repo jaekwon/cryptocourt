@@ -4786,15 +4786,22 @@
   "pkg": "kourtv2",
   "file": "answer.gno",
   "label": "PostAnswer: the priority window never expires",
-  "find": "\tif priorityGateActive(c) && now < cs.openedAt+c.params.stakeOpenDelayBlocks+answerWindow+priorityWindowBlocks {",
-  "replace": "\tif priorityGateActive(c) {"
+  "find": "if passed, known := pastDeadline(cs.openedAtTime,\n\t\tblocksToSecs(c.params.stakeOpenDelayBlocks+answerWindow)+priorityWindowSecs); priorityGateActive(c) &&\n\t\t((known && !passed) ||\n\t\t\t(!known && now < cs.openedAt+c.params.stakeOpenDelayBlocks+answerWindow+priorityWindowBlocks)) {",
+  "replace": "if priorityGateActive(c) {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "answer.gno",
+  "label": "PostAnswer: the priority window ends on its exact second",
+  "find": "+priorityWindowSecs); priorityGateActive(c)",
+  "replace": "+priorityWindowSecs+1); priorityGateActive(c)"
  },
  {
   "pkg": "kourtv2",
   "file": "answer.gno",
   "label": "PostAnswer: the priority window binds before the cold-start gate arms",
-  "find": "\tif priorityGateActive(c) && now < cs.openedAt+c.params.stakeOpenDelayBlocks+answerWindow+priorityWindowBlocks {",
-  "replace": "\tif now < cs.openedAt+c.params.stakeOpenDelayBlocks+answerWindow+priorityWindowBlocks {"
+  "find": "priorityGateActive(c) &&\n\t\t((known && !passed) ||",
+  "replace": "((known && !passed) ||"
  },
  {
   "pkg": "kourtv2",

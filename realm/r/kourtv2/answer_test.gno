@@ -2,6 +2,7 @@ package kourtv2
 
 import (
 	"testing"
+	"time"
 
 	testutils "gno.land/p/nt/testutils/v0"
 	uassert "gno.land/p/nt/uassert/v0"
@@ -124,6 +125,98 @@ func TestPriorityWindowGates(cur realm, t *testing.T) {
 	PostAnswer(cross(cur), "an3", id2, sideNO)
 	if AnswerVerdict("an3", id2) != sideNO {
 		t.Fatal("past the window the answer slot is first-come")
+	}
+}
+
+// THE HEAD START IS 24 HOURS, WHICH IS NOT 17,280 BLOCKS.
+//
+// TestPriorityWindowGates above walks the window with SkipHeights, which moves
+// height and time together at exactly 5s a block, so it cannot say which clock
+// the gate read. It reads the wall clock now, and the window is a SUM: the polish
+// delay and the trailing ring's width — both block-denominated, converted at the
+// call site — plus the 24h head start itself.
+//
+// The sum is why this is pinned to its exact second rather than approximately.
+// An off-by-one in any term is an off-by-one in the deadline, and three terms
+// give three chances to get it wrong; asserting "refused a day in, allowed two
+// days in" would pass with any of them mis-added.
+func TestThePriorityWindowClosesOnWallClockNotOnBlocks(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("an9-alice")
+	pro := testutils.TestAddress("an9-pro")
+	c := testCourt(cur, "an9", alice, 50_000_000_000)
+	c.coin.Mint(pro, 10_000_000_000)
+	for _, a := range []address{pro, testutils.TestAddress("an9-q2"), testutils.TestAddress("an9-q3")} {
+		for i := 0; i < priorityNetRecord; i++ {
+			creditUpheld(c, a)
+		}
+	}
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "an9", "Priority on the clock")
+	matureOI(cur, "an9", id, alice, 200_000_000)
+
+	cs := mustClaim(c, id)
+	if cs.openedAtTime == 0 {
+		t.Fatal("fixture: no open stamp, so this would test the height fallback instead")
+	}
+	// The block arithmetic must still read "inside the window" throughout, or the
+	// wall clock is not what ends it and this test proves nothing.
+	blockEnd := cs.openedAt + c.params.stakeOpenDelayBlocks + answerWindow + priorityWindowBlocks
+	if heightNow() >= blockEnd {
+		t.Fatal("fixture: already past the window in blocks, nothing is being tested")
+	}
+
+	deadline := cs.openedAtTime +
+		blocksToSecs(c.params.stakeOpenDelayBlocks+answerWindow) + priorityWindowSecs
+	bumpTo := func(target int64) {
+		d := target - nowTime()
+		if d < 0 {
+			t.Fatalf("fixture: %d is already behind us (now %d)", target, nowTime())
+		}
+		ctx := testing.GetContext()
+		ctx.Time = ctx.Time.Add(time.Duration(d) * time.Second)
+		testing.SetContext(ctx)
+	}
+
+	// One second short: unqualified alice is still held off.
+	bumpTo(deadline - 1)
+	frozenH := heightNow()
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "priority window is open", func() {
+		PostAnswer(cross(cur), "an9", id, sideYES)
+	})
+
+	// The second itself: the head start is over and the slot is first-come, with
+	// no block mined between the two assertions.
+	bumpTo(deadline)
+	uassert.Equal(t, frozenH, heightNow())
+	uassert.True(t, heightNow() < blockEnd) // and blocks still say "inside"
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "an9", id, sideYES)
+	if AnswerVerdict("an9", id) != sideYES {
+		t.Fatal("past the window on the wall clock the answer slot is first-come")
+	}
+
+	// ---- AND A PRE-STAMP CLAIM STILL READS HEIGHT, TO ITS EXACT BLOCK ----
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id2 := OpenClaim(cross(cur), "an9", "A claim from before the stamps")
+	matureOI(cur, "an9", id2, alice, 200_000_000)
+	cs2 := mustClaim(c, id2)
+	cs2.openedAtTime = 0 // the pre-upgrade shape: a height, no stamp
+	target := cs2.openedAt + c.params.stakeOpenDelayBlocks + answerWindow + priorityWindowBlocks
+	if d := target - 1 - heightNow(); d > 0 {
+		testing.SkipHeights(d)
+	}
+	uassert.Equal(t, target-1, heightNow())
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "priority window is open", func() {
+		PostAnswer(cross(cur), "an9", id2, sideYES)
+	})
+	testing.SkipHeights(1)
+	uassert.Equal(t, target, heightNow())
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "an9", id2, sideYES)
+	if AnswerVerdict("an9", id2) != sideYES {
+		t.Fatal("a pre-stamp claim's window must still end on its exact block")
 	}
 }
 // TestQualityEpochPinnedAtAnswer went with the quality lane: there is no quality epoch to pin

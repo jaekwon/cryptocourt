@@ -1,6 +1,6 @@
 # Deadlines in seconds, accounting in blocks
 
-**Status:** in progress. 3 of 11 gates converted; see the log at the end.
+**Status:** in progress. 4 of 11 gates converted; see the log at the end.
 
 ## The problem, as observed
 
@@ -144,7 +144,7 @@ trailing ring; `pendingTTLBlocks` looks like accounting and is a deadline.
 | `crystallize.gno:46` | `finalizeGraceBlocks` after verdict | `verdictAtTime` | **converted — bug 2 fixed** |
 | `dispute.gno:652` | `finalizeGraceBlocks` after escrow | `escrowUntilAt` | **converted** |
 | `dispute.gno:101,649` | escrow window | `escrowUntilAt` | half — stamp path exists |
-| `answer.gno:69` | `stakeOpenDelay + answerWindow + priorityWindow`, summed | `openedAtTime` | unconverted — composite, converts as one duration |
+| `answer.gno:69` | `stakeOpenDelay + answerWindow + priorityWindow`, summed | `openedAtTime` | **converted** — as one duration |
 | `stake.gno:166` | `stakeOpenDelayBlocks` | `openedAtTime` | **converted** |
 | `moderation.gno:664,1187` | `pendingTTLBlocks` | needs a stamp | unconverted |
 | `moderation.gno:691` | `votingBlocks` after execute | needs a stamp | unconverted |
@@ -231,6 +231,46 @@ of 1.2M.
   as a one-off for legacy params only.
 
 ## Log
+
+### `answer.gno:69` — the qualified-answerer head start (the composite)
+
+Converted whole, from `openedAtTime`. `priorityWindowSecs = 24*3600` added to
+`clock.gno`, which had explicitly reserved the right to it: *"If the gate does
+move, put it back in the list and give it a constant then."* The header list and
+the constant block both updated, since the file had been documenting this gate as
+the one still counting blocks.
+
+**Why converting the whole sum is right, and not a units error.** Three terms:
+a court parameter, the trailing ring's width, and the 24h head start. The first
+two are block-denominated and go through `blocksToSecs` at the call site; only
+the third is a wall-clock promise. It looked at first like the anchor could not
+move — the ring matures in blocks, so a naive conversion would let the window
+expire before a claim was answerable at all, which is the exact bug the polish
+re-anchoring already fixed once. But the anchor is NOT actual maturity. The
+design comment says the window is keyed on claim AGE and runs from *"the earliest
+the claim could have been answerable"*, adding that *"priority is a perk, not a
+guarantee (a claim that matures late may have no priority phase left)"*. A
+projection from opening converts whole; actual maturity would not have.
+
+**What it gives up, recorded because it is a real trade.** In blocks the window
+stretched with cadence, so a slow chain handed a late-maturing ring more room
+inside the window. It no longer does — the same "may have no priority phase left"
+the design already accepts, now reached by a clock rather than by a block rate.
+In exchange the head start is 24 hours on every chain instead of on one holding
+5s a block.
+
+`answerWindow` is untouched as a constant. It appears at line 49 as the trailing
+ring (accounting, stays blocks) and at line 69 as a duration; only the second is
+converted, and at the call site.
+
+**A third distinct corpus outcome.** Site 1 had a stale row, site 3 had no rows;
+this one had TWO rows both anchored on the same line, plus no edge row. Both
+repointed, one edge row added, all five mutants (never-expires, binds-early,
+exact second, polarity, exact block) confirmed killed.
+
+Verified: full kourtv2 suite green; five mutants compile and are killed; the new
+test panics with the real message on the pre-conversion gate; `make anchors
+collisions staleguards guards` pass.
 
 ### `stake.gno:166` — the polish window, second half of a window already half-converted
 
