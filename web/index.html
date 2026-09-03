@@ -3544,6 +3544,16 @@ function ccFigure(n){ const u=n||0, v=u/1e6;
   return {fig:(v>=1000? fmtN(v): v.toFixed(v<10?2:1)), micro:false}; }
 function cc(n, slug){ const {fig,micro}=ccFigure(n);
   return fig+" "+(micro?"µ":"")+ccSymHtml(slug); }
+/* The time half of conviction's unit. convToCC divides the accumulator by
+   periodBlocks, which court.gno calls "1 week — the emission accounting
+   period", so what the page prints is coin × WEEKS and not coin.
+
+   ALREADY PINNED, so this needs no registration of its own: MIRRORS maps this
+   file's WEEK to the realm's periodBlocks, and WEEK is 120960 here. Move the
+   period and that mirror fails, which is the same edit that would strand this
+   label — so a second entry naming the same fact would be two guards owning
+   one invariant, and the one that drifts is the one nobody reruns. */
+const CONV_UNIT = "·wk";
 /* ONE UNIT FOR A ROW OF FIGURES. Four amounts each carrying "µKourt:COVID"
    spent four times the width to say the same thing once, and the repetition
    crowded out the numbers, which are the point. The unit goes after all of
@@ -10991,13 +11001,27 @@ function chartChips(d, slug){
        units under one label. */
     (() => {
       const cy = ccFigure(d.convYes), cn = ccFigure(d.convNo);
+      // THE UNIT CARRIES TIME, because the figure does. Conviction is
+      // Σ stake × Δ(rate × blocks), and convToCC divides by
+      // periodBlocks × 10000 × 1e6: the 10000×1e6 cancels the rate's
+      // fixed-point scale, but periodBlocks is a TIME normalisation, so what
+      // survives is coin × periods — and a period is one week
+      // (periodBlocks = 120,960). Labelling it "µKourt:COVID" alone said coin,
+      // which is a different quantity from the one printed: 3,718 here means
+      // 3,718 µ held for a week, or 7,436 µ held for half of one.
+      //
+      // Both figures take the suffix in the mixed-scale branch rather than one
+      // trailing copy governing the row, on the same grounds the shared-unit
+      // note above gives for falling back: busy and right beats tidy and wrong.
       const t = cy.micro === cn.micro
-        ? `conviction ${cy.fig} / ${cc(d.convNo, slug)}`
-        : `conviction ${cc(d.convYes, slug)} / ${cc(d.convNo, slug)}`;
+        ? `conviction ${cy.fig} / ${cc(d.convNo, slug)}${CONV_UNIT}`
+        : `conviction ${cc(d.convYes, slug)}${CONV_UNIT} / ${cc(d.convNo, slug)}${CONV_UNIT}`;
       return {t, title: "Conviction is stake multiplied by the time it was held"
-        + " — YES / NO. It is the weight the accuracy reward is shared out by,"
-        + " so it rewards backing the right answer early. The stake bar above"
-        + " shows the coin itself; this is that coin times how long it stayed."};
+        + " — YES / NO, in coin × weeks: 3,718 µ means 3,718 µ held for one"
+        + " week, or twice that held for half. It is the weight the accuracy"
+        + " reward is shared out by, so it rewards backing the right answer"
+        + " early. The stake bar above shows the coin itself; this is that coin"
+        + " times how long it stayed."};
     })(),
     d.round? `${d.round} failed round${d.round>1?"s":""}`:null,
     d.disputeBondNext? `next dispute bond ${cc(d.disputeBondNext,slug)}`:null,
