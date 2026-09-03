@@ -7,6 +7,85 @@ import (
 	uassert "gno.land/p/nt/uassert/v0"
 )
 
+// THE QUOTE IS THE PAYMENT, and the only way to know that is to collect it.
+//
+// DrawQuote exists so the page can say what "Open the rewards" is worth before
+// somebody presses it. A figure derived independently of the payment path is the
+// defect this realm has now had three times on deadlines — a read that
+// contradicts its own gate — so the assertion here is not "the quote looks
+// sensible" but "the quote equals what Crystallize then paid", compared against
+// DrawSlices after the fact.
+//
+// Not circular: DrawQuote is computed BEFORE the call, from the pre-crystallize
+// state, and DrawSlices reports what the write path actually stored.
+func TestTheDrawQuoteIsWhatCrystallizeThenPays(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("dqz-alice")
+	bob := testutils.TestAddress("dqz-bob")
+	c := testCourt(cur, "dqz", alice, 90_000_000_000)
+	c.coin.Mint(bob, 40_000_000_000)
+	id := settledClaim(cur, c, "dqz", alice, bob)
+
+	qw, qa, qan := DrawQuote("dqz", id)
+	if qw == 0 && qa == 0 && qan == 0 {
+		t.Fatal("fixture: a settled, uncrystallized claim must quote a draw, or " +
+			"this asserts nothing")
+	}
+
+	// A COURT THAT CAN ACTUALLY PAY. Without this the period budget is 0, the
+	// payment is 0, and "payment <= quote" holds against any quote at all —
+	// measured: halving DrawQuote survived that version of this test. One period
+	// of emission gives the reservoir something to grant, and then the two
+	// numbers can be compared for equality rather than for an inequality that
+	// zero satisfies.
+	testing.SkipHeights(periodBlocks)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	Crystallize(cross(cur), "dqz", id)
+	pw, pa, pan, _ := DrawSlices("dqz", id)
+	if pw+pa+pan == 0 {
+		t.Fatal("fixture: the court must be able to pay, or the comparison below " +
+			"is satisfied by zero")
+	}
+
+	// THE QUOTE IS A CEILING THE PAYMENT NEVER EXCEEDS. The quote is what the
+	// claim earned; the payment is that, clamped by the period budget and the
+	// junior reservoir, both of which belong to the court and neither of which a
+	// read may advance. So `payment <= quote` is the invariant, and a payment
+	// ABOVE the quote would mean the shared chain had drifted — which is the
+	// thing this test exists to catch.
+	uassert.True(t, pw <= qw)
+	uassert.True(t, pa <= qa)
+	uassert.True(t, pan <= qan)
+	// AND EQUAL when nothing clamped, which is this fixture: a quote that is
+	// merely "not too high" is satisfied by any understatement, so the useful
+	// assertion is that the reader was shown the figure they then received.
+	uassert.Equal(t, pw, qw)
+	uassert.Equal(t, pa, qa)
+	uassert.Equal(t, pan, qan)
+	// And the exclusions travel: an upheld answer pays its answerer, a seeded
+	// claim pays no author. Whatever the clamps did, a slice the quote called
+	// zero must not appear in the payment.
+	if qa == 0 && pa != 0 {
+		t.Fatalf("the payment invented an author slice the quote excluded: %d", pa)
+	}
+	if qan == 0 && pan != 0 {
+		t.Fatalf("the payment invented an answerer slice the quote excluded: %d", pan)
+	}
+
+	// AND IT GOES QUIET once there is nothing left to quote: after crystallize
+	// DrawSlices is the authority, and two answers to one question is what this
+	// read exists to avoid.
+	zw, za, zan := DrawQuote("dqz", id)
+	if zw != 0 || za != 0 || zan != 0 {
+		t.Fatalf("a crystallized claim must stop quoting: %d %d %d", zw, za, zan)
+	}
+	// A claim with no verdict has nothing to quote either.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	fresh := OpenClaim(cross(cur), "dqz", "no verdict, no quote")
+	if w, a, an := DrawQuote("dqz", fresh); w != 0 || a != 0 || an != 0 {
+		t.Fatalf("an unanswered claim must quote nothing: %d %d %d", w, a, an)
+	}
+}
+
 func TestCrystallizeMidHappyPathDrainsEscrow(cur realm, t *testing.T) {
 	alice := testutils.TestAddress("cz1-alice")
 	bob := testutils.TestAddress("cz1-bob")

@@ -3197,6 +3197,14 @@ async function claimDetail(slug,id){
       if(!d.draw){ const ds = await tup(`DrawSlices(${s},${i})`);
         d.draw = {w:ds[0], a:ds[1], ans:ds[2], carrot:ds[3]}; }
     }
+    /* WHAT "Open the rewards" IS WORTH, before anyone presses it. Until now the
+       button named an action and no amount, so the only way to learn the size of
+       the draw was to spend gas finding out. DrawQuote answers what the claim
+       EARNED; the court's reservoir line answers what can be paid right now, and
+       the two are deliberately separate numbers — the realm cannot quote the
+       second from a read without advancing emission, and a read may not. */
+    else if(ready){ const q = await tup(`DrawQuote(${s},${i})`).catch(()=>null);
+      if(q) d.quote = {w:q[0], a:q[1], ans:q[2]}; }
   }
   // phase for the demo-shaped views
   d.phase = d.closed?"closed": d.provClose?"provClose": d.settled?"settled": d.disputeOpen?"disputed": (d.provisional>=0?"provisional": d.answered?"answered":"open");
@@ -11279,7 +11287,18 @@ function stakeTicket(slug,id,d){
              the sample — and the sample is where this is seen without a wallet.
              The first version of the participant guard was written that way and
              silently guarded nothing. */
-          : `<span data-crys="1">` + btn("Open the rewards","Crystallize",{courtSlug:slug,claimID:id},"",
+          : (d.quote && (d.quote.w + d.quote.a + d.quote.ans) > 0
+              ? `<div class="line"><span class="l">Reward to open</span><span class="r">`
+                + cc(d.quote.w + d.quote.a + d.quote.ans, slug) + ccSym(slug)
+                + `</span></div>`
+                /* THE CLAIM'S FIGURE, NOT THE READER'S. Whoever presses this pays
+                   the gas and opens the draw for everyone; the slices then go to
+                   the winning stakers, the author and the answerer, and a reader
+                   with no stake collects none of it. Saying "your reward" here
+                   would be a promise to the wrong person. */
+                + `<div class="hint">What this claim has earned: the winning side's accuracy reward, the author's slice and the answerer's. Opening pays whoever is owed, not whoever presses. The court's reservoir caps what settles today.</div>`
+              : "")
+            + `<span data-crys="1">` + btn("Open the rewards","Crystallize",{courtSlug:slug,claimID:id},"",
                 "",null,null,null,
                 /* NO QUALITY QUESTION LEFT TO WAIT ON. This passed a reason when a
                    flag or counter window was open; both are gone, and the only
@@ -11554,11 +11573,35 @@ function resolutionLadder(d, nowH, tl, narrow, bare){
        closes — while the notice above said "a dispute is under way". A reader
        had to infer the dispute from the existence of a vote, on the one surface
        whose whole job is to say what has happened.
-       Dateless, for the reason the failed rounds are: clock.gno stamps a round's
-       opening nowhere, so this carries an em-dash rather than a projection.
-       Sorted after the failed rounds, which is when it opened. */
-    if(d.phase==="disputed") rows.push({t:nowT-0.4, nodate:true,
-      what:`dispute opened · round ${(d.round||0)+1}`});
+       DATED NOW, and the comment that used to sit here said why it could not be:
+       "clock.gno stamps a round's opening nowhere". That stopped being true when
+       ClaimTimeline began publishing `dispute:<unix>:<height>` from
+       disputeOpenedTime (dispute.gno) — the stamp was there and this row went on
+       drawing an em-dash beside it. A dateless row on the surface whose whole job
+       is to say WHEN things happened is a hole a reader cannot tell from "the
+       chain does not know".
+       The em-dash survives for a round opened before that stamp existed, where
+       the chain genuinely does not know; sorted just after the failed rounds
+       either way, which is when it opened. */
+    if(d.phase==="disputed"){
+      const dt = tl.dispute && tl.dispute.t ? tl.dispute.t : null;
+      rows.push(dt
+        ? {t:dt, h:(tl.dispute.h||null), what:`dispute opened · round ${(d.round||0)+1}`}
+        : {t:nowT-0.4, nodate:true, what:`dispute opened · round ${(d.round||0)+1}`});
+    }
+    /* THE CLOSE IS PUBLISHED NOW, so it is not estimated. ClaimTimeline carries
+       `voteclose:<unix>:<height>` — the moment the governor actually gates on —
+       and using it removes the projection that put this row five years out on a
+       claim answered in 2021: the old line derived the date from a height at an
+       assumed cadence, which is only right while the chain holds that pace.
+       The estimate stays as the fallback for a dispute opened before the stamps
+       existed, where a height is genuinely all there is; `est` marks which. */
+    if(tl.voteclose && tl.voteclose.t)
+      rows.push({h:tl.voteclose.h, t:tl.voteclose.t,
+        what:`vote closes · round ${(d.round||0)+1}`, future:true});
+    else if(d.voteEndsAt && nowH!=null)
+      rows.push({h:d.voteEndsAt, t:nowT+(d.voteEndsAt-nowH)*BLOCK_SECS,
+        what:`vote closes · round ${(d.round||0)+1}`, future:true, est:true});
     /* THE CLOSE IS PUBLISHED NOW, so it is not estimated. ClaimTimeline carries
        `voteclose:<unix>:<height>` — the moment the governor actually gates on —
        and using it removes the projection that put this row five years out on a

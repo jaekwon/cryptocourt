@@ -585,22 +585,29 @@
   "pkg": "kourtv2",
   "file": "crystallize.gno",
   "label": "P7: winners take the whole draw (the section 3.5 'fix')",
-  "find": "\tcs.drawWinners = d * splitWinners / (splitWinners + splitAuthor + splitAnswerer)",
-  "replace": "\tcs.drawWinners = d"
+  "find": "\twinners = d * splitWinners / (splitWinners + splitAuthor + splitAnswerer)",
+  "replace": "\twinners = d"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "crystallize.gno",
+  "label": "DrawQuote: the quote is not the entitlement the payment path computes",
+  "find": "\treturn drawSplit(cs, drawEntitlement(c, cs, midGross))",
+  "replace": "\treturn drawSplit(cs, drawEntitlement(c, cs, midGross)/2)"
  },
  {
   "pkg": "kourtv2",
   "file": "crystallize.gno",
   "label": "P7: the author slice is not paid",
-  "find": "\tcs.drawAuthor = d * splitAuthor / (splitWinners + splitAuthor + splitAnswerer)",
-  "replace": "\tcs.drawAuthor = 0"
+  "find": "\tauthor = d * splitAuthor / (splitWinners + splitAuthor + splitAnswerer)",
+  "replace": "\tauthor = 0"
  },
  {
   "pkg": "kourtv2",
   "file": "crystallize.gno",
   "label": "P7: the answerer slice is not paid",
-  "find": "\tcs.drawAnswerer = d * splitAnswerer / (splitWinners + splitAuthor + splitAnswerer)",
-  "replace": "\tcs.drawAnswerer = 0"
+  "find": "\tanswerer = d * splitAnswerer / (splitWinners + splitAuthor + splitAnswerer)",
+  "replace": "\tanswerer = 0"
  },
  {
   "pkg": "kourtv2",
@@ -5626,15 +5633,15 @@
   "pkg": "kourtv2",
   "file": "crystallize.gno",
   "label": "crystallize: the answerer slice is zeroed on the STANDING path instead of the overturn",
-  "find": "\tif int(cs.provisional) != int(cs.answer) {\n\t\tcs.drawAnswerer = 0",
-  "replace": "\tif int(cs.provisional) == int(cs.answer) {\n\t\tcs.drawAnswerer = 0"
+  "find": "\tif int(cs.provisional) != int(cs.answer) {\n\t\tanswerer = 0",
+  "replace": "\tif int(cs.provisional) == int(cs.answer) {\n\t\tanswerer = 0"
  },
  {
   "pkg": "kourtv2",
   "file": "crystallize.gno",
   "label": "crystallize: the author slice is zeroed for every UNSEEDED claim",
-  "find": "\tif cs.seeded {\n\t\tcs.drawAuthor = 0",
-  "replace": "\tif !cs.seeded {\n\t\tcs.drawAuthor = 0"
+  "find": "\tif cs.seeded {\n\t\tauthor = 0",
+  "replace": "\tif !cs.seeded {\n\t\tauthor = 0"
  },
  {
   "pkg": "kourtv2",

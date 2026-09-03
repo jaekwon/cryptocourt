@@ -105,96 +105,9 @@ func Crystallize(cur realm, courtSlug string, claimID uint64) {
 	//
 	// Floored twice, once per step, which is conservative in the only direction
 	// that matters: the draw is never rounded up.
-	tierBps := tierBpsFor(cs)
-	want := mulDiv128(midGross, tierBps, tierParBps)
-	want = mulDiv128(want, spamNetBps(cs), tierParBps)
-	// DRAW CAP: the claim may not mint more than the answer bond collateralized.
-	//
-	// WHY. A sniper stakes dust on one side, declares it, and lets 72h of silence
-	// settle: the opposing pool's whole draw is annihilated while the bond returns
-	// whole. What that costs the attacker is bounded by the bond; what it destroys
-	// is bounded by tier × midGross. So the ratio destroyed/posted — the only
-	// well-defined leverage here, since on every realized path either destruction
-	// or forfeiture is zero — is (tier + carrot)/(bondFloorConvBps/1e4). That is
-	// 1.07/1.6 = 0.669 at MID but 2.07/1.6 = 1.294 at HIGH, i.e. sniping an
-	// exceptional claim PAYS. Measured 1.2937 end to end.
-	//
-	// The alternative was to freeze the tier the floor was sized against. It is
-	// strictly dominated: because answerBond0 >= 1.6·mg always, capd >= 1.53·mg,
-	// so the cap never pays less than 1.53×mg where the freeze always pays 1×mg —
-	// the freeze is this cap evaluated at the extremal and then applied
-	// everywhere, abolishing the HIGH premium (0% kept) where the cap keeps 53%.
-	// A stored frozen-tier field would also be dead state: slashSizeAt has no tier
-	// factor, so the value is tierMidX on every claim.
-	//
-	// STANDING ANSWERS ONLY, and this gate is load-bearing rather than tidy. The
-	// leverage above compares what a snipe destroys against what the sniper
-	// FORFEITS, and on an overturn the bond has already burned in full
-	// (dispute.gno, A19) — the collateral premise is satisfied by the forfeiture,
-	// so there is nothing left for a cap to bound. Capping there would instead cut
-	// the vindicated majority's draw to pay for an attack that already failed, and
-	// it is the one path where the floor carries no information about the winning
-	// pool: the floor keys on the ANSWERED side, which on an overturn is the losing
-	// side. Measured on a dust-answered overturn, the floor delivered 40% of the
-	// 1.6·mg_win it is casually assumed to give.
-	//
-	// INERT ON THE PUBLISHED RATE. Two regimes, and BOTH are needed — an earlier
-	// version of this comment gave only the first and was therefore wrong about the
-	// shipped tree:
-	//
-	//   floor binds (mg_max >= answerBondBps/bondFloorConvBps·X̄):
-	//     capd >= (1.60 - 0.07)·mg_win = 1.53·mg_win > want. Carries no X̄, no age,
-	//     no rate, no bond level — this is the post-re-keying guarantee.
-	//   base arm binds (mg_max below that):
-	//     capd >= answerBondBps·X̄ - 0.07·mg_max, and mg_max is small by assumption,
-	//     so the slack is answerBondBps·X̄ minus a fraction of something smaller.
-	//     At 600 bps: 573 bps·X̄ against a want under 375 bps·X̄.
-	//
-	// On the CURRENT tree it is the second regime that carries it — the 5000 bps
-	// base arm against maxMidGrossBps, measured at 2.42× margin. That is a
-	// calibration, not a proof — exactly what court.gno's own "CALIBRATION, NOT A
-	// SAFETY PROOF" note says of the neighbouring draw-arm check. **So the bond constant must not drop to 600 before
-	// the floor is re-keyed to max over both sides. The two deploy
-	// interlocks ("answer bond below the undisputed-extraction bound" and "the draw
-	// arm exceeds the base bond") force that change to be deliberate, but they do
-	// not force the two halves into one commit, and this cap is a third reason they
-	// must be.**
-	//
-	// Do NOT lower crystallize.gno's AnswererBonus cap or capBonus to match:
-	// lowering this arm alone can only make those LESS binding, and lowering them
-	// independently strands coin.
-	if int(cs.provisional) == int(cs.answer) {
-		if capd := cs.answerBond0 - mulDiv128(midGross, splitCarrot, 100); want > capd {
-			want = capd
-			if want < 0 {
-				want = 0
-			}
-		}
-	}
-	if want > c.curPeriodBudget {
-		want = c.curPeriodBudget
-	}
+	want := drawWant(c, cs, midGross)
 	d := reserveJunior(c, want)
-	cs.drawWinners = d * splitWinners / (splitWinners + splitAuthor + splitAnswerer)
-	cs.drawAuthor = d * splitAuthor / (splitWinners + splitAuthor + splitAnswerer)
-	cs.drawAnswerer = d * splitAnswerer / (splitWinners + splitAuthor + splitAnswerer)
-	// An OVERTURNED answer never stood — the answerer was adjudicated wrong
-	// (bond burned in full, record reset). They draw NO answerer slice, mirroring
-	// the author slice's winning-side gate and PLAN Appendix B's overturn example
-	// (audit-final MED). The unclaimed points stay unminted — conservative, under
-	// the ceiling. The undisputed and upheld paths set provisional == answer, so
-	// a standing answer is paid as before.
-	if int(cs.provisional) != int(cs.answer) {
-		cs.drawAnswerer = 0
-	}
-	// I5 (MODERATION.md §8): a moderator-SEEDED claim never pays an author
-	// slice. Seeding waives the CC deposit/fee to bootstrap a young court, and
-	// the author slice staying unminted is what proves seeding is uncompensated
-	// work — the securities-relevant fact, and it keeps the waiver un-farmable.
-	// The points stay unminted (conservative, under the ceiling).
-	if cs.seeded {
-		cs.drawAuthor = 0
-	}
+	cs.drawWinners, cs.drawAuthor, cs.drawAnswerer = drawSplit(cs, d)
 	// THE AUTHOR'S STANDING CREDIT IS GONE, and it is worth saying why rather
 	// than leaving a hole. It paid only at tier HIGH — "a default MID is what an
 	// unlooked-at claim gets, and crediting that is the author-mill's habitat"
@@ -511,6 +424,156 @@ func div128(hi, lo uint64, den int64) int64 {
 
 func Crystallized(courtSlug string, claimID uint64) bool {
 	return mustClaim(mustCourt(courtSlug), claimID).crystallized
+}
+
+// drawWant is the draw a claim ASKS for, before the reservoir is consulted.
+//
+// A FUNCTION SO THE QUOTE AND THE PAYMENT CANNOT DISAGREE. DrawQuote below shows
+// a reader what pressing "Open the rewards" will pay, and a page deriving that
+// figure independently is the same defect as a page deriving a deadline
+// independently — which this realm has had three times. One computation, two
+// callers, and the cap's reasoning moved here with it, unchanged.
+func drawEntitlement(c *Court, cs *claimState, midGross int64) int64 {
+	tierBps := tierBpsFor(cs)
+	want := mulDiv128(midGross, tierBps, tierParBps)
+	want = mulDiv128(want, spamNetBps(cs), tierParBps)
+	// DRAW CAP: the claim may not mint more than the answer bond collateralized.
+	//
+	// WHY. A sniper stakes dust on one side, declares it, and lets 72h of silence
+	// settle: the opposing pool's whole draw is annihilated while the bond returns
+	// whole. What that costs the attacker is bounded by the bond; what it destroys
+	// is bounded by tier × midGross. So the ratio destroyed/posted — the only
+	// well-defined leverage here, since on every realized path either destruction
+	// or forfeiture is zero — is (tier + carrot)/(bondFloorConvBps/1e4). That is
+	// 1.07/1.6 = 0.669 at MID but 2.07/1.6 = 1.294 at HIGH, i.e. sniping an
+	// exceptional claim PAYS. Measured 1.2937 end to end.
+	//
+	// The alternative was to freeze the tier the floor was sized against. It is
+	// strictly dominated: because answerBond0 >= 1.6·mg always, capd >= 1.53·mg,
+	// so the cap never pays less than 1.53×mg where the freeze always pays 1×mg —
+	// the freeze is this cap evaluated at the extremal and then applied
+	// everywhere, abolishing the HIGH premium (0% kept) where the cap keeps 53%.
+	// A stored frozen-tier field would also be dead state: slashSizeAt has no tier
+	// factor, so the value is tierMidX on every claim.
+	//
+	// STANDING ANSWERS ONLY, and this gate is load-bearing rather than tidy. The
+	// leverage above compares what a snipe destroys against what the sniper
+	// FORFEITS, and on an overturn the bond has already burned in full
+	// (dispute.gno, A19) — the collateral premise is satisfied by the forfeiture,
+	// so there is nothing left for a cap to bound. Capping there would instead cut
+	// the vindicated majority's draw to pay for an attack that already failed, and
+	// it is the one path where the floor carries no information about the winning
+	// pool: the floor keys on the ANSWERED side, which on an overturn is the losing
+	// side. Measured on a dust-answered overturn, the floor delivered 40% of the
+	// 1.6·mg_win it is casually assumed to give.
+	//
+	// INERT ON THE PUBLISHED RATE. Two regimes, and BOTH are needed — an earlier
+	// version of this comment gave only the first and was therefore wrong about the
+	// shipped tree:
+	//
+	//   floor binds (mg_max >= answerBondBps/bondFloorConvBps·X̄):
+	//     capd >= (1.60 - 0.07)·mg_win = 1.53·mg_win > want. Carries no X̄, no age,
+	//     no rate, no bond level — this is the post-re-keying guarantee.
+	//   base arm binds (mg_max below that):
+	//     capd >= answerBondBps·X̄ - 0.07·mg_max, and mg_max is small by assumption,
+	//     so the slack is answerBondBps·X̄ minus a fraction of something smaller.
+	//     At 600 bps: 573 bps·X̄ against a want under 375 bps·X̄.
+	//
+	// On the CURRENT tree it is the second regime that carries it — the 5000 bps
+	// base arm against maxMidGrossBps, measured at 2.42× margin. That is a
+	// calibration, not a proof — exactly what court.gno's own "CALIBRATION, NOT A
+	// SAFETY PROOF" note says of the neighbouring draw-arm check. **So the bond constant must not drop to 600 before
+	// the floor is re-keyed to max over both sides. The two deploy
+	// interlocks ("answer bond below the undisputed-extraction bound" and "the draw
+	// arm exceeds the base bond") force that change to be deliberate, but they do
+	// not force the two halves into one commit, and this cap is a third reason they
+	// must be.**
+	//
+	// Do NOT lower crystallize.gno's AnswererBonus cap or capBonus to match:
+	// lowering this arm alone can only make those LESS binding, and lowering them
+	// independently strands coin.
+	if int(cs.provisional) == int(cs.answer) {
+		if capd := cs.answerBond0 - mulDiv128(midGross, splitCarrot, 100); want > capd {
+			want = capd
+			if want < 0 {
+				want = 0
+			}
+		}
+	}
+	return want
+}
+
+// drawWant is drawEntitlement clamped by what this period may still mint. The
+// clamp lives HERE and not in the entitlement because it is a property of the
+// court's emission schedule at the moment of payment, not of what the claim
+// earned — and DrawQuote must not pretend to know the first.
+func drawWant(c *Court, cs *claimState, midGross int64) int64 {
+	want := drawEntitlement(c, cs, midGross)
+	if want > c.curPeriodBudget {
+		want = c.curPeriodBudget
+	}
+	return want
+}
+
+// drawSplit cuts a granted draw into its three slices. Shared with DrawQuote for
+// the same reason as drawWant: the figure a reader is shown and the figure they
+// are paid have to come from one place. The two exclusions and their reasoning
+// travel with it.
+func drawSplit(cs *claimState, d int64) (winners, author, answerer int64) {
+	winners = d * splitWinners / (splitWinners + splitAuthor + splitAnswerer)
+	author = d * splitAuthor / (splitWinners + splitAuthor + splitAnswerer)
+	answerer = d * splitAnswerer / (splitWinners + splitAuthor + splitAnswerer)
+	// An OVERTURNED answer never stood — the answerer was adjudicated wrong
+	// (bond burned in full, record reset). They draw NO answerer slice, mirroring
+	// the author slice's winning-side gate and PLAN Appendix B's overturn example
+	// (audit-final MED). The unclaimed points stay unminted — conservative, under
+	// the ceiling. The undisputed and upheld paths set provisional == answer, so
+	// a standing answer is paid as before.
+	if int(cs.provisional) != int(cs.answer) {
+		answerer = 0
+	}
+	// I5 (MODERATION.md §8): a moderator-SEEDED claim never pays an author
+	// slice. Seeding waives the CC deposit/fee to bootstrap a young court, and
+	// the author slice staying unminted is what proves seeding is uncompensated
+	// work — the securities-relevant fact, and it keeps the waiver un-farmable.
+	// The points stay unminted (conservative, under the ceiling).
+	if cs.seeded {
+		author = 0
+	}
+	return winners, author, answerer
+}
+
+// DrawQuote is what Crystallize would pay if it ran now: the three slices, in CC.
+//
+// (0,0,0) on a claim with no final verdict or one already crystallized — in the
+// second case DrawSlices holds the real figures, and answering here too would
+// only invite a reader to compare two answers to one question.
+//
+// WHAT THE CLAIM EARNED, and the payment can only be this or less. The two
+// clamps left off are the court's, not the claim's: the period budget and the
+// junior reservoir are both advanced by touch(), which reserveJunior calls and a
+// READ MAY NOT (check-read-purity — a read that mutated would let the first
+// caller change what the second sees). Quoting them untouched reports 0 on a
+// court nobody has poked this period, which is worse than not quoting them: a
+// page would tell a reader their reward is nothing when it is not.
+//
+// So this answers "what has this claim earned", and the reservoir figure the
+// court page already shows answers "what can be paid out right now". Two honest
+// numbers beat one dishonest one, and the tier/spam/bond chain that decides the
+// first is shared with the payment path so it cannot drift.
+func DrawQuote(courtSlug string, claimID uint64) (winners, author, answerer int64) {
+	c := mustCourt(courtSlug)
+	cs := mustClaim(c, claimID)
+	if cs.verdictAt == 0 || cs.crystallized || cs.provisional < 0 {
+		return 0, 0, 0
+	}
+	var midGross int64
+	if cs.provisional == sideYES {
+		midGross = convToCC(cs.yesConvHi, cs.yesConvLo)
+	} else {
+		midGross = convToCC(cs.noConvHi, cs.noConvLo)
+	}
+	return drawSplit(cs, drawEntitlement(c, cs, midGross))
 }
 
 // DrawSlices reads the crystallized slice budgets (winners, author, answerer)

@@ -261,8 +261,25 @@ ok("the unexposed-close note names its round too", L3n.includes("round 2 is voti
      happened. Dateless for the same reason the failed rounds are. */
   ok("dated ladder: the dispute has a rung of its own",
      L.includes("dispute opened · round 3"));
-  ok("dated ladder: ...dateless, like every other round event",
+  /* DATELESS ONLY WHEN THE CHAIN IS. This tl carries no `dispute` key, which is
+     a round opened before ClaimTimeline published one — there the em-dash is the
+     honest answer. The stamped case is below, and it is the common one now. */
+  ok("dated ladder: ...dateless when the chain published no dispute stamp",
      /dispute opened · round 3<\/div><div class="dt"[^>]*>—<\/div>/.test(L));
+  {
+    const stamped = Object.assign({}, tl, {dispute:{t:T0-500000, h:2500}});
+    const S = resolutionLadder(D, NOW, stamped);
+    ok("dated ladder: a published dispute stamp is drawn as a date, not an em-dash",
+       S.includes(stampDate(T0-500000))
+       && !/dispute opened · round 3<\/div><div class="dt"[^>]*>—<\/div>/.test(S));
+    /* A DATED ROW SORTS BY ITS DATE, which is the whole point of dating it —
+       so it lands between the events it happened between, not in the pseudo-time
+       slot the dateless row occupies just before "now". Asserting the old
+       ordering here would be asserting that the date is ignored. */
+    ok("dated ladder: ...and it sorts by that date, after the answer",
+       S.indexOf("answered") < S.indexOf("dispute opened")
+       && S.indexOf("dispute opened") < S.indexOf(">now<"));
+  }
   ok("dated ladder: ...after the rounds that failed, before now",
      L.indexOf("failed rounds") < L.indexOf("dispute opened")
      && L.indexOf("dispute opened") < L.indexOf(">now<"));
