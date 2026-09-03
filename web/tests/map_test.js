@@ -1011,19 +1011,72 @@ ok("controls present", ["mt-titles","mt-ids","mz-in","mz-out","mz-fit","mz-slide
      return id1 && t1 && t1.y===id1.y && t1.x > id1.x; })());
   ok("the id is not a .mtitle, so a zoomed-out map is still labelled",
      rowOf(1,"mid").length===1 && !rowOf(1,"mtitle").some(t=>t.t.startsWith("#")));
-  // The node reads "<phase>: <side>" for every phase that has a side — the
-  // same shape as the pill. It used to say "verdict: NO" here while its own
-  // pill said "settled NO".
-  ok("a settled-NO node states its verdict",
-     rowOf(1,"mverdict").map(t=>t.t).includes("settled: NO"));
-  ok("a settled-YES node states its verdict",
-     rowOf(2,"mverdict").map(t=>t.t).includes("settled: YES"));
-  ok("an open node says open, and claims no verdict",
-     rowOf(3,"mverdict").map(t=>t.t).join("")==="open");
-  ok("the verdict line is right-adjusted, below the title", (()=>{
-     const v=rowOf(1,"mverdict")[0], id1=rowOf(1,"mid")[0];
-     return v && v.y > id1.y && /text-anchor="end"/.test(
-       svgT.slice(svgT.indexOf('>verdict: NO<')-260, svgT.indexOf('>verdict: NO<'))); })());
+  /* A DECIDED NODE WEARS THE OVAL THE CLAIM TITLE WEARS, and is struck through
+     when the court ruled NO. The row used to read "settled: NO" in words: the
+     phase, which the dot four pixels along the same row already encodes, and the
+     side, in the secondary ink. The claim page had already stopped doing this —
+     its title carries the side in a .sidetag and is struck on a NO, and the
+     "SETTLED · UNDISPUTED" pill beside it was removed for saying the same thing
+     twice — so this is the map catching up with its own claim page.
+     An unknown side keeps the words, and that arm is asserted below rather than
+     here, because it is the reason the branch is a side test and not a phase
+     test. */
+  const ovalOf = (svg,id) =>
+    (new RegExp(`<rect class="mvtag ([yn])"[^>]*data-owner="c${id}"`).exec(svg)||[])[1];
+  const strikesOf = (svg,id) =>
+    [...svg.matchAll(new RegExp(`<line class="mstrike"[^>]*data-owner="c${id}"`,"g"))].length;
+  ok("a settled-NO node wears the NO oval", ovalOf(svgT,1)==="n");
+  ok("a settled-YES node wears the YES oval", ovalOf(svgT,2)==="y");
+  ok("...and the word inside it is the side, in the side's own hue class",
+     /<text class="mtext mvt n"[^>]*data-owner="c1">NO<\/text>/.test(svgT)
+     && /<text class="mtext mvt y"[^>]*data-owner="c2">YES<\/text>/.test(svgT));
+  ok("the phase word is gone from a decided node's row",
+     !rowOf(1,"mverdict").length && !rowOf(2,"mverdict").length
+     && !/settled: /.test(svgT));
+  ok("an open node says open, wears no oval, and claims no verdict",
+     rowOf(3,"mverdict").map(t=>t.t).join("")==="open" && ovalOf(svgT,3)===undefined);
+  ok("a settled claim of unknown side keeps the words rather than an empty oval",
+     (()=>{
+       const u = JSON.parse(JSON.stringify(d));
+       u.claims[1].statusText = "settled — every stake withdraws 1×";
+       const s = mapSvg(mapLayout(u,"titles"), u, "covid");
+       return ovalOf(s,1)===undefined && strikesOf(s,1)===0
+         && textsOf(s).filter(t=>t.id===1&&t.cls==="mverdict").map(t=>t.t).join("")==="settled";
+     })());
+  /* THE OVAL SITS WHERE THE VERDICT LINE SAT: below the title, hard against the
+     node's right padding. Read off the rect rather than the text, because the
+     rect is the mark a reader sees the position of — and its right edge is the
+     one thing that ties it to the row it replaced. */
+  ok("the oval closes the node, right-adjusted below the title", (()=>{
+     const m=/<rect class="mvtag n" x="([\d.]+)" y="([\d.]+)" width="([\d.]+)" height="([\d.]+)" rx="([\d.]+)" data-owner="c1"/.exec(svgT);
+     const id1=rowOf(1,"mid")[0], box=parseSVG(svgT).rects.find(r=>r.cls==="mnode"&&r.ref==="1");
+     if(!m||!id1||!box) return false;
+     const x=+m[1], y=+m[2], w=+m[3], h=+m[4], rx=+m[5];
+     return y > id1.y                            // below the id's line
+       && Math.abs((x+w)-(box.x+box.w-8))<0.15   // MAPK.tpad off the right edge
+       && x > box.x && y+h <= box.y+box.h+0.51   // and inside its own node
+       && Math.abs(rx-h/2)<0.06;                 // a pill, not a rounded box
+  })());
+  ok("the court strikes the sentence it ruled against", strikesOf(svgT,1)>=1);
+  ok("...and never a YES it agreed with", strikesOf(svgT,2)===0);
+  ok("...nor a claim it has not decided", strikesOf(svgT,3)===0);
+  ok("the strike starts where the sentence starts, not at the id", (()=>{
+     const m=/<line class="mstrike" x1="([\d.]+)" y1="([\d.]+)" x2="([\d.]+)" y2="([\d.]+)" data-owner="c1"/.exec(svgT);
+     const t1=rowOf(1,"mtitle")[0], id1=rowOf(1,"mid")[0];
+     if(!m||!t1||!id1) return false;
+     const x1=+m[1], y1=+m[2], x2=+m[3], y2=+m[4];
+     return x1 > id1.x && Math.abs(x1-t1.x)<0.15  // at the title's own left edge
+       && y1===y2 && y1 < t1.y && t1.y-y1 < 12    // a rule, through the x-height
+       && x2 > x1;
+  })());
+  ok("every line of a struck title is struck", (()=>{
+     const u = JSON.parse(JSON.stringify(d));
+     u.claims[1].title = "The virus circulated in more than one country well before "
+       + "the first cluster was described, and the record of that is now public.";
+     const s = mapSvg(mapLayout(u,"titles"), u, "covid");
+     const lines = textsOf(s).filter(t=>t.id===1&&t.cls==="mtitle");
+     return lines.length>=3 && strikesOf(s,1)===lines.length;
+  })());
   /* THE ID IS SLICED OFF LINE 0 to draw it separately, which assumes line 0 starts
      with it. mapWrapTitle guarantees that — "#1" always fits alone, so a first word
      too long to join it pushes the WORD down, never the id — but the assumption is

@@ -78,6 +78,86 @@ const {PAGE, demoPage} = require('./harness');
      `shapes=${m.shapes} texts=${m.texts}`);
   ok("...and the nodes are labelled", (m.texts || 0) >= 1, `texts=${m.texts}`);
 
+  /* THE VERDICT'S MARKS, PAINTED. A settled claim's node wears the oval the claim
+     title wears and is struck through when the court ruled NO, and both of those
+     are things web/tests/map_test.js can only read as strings: under node there
+     is no stylesheet, so a hue that resolves to nothing and a rule the browser
+     declines to draw both read as present there.
+     RENDERED FROM A FIXTURE, not found on the demo map, because the demo court's
+     one settled claim is a YES (`phase:"settled", verdict:0`) — so no strike
+     exists on any page this check could navigate to, and the CSS for it would
+     ship unexercised. The fixture is map_test.js's, and it is appended INSIDE
+     .mapwrap so the map's own rules apply to it exactly as they do to the real
+     one.
+     Ablated, and each fires on the arm named: dropping `stroke` from .mstrike
+     leaves it `none` — SVG's initial value, so the rule is not merely the wrong
+     colour, there is no line at all — and fails the hue arm; giving .mvtag a
+     fill fails the hairline arm; adding .mvtag to the `far` rule fails the
+     zoomed-out arm; striking from the node's padding instead of the title's
+     offset fails the crosses-the-sentence arm at x, 16px short. */
+  const v = await page.evaluate(() => {
+    try {
+      const st = t => t + " — every stake withdraws 1×";
+      const d = {folders: [{name: "F", claims: [1, 2, 3], folders: [], path: "0"}], all: [1, 2, 3],
+                 claims: {1: {title: "The record does not bear this out.", statusText: st("settled NO")},
+                          2: {title: "Settled for.", statusText: st("settled YES")},
+                          3: {title: "Still open.", statusText: "open — stake YES or NO"}},
+                 relations: [], courtName: "C", linkFolders: true};
+      const host = document.createElement('div');
+      host.innerHTML = mapSvg(mapLayout(d, "titles"), d, "covid");
+      document.querySelector('.mapwrap').appendChild(host);
+      const svg = host.querySelector('svg.mapsvg');
+      const q = s => svg.querySelector(s);
+      const line = q('line.mstrike[data-owner="c1"]'), ring = q('rect.mvtag[data-owner="c1"]');
+      const word = q('text.mvt[data-owner="c1"]'), ttl = q('text.mtitle[data-owner="c1"]');
+      // The tokens resolved by the page, not copied into this file: a hue
+      // written here would pass after somebody changes --no.
+      const probe = t => { const p = document.createElement('span');
+        p.style.color = "var(" + t + ")"; document.body.appendChild(p);
+        const c = getComputedStyle(p).color; p.remove(); return c; };
+      const box = e => { const b = e.getBBox(); return {x: b.x, y: b.y, w: b.width, h: b.height}; };
+      const out = {no: probe("--no"), yes: probe("--yes"), found: !!(line && ring && word && ttl)};
+      if (out.found) {
+        out.line = {stroke: getComputedStyle(line).stroke, display: getComputedStyle(line).display,
+                    ...box(line)};
+        out.ring = {stroke: getComputedStyle(ring).stroke, fill: getComputedStyle(ring).fill};
+        out.word = {fill: getComputedStyle(word).fill, t: word.textContent};
+        out.ttl = box(ttl);
+        out.yesRing = getComputedStyle(q('rect.mvtag[data-owner="c2"]')).stroke;
+        out.strikesOnYes = svg.querySelectorAll('line.mstrike[data-owner="c2"]').length;
+        // What survives the zoomed-out view, which hides the sentences.
+        svg.classList.add('far');
+        out.far = {strike: getComputedStyle(line).display, title: getComputedStyle(ttl).display,
+                   ring: getComputedStyle(ring).display, word: getComputedStyle(word).display};
+        svg.classList.remove('far');
+      }
+      host.remove();
+      return out;
+    } catch (e) { return {err: String(e).slice(0, 160)}; }
+  });
+  ok("a settled node's verdict marks are in the drawing", v.found === true, v.err || "");
+  if (v.found) {
+    ok("the strike is painted, not just emitted",
+       v.line.display !== "none" && v.line.w > 4, `display=${v.line.display} w=${v.line.w}`);
+    ok("...in the losing side's hue, not in ink",
+       v.line.stroke === v.no, `${v.line.stroke} vs --no ${v.no}`);
+    ok("...and it crosses the sentence it strikes", (() => {
+       const l = v.line, t = v.ttl;
+       return Math.abs(l.x - t.x) <= 1.5            // starts at the title, not the id
+         && (l.x + l.w) >= t.x + t.w * 0.9          // and runs the length of it
+         && l.y > t.y && l.y < t.y + t.h;           // through the glyphs, not under them
+    })(), `strike ${v.line.x}+${v.line.w}@${v.line.y} title ${v.ttl.x}+${v.ttl.w}@${v.ttl.y}..${v.ttl.y + v.ttl.h}`);
+    ok("the oval is a hairline ring, not a chip",
+       v.ring.fill === "none" && v.ring.stroke === v.no, `fill=${v.ring.fill} stroke=${v.ring.stroke}`);
+    ok("...with the side inside it, in the same hue",
+       v.word.t === "NO" && v.word.fill === v.no, `"${v.word.t}" ${v.word.fill}`);
+    ok("a settled YES rings in green and keeps its sentence",
+       v.yesRing === v.yes && v.strikesOnYes === 0, `${v.yesRing} strikes=${v.strikesOnYes}`);
+    ok("zoomed out, the sentence and its strike go and the verdict stays",
+       v.far.title === "none" && v.far.strike === "none"
+       && v.far.ring !== "none" && v.far.word !== "none", JSON.stringify(v.far));
+  }
+
   // A page error is a failure even when the frame looks right: the map may have
   // drawn a first pass and thrown on the data.
   ok("no page errors on the map route", errs.length === 0, errs.slice(0, 2).join(" | "));

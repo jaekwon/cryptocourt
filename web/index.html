@@ -1333,7 +1333,7 @@ tr.youare .mono{font-weight:600}
    here cannot silently un-fit the labels. */
 .mtitle,.mcourt-t{font-family:var(--serif)}
 .mid{font-family:var(--mono); font-variant-numeric:tabular-nums}
-.mhdr-t,.mverdict{font-family:var(--sans)}
+.mhdr-t,.mverdict,.mvt{font-family:var(--sans)}
 .mnode{fill:var(--surface); stroke:var(--ink-2); stroke-width:1; vector-effect:non-scaling-stroke}
 .mnode-a{cursor:pointer}
 /* THE PICKED NODE GROWS, so its label is readable without leaving the map.
@@ -1483,7 +1483,29 @@ tr.youare .mono{font-weight:600}
    level-of-detail rule below, which hides only .mtitle. */
 .mid{fill:var(--ink); font-weight:600}
 .mverdict{fill:var(--ink-2); font-weight:600}
-.mapsvg.far .mtitle{display:none}
+/* THE VERDICT'S OVAL, the same mark the claim title wears — .sidetag there, a
+   rounded rect here, because SVG has no border-radius on a box of text. The word
+   and the ring both take the side's hue: two marks for one answer in two colours
+   read as two different answers. Fill:none for the ring, like every other frame
+   on this map — the drawing is rules and points, not chips.
+   NO LETTER-SPACING, and that is the one place this oval must NOT follow
+   .sidetag. Every label here is drawn with a textLength measured off a canvas,
+   and a canvas does not apply CSS letter-spacing — "NO" tracked at .08em is 6%
+   wider than the ring measured for it, which browser/map_type.js reads as
+   deformed glyphs. The mark is 11px and bold; it does not need the tracking. */
+.mvt{font-weight:600}
+.mvtag{fill:none; stroke-width:1; vector-effect:non-scaling-stroke}
+.mvt.y{fill:var(--yes)}  .mvtag.y{stroke:var(--yes)}
+.mvt.n{fill:var(--no)}   .mvtag.n{stroke:var(--no)}
+/* THE STRIKE IS THE COURT'S, in the losing side's hue and for the same reason
+   `.page-h s` is: a grey rule through a sentence reads as "deleted", and nothing
+   here was deleted — the court ruled against it.
+   IT HIDES WITH THE TITLES. `.mapsvg.far .mtitle` takes the sentences away when
+   the map is zoomed out to labelled boxes; a rule left behind would be a line
+   ruling nothing. The oval is not in this rule and must not be — it is the
+   better zoomed-out reading, which is why the verdict row survives out there. */
+.mstrike{stroke:var(--no); stroke-width:1; vector-effect:non-scaling-stroke}
+.mapsvg.far .mtitle,.mapsvg.far .mstrike{display:none}
 /* A folder is a NODE now, not a box drawn round its contents — the radial map
    hangs claims off it instead of nesting them inside. The court is the same
    shape one step up: filled, heavier, at the centre. */
@@ -8198,7 +8220,7 @@ function mapSvg(L, data, slug){
     // from what is drawn.
     const tok = (k==="mtitle"||k==="mcourt-t") ? "--serif" : k==="mid" ? "--mono" : "--sans";
     const wt  = k==="mcourt-t" ? "700"
-              : (k==="mid"||k==="mverdict"||k==="mhdr-t") ? "600" : "400";
+              : (k==="mid"||k==="mverdict"||k==="mhdr-t"||k==="mvt") ? "600" : "400";
     let fam="";
     try{ fam=getComputedStyle(document.documentElement).getPropertyValue(tok).trim(); }catch(e){}
     return (faceCache[k]= wt+" "+(fam||"sans-serif"));
@@ -8233,6 +8255,50 @@ function mapSvg(L, data, slug){
     return `<text class="mtext ${cls}" x="${box.x+box.w-K.tpad}" y="${y}" font-size="${fs}" `
       + `text-anchor="end" textLength="${Math.min(est(nm,fs,cls), box.w-2*K.tpad)}" `
       + `lengthAdjust="spacing" data-owner="${owner}">${esc(nm)}</text>`;
+  };
+  /* THE VERDICT'S OWN OVAL — the map's copy of the mark the claim title wears.
+     On the claim page the side sits in a .sidetag: a border, a pill radius and
+     some padding on an inline box. SVG has none of those, so the oval is a
+     rounded <rect> sized from THE SAME MEASUREMENT the word inside it is drawn
+     with, which is the only way the ring cannot end up wider or narrower than
+     its own text — est() and an imposed textLength, like every other label
+     here.
+     IT REPLACES THE WORD "settled" AS WELL AS THE SIDE. The row used to read
+     "settled: NO" in --ink-2; the phase is what the dot four pixels to its left
+     already encodes, and a struck sentence wearing (NO) has said the rest. */
+  const VTAG={fs:K.fs.id-2, px:5.5, py:3};
+  const vtag=(side,box,y,owner)=>{
+    const fs=VTAG.fs, c=side==="NO"?"n":"y", w=est(side,fs,"mvt");
+    const right=box.x+box.w-K.tpad, h=fs+2*VTAG.py;
+    // CENTRED ON THE CAP BAND, not on the baseline. Capitals rise about 0.72em
+    // above it and nothing descends below it in "YES" or "NO", so a ring centred
+    // on y would hang a third of its height under the word.
+    const cy=y-0.36*fs;
+    return `<rect class="mvtag ${c}" x="${(right-w-2*VTAG.px).toFixed(1)}" y="${(cy-h/2).toFixed(1)}" `
+      + `width="${(w+2*VTAG.px).toFixed(1)}" height="${h.toFixed(1)}" rx="${(h/2).toFixed(1)}" `
+      + `data-owner="${owner}"/>`
+      + `<text class="mtext mvt ${c}" x="${(right-VTAG.px).toFixed(1)}" y="${y}" font-size="${fs}" `
+      + `text-anchor="end" textLength="${w}" lengthAdjust="spacing" `
+      + `data-owner="${owner}">${side}</text>`;
+  };
+  /* THE COURT'S STRIKE, drawn as GEOMETRY rather than as text-decoration. Every
+     label on this map is laid out with textLength + lengthAdjust="spacing", so
+     the rendered width of a line IS min(est, room) — the rule can be placed
+     exactly, with no DOM to measure — and a <line> paints in every renderer,
+     where support for text-decoration on an SVG <text> is a coin toss and a
+     silent one when it loses.
+     OVER THE SENTENCE, NOT OVER THE ID. `#3` at the head of line 0 is a label
+     ON the claim rather than part of the statement, so the rule starts where the
+     title starts — the same reason the claim page keeps its oval outside the
+     <s>. It takes the title's offset from the caller rather than recomputing it,
+     because a strike that measured the id differently than the label did would
+     be off by however far the two disagreed. */
+  const strike=(t,box,fs,y,owner,dx)=>{
+    const off=dx||0, room=box.w-2*K.tpad-off;
+    const w=Math.min(est(clip(t,room,fs),fs,"mtitle"), room);
+    const x=box.x+K.tpad+off, sy=(y-0.28*fs).toFixed(1);
+    return `<line class="mstrike" x1="${x.toFixed(1)}" y1="${sy}" `
+      + `x2="${(x+w).toFixed(1)}" y2="${sy}" data-owner="${owner}"/>`;
   };
   out.push(`<svg xmlns="http://www.w3.org/2000/svg" class="mapsvg" viewBox="${vx} ${vy} ${vw} ${vh}" tabindex="0" role="img" aria-label="Map of ${esc(slug)} — the court at the centre, folders around it, claims around their folder; every node is a link.">`);
   // UNDER EVERYTHING: containment spokes, then association chords. Order is the
@@ -8391,11 +8457,28 @@ function mapSvg(L, data, slug){
       const idTxt=`#${n.id}`;
       const lines=mapWrapTitle(`${idTxt} ${cl.title}`, n.w-2*K.tpad, K.fs.title, K.maxTitleLines);
       const rest=(lines[0]||idTxt).slice(idTxt.length).replace(/^ /,"");
+      // ONE EXPRESSION, TWO CALLERS: where line 0's title begins is also where
+      // its strike begins, and the two must not measure the id apart.
+      const tdx=est(idTxt+" ", K.fs.title);
       out.push(label(idTxt, n, K.fs.title, n.y+16, "mid", "c"+n.id));
-      if(rest) out.push(label(rest, n, K.fs.title, n.y+16, "mtitle", "c"+n.id,
-                              est(idTxt+" ", K.fs.title)));
+      if(rest) out.push(label(rest, n, K.fs.title, n.y+16, "mtitle", "c"+n.id, tdx));
       lines.slice(1).forEach((ln,i)=>
         out.push(label(ln, n, K.fs.title, n.y+16+(i+1)*K.lineH, "mtitle", "c"+n.id)));
+      /* STRUCK ONLY ON A SETTLED NO, and the reasoning is claimTitleHtml's,
+         deliberately: these two draw the same fact on two surfaces and must not
+         disagree about it. A claim is a statement and a NO verdict is the court
+         saying it is not so, which is what a strikethrough means — so a settled
+         YES keeps its sentence intact, and nothing before settled is struck at
+         all, because a provisional verdict is reopenable and a dispute has
+         decided nothing yet.
+         EVERY LINE OF THE SENTENCE, which is why this loops the same way the
+         labels above do rather than ruling one line: a rule through the first
+         line of a four-line title reads as a mark on the first line. */
+      if(pc.short==="settled" && pc.side==="NO"){
+        if(rest) out.push(strike(rest, n, K.fs.title, n.y+16, "c"+n.id, tdx));
+        lines.slice(1).forEach((ln,i)=>
+          out.push(strike(ln, n, K.fs.title, n.y+16+(i+1)*K.lineH, "c"+n.id)));
+      }
       /* The strip, between the last line of the title and the verdict row. Its
          top is measured from the LAST BASELINE rather than from the bottom of
          the box, because mapClaimSize built the box by adding a row to the title
@@ -8423,8 +8506,20 @@ function mapSvg(L, data, slug){
          hands the whole first line back to the title instead of reserving 14px of
          it for a mark that sat on a different subject. */
       out.push(dot(n.x+K.tpad+4, vy-4));
-      out.push(rlabel(pc.side? pc.short+": "+pc.side : pc.short,
-                      n, K.fs.id, vy, "mverdict", "c"+n.id));
+      /* A DECIDED CLAIM CLOSES WITH ITS OVAL; everything else still closes with
+         the phase in words. "settled: NO" said the phase twice — the dot at the
+         other end of this row is the phase channel — and said the side in the
+         secondary ink, on the one map surface that has a title beside it to
+         carry the mark instead. Where there is no verdict there is no oval and
+         the words are all there is: "open", "in dispute", "provisional: YES".
+         AN UNKNOWN SIDE KEEPS THE WORDS TOO. phaseClass hands back "settled"
+         with an empty side when the realm's sentence does not name one, and an
+         oval with nothing in it would be a mark asserting a decision it cannot
+         read. */
+      if(pc.short==="settled" && (pc.side==="YES"||pc.side==="NO"))
+        out.push(vtag(pc.side, n, vy, "c"+n.id));
+      else out.push(rlabel(pc.side? pc.short+": "+pc.side : pc.short,
+                           n, K.fs.id, vy, "mverdict", "c"+n.id));
     } else {
       /* IN IDS MODE THE ID IS THE WHOLE LABEL, and asking for the phase as well
          bought an ellipsis and nothing else. An ids box is 64 wide, less 14 for

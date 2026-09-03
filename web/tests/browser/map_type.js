@@ -136,9 +136,12 @@ const {PAGE, demoPage} = require('./harness');
   // know both — the canvas measured the court's name at 400 while the CSS drew
   // it at 700, and 6% of crowding is what that mistake looks like. Anything
   // that changes a weight in the stylesheet and not in faceOf lands here.
+  // .mvt is the word inside the verdict's oval, and it is measured with the same
+  // canvas as everything else — so the ring drawn around it is only the right
+  // size while this row and faceOf agree.
   const faceFor = {"mtitle": ["--serif", "400"], "mcourt-t": ["--serif", "700"],
                    "mid": ["--mono", "600"], "mhdr-t": ["--sans", "600"],
-                   "mverdict": ["--sans", "600"]};
+                   "mverdict": ["--sans", "600"], "mvt": ["--sans", "600"]};
   // getComputedStyle returns a NORMALISED stack — quotes added, ", " between
   // entries — while the custom property is the authored string. Comparing them
   // raw fails on punctuation while the fonts agree, so both sides are reduced
@@ -175,7 +178,7 @@ const {PAGE, demoPage} = require('./harness');
      content, and AA's 4.5 for the verdict line, which is deliberately secondary.
      Literals, not the tokens: an expectation spelled as var(--ink) would follow
      the token wherever it went. */
-  const WANT = {mtitle: 7, mid: 7, "mcourt-t": 7, "mhdr-t": 7, mverdict: 4.5};
+  const WANT = {mtitle: 7, mid: 7, "mcourt-t": 7, "mhdr-t": 7, mverdict: 4.5, mvt: 4.5};
   for (const scheme of ["light", "dark"]) {
     await page.emulateMediaFeatures([{name: 'prefers-color-scheme', value: scheme}]);
     await page.goto(PAGE + '#/c/' + slug + '/map', {waitUntil: 'networkidle2'});
@@ -193,7 +196,7 @@ const {PAGE, demoPage} = require('./harness');
       // The court is a <g>, not an <a> — the first version of this probe looked
       // only for an anchor and reported the court's contrast as null.
       const boxOf = {mtitle: '.mnode', mid: '.mnode', mverdict: '.mnode',
-                     'mhdr-t': '.mfold', 'mcourt-t': '.mcourt'};
+                     mvt: '.mnode', 'mhdr-t': '.mfold', 'mcourt-t': '.mcourt'};
       const out = {};
       for (const t of document.querySelectorAll('.mapwrap svg text')) {
         const cls = (t.getAttribute('class') || "").replace('mtext ', '').split(/\s+/)[0];
