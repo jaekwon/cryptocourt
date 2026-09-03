@@ -87,6 +87,7 @@ is the thing this product does.
 """
 
 import datetime
+import os
 import json
 import pathlib
 import sys
@@ -100,7 +101,29 @@ CI = False
 
 SLUG = "covid"
 BASE = "2020-01-15"
-END = "2026-12-15"   # the iPhone-text claims are filed in August 2026
+# THE FIXTURE'S "NOW" IS TODAY, computed rather than written down. A literal END
+# drifts the moment the calendar passes it: this said 2026-12-15 while the real
+# date was 2026-09-03, so every seeded claim sat three months in the future and a
+# vote closing five days after the fixture's now read as "closes in December" to
+# somebody looking at it in September. The graph is where that shows, because a
+# reader compares its x-axis against the date on their own wall.
+#
+# SEED_END pins it, for a run that wants a fixed dataset to diff.
+END = os.environ.get("SEED_END") or datetime.date.today().isoformat()
+
+
+def before_end(days):
+    """A date `days` before the fixture's now, as an ISO string.
+
+    The live disputes use this for the same reason END is computed: a dispute is
+    interesting only while its vote is open, and fixed dates put them in the
+    future once and in the distant past soon after. The offsets leave room for
+    each arc to finish before END — short_grind runs about six days past its
+    filing, and a date past END is what the guard at the bottom of this file
+    refuses.
+    """
+    return (datetime.date.fromisoformat(END)
+            - datetime.timedelta(days=days)).isoformat()
 EPOCH_BLOCKS = 720       # the twap bucket width, and the height a calendar step moves
 TWAP_BUCKETS = 3         # answerWindow / epochBlocks: distinct buckets needed to answer
 # Beside the scenario, not in web/: the web root is what deploy.sh ships, and
@@ -375,19 +398,19 @@ D = [
 # vote closing next week, which is the state that was reported as nonsense.
 # The subjects are unchanged — a court files a claim about a 2021 event whenever
 # somebody raises it, and the filing date is when it was raised.
-dict(key="p3co", on="2026-11-18", arc="dispute", shape=short_grind,
+dict(key="p3co", on=before_end(28), arc="dispute", shape=short_grind,
        path=("Fauci", "Gain-of-function funding"),
        cast=("biosafety", "virology", "oversight", "epi"),
        body='Settles on a determination by HHS or another authorised body that the funded work did or did not meet the P3CO definition.\n\nThe sharpest claim in this folder, because it is the one thing everybody is actually arguing about: nobody disputes that the money reached the work. NIH conceded in 2021 that a limited experiment met some criteria while rejecting the label.',
        title="The NIAID-funded work at the Wuhan Institute of Virology met the federal P3CO definition of gain-of-function research."),
-  dict(key="perjury", on="2026-11-20", arc="dispute", shape=short_grind,
+  dict(key="perjury", on=before_end(24), arc="dispute", shape=short_grind,
        path=("Fauci", "Gain-of-function funding"),
        cast=("oversight", "virology", "skeptic", "foia"),
        body='Settles on a perjury referral producing a finding, or an authoritative determination by a body with subpoena power. An accusation attached to a document release is not a finding.',
        title="Testimony given to Congress in 2024 denying participation in intelligence discussions about Wuhan research was false."),
 
   # ------------------------------------------------- Fauci / Proximal Origin
-  dict(key="prompted", on="2026-11-19", arc="dispute", shape=short_grind,
+  dict(key="prompted", on=before_end(26), arc="dispute", shape=short_grind,
        path=("Fauci", "Proximal Origin"),
        cast=("foia", "virology", "oversight", "epi"),
        body='Settles on the correspondence together with sworn testimony from the participants. The 1 February 2020 teleconference and the drafting timeline are documented; whether they amount to prompting is what is contested.',
@@ -404,17 +427,17 @@ dict(key="p3co", on="2026-11-18", arc="dispute", shape=short_grind,
        title="The organiser of the February 2020 Lancet statement concealed his institute's funding relationship with the Wuhan Institute of Virology."),
 
   # -------------------------------------------------- Fauci / the iPhone texts
-  dict(key="mctext", on="2026-08-11", arc="yes", shape=sparse,
+  dict(key="mctext", on=before_end(50), arc="yes", shape=sparse,
        path=("Fauci", "The iPhone texts"),
        cast=("foia", "vaxsafety", "clinician", "oversight"),
        body='Settles on the message itself, released 10 August 2026 from a government device produced to a Senate subcommittee.\n\nAsks only whether the message says what it is quoted as saying. What follows from it is the two claims after this one.',
        title="In January 2021 the director of NIAID privately raised first-trimester miscarriage as a theoretical risk of the second vaccine dose."),
-  dict(key="concealed", on="2026-08-12", arc="no", shape=short_grind,
+  dict(key="concealed", on=before_end(49), arc="no", shape=short_grind,
        path=("Fauci", "The iPhone texts"),
        cast=("oversight", "clinician", "skeptic", "vaxsafety"),
        body='Settles on comparing the private chain with the public statements over the same period.\n\nThe same message chain, one day later, weighs risks against benefits and records ten thousand vaccinated pregnancies with no signal — so the private position and the public one have to be compared whole, not by their first line.',
        title="The January 2021 miscarriage concern was withheld from the public while the same officials recommended vaccination in pregnancy."),
-  dict(key="nochain", on="2026-08-13", arc="yes", shape=sparse,
+  dict(key="nochain", on=before_end(48), arc="yes", shape=sparse,
        path=("Fauci", "The iPhone texts"),
        cast=("foia", "clinician", "vaxsafety", "oversight"),
        body='Settles on the same released chain that carries the quoted line.\n\nFiled because a quotation with its reply removed is a different claim from the quotation, and the docket should hold both.',
