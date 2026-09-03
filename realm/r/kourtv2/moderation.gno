@@ -31,6 +31,12 @@ const (
 	// weeks): re-setting a global redaction that a global act cleared inside
 	// this window needs m-of-n (MODERATION.md §3.2, round-4 F5). Outside it a
 	// fresh notice is a fresh single-key hide.
+	//
+	// A STATUTORY PERIOD IS IN DAYS, so the gates read it in seconds, through
+	// blocksToSecs at the call site. It stays declared in blocks and there is no
+	// seconds twin on purpose: counsel must be able to retune this alone, and two
+	// numbers for one statutory period is the way one of them ends up retuned for
+	// the other's reasons — the hazard pendingTTLBlocks' own note names below.
 	reSetWindowBlocks = int64(241_920) // ~14 days at 17_280 blocks/day
 
 	// Moderation event names. Events carry act metadata and a category/act code
@@ -294,7 +300,8 @@ type claimMod struct {
 	// They are gone rather than left looking load-bearing; the mod log carries
 	// the same who/when for render. A stripEnteredAt field went the same way —
 	// the strip key already encodes the deadline it would have duplicated.
-	globalClearedAt int64 // for the windowed-m-of-n re-set rule
+	globalClearedAt     int64 // for the windowed-m-of-n re-set rule
+	globalClearedAtTime int64 // unix seconds beside it; 0 on clears predating the stamps
 	executedAt      int64 // meta-verdict cooldown anchor (module 7)
 	executedAtTime  int64 // unix seconds beside it; 0 on verdicts predating the stamps
 
@@ -328,6 +335,18 @@ type modAct struct {
 	reason string
 	height int64
 	purged bool
+}
+
+// reSetWindowOpen reports whether a global clear is still inside the §512(g)
+// counter-notice window, so a re-set needs m-of-n rather than one key.
+//
+// TWO GATES ASK THIS, on two different records: a claim's redaction here and a
+// board row's in boardlegal.gno. They are one statutory period, so they get one
+// predicate rather than two copies that could be converted separately — the
+// lesson approvalStale records one screen up.
+func reSetWindowOpen(clearedAtTime, clearedAt, now int64) bool {
+	passed, known := pastDeadline(clearedAtTime, blocksToSecs(reSetWindowBlocks))
+	return (known && !passed) || (!known && now < clearedAt+reSetWindowBlocks)
 }
 
 // pendingTTLBlocks is how long an unfired m-of-n approval stays valid: 7 days,
@@ -782,7 +801,7 @@ func GlobalHide(cur realm, courtSlug string, claimID uint64, categoryCode string
 	// cleared within the counter-notice window needs m-of-n, so a lone rogue
 	// key can't win the reversal race and camp a competitor redacted.
 	if prev := lookupClaimMod(cm, claimID); prev != nil && !prev.global &&
-		prev.globalClearedAt != 0 && now < prev.globalClearedAt+reSetWindowBlocks {
+		prev.globalClearedAt != 0 && reSetWindowOpen(prev.globalClearedAtTime, prev.globalClearedAt, now) {
 		d := ensureGlobalDAO()
 		fire, _ := approveAction(d.pending, "reset:"+c.id+":"+strconv.FormatUint(claimID, 10), who, categoryCode, d.purgeM)
 		if !fire {
@@ -813,6 +832,7 @@ func GlobalClear(cur realm, courtSlug string, claimID uint64) {
 	}
 	clm.global = false
 	clm.globalClearedAt = heightNow()
+	clm.globalClearedAtTime = nowTime()
 	clm.appendLog(who, "global-clear", "")
 	emitGlobalAct(c.id, claimID, "global-clear", who)
 }

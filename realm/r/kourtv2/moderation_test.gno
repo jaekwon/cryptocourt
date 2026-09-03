@@ -1366,17 +1366,25 @@ func TestTheThresholdIsCheckedAgainstTheCanonicalSet(cur realm, t *testing.T) {
 // could have held any number at all and nothing in the suite would have objected.
 // The constants sweep found it unpinned, and this is the pin.
 //
-// The expectation is the LITERAL 241_920 and never the constant. An assertion
-// written as `reSetWindowBlocks` moves together with the code it is supposed to
-// hold still — which is exactly how the first draft of the deposit-floor pin
-// passed against its own mutation.
+// IT NOW PINS WHAT ITS NAME SAYS. The window gates on the wall clock, so the
+// bracket is 1_209_600 SECONDS; the old bracket of 241_920 blocks was fourteen
+// days only on a chain holding 5s a block, which for a period borrowed from
+// §512(g) is the wrong thing to have been asserting. The block bracket is kept
+// below, on a record with no stamp, where it is still the rule.
 //
-// The skip totals 241_920, which is 336 whole epochs, so it leaves the phase of
-// the epoch clock untouched for every test that runs after this one. A bare skip
-// that lands mid-epoch is what broke TestTheAssociationCapsBindAtTheirStatedNumbers
-// once already.
+// The expectation is the LITERAL and never the constant. An assertion written as
+// `reSetWindowBlocks` moves together with the code it is supposed to hold still —
+// which is exactly how the first draft of the deposit-floor pin passed against
+// its own mutation.
+//
+// The second half's skip totals 241_920, which is 336 whole epochs, so it leaves
+// the phase of the epoch clock untouched for every test that runs after this one.
+// A bare skip that lands mid-epoch is what broke
+// TestTheAssociationCapsBindAtTheirStatedNumbers once already. The first half
+// mines no blocks at all, so it cannot disturb that phase.
 func TestTheReSetWindowIsExactlyFourteenDaysLong(cur realm, t *testing.T) {
-	const windowIs = int64(241_920) // 14 days at 17_280 blocks/day
+	const windowIs = int64(241_920)     // 14 days at 17_280 blocks/day
+	const windowSecs = int64(1_209_600) // and fourteen days is this many seconds
 
 	alice := testutils.TestAddress("rsw-alice")
 	c := testCourt(cur, "rsw", alice, 10_000_000_000)
@@ -1401,13 +1409,56 @@ func TestTheReSetWindowIsExactlyFourteenDaysLong(cur realm, t *testing.T) {
 	GlobalClear(cross(cur), "rsw", id)
 
 	cm := ensureMod(c)
-	clearedAt := lookupClaimMod(cm, id).globalClearedAt
+	clm := lookupClaimMod(cm, id)
+	clearedAt, clearedTime := clm.globalClearedAt, clm.globalClearedAtTime
 	if clearedAt == 0 {
 		t.Fatal("setup: the put-back must record the height it happened at")
 	}
+	if clearedTime == 0 {
+		t.Fatal("setup: the put-back must stamp the moment, or this pins the height arm")
+	}
 
-	// ONE BLOCK INSIDE. A lone key must not win the reversal race.
-	if step := clearedAt + windowIs - 1 - heightNow(); step > 0 {
+	// ---- THE STATUTORY BRACKET, IN SECONDS, MINING NO BLOCKS ----
+	bumpTo := func(target int64) {
+		d := target - nowTime()
+		if d < 0 {
+			t.Fatalf("setup: %d is already behind us (now %d)", target, nowTime())
+		}
+		ctx := testing.GetContext()
+		ctx.Time = ctx.Time.Add(time.Duration(d) * time.Second)
+		testing.SetContext(ctx)
+	}
+	frozenH := heightNow()
+
+	// ONE SECOND INSIDE. A lone key must not win the reversal race.
+	bumpTo(clearedTime + windowSecs - 1)
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	GlobalHide(cross(cur), "rsw", id, "DMCA")
+	if lookupClaimMod(cm, id).global {
+		t.Fatalf("a lone key re-set the claim %d seconds after the put-back, which "+
+			"is still inside a %d-second window", nowTime()-clearedTime, windowSecs)
+	}
+
+	// AND ONE SECOND OUT, where the same lone key acts. The guard is
+	// `now < clearedAt+window`, so the window is over AT clearedAt+window.
+	bumpTo(clearedTime + windowSecs)
+	uassert.Equal(t, frozenH, heightNow()) // the whole bracket mined nothing
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	GlobalHide(cross(cur), "rsw", id, "DMCA")
+	if !lookupClaimMod(cm, id).global {
+		t.Errorf("the window outlasted its stated %d seconds: a lone key still could "+
+			"not re-set at clearedAt+%d", windowSecs, nowTime()-clearedTime)
+	}
+
+	// ---- AND THE BLOCK BRACKET, ON A RECORD WITH NO STAMP ----
+	// Where the height arm is still the rule, and still exactly 241_920 wide.
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	GlobalClear(cross(cur), "rsw", id)
+	clm2 := lookupClaimMod(cm, id)
+	clm2.globalClearedAtTime = 0 // the pre-upgrade shape: a height, no stamp
+	clearedAt2 := clm2.globalClearedAt
+
+	if step := clearedAt2 + windowIs - 1 - heightNow(); step > 0 {
 		testing.SkipHeights(step)
 	} else {
 		t.Fatalf("setup: the window's near edge is already behind us (step %d)", step)
@@ -1415,17 +1466,13 @@ func TestTheReSetWindowIsExactlyFourteenDaysLong(cur realm, t *testing.T) {
 	testing.SetRealm(testing.NewUserRealm(dadmin))
 	GlobalHide(cross(cur), "rsw", id, "DMCA")
 	if lookupClaimMod(cm, id).global {
-		t.Fatalf("a lone key re-set the claim %d blocks after the put-back, which "+
-			"is still inside a %d-block window", heightNow()-clearedAt, windowIs)
+		t.Fatalf("a lone key re-set a pre-stamp record %d blocks after the put-back, "+
+			"which is still inside a %d-block window", heightNow()-clearedAt2, windowIs)
 	}
-
-	// AND ONE BLOCK OUT, where the same lone key acts. The guard is
-	// `now < clearedAt+window`, so the window is over AT clearedAt+window.
 	testing.SkipHeights(1)
 	testing.SetRealm(testing.NewUserRealm(dadmin))
 	GlobalHide(cross(cur), "rsw", id, "DMCA")
 	if !lookupClaimMod(cm, id).global {
-		t.Errorf("the window outlasted its stated %d blocks: a lone key still could "+
-			"not re-set at clearedAt+%d", windowIs, heightNow()-clearedAt)
+		t.Errorf("a pre-stamp record's window outlasted its stated %d blocks", windowIs)
 	}
 }

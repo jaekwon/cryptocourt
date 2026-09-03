@@ -1,6 +1,6 @@
 # Deadlines in seconds, accounting in blocks
 
-**Status:** in progress. 6 of 11 gates converted (plus one found already done); see the log at the end.
+**Status:** in progress. 7 of 11 gates converted (plus one found already done); see the log at the end.
 
 ## The problem, as observed
 
@@ -148,6 +148,7 @@ trailing ring; `pendingTTLBlocks` looks like accounting and is a deadline.
 | `stake.gno:166` | `stakeOpenDelayBlocks` | `openedAtTime` | **converted** |
 | `moderation.gno:620,664,1187` | `pendingTTLBlocks` | `approval.openedAtTime` (added) | **converted** |
 | `moderation.gno:691` | `votingBlocks` after execute | `claimMod.executedAtTime` (added) | **converted** |
+| `moderation.gno:755` | `reSetWindowBlocks` (DMCA §512(g)) | `globalClearedAtTime` (added) | **converted** |
 | `modvote.gno:328` | `nominateEnd` | needs a stamp | unconverted |
 | `boardmod.gno:107,137` | `frozenUntil` | needs a stamp | unconverted |
 | `meta.gno:366` | `votingBlocks` after verdict | `verdictAtTime` | unconverted |
@@ -242,6 +243,43 @@ units across two claims would be worse than falling back), and it is the one sit
 that already had a corpus row per arm — the discipline being retrofitted
 elsewhere. `supEdge.at` is a height "for the record" that nothing reads and
 nothing renders.
+
+### `moderation.gno:755` — the DMCA §512(g) counter-notice window
+
+Converted. Third new field: `globalClearedAtTime`. The gate now goes through
+`reSetWindowOpen`, a shared predicate, because the SAME window is read by a
+second gate on a different record — `boardlegal.gno:100`, the last item in the
+order. One statutory period, one predicate, so the two cannot be converted
+separately.
+
+**A statutory period is the strongest case for the clock in the whole plan.**
+§512(g) is written in days. Counted in blocks the legal window was fourteen days
+only on a chain holding 5s a block; anywhere else the realm was enforcing a
+period the statute does not name.
+
+**And it is the strongest case AGAINST a seconds constant.** The constant's own
+note says counsel must be able to retune this alone, and the neighbouring
+`pendingTTLBlocks` note names the hazard exactly: "one of the two eventually gets
+changed for the other's reasons". So there is no `reSetWindowSecs`; the gate
+converts at the call site. That decision is now measured rather than argued — the
+two pre-existing PARAM rows that halve and double `reSetWindowBlocks` are still
+CAUGHT after the conversion, which is only true because one number still governs.
+A seconds twin would have left those rows passing while changing nothing.
+
+**The test finally asserts its own name.** `TestTheReSetWindowIsExactlyFourteenDaysLong`
+bracketed 241_920 BLOCKS, which is fourteen days only at 5s — the wrong quantity
+for a period borrowed from statute. It now brackets 1_209_600 seconds, mining no
+blocks at all, and keeps the block bracket on a second record with no stamp where
+the height arm is still the rule.
+
+**The collision checker earned its keep.** My first `not enforced` row left `now`
+declared and unused, so the mutant could never compile and would have measured
+nothing while reading as coverage. `check-mutant-collisions` reported exactly
+that, automatically — the same class of mistake iteration 2 caught only by hand.
+
+Verified: full kourtv2 suite green; six mutants compile and are killed, including
+both pre-existing PARAM rows; `make anchors collisions staleguards guards` and
+check-read-purity/check-storage pass.
 
 ### `moderation.gno:691` — the I8 re-hide cooldown, which had no test at all
 

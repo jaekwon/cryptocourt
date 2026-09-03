@@ -5947,6 +5947,34 @@
  {
   "pkg": "kourtv2",
   "file": "moderation.gno",
+  "label": "reSetWindowOpen: the counter-notice window ends one second early",
+  "find": "pastDeadline(clearedAtTime, blocksToSecs(reSetWindowBlocks))",
+  "replace": "pastDeadline(clearedAtTime, blocksToSecs(reSetWindowBlocks)-1)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "moderation.gno",
+  "label": "reSetWindowOpen: a pre-stamp clear's window ends one block early",
+  "find": "(!known && now < clearedAt+reSetWindowBlocks)",
+  "replace": "(!known && now < clearedAt+reSetWindowBlocks-1)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "moderation.gno",
+  "label": "GlobalHide: the windowed m-of-n re-set rule is not enforced",
+  "find": "prev.globalClearedAt != 0 && reSetWindowOpen(prev.globalClearedAtTime, prev.globalClearedAt, now) {",
+  "replace": "prev.globalClearedAt != 0 && now < 0 {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "moderation.gno",
+  "label": "GlobalClear: the re-set window is armed without its wall-clock stamp",
+  "find": "\tclm.globalClearedAt = heightNow()\n\tclm.globalClearedAtTime = nowTime()",
+  "replace": "\tclm.globalClearedAt = heightNow()\n\tclm.globalClearedAtTime = 0"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "moderation.gno",
   "label": "HideItem: the I8 re-hide cooldown is not enforced",
   "find": "\t\tif passed, known := pastDeadline(clm.executedAtTime, blocksToSecs(c.params.votingBlocks)); (known && !passed) ||\n\t\t\t(!known && heightNow() < clm.executedAt+c.params.votingBlocks) {",
   "replace": "\t\tif false {"
