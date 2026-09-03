@@ -1843,12 +1843,16 @@ func TestAProposalsPageSaysWhatHappensNext(cur realm, t *testing.T) {
 		t.Errorf("a recorded proposal inside its delay does not say when it "+
 			"can run:\n%s", page)
 	}
-	// The HEIGHT, not just the phrase. A mutation naming p.closes here instead
+	// The BLOCK, not just the phrase. A mutation naming p.closes here instead
 	// of p.ready passed every test in the realm — so the page could have sent a
-	// reader back at the wrong block, which is the entire content of the line.
+	// reader back at the wrong moment, which is the entire content of the line.
+	//
+	// It reads "at <unix> (block <height>)" now: the delay gates on the stamp,
+	// so the date leads and the block is the reference beside it. The height is
+	// still asserted because it is still what a mutation would get wrong.
 	ready := timingReady(id)
-	if !strings.Contains(page, "at height "+strconv.FormatInt(ready, 10)) {
-		t.Errorf("the waiting line does not name the height %d it becomes "+
+	if !strings.Contains(page, "(block "+strconv.FormatInt(ready, 10)+")") {
+		t.Errorf("the waiting line does not name the block %d it becomes "+
 			"executable at:\n%s", ready, page)
 	}
 
@@ -2730,11 +2734,12 @@ func TestARefusalSaysWhatWouldFixIt(cur realm, t *testing.T) {
 		Propose(cross(cur), "bar/k", "5", "bob tries")
 	})
 
-	// And the timelock names the height rather than saying "not yet".
+	// And the timelock names WHEN rather than saying "not yet" — as a block,
+	// which is still the reference beside the date the refusal now leads with.
 	testing.SetRealm(testing.NewUserRealm(gAlice))
 	id := Propose(cross(cur), "bar/k", "6", "alice can")
 	Vote(cross(cur), id, "yes")
-	uassert.AbortsContains(t, cur, "executable at height "+strconv.FormatInt(timingReady(id), 10), func() {
+	uassert.AbortsContains(t, cur, "(block "+strconv.FormatInt(timingReady(id), 10)+")", func() {
 		Execute(cross(cur), id)
 	})
 }

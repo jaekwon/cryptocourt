@@ -2923,9 +2923,9 @@
  {
   "pkg": "governor",
   "file": "governor.gno",
-  "label": "wouldBe: the grace period expires one block early",
-  "find": "\t\tif at, expires := expiresAt(p); expires && now > at {",
-  "replace": "\t\tif at, expires := expiresAt(p); expires && now >= at {"
+  "label": "wouldBe: the grace period is inverted, so only expired proposals survive",
+  "find": "\t\tif g.expired(p) {",
+  "replace": "\t\tif !g.expired(p) {"
  },
  {
   "pkg": "governor",
@@ -2966,8 +2966,8 @@
   "pkg": "governor",
   "file": "governor.gno",
   "label": "Execute: the delay window is not enforced",
-  "find": "\tif now := g.voters.Height(); inDelay(p, now) {",
-  "replace": "\tif now := g.voters.Height(); inDelay(p, now) && id < 0 {"
+  "find": "\tif g.inDelay(p) {",
+  "replace": "\tif g.inDelay(p) && id < 0 {"
  },
  {
   "pkg": "governor",
@@ -3029,8 +3029,8 @@
   "pkg": "governor",
   "file": "governor.gno",
   "label": "inDelay: the delay window is off by one",
-  "find": "func inDelay(p *proposal, now int64) bool { return now < p.ready }",
-  "replace": "func inDelay(p *proposal, now int64) bool { return now < p.ready-1 }"
+  "find": "\t\treturn g.voters.Now() < p.readyTime",
+  "replace": "\t\treturn g.voters.Now() < p.readyTime-1"
  },
  {
   "pkg": "governor",
@@ -3960,8 +3960,8 @@
   "pkg": "governor",
   "file": "governor.gno",
   "label": "renderOne: a proposal in its timelock does not say it is waiting",
-  "find": "\t\tcase inDelay(p, now):",
-  "replace": "\t\tcase inDelay(p, now) && p.id < 0:"
+  "find": "\t\tcase g.inDelay(p):",
+  "replace": "\t\tcase g.inDelay(p) && p.id < 0:"
  },
  {
   "pkg": "governor",
@@ -6118,6 +6118,48 @@
   "label": "ClaimTimeline: the vote's close is published as a zero, forcing an estimate",
   "find": "\t\t_, closesTime := c.gov.TimingsAt(cs.proposalID)",
   "replace": "\t\tclosesTime := int64(0)"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "inDelay: the timelock ends one second late",
+  "find": "\t\treturn g.voters.Now() < p.readyTime",
+  "replace": "\t\treturn g.voters.Now() <= p.readyTime"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "inDelay: a pre-stamp proposal loses its HEIGHT fallback",
+  "find": "\treturn g.voters.Height() < p.ready\n}",
+  "replace": "\treturn false\n}"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "Settle: the timelock is armed without its wall-clock stamp",
+  "find": "\t\tp.readyTime = g.voters.Now() + p.rules.DelayBlocks*secsPerBlock",
+  "replace": "\t\tp.readyTime = 0"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "expiresAtTime: the grace window is one second too long",
+  "find": "\treturn p.readyTime + p.rules.GraceBlocks*secsPerBlock, true",
+  "replace": "\treturn p.readyTime + p.rules.GraceBlocks*secsPerBlock + 1, true"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "expired: a decision expires one second early",
+  "find": "\t\treturn g.voters.Now() > at",
+  "replace": "\t\treturn g.voters.Now() >= at"
+ },
+ {
+  "pkg": "governor",
+  "file": "governor.gno",
+  "label": "expired: a pre-stamp decision never expires",
+  "find": "\treturn ever && g.voters.Height() > at",
+  "replace": "\treturn false"
  },
  {
   "pkg": "governor",

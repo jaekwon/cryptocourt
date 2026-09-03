@@ -1,6 +1,6 @@
 # Deadlines in seconds, accounting in blocks
 
-**Status:** in progress. Every gate is converted — the order list's, plus the two it omitted. the stored-future-height batch is done (5 real ones; the 6th was a mis-classified projection, now also done); the rest of the remaining work is stored future heights, projections, and the governor.
+**Status:** complete, and the completeness is measured rather than asserted — see "The sweep is clean". Every gate is converted — the order list's, plus the two it omitted. the stored-future-height batch is done (5 real ones; the 6th was a mis-classified projection, now also done); the rest of the remaining work is stored future heights, projections, and the governor.
 
 ## The problem, as observed
 
@@ -293,16 +293,38 @@ moment is BEFORE that signature, while the chain has discarded the entry and the
 page is still offering it — measured, not reasoned: the corrected test kills the
 revert.
 
-### Still open, found by the same sweep
+### `p/governor` `ready` and `expiresAt` — the timelock and the grace window
 
-`p/governor` has a second family of block deadlines the ADR did not scope:
-`p.ready` (`DelayBlocks`, the execution delay) and `expiresAt` (`GraceBlocks`,
-the expiry) — gated at `governor.gno:1172`, `:1810` and `:1852`. Same shape as
-`closes`, same fix, and the stamps to hang them on already exist.
+Converted, and together: both are measured from `p.ready`, so converting one
+would let a proposal leave its delay on one clock and expire on the other — a gap
+where it is neither waiting nor executable, or an overlap where it is both.
+`readyTime` joins `ready`, `inDelay` and `expired` became stamp-preferring
+methods, `expiresAtTime` is `expiresAt`'s wall-clock twin, and the page and the
+Execute refusal both state the moment in seconds with the block beside it.
+
+**A ONE-SECOND ERROR HIDES BETWEEN WHOLE BLOCKS.** `advanceTo` steps five seconds
+at a time, so shifting the delay or the grace by a single second SURVIVED
+block-stepped assertions. Both edges are now driven on the wall clock directly.
+That applies to every seconds edge in this plan; the ones pinned earlier used
+`bumpTo` for other reasons and were lucky.
+
+**And the circularity again**, in the same shape as `TimingsAt` a commit ago: the
+expiry assertion took its target from `expiresAtTime`, the function under test, so
+a `+1` moved both sides and survived. The expected moment is computed from the
+stamp and the rule independently now.
+
+Four pre-existing rows went stale on these lines and were repointed; two of them
+looked like survivors until they were run against `r/govern` as well as
+`p/governor` — **a mutant is only dead when every suite that covers it has run.**
 
 `meta.gno:319/325/335` are NOT deadlines: they compare two stored heights for
 ordering ("the target must strictly predate the appeal"), with no duration
 involved. They stay.
+
+### The sweep is clean
+
+Block arithmetic in `r/kourtv2` and `p/governor` now returns only the `!known`
+fallback arms of converted gates, and comments. No deadline is left on blocks.
 
 ## Done so far
 

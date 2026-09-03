@@ -152,6 +152,7 @@ type proposal struct {
 	openedTime int64
 	closesTime int64
 	ready      int64 // set when it succeeds
+	readyTime  int64 // its wall-clock twin, written at the same moment
 	state  int8
 	reason string
 
@@ -1169,7 +1170,7 @@ func (g *Governor) wouldBe(p *proposal, now int64) (int8, string) {
 		return stateActive, p.reason
 
 	case stateSucceeded:
-		if at, expires := expiresAt(p); expires && now > at {
+		if g.expired(p) {
 			// A proposal nobody executed for a long time is a decision about a
 			// world that has moved. gno's own govdao has no deadline at all
 			// and had to bolt on a reject path because proposals could sit
@@ -1199,6 +1200,7 @@ func (g *Governor) settle(p *proposal) {
 		// nothing to react to until the decision is announced. Settle is
 		// permissionless so announcing is never a privileged position.
 		p.ready = now + p.rules.DelayBlocks
+		p.readyTime = g.voters.Now() + p.rules.DelayBlocks*secsPerBlock
 		return
 	}
 }
@@ -1239,10 +1241,21 @@ func (g *Governor) Execute(who address, id int64, run Dispatch) {
 	if p.state != stateSucceeded {
 		panic("govern: that proposal is not waiting to be executed")
 	}
-	if now := g.voters.Height(); inDelay(p, now) {
+	if g.inDelay(p) {
 		// Says when, because "not yet" without a when is an invitation to poll.
 		// The proposal page has carried this figure all along; the refusal a
 		// caller actually receives did not.
+		//
+		// In the unit that GOVERNS: a caller told "1,000 blocks away" has to know
+		// the chain's pace to turn that into "come back tomorrow", and the pace
+		// is what this conversion exists to stop assuming. A proposal settled
+		// before the stamps keeps the block form, which is all it ever had.
+		if p.readyTime != 0 {
+			panic(ufmt.Sprintf("govern: still in the delay window: executable at "+
+				"%d (block %d), %d seconds away",
+				p.readyTime, p.ready, p.readyTime-g.voters.Now()))
+		}
+		now := g.voters.Height()
 		panic(ufmt.Sprintf("govern: still in the delay window: executable at "+
 			"height %d, %d blocks away", p.ready, p.ready-now))
 	}
@@ -1804,10 +1817,19 @@ func (g *Governor) renderOne(path string) string {
 			// anyway, because anybody may Settle it.
 			out += "\n_Decided, and nobody has recorded it yet. The delay " +
 				"starts when somebody calls Settle — anybody may._\n"
-		case inDelay(p, now):
-			out += ufmt.Sprintf("\n_Waiting: executable in %d blocks, at height %d._\n",
-				p.ready-now, p.ready)
-		case expires && now > expiry:
+		case g.inDelay(p):
+			// SECONDS AND THE ABSOLUTE, for the reason the voting close carries
+			// both: a count in blocks is a duration only to a reader who knows
+			// the chain's pace. A proposal settled before the stamps keeps the
+			// block form, which is all it ever had.
+			if p.readyTime != 0 {
+				out += ufmt.Sprintf("\n_Waiting: executable in %d seconds, at %d (block %d)._\n",
+					p.readyTime-g.voters.Now(), p.readyTime, p.ready)
+			} else {
+				out += ufmt.Sprintf("\n_Waiting: executable in %d blocks, at height %d._\n",
+					p.ready-now, p.ready)
+			}
+		case g.expired(p):
 			out += "\n_Expired: nobody executed it in time._\n"
 		case expires:
 			out += ufmt.Sprintf("\n**Executable now**, until height %d.\n", expiry)
@@ -1849,7 +1871,37 @@ func forAndAgainst(p *proposal) int64 { return p.yes + p.no }
 // those two must not disagree by even a block: a page offering to run what
 // Execute will refuse is the same defect as a page calling a live proposal
 // expired. One definition, so a boundary cannot be moved on one side only.
-func inDelay(p *proposal, now int64) bool { return now < p.ready }
+func (g *Governor) inDelay(p *proposal) bool {
+	if p.readyTime != 0 {
+		return g.voters.Now() < p.readyTime
+	}
+	return g.voters.Height() < p.ready
+}
+
+// expired reports whether a decided proposal is past its execution window.
+//
+// THE TWO WINDOWS MOVE TOGETHER, and that is why they convert together: the
+// delay exists so people can react, and the grace exists so a decision about a
+// world that has moved cannot be executed. Both are measured from p.ready, so
+// converting one and not the other would let a proposal leave its delay on one
+// clock and expire on the other — a gap where it is neither waiting nor
+// executable, or an overlap where it is both.
+func (g *Governor) expired(p *proposal) bool {
+	if at, ever := expiresAtTime(p); ever {
+		return g.voters.Now() > at
+	}
+	at, ever := expiresAt(p)
+	return ever && g.voters.Height() > at
+}
+
+// expiresAtTime is expiresAt in wall-clock seconds, or (0, false) for a
+// proposal settled before the stamps existed.
+func expiresAtTime(p *proposal) (int64, bool) {
+	if p.rules.GraceBlocks <= 0 || p.readyTime == 0 {
+		return 0, false
+	}
+	return p.readyTime + p.rules.GraceBlocks*secsPerBlock, true
+}
 
 // expiresAt is when a decided proposal stops being executable, and whether it
 // ever does. saneRules refuses a grace of zero, so in practice it always does.

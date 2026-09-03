@@ -1274,6 +1274,131 @@ func TestAProposalRowIsItsOwnListItem(t *testing.T) {
 // An active proposal's countdown counts DOWN, found surviving. The existing test
 // asserts the line is present; nothing asserted the number on it, so reversing the
 // subtraction — printing how long ago voting would have closed — read as fine.
+// THE DELAY AND THE EXPIRY ARE THE SAME CLOCK, and they end on their exact
+// moments.
+//
+// They convert together because both are measured from p.ready: the delay exists
+// so people can react, the grace so a decision about a world that has moved
+// cannot run. Convert one and not the other and a proposal can leave its delay
+// on one clock and expire on another — a gap where it is neither waiting nor
+// executable, or an overlap where it is both.
+//
+// Pinned on the predicates, whose height arms are otherwise unreachable from a
+// fixture: a proposal settled before the stamps cannot be produced through the
+// front door, so readyTime is zeroed by hand exactly as the pre-stamp claims are
+// elsewhere in this plan.
+func TestTheDelayAndTheExpiryEndOnTheirExactMoments(cur realm, t *testing.T) {
+	g, _, _ := armed(t, gAlice, gBob, gCarl)
+	resumeClock()
+	// A kind with a REAL delay: the fixture's "fee" has DelayBlocks 0, so
+	// p.ready lands on the settling block and there is no window to stand one
+	// unit short of. The first draft of this test asked advanceTo to go
+	// backwards by one and got the harness's forward-only panic.
+	var ran int64
+	g.Adopt(setFee{name: "delay/k", ran: &ran}, Rules{
+		QuorumBps: 5000, ThresholdBps: 5000, VotingBlocks: 100,
+		DelayBlocks: 50, GraceBlocks: 1000,
+	})
+	id := g.Propose(gAlice, "delay/k", "1", "waits, then expires")
+	g.Vote(gAlice, id, "yes")
+	g.Vote(gBob, id, "yes") // carries quorum and threshold
+	p := g.mustProposal(id)
+
+	// Settled AT ONCE, not after the closing block. Two of three in favour
+	// carries quorum and threshold outright, so wouldBe succeeds early — and
+	// p.ready is then measured from THIS height. Waiting for p.closes first put
+	// ready behind us and asked advanceTo to move backwards.
+	g.Settle(gCarl, id) // permissionless: anybody records the outcome
+	p = g.mustProposal(id)
+	if p.ready == 0 || p.readyTime == 0 {
+		t.Fatalf("fixture: Settle must stamp both clocks (ready=%d readyTime=%d)",
+			p.ready, p.readyTime)
+	}
+
+	// ---- THE DELAY, to its exact SECOND ----
+	// On the wall clock, not by advanceTo: whole blocks move five seconds at a
+	// time and a one-second error hides between the steps. Measured — shifting
+	// the delay by one second survived a block-stepped version of this.
+	bumpTo := func(target int64) {
+		d := target - g.voters.Now()
+		if d < 0 {
+			t.Fatalf("fixture: %d is already behind us (now %d)", target, g.voters.Now())
+		}
+		ctx := testing.GetContext()
+		ctx.Time = ctx.Time.Add(time.Duration(d) * time.Second)
+		testing.SetContext(ctx)
+	}
+	bumpTo(p.readyTime - 1)
+	if !g.inDelay(p) {
+		t.Fatal("one second short of ready the proposal must still be waiting")
+	}
+	bumpTo(p.readyTime)
+	if g.inDelay(p) {
+		t.Fatal("at ready the delay is over; the gate is `<`")
+	}
+	// The height follows, so the rest of the test can walk blocks again.
+	advanceTo(p.ready)
+
+	// ---- THE EXPIRY, to its exact SECOND ----
+	// Driven on the wall clock alone. advanceTo steps whole blocks, so it moves
+	// five seconds at a time and a one-second error hides between its steps —
+	// measured: shifting expiresAtTime by +1 survived a block-stepped version of
+	// this assertion.
+	// COMPUTED FROM THE FIELDS, not from expiresAtTime. Asking the function
+	// under test where its own boundary is moves both sides of the assertion
+	// together — shifting expiresAtTime by +1 survived exactly that version,
+	// the same circularity TimingsAt showed a commit ago. The expected moment
+	// is the stamp plus the rule, stated here independently.
+	atT := p.readyTime + p.rules.GraceBlocks*5
+	if _, everT := expiresAtTime(p); !everT {
+		t.Fatal("fixture: this proposal must have a wall-clock grace window")
+	}
+	if got, _ := expiresAtTime(p); got != atT {
+		t.Fatalf("expiresAtTime says %d, the stamp plus the rule is %d", got, atT)
+	}
+	bumpTo(atT)
+	if g.expired(p) {
+		t.Fatal("AT the expiry it is still executable; the gate is `>`")
+	}
+	bumpTo(atT + 1)
+	if !g.expired(p) {
+		t.Fatal("one second past the expiry it must be expired")
+	}
+
+	// ---- AND A PRE-STAMP PROPOSAL USES ITS HEIGHTS ----
+	// Both arms at once: with readyTime zeroed the delay and the expiry must
+	// both fall back, and the expiry is derived from ready so a half-conversion
+	// would show up here as the two disagreeing.
+	p.readyTime = 0
+	if _, ever := expiresAtTime(p); ever {
+		t.Fatal("with no ready stamp there is no wall-clock expiry to read")
+	}
+	// The HEIGHT has to move for the height arm to be reachable: the wall clock
+	// was driven past the expiry above, and with the stamp gone that number is
+	// no longer consulted at all.
+	atH, everH := expiresAt(p)
+	if !everH {
+		t.Fatal("fixture: the height expiry must exist")
+	}
+	advanceTo(atH + 1)
+	if !g.expired(p) {
+		t.Fatal("the height arm must still expire a proposal past its grace")
+	}
+	// AND THE DELAY'S height arm, which the expiry assertion above cannot reach:
+	// a pre-stamp proposal whose ready block is still ahead must read as waiting.
+	// Measured — deleting this arm survived until this assertion existed.
+	future := g.mustProposal(id)
+	future.readyTime = 0
+	future.ready = g.voters.Height() + 10
+	if !g.inDelay(future) {
+		t.Fatal("a pre-stamp proposal before its ready block must still be waiting")
+	}
+	future.ready = g.voters.Height()
+	if g.inDelay(future) {
+		t.Fatal("...and not waiting once the block arrives")
+	}
+}
+
 // THE VOTING WINDOW CLOSES ON ITS EXACT SECOND, and a proposal from before the
 // stamps still closes on its exact block.
 //
