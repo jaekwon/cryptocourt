@@ -97,8 +97,7 @@ func OpenDispute(cur realm, courtSlug string, claimID uint64) int64 {
 			(!known && now >= cs.answerHeight+settleDelay) {
 			panic("kourtv2: the dispute window has passed; the answer settles undisputed")
 		}
-	} else if (cs.escrowUntilAt != 0 && nowTime() >= cs.escrowUntilAt) ||
-		(cs.escrowUntilAt == 0 && now >= cs.escrowUntil) {
+	} else if escrowPassed(cs) {
 		panic("kourtv2: the escrow window has passed; Finalize the verdict")
 	}
 	touch(c)
@@ -645,8 +644,7 @@ func Finalize(cur realm, courtSlug string, claimID uint64) {
 		panic("kourtv2: no provisional verdict to finalize")
 	}
 	now := heightNow()
-	if (cs.escrowUntilAt != 0 && nowTime() < cs.escrowUntilAt) ||
-		(cs.escrowUntilAt == 0 && now < cs.escrowUntil) {
+	if !escrowPassed(cs) {
 		panic("kourtv2: the escrow window has not passed")
 	}
 	/* THE TWIN OF crystallize.gno's GATE, and it drifts the same way: counted in
@@ -978,12 +976,34 @@ func DisputeBondNext(courtSlug string, claimID uint64) int64 {
 	return cs.disputeBond0()
 }
 
+// escrowPassed reports whether the reopen window has closed.
+//
+// THREE PLACES ASK THIS and they had three answers. OpenDispute and Finalize
+// each wrote the stamp-then-height test out longhand, in mirrored polarity; this
+// function's third caller, Reopenable, was still reading `heightNow() <
+// cs.escrowUntil` and nothing else. So the READ a client gates its "reopen"
+// txlink on could say the window was open while OpenDispute refused, or hide the
+// link while OpenDispute would have accepted — a button that lies in both
+// directions, on the same claim, in the same block.
+//
+// Not a projection: it answers the same question as the gate, so it converts
+// with the gate rather than in the projection pass. What IS a projection here is
+// the block NUMBER the web prints beside it ("Reopenable until block N"), which
+// still needs escrowUntilAt.
+//
+// secs is 0 because escrowUntilAt IS the deadline, not an event to add a window
+// to — the shape the election's phase stamps use.
+func escrowPassed(cs *claimState) bool {
+	passed, known := pastDeadline(cs.escrowUntilAt, 0)
+	return (known && passed) || (!known && heightNow() >= cs.escrowUntil)
+}
+
 // Reopenable reports whether the standing provisional verdict can still be
 // disputed again. A client gates the "reopen" txlink on this.
 func Reopenable(courtSlug string, claimID uint64) bool {
 	cs := mustClaim(mustCourt(courtSlug), claimID)
 	return cs.provisional >= 0 && cs.verdictAt == 0 && !cs.disputeOpen &&
-		heightNow() < cs.escrowUntil
+		!escrowPassed(cs)
 }
 
 // ladderWindow is the window a DEFAULTED verdict needs so the failed-round ladder

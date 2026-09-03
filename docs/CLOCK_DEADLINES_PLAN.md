@@ -1,6 +1,6 @@
 # Deadlines in seconds, accounting in blocks
 
-**Status:** in progress. Every gate in the order list is converted (plus one found already done), and 2 of the 6 stored future heights. TWO GATES THE ORDER LIST OMITS remain — see the log.
+**Status:** in progress. Every gate in the order list is converted (plus one found already done), 2 of the 6 stored future heights, and one of the two gates the order omits. `meta.gno:366` is the last gate.
 
 ## The problem, as observed
 
@@ -244,6 +244,42 @@ units across two claims would be worse than falling back), and it is the one sit
 that already had a corpus row per arm — the discipline being retrofitted
 elsewhere. `supEdge.at` is a height "for the record" that nothing reads and
 nothing renders.
+
+### `dispute.gno:986` — Reopenable, the read that contradicted its own gate
+
+Converted, by collapsing three copies of one rule into `escrowPassed`. The escrow
+window was asked in three places and answered in three ways: OpenDispute and
+Finalize each wrote the stamp-then-height test out longhand in mirrored polarity,
+and Reopenable read `heightNow() < cs.escrowUntil` and nothing else.
+
+**Not drift — a live contradiction.** Reopenable is what "a client gates the
+reopen txlink on", per its own comment. Off 5s a block there were instants where
+the link was offered and the transaction refused, and instants where the link was
+hidden and the transaction would have been accepted. Both directions, same claim,
+same block. So the test asserts AGREEMENT between the read and the write path
+rather than either answer alone; a test checking only "Reopenable is false past
+the window" would have passed throughout the bug.
+
+**Sharing a predicate merged two corpus rows into one.** The two "loses its
+pre-stamp HEIGHT fallback" rows — one per call site — became the same mutation
+once both call sites routed through `escrowPassed`. Kept one, deleted the other:
+a duplicate triple is one mutation billed twice and reads as more coverage than
+exists. Reopenable had no row at all and now has two.
+
+**THE CORPUS CAN BE EDITED AS DATA.** `json.dumps(rows, indent=1,
+ensure_ascii=True) + "\n"` round-trips `mutations-kourtv2.json` byte-identically
+— verified against the file. Every earlier iteration did string surgery on the
+raw JSON to avoid reformatting it, which is how this one briefly shipped a row
+whose `replace` I had rewritten by accident: the OpenDispute row's replacement
+keeps the brace that closes `if cs.provisional < 0`, and blanking it produced a
+mutant that could not parse. `check-mutant-collisions` caught it. Repoint `find`
+and LEAVE `replace` ALONE unless the mutation itself is meant to change.
+
+**Still open, and now the last gate:** `meta.gno:366`, the meta-verdict execution
+expiry.
+
+Verified: full kourtv2 suite green; five mutants compile and are killed; `make
+anchors collisions staleguards guards` and check-read-purity/check-storage pass.
 
 ### `boardlegal.gno:100` — the board row's counter-notice window (last in the order)
 

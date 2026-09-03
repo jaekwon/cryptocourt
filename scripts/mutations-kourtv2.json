@@ -1155,7 +1155,7 @@
   "pkg": "kourtv2",
   "file": "dispute.gno",
   "label": "OpenDispute: a reopen ignores the escrow window",
-  "find": "\t} else if (cs.escrowUntilAt != 0 && nowTime() >= cs.escrowUntilAt) ||\n\t\t(cs.escrowUntilAt == 0 && now >= cs.escrowUntil) {\n\t\tpanic(\"kourtv2: the escrow window has passed; Finalize the verdict\")\n\t}\n",
+  "find": "\t} else if escrowPassed(cs) {\n\t\tpanic(\"kourtv2: the escrow window has passed; Finalize the verdict\")\n\t}\n",
   "replace": "\t}\n"
  },
  {
@@ -4758,7 +4758,7 @@
   "pkg": "kourtv2",
   "file": "dispute.gno",
   "label": "Finalize: finalizes before the escrow window passes",
-  "find": "\tif (cs.escrowUntilAt != 0 && nowTime() < cs.escrowUntilAt) ||\n\t\t(cs.escrowUntilAt == 0 && now < cs.escrowUntil) {\n\t\tpanic(\"kourtv2: the escrow window has not passed\")\n\t}\n",
+  "find": "\tif !escrowPassed(cs) {\n\t\tpanic(\"kourtv2: the escrow window has not passed\")\n\t}\n",
   "replace": ""
  },
  {
@@ -4904,16 +4904,23 @@
  {
   "pkg": "kourtv2",
   "file": "dispute.gno",
-  "label": "escrow: Finalize loses its pre-stamp HEIGHT fallback (escrowUntilAt==0 arm)",
-  "find": "\tif (cs.escrowUntilAt != 0 && nowTime() < cs.escrowUntilAt) ||\n\t\t(cs.escrowUntilAt == 0 && now < cs.escrowUntil) {",
-  "replace": "\tif cs.escrowUntilAt != 0 && nowTime() < cs.escrowUntilAt {"
+  "label": "escrow: the reopen window loses its pre-stamp HEIGHT fallback",
+  "find": "\treturn (known && passed) || (!known && heightNow() >= cs.escrowUntil)",
+  "replace": "\treturn known && passed"
  },
  {
   "pkg": "kourtv2",
   "file": "dispute.gno",
-  "label": "escrow: a reopen loses its pre-stamp HEIGHT fallback (escrowUntilAt==0 arm)",
-  "find": "\t} else if (cs.escrowUntilAt != 0 && nowTime() >= cs.escrowUntilAt) ||\n\t\t(cs.escrowUntilAt == 0 && now >= cs.escrowUntil) {",
-  "replace": "\t} else if cs.escrowUntilAt != 0 && nowTime() >= cs.escrowUntilAt {"
+  "label": "Reopenable: the reopen link ignores the escrow window",
+  "find": "\t\t!escrowPassed(cs)\n}",
+  "replace": "\t\ttrue\n}"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "dispute.gno",
+  "label": "escrowPassed: the reopen window closes one second late",
+  "find": "\tpassed, known := pastDeadline(cs.escrowUntilAt, 0)",
+  "replace": "\tpassed, known := pastDeadline(cs.escrowUntilAt, 1)"
  },
  {
   "pkg": "kourtv2",

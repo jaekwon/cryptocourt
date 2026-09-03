@@ -2,6 +2,7 @@ package kourtv2
 
 import (
 	"testing"
+	"time"
 
 	testutils "gno.land/p/nt/testutils/v0"
 	uassert "gno.land/p/nt/uassert/v0"
@@ -18,6 +19,93 @@ func stakeAnswerDispute(cur realm, slug string, alice, bob address) uint64 {
 	testing.SetRealm(testing.NewUserRealm(alice))
 	PostAnswer(cross(cur), slug, id, sideYES)
 	return id
+}
+
+// THE REOPEN LINK MUST NOT LIE, IN EITHER DIRECTION.
+//
+// Reopenable answers the same question OpenDispute's escrow guard asks, and a
+// client gates the "reopen" txlink on it. Until this commit the two answered
+// differently: the guard read escrowUntilAt and Reopenable read `heightNow() <
+// cs.escrowUntil`, so on any chain off 5s a block there were instants where the
+// link was offered and the transaction refused, and instants where the link was
+// hidden and the transaction would have been accepted. Both directions, same
+// claim, same block.
+//
+// So this asserts AGREEMENT rather than either answer alone: at each instant the
+// read and the write path are compared to each other. A test that checked only
+// "Reopenable is false past the window" would have passed throughout the bug.
+func TestReopenableAgreesWithTheGateItMirrors(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("rpn-alice")
+	bob := testutils.TestAddress("rpn-bob")
+	c := testCourt(cur, "rpn", alice, 90_000_000_000)
+	c.coin.Mint(bob, 40_000_000_000)
+
+	// arm re-opens a parked claim's escrow window ahead of us on BOTH clocks, so
+	// the two can then be driven apart deliberately. parkedClaim leaves the window
+	// already behind in blocks, which is the state Finalize wants, not this test.
+	arm := func(id uint64, secs, blocks int64) *claimState {
+		cs := mustClaim(c, id)
+		if cs.escrowUntilAt == 0 {
+			t.Fatal("fixture: no escrow stamp, so this would test the height fallback instead")
+		}
+		cs.escrowUntilAt = nowTime() + secs
+		cs.escrowUntil = heightNow() + blocks
+		return cs
+	}
+
+	// ---- DIRECTION ONE: the link is withdrawn exactly when the chain refuses ----
+	idA := parkedClaim(cur, c, "rpn", alice, bob)
+	csA := arm(idA, 3600, 720)
+	if !Reopenable("rpn", idA) {
+		t.Fatal("inside the window on both clocks, the link must be offered")
+	}
+	frozenH := heightNow()
+	ctx := testing.GetContext()
+	ctx.Time = ctx.Time.Add(3600 * time.Second) // past it on the CLOCK only
+	testing.SetContext(ctx)
+	uassert.Equal(t, frozenH, heightNow())
+	uassert.True(t, heightNow() < csA.escrowUntil) // blocks still say "open"
+
+	if Reopenable("rpn", idA) {
+		t.Fatal("past the window on the wall clock, the link must be withdrawn")
+	}
+	testing.SetRealm(testing.NewUserRealm(bob))
+	uassert.AbortsContains(t, cur, "escrow window has passed", func() {
+		OpenDispute(cross(cur), "rpn", idA)
+	})
+
+	// ---- DIRECTION TWO: the link is offered exactly when the chain accepts ----
+	// Asserted on its OWN claim, because proving it means actually reopening, and
+	// a reopened claim can no longer answer the question. The first draft of this
+	// test called OpenDispute on the shared claim and every later assertion read
+	// "a dispute is already open" instead of what it meant to read.
+	idB := parkedClaim(cur, c, "rpn", alice, bob)
+	arm(idB, 3600, 720)
+	if !Reopenable("rpn", idB) {
+		t.Fatal("inside the window the link must be offered")
+	}
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), "rpn", idB) // and the chain accepts, same instant
+	if !mustClaim(c, idB).disputeOpen {
+		t.Fatal("the reopen the link promised must actually have landed")
+	}
+
+	// ---- AND A PRE-STAMP CLAIM: read and gate both fall back to height ----
+	idC := parkedClaim(cur, c, "rpn", alice, bob)
+	csC := arm(idC, 3600, 10)
+	csC.escrowUntilAt = 0 // the pre-upgrade shape: a height, no stamp
+	if !Reopenable("rpn", idC) {
+		t.Fatal("a pre-stamp claim inside its block window must still offer the link")
+	}
+	testing.SkipHeights(10)
+	uassert.Equal(t, csC.escrowUntil, heightNow())
+	if Reopenable("rpn", idC) {
+		t.Fatal("a pre-stamp claim must still withdraw the link on its exact block")
+	}
+	testing.SetRealm(testing.NewUserRealm(bob))
+	uassert.AbortsContains(t, cur, "escrow window has passed", func() {
+		OpenDispute(cross(cur), "rpn", idC)
+	})
 }
 
 // upholdByVote carries the claim to an UPHELD dispute verdict on `voter`'s
