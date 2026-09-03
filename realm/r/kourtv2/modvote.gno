@@ -282,6 +282,23 @@ func (cm *courtMod) mustCandidate(id uint64) *modCandidate {
 	return v.(*modCandidate)
 }
 
+// electionCooldownOpen reports whether a court is still inside the cooldown a
+// fully-failed election starts.
+//
+// A THIRD STORED FUTURE MOMENT, converted like the other two: the twin is
+// written beside the height and never derived afterwards. The duration is
+// decideWindowBlocks — "the realm's unit for a body gets this long to decide",
+// reused here — so it converts at the write site rather than through a constant
+// of its own, for the reason pendingTTLBlocks' note gives.
+//
+// A ZERO COOLDOWN IS "NEVER SET", and both arms answer that correctly without a
+// special case: with no stamp the height arm asks `heightNow() < 0`, which is
+// false, and a court that has never failed an election is never in cooldown.
+func electionCooldownOpen(cm *courtMod) bool {
+	passed, known := pastDeadline(cm.electionCooldownUntilTime, 0)
+	return (known && !passed) || (!known && heightNow() < cm.electionCooldownUntil)
+}
+
 // nominationClosed and votingClosed are the ballot's PHASE, asked in one place
 // each. Six sites ask them — three gates in modvote, one in ResolveElection and
 // the two the render derives its phase banner from — and the phases are adjacent,
@@ -322,7 +339,7 @@ func OpenElection(cur realm, courtSlug string, candidateID uint64) uint64 {
 		panic("kourtv2: an election is already open for this court")
 	}
 	now := heightNow()
-	if now < cm.electionCooldownUntil {
+	if electionCooldownOpen(cm) {
 		panic("kourtv2: this court is in its post-election cooldown")
 	}
 	cand := cm.mustCandidate(candidateID)
@@ -595,6 +612,7 @@ func ResolveElection(cur realm, courtSlug string) {
 	// A fully-failed election starts this court's OWN cooldown slot (the
 	// decideWindowBlocks DURATION is reused; the per-claim flag field is not).
 	cm.electionCooldownUntil = now + decideWindowBlocks
+	cm.electionCooldownUntilTime = nowTime() + blocksToSecs(decideWindowBlocks)
 }
 
 // installModSet is the shared primitive both peers use to replace a court's

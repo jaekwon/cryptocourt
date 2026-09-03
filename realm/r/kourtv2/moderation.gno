@@ -251,7 +251,8 @@ type courtMod struct {
 	candSeq               uint64
 	election              *election
 	electionSeq           uint64
-	electionCooldownUntil int64 // this court's OWN cooldown slot (not the per-claim flag field)
+	electionCooldownUntil     int64 // this court's OWN cooldown slot (not the per-claim flag field)
+	electionCooldownUntilTime int64 // its wall-clock twin, written at the same moment
 	creatorUnseated       bool  // an election has installed a set; the creator no longer appoints
 
 	// election / strip-index state land in modvote.gno / the strip module; they

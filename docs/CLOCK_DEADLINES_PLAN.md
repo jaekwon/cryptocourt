@@ -1,6 +1,6 @@
 # Deadlines in seconds, accounting in blocks
 
-**Status:** in progress. EVERY GATE IS CONVERTED — the order list's, plus the two it omitted. 4 of the 6 stored future heights are done; the rest of the remaining work is stored future heights, projections, and the governor.
+**Status:** in progress. EVERY GATE IS CONVERTED — the order list's, plus the two it omitted. 5 of the 6 stored future heights are done; the rest of the remaining work is stored future heights, projections, and the governor.
 
 ## The problem, as observed
 
@@ -245,6 +245,31 @@ units across two claims would be worse than falling back), and it is the one sit
 that already had a corpus row per arm — the discipline being retrofitted
 elsewhere. `supEdge.at` is a height "for the record" that nothing reads and
 nothing renders.
+
+### `modvote.gno:563` — the post-election cooldown
+
+Converted. `electionCooldownUntilTime` beside its height, one predicate
+(`electionCooldownOpen`) read by the gate and by the render's cooldown banner —
+the banner follows the gate for the same reason the ballot's phase banner does.
+The duration is `decideWindowBlocks` reused, so it converts at the write site.
+
+A zero cooldown means "never set", and both arms answer that without a special
+case: with no stamp the height arm asks `heightNow() < 0`, which is false.
+
+**The gate was covered but had NO corpus row.** Disabling it is caught by the
+suite, so the rule was held — but nothing pinned its LENGTH, and
+`TestElectionBelowQuorumRetains` proves only that the cooldown blocks a re-open,
+never when it lifts. Four rows added (not enforced, one second late, height
+fallback lost, stamp not written), all killed.
+
+**The stale-anchor list worked as the index, in the negative.** Last commit's
+lesson was that `make anchors` is a more reliable guide to what the corpus
+already covers than grepping by symbol. Here it reported NOTHING stale after the
+change — which correctly meant no row had ever anchored on these lines, not that
+the rows were fine. A silent anchors run is a coverage question, not an all-clear.
+
+Verified: full kourtv2 suite green; four mutants compile and are killed; `make
+anchors collisions staleguards guards` and check-read-purity/check-storage pass.
 
 ### `boardmod.gno:442,444` — the claim-board freeze and its gap (the mirror)
 

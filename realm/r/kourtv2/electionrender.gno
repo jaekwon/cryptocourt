@@ -84,7 +84,7 @@ func writeNoElection(b *strings.Builder, c *Court, cm *courtMod) {
 	now := heightNow()
 	// THE COOLDOWN, WITH ITS DEADLINE. A holder told only "you cannot open one"
 	// has no way to learn when they can, and the number is already in state.
-	if cm != nil && cm.electionCooldownUntil > now {
+	if cm != nil && electionCooldownOpen(cm) {
 		b.WriteString("- this court is in its post-election cooldown until block **" +
 			strconv.FormatInt(cm.electionCooldownUntil, 10) + "** (now " +
 			strconv.FormatInt(now, 10) + "); no ballot can open before then\n\n")

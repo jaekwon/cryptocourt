@@ -252,6 +252,113 @@ func TestElectionNominationGuards(cur realm, t *testing.T) {
 	})
 }
 
+// THE POST-ELECTION COOLDOWN IS A WEEK, NOT 120,960 BLOCKS.
+//
+// A fully-failed election arms this court's cooldown so the same ballot cannot be
+// re-run immediately. TestElectionBelowQuorumRetains proves the cooldown BLOCKS a
+// re-open; nothing proved when it LIFTS, and the corpus carried no row for it at
+// all — so its length was free to be anything.
+//
+// The duration is decideWindowBlocks, the realm's unit for "a body gets this long
+// to decide", reused here. On a chain off 5s a block, counted in blocks, a
+// court's enforced pause between ballots is not the week the unit means.
+func TestTheElectionCooldownLiftsOnTheWallClock(cur realm, t *testing.T) {
+	creator := testutils.TestAddress("evc-creator")
+	whale := testutils.TestAddress("evc-whale")
+	dust := testutils.TestAddress("evc-dust")
+	newMod := testutils.TestAddress("evc-newmod")
+	c := electionCourt(cur, "evc", creator,
+		[]address{whale, dust}, []int64{1_000_000_000, 10_000_000})
+	c.coin.Mint(dust, 50_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(dust))
+	cand := RegisterModCandidate(cross(cur), "evc", 1, newMod)
+	testing.SetRealm(testing.NewUserRealm(dust))
+	OpenElection(cross(cur), "evc", cand)
+	testing.SkipHeights(nominationWindow)
+	testing.SetRealm(testing.NewUserRealm(dust)) // sub-quorum turnout
+	ApproveCandidate(cross(cur), "evc", cand)
+	testing.SkipHeights(c.params.votingBlocks)
+	testing.SetRealm(testing.NewUserRealm(dust))
+	ResolveElection(cross(cur), "evc")
+
+	cm := c.mod
+	if cm.electionCooldownUntilTime == 0 {
+		t.Fatal("fixture: the cooldown must be stamped, or this pins the height arm")
+	}
+	frozenH := heightNow()
+	bumpTo := func(target int64) {
+		d := target - nowTime()
+		if d < 0 {
+			t.Fatalf("fixture: %d is already behind us (now %d)", target, nowTime())
+		}
+		ctx := testing.GetContext()
+		ctx.Time = ctx.Time.Add(time.Duration(d) * time.Second)
+		testing.SetContext(ctx)
+	}
+
+	// ONE SECOND SHORT: still shut.
+	bumpTo(cm.electionCooldownUntilTime - 1)
+	uassert.Equal(t, frozenH, heightNow())
+	uassert.True(t, heightNow() < cm.electionCooldownUntil) // blocks agree it is early
+	testing.SetRealm(testing.NewUserRealm(dust))
+	uassert.AbortsContains(t, cur, "cooldown", func() {
+		OpenElection(cross(cur), "evc", cand)
+	})
+
+	// THE SECOND ITSELF: a new ballot may open, with no block mined and the block
+	// arithmetic still reading "in cooldown".
+	bumpTo(cm.electionCooldownUntilTime)
+	uassert.Equal(t, frozenH, heightNow())
+	uassert.True(t, heightNow() < cm.electionCooldownUntil)
+	testing.SetRealm(testing.NewUserRealm(dust))
+	OpenElection(cross(cur), "evc", cand)
+	if !ElectionOpen("evc") {
+		t.Fatal("past the cooldown on the wall clock a ballot must open")
+	}
+}
+
+// A COURT THAT FAILED AN ELECTION BEFORE THE STAMPS keeps its block cooldown.
+func TestAPreStampElectionCooldownKeepsItsBlockWindow(cur realm, t *testing.T) {
+	creator := testutils.TestAddress("evd-creator")
+	whale := testutils.TestAddress("evd-whale")
+	dust := testutils.TestAddress("evd-dust")
+	newMod := testutils.TestAddress("evd-newmod")
+	c := electionCourt(cur, "evd", creator,
+		[]address{whale, dust}, []int64{1_000_000_000, 10_000_000})
+	c.coin.Mint(dust, 50_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(dust))
+	cand := RegisterModCandidate(cross(cur), "evd", 1, newMod)
+	testing.SetRealm(testing.NewUserRealm(dust))
+	OpenElection(cross(cur), "evd", cand)
+	testing.SkipHeights(nominationWindow)
+	testing.SetRealm(testing.NewUserRealm(dust))
+	ApproveCandidate(cross(cur), "evd", cand)
+	testing.SkipHeights(c.params.votingBlocks)
+	testing.SetRealm(testing.NewUserRealm(dust))
+	ResolveElection(cross(cur), "evd")
+
+	cm := c.mod
+	cm.electionCooldownUntilTime = 0 // the pre-upgrade shape: a height, no stamp
+
+	if d := cm.electionCooldownUntil - 1 - heightNow(); d > 0 {
+		testing.SkipHeights(d)
+	}
+	uassert.Equal(t, cm.electionCooldownUntil-1, heightNow())
+	testing.SetRealm(testing.NewUserRealm(dust))
+	uassert.AbortsContains(t, cur, "cooldown", func() {
+		OpenElection(cross(cur), "evd", cand)
+	})
+	testing.SkipHeights(1)
+	uassert.Equal(t, cm.electionCooldownUntil, heightNow())
+	testing.SetRealm(testing.NewUserRealm(dust))
+	OpenElection(cross(cur), "evd", cand)
+	if !ElectionOpen("evd") {
+		t.Fatal("a pre-stamp cooldown must lift on its exact block")
+	}
+}
+
 // THE BALLOT'S PHASES ARE HOURS, NOT BLOCK COUNTS — AND THEY MEET EXACTLY.
 //
 // nominateEnd and voteEnd are STORED FUTURE HEIGHTS, which is the kind that

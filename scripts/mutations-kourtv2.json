@@ -5975,6 +5975,34 @@
  {
   "pkg": "kourtv2",
   "file": "modvote.gno",
+  "label": "OpenElection: the post-election cooldown is not enforced",
+  "find": "\tif electionCooldownOpen(cm) {\n\t\tpanic(\"kourtv2: this court is in its post-election cooldown\")\n\t}",
+  "replace": "\tif false {\n\t\tpanic(\"kourtv2: this court is in its post-election cooldown\")\n\t}"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "modvote.gno",
+  "label": "electionCooldownOpen: the cooldown lifts one second late",
+  "find": "\tpassed, known := pastDeadline(cm.electionCooldownUntilTime, 0)",
+  "replace": "\tpassed, known := pastDeadline(cm.electionCooldownUntilTime, 1)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "modvote.gno",
+  "label": "electionCooldownOpen: a pre-stamp cooldown loses its HEIGHT fallback",
+  "find": "\treturn (known && !passed) || (!known && heightNow() < cm.electionCooldownUntil)",
+  "replace": "\treturn known && !passed"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "modvote.gno",
+  "label": "ResolveElection: the cooldown is armed without its wall-clock stamp",
+  "find": "\tcm.electionCooldownUntilTime = nowTime() + blocksToSecs(decideWindowBlocks)",
+  "replace": "\tcm.electionCooldownUntilTime = 0"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "modvote.gno",
   "label": "nominationClosed: the nomination window shuts one second late",
   "find": "\tpassed, known := pastDeadline(e.nominateEndTime, 0)",
   "replace": "\tpassed, known := pastDeadline(e.nominateEndTime, 1)"
