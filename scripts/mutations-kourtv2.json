@@ -262,6 +262,27 @@
  {
   "pkg": "kourtv2",
   "file": "stake.gno",
+  "label": "Stake: the polish window ends on its exact second",
+  "find": "pastDeadline(cs.openedAtTime, blocksToSecs(c.params.stakeOpenDelayBlocks)); (known && !passed)",
+  "replace": "pastDeadline(cs.openedAtTime, blocksToSecs(c.params.stakeOpenDelayBlocks)+1); (known && !passed)"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "stake.gno",
+  "label": "Stake: a pre-stamp claim's polish window ends on its exact block",
+  "find": "(!known && heightNow() < cs.openedAt+c.params.stakeOpenDelayBlocks) {\n\t\tpanic(\"kourtv2: the polish window is open",
+  "replace": "(!known && heightNow() <= cs.openedAt+c.params.stakeOpenDelayBlocks) {\n\t\tpanic(\"kourtv2: the polish window is open"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "stake.gno",
+  "label": "Stake: the polish window is not enforced at all",
+  "find": "if passed, known := pastDeadline(cs.openedAtTime, blocksToSecs(c.params.stakeOpenDelayBlocks)); (known && !passed) ||\n\t\t(!known && heightNow() < cs.openedAt+c.params.stakeOpenDelayBlocks) {",
+  "replace": "if false {"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "stake.gno",
   "label": "lock: Stake itself skips the spendable check",
   "find": "\tmustStakable(c, who, amount)\n",
   "replace": ""

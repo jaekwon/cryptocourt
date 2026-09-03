@@ -163,7 +163,15 @@ func Stake(cur realm, courtSlug string, claimID uint64, side int, amount int64) 
 	// Polish window (§9): staking is closed for stakeOpenDelayBlocks after
 	// OpenClaim so the author/moderators can fix wording before anyone bets.
 	// Default 0 → no window, behaviour unchanged for courts that don't opt in.
-	if heightNow() < cs.openedAt+c.params.stakeOpenDelayBlocks {
+	//
+	// THE SAME WINDOW EditClaimTitle READS (claim.gno), converted the same way
+	// and deliberately character-identical apart from the polarity: that gate
+	// asks whether the window has CLOSED, this one whether it is still OPEN. They
+	// must agree on the instant, because it is one window seen from two sides —
+	// the title freezes exactly when staking opens. blocksToSecs is what makes
+	// them agree, the window being a court parameter denominated in blocks.
+	if passed, known := pastDeadline(cs.openedAtTime, blocksToSecs(c.params.stakeOpenDelayBlocks)); (known && !passed) ||
+		(!known && heightNow() < cs.openedAt+c.params.stakeOpenDelayBlocks) {
 		panic("kourtv2: the polish window is open; staking has not started yet")
 	}
 	touch(c)

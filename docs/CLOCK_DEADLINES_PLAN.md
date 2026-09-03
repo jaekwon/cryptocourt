@@ -1,6 +1,6 @@
 # Deadlines in seconds, accounting in blocks
 
-**Status:** in progress. 2 of 11 gates converted; see the log at the end.
+**Status:** in progress. 3 of 11 gates converted; see the log at the end.
 
 ## The problem, as observed
 
@@ -145,7 +145,7 @@ trailing ring; `pendingTTLBlocks` looks like accounting and is a deadline.
 | `dispute.gno:652` | `finalizeGraceBlocks` after escrow | `escrowUntilAt` | **converted** |
 | `dispute.gno:101,649` | escrow window | `escrowUntilAt` | half — stamp path exists |
 | `answer.gno:69` | `stakeOpenDelay + answerWindow + priorityWindow`, summed | `openedAtTime` | unconverted — composite, converts as one duration |
-| `stake.gno:166` | `stakeOpenDelayBlocks` | `openedAtTime` | unconverted |
+| `stake.gno:166` | `stakeOpenDelayBlocks` | `openedAtTime` | **converted** |
 | `moderation.gno:664,1187` | `pendingTTLBlocks` | needs a stamp | unconverted |
 | `moderation.gno:691` | `votingBlocks` after execute | needs a stamp | unconverted |
 | `modvote.gno:328` | `nominateEnd` | needs a stamp | unconverted |
@@ -231,6 +231,34 @@ of 1.2M.
   as a one-off for legacy params only.
 
 ## Log
+
+### `stake.gno:166` — the polish window, second half of a window already half-converted
+
+Converted. No new constant: the window is a COURT PARAMETER in blocks, so it goes
+through `blocksToSecs` exactly as `claim.gno:497` already did for the other half
+of the same window.
+
+**That other half is the point.** `EditClaimTitle` asks whether the polish window
+has CLOSED; `Stake` asks whether it is still OPEN. One window, two gates, opposite
+polarity — and until this commit one read seconds and the other read blocks. On
+any chain not running at 5s a block there was a spread of instants where a claim
+could be both re-titled and staked, which is the exact race the window exists to
+prevent. Converting the second half closed it, and the new test asserts the two
+gates agree at the boundary rather than merely that each works alone.
+
+**A different failure mode from the first two sites.** There was no stale anchor
+here, because there was no corpus row to go stale: this gate had NO mutation
+coverage at all. Grepping the corpus before editing (the lesson from the last
+commit) is what surfaced that — the check suite cannot report a row that was never
+written. Three rows added: exact second, exact block, not enforced. All killed.
+
+The window is short (720 blocks = 3600s), so unlike the grace week its exact
+second is cheap to pin, and the test does: refused at 3599, allowed at 3600, with
+no block mined in between.
+
+Verified: full kourtv2 suite green; all four mutants compile and are killed; the
+new test panics with the real message on the pre-conversion gate; `make anchors
+collisions staleguards guards` pass.
 
 ### `dispute.gno:652` — Finalize's grace, the twin
 
