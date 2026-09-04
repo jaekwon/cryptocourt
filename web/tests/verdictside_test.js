@@ -396,6 +396,41 @@ const run = async (rows, v, mode) => {
         && verdictBanner({phase:"open"}).includes("open");
   })());
 
+
+  /* WHAT IS BEING DISPUTED, on the docket. Reported from the court page: the
+     rows say "IN DISPUTE" and should say which side is on the table. It was the
+     one status that named none — settled, provisional and answered all do — so a
+     reader scanning a court could see which way every claim went except the ones
+     still being fought over.
+     "YES?" rather than "in dispute YES", which reads as though YES had won it.
+     The colour still carries the phase, so the question mark is not doing that
+     job alone. */
+  ok("a disputed row names the side under dispute", (()=>{
+    const p = statusPill("disputed YES — a sealed vote is deciding; principal is never withheld");
+    return p.includes(">YES?<") && !p.includes("in dispute");
+  })());
+  ok("...on either side", (()=>{
+    return statusPill("disputed NO — a sealed vote is deciding").includes(">NO?<");
+  })());
+  ok("...keeping the dispute colour, so the phase is not carried by punctuation", (()=>{
+    const p = statusPill("disputed YES — a sealed vote is deciding");
+    return p.includes(`class="pill ${phaseClass("disputed YES — x").cls}"`);
+  })());
+  /* A realm older than the side-naming status line answers without one. Saying
+     less is right there; inventing a side would not be. */
+  ok("...and falls back to the bare phase when no side is readable", (()=>{
+    const p = statusPill("disputed — a sealed vote is deciding; principal is never withheld");
+    return p.includes(">in dispute<") && !p.includes("?");
+  })());
+  /* The side regex is anchored to the words that carry a decision. "open — stake
+     YES or NO" is the sentence that made an earlier unanchored version give every
+     open claim a side, so adding a fourth word to the anchor is asserted against
+     exactly that string. */
+  ok("...and no side leaks onto an open claim from its own instructions", (()=>{
+    return phaseClass("open — stake YES or NO; unstake freely until an answer posts").side === ""
+        && !statusPill("open — stake YES or NO; unstake freely").includes("?");
+  })());
+
   console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");
   process.exit(fail?1:0);
 })();

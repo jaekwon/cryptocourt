@@ -709,7 +709,23 @@ func claimStatus(cs *claimState) string {
 		// provisional. TestBothSettleRoutesNameTheVerdictSide pins both.
 		return "settled " + sideName(int(cs.provisional)) + " — every stake withdraws 1×"
 	case cs.disputeOpen:
-		return "disputed — a sealed vote is deciding; principal is never withheld"
+		// AND A DISPUTE HAS A SIDE TOO, for the reason the settled branch above
+		// gives about itself: this line named none, so every disputed claim in a
+		// court read identically and a client showing a one-line status could not
+		// say what was being contested. Settled, provisional and answered have all
+		// named their side; disputed was the last one that did not.
+		//
+		// THE SIDE UNDER DISPUTE IS THE ONE ON THE TABLE, which is the provisional
+		// once a round has produced one and the answer before that. A re-dispute
+		// reaches this branch with provisional >= 0 — the case below is only for a
+		// provisional with no dispute running — so reading cs.answer here would
+		// name the original answer while the vote is contesting a later verdict.
+		disputed := int(cs.answer)
+		if cs.provisional >= 0 {
+			disputed = int(cs.provisional)
+		}
+		return "disputed " + sideName(disputed) +
+			" — a sealed vote is deciding; principal is never withheld"
 	case cs.provisional >= 0:
 		return "provisional verdict " + sideName(int(cs.provisional)) +
 			" — reopenable by a new dispute until block " + strconv.FormatInt(cs.escrowUntil, 10) +

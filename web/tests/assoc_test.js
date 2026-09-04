@@ -167,10 +167,15 @@ CFG.mode='demo';
    unchanged and still pinned — #4's answer was NO and its verdict YES, and YES
    is what the oval says — and the pill's ABSENCE is asserted beside it, since
    dropping the pill is the change and a row carrying both would be the bug.
-   #3 is in dispute, has no readable side, and keeps its pill. */
-ok("#9 rows: #4 wears the verdict's oval, #3 keeps its in-dispute pill",
+   #3 is in dispute and keeps its PILL — the oval is for a decided claim, and a
+   dispute is the opposite of decided. What its pill says changed: the docket
+   asked for the side under dispute, so it reads "YES?" rather than the phase
+   alone. That it is still a pill, and still the dispute colour, is the part this
+   assertion is about. */
+ok("#9 rows: #4 wears the verdict's oval, #3 keeps its dispute pill",
    /vtag y">YES</.test(h9) && !h9.includes(">settled YES<")
-   && h9.includes(">in dispute<"));
+   && h9.includes('<span class="pill escrow">YES?</span>')
+   && !/vtag[^>]*>YES<\/span>\s*<\/a>[^]*#\/c\/orem\/3/.test(h9));
 
 // ---- resolution ladder ----
 const d2 = Object.assign({id:2}, DEMO.claims["orem/2"], {answered:true});

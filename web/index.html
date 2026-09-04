@@ -3691,7 +3691,13 @@ function statusText(d){
     const sn = sideName(d.verdict!=null? d.verdict : d.answer);
     return "settled" + (sn==="—" ? "" : " "+sn) + " — every stake withdraws 1×";
   }
-  if(d.phase==="disputed") return "disputed — a sealed vote is deciding; principal is never withheld";
+  // Names the side as the realm's claimStatus does, for the same reason the
+  // settled branch above does: without it the sample's disputed claims carry no
+  // side and the demo docket disagrees with a live one.
+  if(d.phase==="disputed"){
+    const sd = sideName(d.provisional!=null && d.provisional>=0 ? d.provisional : d.answer);
+    return "disputed" + (sd==="—" ? "" : " "+sd) + " — a sealed vote is deciding; principal is never withheld";
+  }
   if(d.phase==="provisional") return "provisional verdict — reopenable by a new dispute; the losing side may withdraw 1× now";
   if(d.phase==="answered"){
     const sd = (d.answer===0||d.answer===1)? " "+sideName(d.answer) : "";
@@ -10275,7 +10281,7 @@ function phaseClass(statusText){
   // in demo mode as well, where that sentence is identical. The two forms that
   // carry a decision are the realm's "settled X" and "provisional verdict X"; the
   // match is anchored to them, and anything else has no side.
-  const side=(/(?:settled|verdict|answered)\s+(YES|NO)\b/.exec(statusText||"")||[])[1]||"";
+  const side=(/(?:settled|verdict|answered|disputed)\s+(YES|NO)\b/.exec(statusText||"")||[])[1]||"";
   const st=(statusText||"").toLowerCase(); let cls="void", short="open";
   if(/^closed|provclose/.test(st)){cls="void";short=/never answered/.test(st)?"never answered":"no decision";}
   else if(/settled/.test(st)){
@@ -10296,6 +10302,19 @@ function phaseClass(statusText){
 }
 function statusPill(statusText){
   const p = phaseClass(statusText);
+  /* A DISPUTED ROW SAYS WHAT IS BEING DISPUTED. It read "in dispute", which is
+     the one status on the docket that named no side: settled, provisional and
+     answered all do, so a reader scanning a court saw which way every claim went
+     EXCEPT the ones still being fought over — the ones where the side on the
+     table is most worth knowing.
+     "YES?" rather than "in dispute YES", which reads as though YES had won the
+     dispute. The question mark is the phase: this is the answer on the table and
+     it may not survive the vote. The colour is still the dispute colour, so the
+     phase is not carried by punctuation alone.
+     Falls back to the bare phase when no side is readable — a realm older than
+     the side-naming status line answers without one, and inventing a side there
+     would be worse than saying less. */
+  if(p.short==="in dispute" && p.side) return `<span class="pill ${p.cls}">${esc(p.side)}?</span>`;
   return `<span class="pill ${p.cls}">${esc(p.short)}${p.side? " "+esc(p.side):""}</span>`;
 }
 function docketRow(slug,c,meta){

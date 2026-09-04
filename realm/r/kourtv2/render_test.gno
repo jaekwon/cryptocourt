@@ -963,3 +963,56 @@ func TestBothSettleRoutesNameTheVerdictSide(cur realm, t *testing.T) {
 	Finalize(cross(cur), "vsd2", id2)
 	check("vote", "vsd2", id2)
 }
+
+// A DISPUTE NAMES THE SIDE UNDER DISPUTE, the last one-line status that did not.
+//
+// Same defect and same argument as TestBothSettleRoutesNameTheVerdictSide above:
+// settled, provisional and answered all name their side, so a client showing a
+// one-line status could say which way every claim went EXCEPT the ones still
+// being fought over — where the side on the table is the thing most worth
+// knowing. Reported from the court page: the docket says "IN DISPUTE" and should
+// say which side.
+//
+// Checked AGAINST the reads rather than a literal, so the property asserted is
+// that the status and the reads agree about what is being contested.
+func TestADisputedStatusNamesTheSideUnderDispute(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("dsd-alice")
+	bob := testutils.TestAddress("dsd-bob")
+	c := testCourt(cur, "dsd", alice, 50_000_000_000)
+	c.coin.Mint(bob, 10_000_000_000)
+
+	id := stakeAnswerDispute(cur, "dsd", alice, bob)
+	testing.SetRealm(testing.NewUserRealm(bob))
+	OpenDispute(cross(cur), "dsd", id)
+	cs := mustClaim(c, id)
+	if !cs.disputeOpen {
+		t.Fatal("fixture: no dispute is open, so this tests the wrong branch")
+	}
+
+	st := ClaimStatus("dsd", id)
+	if want := "disputed " + sideName(AnswerVerdict("dsd", id)); !strings.HasPrefix(st, want) {
+		t.Fatalf("status %q does not start with %q", st, want)
+	}
+	// The shape of the bug, named directly — the em-dash clause with no side
+	// between it and the word.
+	if strings.HasPrefix(st, "disputed —") {
+		t.Fatalf("the disputed status names no side: %q", st)
+	}
+
+	// ---- AND ON A RE-DISPUTE IT NAMES THE PROVISIONAL, NOT THE ANSWER ----
+	// A second dispute reaches this branch with a provisional already set, and
+	// the vote is contesting THAT verdict rather than the original answer. The
+	// two are equal on every route this suite can drive end to end — an upheld
+	// answer becomes the provisional — so the field is set by hand to the
+	// opposite side, which is the only way to tell which one the line reads.
+	// Crafted state cannot prove a route fills the field; it is not being asked
+	// to. It proves the branch picks the right field when they disagree.
+	cs.provisional = int8(1 - cs.answer)
+	st2 := ClaimStatus("dsd", id)
+	if want := "disputed " + sideName(int(cs.provisional)); !strings.HasPrefix(st2, want) {
+		t.Fatalf("a re-dispute must name the provisional: status %q, want prefix %q", st2, want)
+	}
+	if st2 == st {
+		t.Fatal("the status did not move with the provisional, so it is reading the answer")
+	}
+}
