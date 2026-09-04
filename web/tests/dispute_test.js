@@ -439,8 +439,26 @@ ok("...and a failed connect says why, in the dialog that asked",
   // The two statements need not be adjacent — the post-transaction cache clear
   // sits between them — but the timer must still be cleared in the same callback
   // that repaints, or a countdown ticks on over a page that has already updated.
-  ok("...clearing its timer when the repaint comes",
-     /clearInterval\(tick\);[\s\S]{0,80}render\(\)/.test(sign));
+  /* THE INTENT, NOT A CHARACTER WINDOW. This read
+     /clearInterval\(tick\);[\s\S]{0,80}render\(\)/ and broke the day a second
+     repaint path was added — refreshClaimRewards, which updates the three boxes a
+     reward write changes instead of the whole route — because the branch pushed
+     render() past eighty characters. The rule was never about the distance: the
+     timer must be cleared in the same callback that repaints, BEFORE either path
+     runs, or a countdown ticks on over a page that has already updated. */
+  ok("...clearing its timer when the repaint comes", (()=>{
+     /* ANCHORED ON THE TIMER, not on the first setTimeout in the slice. A regex
+        for `setTimeout(async ()=>{ … }, 7000);` matches the MEDIA path first —
+        adenaSign has a second seven-second callback for mediaClaimed — so the
+        window has to start at the statement this rule is about. */
+     const clr = sign.indexOf("clearInterval(tick)");
+     if(clr < 0) return false;
+     const end = sign.indexOf("}, 7000);", clr);
+     if(end < 0) return false;
+     const cb = sign.slice(clr, end);
+     // both repaint paths live after the clear, inside the same callback
+     return cb.includes("refreshClaimRewards") && cb.includes("render()");
+  })());
   // NOT the quoted figure: buyRowsHtml promises fewer units are possible, so
   // naming one here would assert something the chain has not agreed to.
   // COMMENTS STRIPPED. The comment at that spot explains why the quoted figure is

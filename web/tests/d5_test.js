@@ -98,8 +98,15 @@ ok("docket short-window note (hedged per critic F1)", src.includes("hidden or un
    sets d.author now, which is what keeps the fallback from ever firing there:
    that assignment is asserted below, and it is the thing that makes "reads
    once" still true. */
+/* A FIFTH CALLER, and it needs the author for the same reason the fourth does.
+   refreshClaimRewards re-renders the ticket after a reward write without going
+   through the route, so it has to put d.author on the record itself — the pulls
+   are pruned by claimParties, and an absent author makes the participant guard
+   bail exactly as it did when the route kept the author in a local. */
 ok("opened-by has one read per caller that needs it",
-   (src.match(/ClaimAuthor\(/g)||[]).length===4);
+   (src.match(/ClaimAuthor\(/g)||[]).length===5);
+ok("...and the partial refresh is one of them, for the participant guard",
+   /refreshClaimRewards[\s\S]{0,900}ClaimAuthor\(/.test(src));
 ok("...and the claim route puts it on d, so the fallback never fires there",
    src.includes("if(author) d.author = author;"));
 // "opened by" is prose and sets in the sans; the address is a machine string

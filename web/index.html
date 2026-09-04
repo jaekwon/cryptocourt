@@ -4711,6 +4711,11 @@ function confirmArgs(func, args, bodyKey, sendPre){
 
 /* The human name of each write a reader can press, for the sent-toast. Keyed by
    the entrypoint the tx calls, valued as the thing the button said. */
+/* The writes whose effect is confined to the ticket, the resolution notice and
+   the Rewards section — see refreshClaimRewards. Staking is closed before any of
+   them is possible, so none of them can move the chart. */
+const TX_REWARD = new Set(["OpenRewards","WithdrawBonus","AuthorBonus",
+                           "AnswererBonus","PullCarrot"]);
 const TX_SENT = {
   OpenRewards:    "the reward draw",
   WithdrawStake:  "your withdrawal",
@@ -5048,8 +5053,15 @@ async function adenaSign(func, args, el){
          reaching into innerHTML here. This restores the position instead, which
          is the part a reader actually notices. render() awaits its route, so by
          the time it resolves the content is back and the offset is valid. */
-      setTimeout(async ()=>{ clearInterval(tick); chainCacheClear();
-        const y = window.scrollY; await render(); window.scrollTo(0, y); }, 7000);
+      setTimeout(async ()=>{
+        clearInterval(tick); chainCacheClear();
+        /* A REWARD WRITE MOVES THREE BOXES; everything else moves the chart too.
+           refreshClaimRewards returns false when it is not on a claim page, when
+           a read fails, or when the hosts are not there — and then this falls
+           through to the whole-route render rather than leaving stale figures. */
+        if(TX_REWARD.has(func) && await refreshClaimRewards()) return;
+        const y = window.scrollY; await render(); window.scrollTo(0, y);
+      }, 7000);
     }
     else if(res.code===4000){ note("Rejected in the wallet."); }
     else if(res.code===3001){ note("Adena's active account is not "+shortAddr(CFG.addr)+" — switch accounts in Adena or reconnect."); }
@@ -10365,8 +10377,7 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
        same expression resolutionSection derives), and every height the ballot
        compares is realm-space. */
     + (() => {
-        const ballot = d.phase==="disputed"? disputeTicket(slug,id,d,seriesH) : "";
-        const sideCol = ballot + (stakeTicketHasActions(d)? stakeTicket(slug,id,d) : "");
+        const sideCol = claimSideCol(slug,id,d,seriesH);
         return `<section><div class="sec-h">The signal${d.phase==="open"? ` <span class="count">staking live</span>`
             : d.phase==="closed"? ` <span class="count">claim died unanswered</span>` : ""}</div>
         <div class="stakewrap${sideCol?"":" solo"}">
@@ -10374,8 +10385,14 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
           ${sideCol? `<div class="sidecol">${sideCol}</div>` : ""}
         </div></section>`;
       })()
-    + resolutionSection(slug,id,d,nowH,tline)
-    + rewardsSection(slug,id,d)
+    /* HOSTS, so a partial refresh always has something to swap into. Both of
+       these render "" in some phases — resolutionSection when the ladder was all
+       it had, rewardsSection before the draw is opened — and an element that
+       comes and goes cannot be a target. The wrappers are empty divs when their
+       section is empty, which costs nothing and means refreshClaimRewards never
+       has to decide whether to create, replace or remove. */
+    + `<div id="resolutionhost">${resolutionSection(slug,id,d,nowH,tline)}</div>`
+    + `<div id="rewardshost">${rewardsSection(slug,id,d)}</div>`
     + associationSection(slug,id,assocLookup,chainAssocs,claimFolders)
     + `<section id="claimcomments"></section>`;
   // Unconditional: the board is the one action on this page that needs no
@@ -10392,19 +10409,8 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
      grace window, and so the guard greyed every claim on the chain forever.
      ClaimTimeline publishes `now` next to `verdict` precisely so a consumer can
      subtract two heights from the same clock. */
-  fillStakeBalance(slug);
-  fillUnstakeSides(slug, id);
-  fillWithdrawSides(slug, id, d,
-    tline && tline.now? tline.now.h : nowH,
-    tline && tline.verdict? tline.verdict.h : null,
-    // ...and the same two moments as DATES, which is what the grace window is
-    // actually measured in. Zero/absent means the record predates the stamps and
-    // the heights above are all there is.
-    tline && tline.now? tline.now.t : null,
-    tline && tline.verdict? tline.verdict.t : null);
+  fillClaimSide(slug, id, d, tline, nowH);
   fillClaimComments(slug, id);
-  if(isLive() && CFG.addr && d.disputeOpen) fillVoteEligibility(slug,id,d);
-  if(isLive() && CFG.addr) fillVoteCommitment(slug,id);
   // arrived from an embed's side button
   if(QP.side) focusStakeSide(QP.side);
   // ?ex=N opens that exhibit, after the list it indexes into has been drawn.
@@ -11555,6 +11561,80 @@ function stakeTicketHasActions(d){
 }
 /* The stake ticket — replaces the V1 order ticket. Principal is never at risk;
    the reward is conviction (stake × time held until the answer). */
+/* THE SIDE COLUMN OF A CLAIM: the ballot when one is running, then the stake
+   ticket. Named because two callers build it — the route, and the refresh below
+   that runs after a write — and a second copy of this expression is how the two
+   would drift. */
+function claimSideCol(slug,id,d,seriesH){
+  const ballot = d.phase==="disputed"? disputeTicket(slug,id,d,seriesH) : "";
+  return ballot + (stakeTicketHasActions(d)? stakeTicket(slug,id,d) : "");
+}
+/* AND THE PASS THAT DECORATES IT, for the same reason. These read the chain and
+   patch the markup claimSideCol just produced: the balance, the two side
+   buttons, the withdraw arms and — inside fillWithdrawSides — fillTicketPulls,
+   which removes the reward pulls that are not this reader's. Re-rendering the
+   column without re-running them leaves every pull button on screen for
+   everybody, which is one signature away from a panic in the wallet. */
+function fillClaimSide(slug, id, d, tline, nowH){
+  fillStakeBalance(slug);
+  fillUnstakeSides(slug, id);
+  fillWithdrawSides(slug, id, d,
+    tline && tline.now? tline.now.h : nowH,
+    tline && tline.verdict? tline.verdict.h : null,
+    // ...and the same two moments as DATES, which is what the grace window is
+    // actually measured in. Zero/absent means the record predates the stamps and
+    // the heights above are all there is.
+    tline && tline.now? tline.now.t : null,
+    tline && tline.verdict? tline.verdict.t : null);
+  if(isLive() && CFG.addr && d.disputeOpen) fillVoteEligibility(slug,id,d);
+  if(isLive() && CFG.addr) fillVoteCommitment(slug,id);
+}
+/* WHAT A REWARD WRITE ACTUALLY CHANGES, and nothing else on the page.
+   Reported as "the whole page refreshed" after opening a claim's rewards: the
+   post-write update calls render(), which rebuilds the entire route.
+   THE UNIT IS THREE BOXES, NOT ONE. Opening the draw rewrites the ticket (the
+   button becomes four pulls), the resolution notice, and the Rewards section —
+   all three are built from the same claim record, and refreshing only the
+   ticket would leave "Reward pools" showing the figures from before the draw.
+   The chart is deliberately NOT in the list: staking is closed by the time any
+   of these writes is possible, so its series cannot have moved.
+   ONLY FOR THOSE WRITES. A stake or a withdrawal does move the chart, so those
+   still take the full render — which is why this returns false rather than
+   guessing, and the caller falls back. */
+async function refreshClaimRewards(){
+  const m = (location.hash.replace(/^#/,"") || "").match(/^\/c\/([a-z0-9-]+)\/(\d+)$/);
+  const wrap = document.querySelector(".stakewrap");
+  const resHost = document.getElementById("resolutionhost");
+  const rewHost = document.getElementById("rewardshost");
+  if(!m || !wrap || !resHost || !rewHost) return false;
+  const slug = m[1], id = parseInt(m[2],10);
+  let d, nowH, tline;
+  try {
+    [d, nowH] = await Promise.all([claimDetail(slug, id), chainHeight()]);
+    if(!d) return false;
+    // The author is a separate read on this route and the participant guard on
+    // the pulls needs it; without it fillTicketPulls cannot tell whose they are.
+    if(isLive()){
+      const a = await one(`ClaimAuthor(${gstr(slug)},${id})`).catch(()=>null);
+      if(a) d.author = a;
+    } else d.author = (DEMO.claims[slug+"/"+id]||{}).author||null;
+    tline = isLive()
+      ? parseTimeline(await one(`ClaimTimeline(${gstr(slug)},${id})`).then(unesc).catch(()=>null))
+      : parseTimeline((DEMO.claims[slug+"/"+id]||{}).timeline);
+  } catch(_){ return false; }
+  const seriesH = (tline && tline.now && tline.now.h != null)? tline.now.h : nowH;
+  const html = claimSideCol(slug,id,d,seriesH);
+  const col = wrap.querySelector(".sidecol");
+  if(html){
+    if(col) col.innerHTML = html;
+    else wrap.insertAdjacentHTML("beforeend", `<div class="sidecol">${html}</div>`);
+    wrap.classList.remove("solo");
+  } else if(col){ col.remove(); wrap.classList.add("solo"); }
+  resHost.innerHTML = resolutionSection(slug,id,d,nowH,tline);
+  rewHost.innerHTML = rewardsSection(slug,id,d);
+  fillClaimSide(slug, id, d, tline, nowH);
+  return true;
+}
 function stakeTicket(slug,id,d){
   if(d.phase==="closed"){
     return `<div class="ticket"><h3>Closed — never answered</h3>
