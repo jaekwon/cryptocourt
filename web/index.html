@@ -3848,7 +3848,23 @@ function ccFig(n){
   }
   return v.toFixed(6);
 }
-function ccPlain(n){ return ccFig(n)+" CC"; }
+/* AND THE UNIT IS THE COURT'S MARK, NOT THE LETTERS "CC".
+   The paragraph above is the reasoning that put "CC" here, and it holds for
+   everything except the last two characters: a claim page has already named its
+   court three ways, so the unit does not need to be REPEATED per figure — which
+   is why ccFig has no micro mode and why a row says its unit once. What that
+   argument never justified was spelling the one surviving unit as an initialism.
+   "0.0001 CC" beside tiles wearing the gold bar reads as a different quantity in
+   a different currency; it is the same coin, drawn two ways on one page.
+   So the unit is said ONCE, as it always was, and said in the product's own
+   mark: 0.0001 [Kourt] COVID.
+   THE SLUG IS OPTIONAL and the fallback is the old text. A caller with no court
+   in hand has nothing to draw a mark from, and "CC" is still the right word for
+   an amount of court coin in the abstract.
+   THIS EMITS MARKUP, exactly as cc() does — ccSymHtml returns spans. A caller
+   that escapes its input or slices the symbol back off wants ccText, and the
+   comment on ccText says so. */
+function ccPlain(n, slug){ return ccFig(n)+" "+(slug? ccSymHtml(slug) : "CC"); }
 /* ONE UNIT FOR A ROW OF FIGURES. Four amounts each carrying "µKourt:COVID"
    spent four times the width to say the same thing once, and the repetition
    crowded out the numbers, which are the point. The unit goes after all of
@@ -3866,8 +3882,8 @@ function ccPlain(n){ return ccFig(n)+" CC"; }
    µ, on a claim page that has already named its court three ways.
    ccFig has no micro mode, so there are no mixed scales left to fall back to:
    every figure is in CC and the unit is said once, after all of them. */
-function ccRow(parts){
-  return parts.map(([l, n]) => `${l} ${ccFig(n)}`).join(" · ") + " CC";
+function ccRow(parts, slug){
+  return parts.map(([l, n]) => `${l} ${ccFig(n)}`).join(" · ") + " " + (slug? ccSymHtml(slug) : "CC");
 }
 /* The same figure as plain text, for what genuinely cannot take markup: an
    aria-label, a button face that btn() escapes, or a caller that slices the
@@ -10385,6 +10401,18 @@ function statusPill(statusText){
   return `<span class="pill ${p.cls}">${esc(p.short)}${p.side? " "+esc(p.side):""}</span>`;
 }
 function docketRow(slug,c,meta){
+  /* THE DOCKET'S ROWS CARRY TITLES, so the verdict rides the sentence here too.
+     These read "SETTLED YES" in a pill beside the claim's own sentence — the
+     shape the claim page, the map and the related rows all stopped using, and
+     the note that kept it here said "there is no title beside them to carry it",
+     which was simply not true of this row: the title is the widest thing in it.
+     One builder, so a docket row now reads as that claim's own heading does, and
+     a settled NO is struck through.
+     THE PILL STAYS FOR EVERY OTHER PHASE. Only a settled claim with a readable
+     side has somewhere to put the fact; open, in dispute and provisional rows
+     keep the pill, which is also what stops the row losing its phase entirely. */
+  const dSide = (()=>{ const pc = phaseClass(c.statusText);
+    return pc.short === "settled"? pc.side : ""; })();
   // A claim with no series is not always a claim awaiting a live fill: in demo
   // mode the row is final, and it used to render an empty cell for good.
   const px = (c.series || Number.isFinite(c.inst))
@@ -10393,9 +10421,9 @@ function docketRow(slug,c,meta){
   const sortKey = c.series ? c.series[2] : (Number.isFinite(c.inst) ? c.inst : null);
   return `<a class="crow${c.offp?" offp":""}" data-id="${c.id}"${sortKey!=null?` data-yes="${sortKey}"`:""} data-q="${esc("#"+c.id+" "+c.title)}" href="#/c/${esc(slug)}/${c.id}">
     <span class="id">#${c.id}</span>
-    <span><span class="t">${safeInline(c.title)}</span>${meta?`<span class="m" style="display:block">${safeInline(meta.label)}</span>`:""}<span class="m" style="display:block" id="clk-${esc(slug)}-${c.id}">${(()=>{ const t=clockLine(isLive()? null:NOW, phaseClass(c.statusText).short, c.settleAt, c.escrowUntil); return t? esc(t):""; })()}</span></span>
+    <span><span class="t">${verdictSentence(c.title, dSide)}</span>${meta?`<span class="m" style="display:block">${safeInline(meta.label)}</span>`:""}<span class="m" style="display:block" id="clk-${esc(slug)}-${c.id}">${(()=>{ const t=clockLine(isLive()? null:NOW, phaseClass(c.statusText).short, c.settleAt, c.escrowUntil); return t? esc(t):""; })()}</span></span>
     ${px}
-    ${statusPill(c.statusText)}</a>`;
+    ${dSide? "" : statusPill(c.statusText)}</a>`;
 }
 
 /* --- a claim: the stake panel + the three ratio series + resolution --- */
@@ -10607,7 +10635,7 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
         return `<section><div class="sec-h">The signal${d.phase==="open"? ` <span class="count">staking live</span>`
             : d.phase==="closed"? ` <span class="count">claim died unanswered</span>` : ""}</div>
         <div class="stakewrap${sideCol?"":" solo"}">
-          <div class="panel">${signalChart(slug,id,d,seriesH,ser,tline)}${stakeBar(d,slug)}${chartChips(d,slug)}${timelineFold(d, (tline&&tline.now&&tline.now.h!=null)?tline.now.h:seriesH, tline, !!sideCol)}</div>
+          <div class="panel">${signalChart(slug,id,d,seriesH,ser,tline)}${stakeBar(d,slug)}${chartChips(d,slug)}${timelineFold(d, (tline&&tline.now&&tline.now.h!=null)?tline.now.h:seriesH, tline, !!sideCol, slug)}</div>
           ${sideCol? `<div class="sidecol">${sideCol}</div>` : ""}
         </div></section>`;
       })()
@@ -11703,7 +11731,7 @@ function stakeBar(d, slug){
       <div class="sbY" style="width:${py.toFixed(3)}%"></div>
       <div class="sbN" style="width:${pn.toFixed(3)}%"></div>
     </div>
-    <div class="sbout"><span class="y"><b><span class="sidetag">YES</span> ${py.toFixed(1)}%</b> · ${ccPlain(y)}</span><span class="n"><b><span class="sidetag">NO</span> ${pn.toFixed(1)}%</b> · ${ccPlain(n)}</span></div>`;
+    <div class="sbout"><span class="y"><b><span class="sidetag">YES</span> ${py.toFixed(1)}%</b> · ${ccPlain(y, slug)}</span><span class="n"><b><span class="sidetag">NO</span> ${pn.toFixed(1)}%</b> · ${ccPlain(n, slug)}</span></div>`;
 }
 function chartChips(d, slug){
   const chips=[
@@ -11744,7 +11772,7 @@ function chartChips(d, slug){
         + " this is that coin times how long it stayed."};
     })(),
     d.round? `${d.round} failed round${d.round>1?"s":""}`:null,
-    d.disputeBondNext? `next dispute bond ${ccPlain(d.disputeBondNext)}`:null,
+    d.disputeBondNext? `next dispute bond ${ccPlain(d.disputeBondNext, slug)}`:null,
     d.phase==="settled"? `verdict ${sideName(d.verdict!=null?d.verdict:d.answer)}${d.route?" · "+esc(d.route):""}`:null,
     d.rewardsOpened? "rewards open":null,
   /* A CHIP MAY CARRY A TOOLTIP, and one of them has to. "conviction 3,718 /
@@ -11922,7 +11950,7 @@ function stakeTicket(slug,id,d){
              the reader saw a moment ago, is the size of the draw. */
           ? `<div class="line"><span class="l">Rewards drawn</span><span class="r tnum">`
               + ccPlain(((d.draw&&d.draw.w)||0) + ((d.draw&&d.draw.a)||0)
-                        + ((d.draw&&d.draw.ans)||0))
+                        + ((d.draw&&d.draw.ans)||0), slug)
               + `</span></div>`
             /* AND THE POOL THAT IS NOT PART OF THAT SUM, said out loud rather
                than left in an attribute. The three slices above are the draw and
@@ -11940,7 +11968,7 @@ function stakeTicket(slug,id,d){
                it is a different question the button already answers. */
             + (((d.draw&&d.draw.carrot)||0) > 0
                 ? `<div class="line"><span class="l">Voter pool left</span>`
-                  + `<span class="r tnum">${ccPlain(d.draw.carrot)}</span></div>`
+                  + `<span class="r tnum">${ccPlain(d.draw.carrot, slug)}</span></div>`
                 : "")
             + `<span data-pull="winner" data-pool="${(d.draw&&d.draw.w)||0}">`
               + btn("Pull accuracy reward","WithdrawBonus",{courtSlug:slug,claimID:id,side:v}) + `</span>`
@@ -11977,7 +12005,7 @@ function stakeTicket(slug,id,d){
                  spelling of the same symbol. ccPlain says it once, in CC, with
                  decimals rather than a micro prefix. */
               ? `<div class="line"><span class="l">Reward to open</span><span class="r tnum">`
-                + ccPlain(d.quote.w + d.quote.a + d.quote.ans)
+                + ccPlain(d.quote.w + d.quote.a + d.quote.ans, slug)
                 + `</span></div>`
                 /* THE CLAIM'S FIGURE, NOT THE READER'S. Whoever presses this pays
                    the gas and opens the draw for everyone; the slices then go to
@@ -12229,8 +12257,8 @@ function sinceWords(nowT, t){
    Keeps the timeline anchor, so ?at=timeline still lands here — atReveal opens
    the fold on arrival, because scrolling somebody to a shut box answers
    nothing. */
-function timelineFold(d, rH, tl, narrow){
-  const ladder = resolutionLadder(d, rH, tl, narrow);
+function timelineFold(d, rH, tl, narrow, slug){
+  const ladder = resolutionLadder(d, rH, tl, narrow, undefined, slug);
   if(!ladder) return "";
   return `<details id="timeline" class="tlfold" tabindex="-1">`
     + `<summary>Timeline</summary>${ladder}</details>`;
@@ -12254,7 +12282,7 @@ function roundTag(d){ return d.round? " · round " + (d.round + 1) : ""; }
 function roundVoting(d){
   return d.round? "round " + (d.round + 1) + " is voting" : "the vote is running";
 }
-function resolutionLadder(d, nowH, tl, narrow, bare){
+function resolutionLadder(d, nowH, tl, narrow, bare, slug){
   const rows=[];
   if(tl){
     // The chain's own record: each row is a stamped date, its height kept for
@@ -12443,7 +12471,7 @@ function resolutionSection(slug,id,d,nowH,tl){
       The court is voting on <i>“overturn the answer?”</i> — the verdict belongs to everyone but the claim\u2019s own participants.
       <p class="small" style="margin:8px 0 0">The ballot is beside the chart, above.</p></div></div>`;
   } else if(d.phase==="provisional"){
-    const cost = d.disputeBondNext? " The next dispute bond is "+ccPlain(d.disputeBondNext)+" (it doubles each failed round).":"";
+    const cost = d.disputeBondNext? " The next dispute bond is "+ccPlain(d.disputeBondNext, slug)+" (it doubles each failed round).":"";
     const when = d.escrowUntil? (rH==null? " Reopenable until block "+fmtN(d.escrowUntil)+"."
       : (d.escrowUntil>rH? " Reopenable until block "+fmtN(d.escrowUntil)+" (in "+wall(rH,d.escrowUntil)+")."
         : " The reopen window has closed — participants may finalize now; anyone may after a week.")):"";
@@ -12486,7 +12514,7 @@ function resolutionSection(slug,id,d,nowH,tl){
 function rewardsSection(slug,id,d){
   if(!d.rewardsOpened || !d.draw) return "";
   return `<section><div class="sec-h">Rewards</div>
-    <div class="panel"><div class="qrows"><div class="line"><span class="l">Reward pools</span><span class="r">${ccRow([["accuracy",d.draw.w],["author",d.draw.a],["answerer",d.draw.ans],["voters",d.draw.carrot]])}</span></div></div></div></section>`;
+    <div class="panel"><div class="qrows"><div class="line"><span class="l">Reward pools</span><span class="r">${ccRow([["accuracy",d.draw.w],["author",d.draw.a],["answerer",d.draw.ans],["voters",d.draw.carrot]], slug)}</span></div></div></div></section>`;
 }
 
 /* The four things every participant must understand — nothing hidden here changes
