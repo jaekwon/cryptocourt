@@ -208,14 +208,16 @@ function chatLineHtml(m, nowSec) {
   const flag = chatFlag(m.country);
   const suffix = /^[0-9a-f]{1,16}$/.test(String(m.suffix || "")) ? m.suffix : "";
   return '<li class="chatmsg">'
-    + '<span class="chatwho">'
-    + (flag ? '<span class="chatflag" title="' + chatEsc(String(m.country).toUpperCase())
-              + '">' + flag + "</span>" : "")
-    + '<span class="chatname">' + chatEsc(m.moniker) + "</span>"
-    + (suffix ? '<span class="chatsuf" title="derived from the sender&#39;s connection,'
-                + ' rotates daily">&middot;' + chatEsc(suffix) + "</span>" : "")
+    + '<span class="chatsaid">'
+    +   '<span class="chatwho">'
+    +   (flag ? '<span class="chatflag" title="' + chatEsc(String(m.country).toUpperCase())
+                + '">' + flag + "</span>" : "")
+    +   '<span class="chatname">' + chatEsc(m.moniker) + "</span>"
+    +   (suffix ? '<span class="chatsuf" title="derived from the sender&#39;s connection,'
+                  + ' rotates daily">&middot;' + chatEsc(suffix) + "</span>" : "")
+    +   "</span>"
+    +   '<span class="chatbody">' + chatEsc(m.body) + "</span>"
     + "</span>"
-    + '<span class="chatbody">' + chatEsc(m.body) + "</span>"
     + '<span class="chatage">' + chatEsc(chatWhen(nowSec, m.created_at)) + "</span>"
     + "</li>";
 }
@@ -418,12 +420,26 @@ const CHATCSS = `
   flex:1 1 auto;min-height:0}
 .chatmsg{display:flex;gap:.5rem;align-items:baseline;padding:.15rem 0;
   border-bottom:1px solid rgba(128,128,128,.12)}
-.chatwho{flex:0 0 auto;max-width:11rem;overflow:hidden;text-overflow:ellipsis;
-  white-space:nowrap}
+/* WHO SAID IT AND WHAT THEY SAID ARE ONE RUN OF PROSE, NOT TWO COLUMNS.
+   The name was its own flex column, so a message that wrapped kept to the body
+   column and every line after the first began under an indent as wide as the
+   longest name in view — in a 230px rail a three-line message spent a third of
+   itself on blank space beside a name that was only said once. Inline, the
+   second line starts at the left edge, the way any wrapped sentence does.
+   The age keeps a column of its own: it is the one thing here that is read
+   down the page rather than across, and a float would let long messages run
+   underneath it and break that column up. */
+.chatsaid{flex:1 1 auto;min-width:0}
+/* THE NAME NO LONGER NEEDS TRUNCATING, AND MUST STILL NOT WIDEN THE PAGE.
+   max-width plus an ellipsis was protecting a column that has gone: inline, a
+   long name cannot squeeze the message, it only delays it. What it can still do
+   is overflow, since a 24-letter moniker and its suffix are one unbreakable
+   word — hence the same anywhere-break the body has always carried. */
+.chatwho{margin-right:.5rem;overflow-wrap:anywhere}
 .chatname{font-weight:600}
 .chatsuf{opacity:.45;font-size:.8em;font-family:ui-monospace,monospace}
 .chatflag{margin-right:.25rem}
-.chatbody{flex:1 1 auto;overflow-wrap:anywhere;white-space:pre-wrap}
+.chatbody{overflow-wrap:anywhere;white-space:pre-wrap}
 .chatage{flex:0 0 auto;opacity:.45;font-size:.85em}
 .chatempty{opacity:.55;padding:.3rem 0}
 .chatstate{margin:.4rem 0;padding:.35rem .5rem;border-radius:4px;
