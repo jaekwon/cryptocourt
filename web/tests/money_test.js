@@ -33,7 +33,11 @@ global.esc = s => String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;")
   .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 eval(slice('function ccSym(', 'function ugnot('));
 
-// ---- ccPlain: one unit, enough decimals, no symbol ------------------------
+// ---- ccPlain WITHOUT a court: one unit, enough decimals, the bare word ----
+// This is the fallback arm now, not the only arm. A caller with no court in hand
+// has nothing to draw a mark from, and "CC" is still the right word for an
+// amount of court coin in the abstract — so every figure assertion below is
+// about the SHAPE OF THE NUMBER and stays exactly as it was.
 ok("a whole amount reads in CC with two decimals", ccPlain(17_000_000) === "17.00 CC");
 ok("a sub-unit amount keeps two decimals", ccPlain(740_000) === "0.74 CC");
 ok("zero is zero, not a fraction", ccPlain(0) === "0.00 CC");
@@ -55,12 +59,39 @@ ok("no micro prefix survives anywhere in it",
 ok("and it names no court",
    [5, 596, 740_000].every(n => !/KOURT|ccsym/i.test(ccPlain(n))));
 
-// ---- cc() still names the coin, because its callers need it ---------------
-// Asserted as the PAIR: the point is not that ccPlain drops the symbol, it is
-// that the two formatters differ, so a future edit cannot quietly make one the
-// other and leave the wallet listing bare numbers across courts.
-ok("cc() still carries the court's symbol", /ccsym/.test(cc(740_000, "covid")));
-ok("...and ccPlain does not", !/ccsym/.test(ccPlain(740_000)));
+// ---- given a court, BOTH name it ------------------------------------------
+/* THE CONTRACT CHANGED HERE, and this is what it changed to. It used to be
+   "cc() names the coin and ccPlain does not", and the claim page took the second
+   one everywhere — so "accuracy 0.00 · author 0.00 · answerer 0.00 · voters
+   0.0001 CC" sat under tiles wearing the gold bar, the same coin drawn two ways
+   on one page. Reported exactly that way.
+   What the original reasoning actually established was that the unit should not
+   be REPEATED per figure — which is why ccFig has no micro mode and why a row
+   says its unit once. It never established that the one surviving unit should be
+   spelled as an initialism. So the unit is still said once, and now said in the
+   product's own mark.
+   Still asserted as a PAIR, for the reason the old comment gave: the two
+   formatters must stay distinguishable, so a future edit cannot quietly collapse
+   them. The difference is no longer symbol-vs-none — it is that cc() carries the
+   µ prefix machinery for a wallet listing across courts, and ccPlain keeps one
+   unit and spends decimals for a page that is already inside one court. */
+ok("cc() carries the court's symbol", /ccsym/.test(cc(740_000, "covid")));
+ok("...and so does ccPlain, once it is told which court",
+   /ccsym/.test(ccPlain(740_000, "covid")));
+ok("...with the figure unchanged either way",
+   ccPlain(740_000, "covid").startsWith("0.74 ") && ccPlain(740_000) === "0.74 CC");
+ok("...and no court means the bare word, not an empty mark",
+   ccPlain(740_000) === "0.74 CC" && !/ccsym|<span/.test(ccPlain(740_000)));
+/* The two still differ where it matters: cc() drops to a µ prefix for a small
+   amount and ccPlain never does. That is the collapse this pair is guarding. */
+ok("...and the two still disagree about small amounts",
+   /µ/.test(cc(596, "covid")) && !/µ/.test(ccPlain(596, "covid")));
+/* ccRow says the unit once, after ALL the figures — the row that was reported. */
+ok("a row of figures wears one mark, at the end",
+   (ccRow([["accuracy",0],["author",0],["answerer",0],["voters",55]], "covid")
+     .match(/ccsym/g) || []).length === 1);
+ok("...and without a court it is still the bare word",
+   ccRow([["a",0],["b",55]]).endsWith(" CC"));
 
 // ---- the regression itself, in the source --------------------------------
 /* A SOURCE CHECK, deliberately: the row is built inside the claim route's
@@ -70,7 +101,7 @@ ok("...and ccPlain does not", !/ccsym/.test(ccPlain(740_000)));
 ok("no call site appends the symbol to a formatter that already carries it",
    !/cc\([^)]*\)\s*\+\s*ccSym\(/.test(src));
 ok("the reward row uses the plain formatter",
-   /Reward to open[\s\S]{0,400}ccPlain\(d\.quote\.w \+ d\.quote\.a \+ d\.quote\.ans\)/.test(src));
+   /Reward to open[\s\S]{0,400}ccPlain\(d\.quote\.w \+ d\.quote\.a \+ d\.quote\.ans, slug\)/.test(src));
 
 // ---- a row of figures shares one unit ------------------------------------
 /* THE REWARD POOLS. ccRow had a mixed-scale fallback: when some figures were
@@ -100,10 +131,10 @@ ok("...with no micro prefix and no court symbol anywhere in it",
    width. Asserted here as a PAIR so neither half can drift into the other —
    sweeping the disclosure by accident is exactly what this catches. */
 ok("the stake bar reads in CC, once per side",
-   /sidetag">YES<\/span> \$\{py\.toFixed\(1\)\}%<\/b> · \$\{ccPlain\(y\)\}/.test(src)
-   && /sidetag">NO<\/span> \$\{pn\.toFixed\(1\)\}%<\/b> · \$\{ccPlain\(n\)\}/.test(src));
+   /sidetag">YES<\/span> \$\{py\.toFixed\(1\)\}%<\/b> · \$\{ccPlain\(y, slug\)\}/.test(src)
+   && /sidetag">NO<\/span> \$\{pn\.toFixed\(1\)\}%<\/b> · \$\{ccPlain\(n, slug\)\}/.test(src));
 ok("the chip under the chart reads in CC",
-   /next dispute bond \$\{ccPlain\(d\.disputeBondNext\)\}/.test(src));
+   /next dispute bond \$\{ccPlain\(d\.disputeBondNext, slug\)\}/.test(src));
 ok("the vote-lock disclosure still names the court's own symbol",
    /this vote would commit \$\{cc\(would,slug\)\}/.test(src));
 

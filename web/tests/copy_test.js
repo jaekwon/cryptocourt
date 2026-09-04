@@ -97,7 +97,7 @@ ok("...and it is the same three pools the pre-open row totalled",
    Reported as: it says rewards drawn 0.00, but what is the total? */
 ok("a carrot pool is stated as a figure, not only as a button attribute",
    /<span class="l">Voter pool left<\/span>/.test(src)
-   && /Voter pool left[\s\S]{0,160}ccPlain\(d\.draw\.carrot\)/.test(src));
+   && /Voter pool left[\s\S]{0,160}ccPlain\(d\.draw\.carrot, slug\)/.test(src));
 ok("...and it is shown whenever there IS one, not only when the reader may pull it",
    /\(\(\(d\.draw&&d\.draw\.carrot\)\|\|0\) > 0/.test(src));
 ok("...while staying out of the drawn total, which is the three fixed slices",
