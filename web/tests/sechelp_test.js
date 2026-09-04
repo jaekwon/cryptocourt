@@ -77,7 +77,13 @@ ok("...with no id to thread, so a template without an id scheme can use it",
 }
 
 // ---- the stylesheet, which is where the touch bug lived --------------------
-const css = src.slice(src.indexOf(".sq{"), src.indexOf(".sq{") + 1600);
+/* ANCHORED AT A LINE START. This was indexOf(".sq{"), which is a substring of
+   ".sec-h .sq{" — so the moment a descendant rule for the same class was added
+   above it, the window opened in the wrong place and every assertion below
+   failed at once. A rule this file reads has to be found by where it BEGINS. */
+const CSS_AT = src.indexOf("\n.sq{");
+const css = src.slice(CSS_AT, CSS_AT + 1700);
+ok("the stylesheet slice found the .sq rule itself", CSS_AT > 0 && /^\n\.sq\{position:static/.test(css));
 ok("the panel is hidden at rest by visibility, not by opacity alone",
    /\.sqp\{[^}]*visibility:hidden/.test(css), css.slice(0, 200));
 /* :focus, NOT :focus-visible — a tap focuses without matching focus-visible, so
