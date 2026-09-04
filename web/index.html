@@ -6183,7 +6183,12 @@ function qCaption(state){
   // state: {mode:"idle"|"active"|"zero", demo, kind:"claims"|"court names",
   //         loaded, total, matches, q, orderTail}
   const noun = state.kind||"claim titles";
-  const unit = noun==="court names"? "name" : "title";
+  /* THE UNIT IS WHAT A MATCH IS, and once folders are in the haystack a match is not
+     always a title: "3 of 25 loaded titles match" over a set of 19 titles and 6 folder
+     names is both wrong about the count and wrong about the noun. "rows" is the word
+     that covers both without pretending they are the same thing — the idle caption
+     above still names them separately, which is where the reader needs the detail. */
+  const unit = noun==="court names"? "name" : /folder/.test(noun)? "row" : "title";
   if(state.mode==="active") return `${fmtN(state.matches)} of ${fmtN(state.loaded)} loaded ${unit}s match "${state.q}"${state.orderTail!==undefined? state.orderTail : " · newest first"}`;
   if(state.mode==="zero")
     return state.demo? (state.total>state.loaded
@@ -6529,8 +6534,16 @@ on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
   if(typeof mediaMount === "function" && CFG.mode !== "demo"){
     mountCompose(document.getElementById("courtcompose"), slug);
   }
-  QCTX = {kind:"claim titles", demo:!isLive(), loaded:allRows.length,
-    total:totalClaims, slug, totalClaims, orderTail:""};
+  /* COUNTED OFF THE PAINTED PAGE, not recomputed. courtBody decides whether folders
+     head this page at all — they are page-1 organisation — and re-deriving that rule
+     here is a second place for it to be wrong. What is on screen with a data-q IS the
+     haystack, so it is what the caption's denominator counts.
+     totalClaims stays a claims-only number beside it: it answers the jump hint ("no
+     claim #40 — this court has 19"), where folders have no part. */
+  const foldRows = document.querySelectorAll("#qscope .folderrow[data-q]").length;
+  QCTX = {kind: foldRows? "claim titles and folder names" : "claim titles",
+    demo:!isLive(), loaded:allRows.length + foldRows,
+    total:totalClaims + foldRows, slug, totalClaims, orderTail:""};
   if(QP.sort) applySort(QP.sort); // before applyQ — the search caption reads QCTX.orderTail
   if(QP.q){ const qi=document.getElementById("q"); if(qi){ qi.value=QP.q; applyQ(QP.q); } }
   if(isLive()) fillCourtFaces([slug]);

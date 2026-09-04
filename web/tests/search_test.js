@@ -85,10 +85,56 @@ ok("§7.4 clean", !/backing|redeem\b|profit|APR/i.test(slice('function qPredicat
 ok("C5: applyQ threads kind to zero+active", src.includes('kind:QCTX.kind, orderTail:QCTX.orderTail') && src.includes('q, kind:QCTX.kind, loaded:QCTX.loaded'));
 ok("C1: offp scoped under .docket", src.includes(".docket .offp{display:none}") && !src.includes("\n.offp{display:none}"));
 ok("C1: reveal outranks the hide", src.includes(".qactive .docket .offp:not(.qhide){display:grid}"));
-ok("C2: court qbar precedes its section", src.indexOf('qBarHtml("title or #id"') < src.indexOf('<section data-qsec${foldersSec'));
+// THE PLACEHOLDER IS ASSERTED TO EXIST, not just compared. This read
+// `indexOf('qBarHtml("title or #id"') < indexOf(...)`, and a missing needle is -1,
+// which is less than everything — so the check passed vacuously the moment the
+// placeholder text changed. Found by changing it.
+const QBAR_COURT = 'qBarHtml("title, folder or #id"';
+ok("C2: the court qbar exists to be placed", src.includes(QBAR_COURT));
+// ABOVE THE FOLDERS NOW, not merely above the docket. The box filters folder rows as
+// well as claim rows, and a filter drawn under half of what it filters reads as the
+// docket's own control.
+ok("C2: court qbar precedes the folders it filters",
+   src.indexOf(QBAR_COURT) < src.indexOf("+ foldersSec"));
+ok("C2: court qbar precedes its section", src.indexOf(QBAR_COURT) < src.indexOf('<section data-qsec${foldersSec'));
+// FOLDERS ARE IN THE HAYSTACK. Two halves, and either one alone is the old behaviour:
+// the row must carry a data-q for the filter to test it, and the section must be qsec
+// rather than qfold or the whole filing system is display:none'd while a query runs.
+ok("folder rows are searchable", /class="crow folderrow" data-q="\$\{esc\(f\.name/.test(src));
+ok("...and the folders section is filtered, not folded away",
+   src.includes('<section data-qsec><div class="sec-h">Folders') &&
+   !src.includes('<section data-qfold><div class="sec-h">Folders'));
+// The description is part of it: a curator's sentence about what belongs in a folder is
+// what a reader half-remembers, and it is not on the row.
+ok("...including the description a reader cannot see", /data-q="\$\{esc\(f\.name \+ " " \+ \(f\.desc\|\|""\)\)\}/.test(src));
 ok("C2: directory qbar precedes Featured", src.indexOf('qBarHtml("court name or orem/7"') < src.indexOf('sec-h">Featured'));
 ok("C3: Enter flushes the debounce", src.includes("clearTimeout(QDEB); QDEB=0;"));
-ok("C4: QCTX totals = route totalClaims", src.includes("total:totalClaims, slug, totalClaims"));
+// C4 pinned `total:totalClaims, slug, totalClaims` verbatim. The denominator is now the
+// SEARCHABLE set — claims plus the folder rows page 1 painted — so the literal moved;
+// what the check is for did not. The total must still be built from the route's own
+// totalClaims rather than counted off the page, and totalClaims must still ride
+// separately, because the jump hint ("no claim #40 — this court has 19") speaks only in
+// claims and would be wrong by the number of folders if it read the total.
+ok("C4: QCTX totals come from the route's totalClaims",
+   src.includes("total:totalClaims + foldRows, slug, totalClaims"));
+// The kind, the count and the unit move together or the caption contradicts itself.
+ok("the caption counts the folder rows it searches",
+   src.includes("loaded:allRows.length + foldRows") &&
+   src.includes('kind: foldRows? "claim titles and folder names" : "claim titles"'));
+ok("idle names both, and counts both",
+   qCaption({mode:"idle",demo:false,kind:"claim titles and folder names",loaded:25,total:25})
+   === "searches all 25 claim titles and folder names");
+// A match may be either, so the active and zero captions stop saying "title".
+ok("a match is a row once folders are in scope",
+   qCaption({mode:"active",matches:3,loaded:25,q:"origins",kind:"claim titles and folder names"})
+   === '3 of 25 loaded rows match "origins" · newest first');
+ok("...and so is the absence of one",
+   qCaption({mode:"zero",demo:true,kind:"claim titles and folder names",q:"zzz",loaded:25,total:25})
+   === 'no row matches "zzz" — the sample is complete');
+// A court with no folders is unchanged, down to the word.
+ok("no folders, no new noun",
+   qCaption({mode:"idle",demo:false,kind:"claim titles",loaded:19,total:19})
+   === "searches all 19 claim titles");
 ok("C5: zero caption speaks in names (live)", qCaption({mode:"zero",demo:false,kind:"court names",q:"x",loaded:32,total:214})==='no loaded name matches "x" — 182 more courts are not loaded; page older ›');
 ok("C5: zero caption speaks in names (demo)", qCaption({mode:"zero",demo:true,kind:"court names",q:"x",loaded:2,total:2})==='no name matches "x" — the sample is complete');
 ok("C5: active caption speaks in names", qCaption({mode:"active",matches:1,loaded:32,q:"or",kind:"court names",orderTail:" · ranked by GNOT burned"})==='1 of 32 loaded names match "or" · ranked by GNOT burned');
