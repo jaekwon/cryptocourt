@@ -34,8 +34,8 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
   let rows = await chainAssociations("orem", 7);
   ok("`of` reads as superseded-by-this",
      rows.some(r=>r[0]===5 && r[1]==="superseded by this"));
-  ok("`by` reads as supersedes",
-     rows.some(r=>r[0]===9 && r[1]==="supersedes") && rows.some(r=>r[0]===11 && r[1]==="supersedes"));
+  ok("`by` reads as supersedes this",
+     rows.some(r=>r[0]===9 && r[1]==="supersedes this") && rows.some(r=>r[0]===11 && r[1]==="supersedes this"));
   ok("and nothing else is invented", rows.length===3);
 
   // Empty halves are the common case and must produce no rows at all, not a row
@@ -49,7 +49,7 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
   CALLS = [];
   rows = await chainAssociations("orem", 7);
   ok("associations survive alongside re-filings",
-     rows.some(r=>r[1]==="supported by this") && rows.some(r=>r[1]==="contradicts")
+     rows.some(r=>r[1]==="supported by this") && rows.some(r=>r[1]==="contradicts this")
      && rows.some(r=>r[1]==="superseded by this"));
   ok("two reads, not more", CALLS.length===2);
 
@@ -67,6 +67,22 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
   ARGS = null; SUP = null;
   rows = await chainAssociations("orem", 7);
   ok("neither read: no chain rows at all", rows === null);
+
+  /* EVERY CHIP NAMES ITS OBJECT. Asked of covid/19: it says SUPPORTS, but which
+     supports what? The chip is a predicate with the ROW as its subject and the
+     claim you are on as the implied object; the outbound half spelled that out
+     while the inbound half left it to a convention no reader was told, so one
+     page could carry "supports" beside "supported by this" and the reader had to
+     infer the missing word. Asserted over BOTH directions of both kinds at once,
+     because the ambiguity was the asymmetry rather than any single string. */
+  ARGS = "out:2:s,4:c;in:3:s,6:c"; SUP = "of:5;by:9";
+  rows = await chainAssociations("orem", 7);
+  ok("no chip is left as a bare verb",
+     rows.every(r=>/\b(this)$/.test(r[1])));
+  ok("...and both directions are still distinguishable",
+     rows.some(r=>r[1]==="supports this") && rows.some(r=>r[1]==="supported by this")
+     && rows.some(r=>r[1]==="contradicts this") && rows.some(r=>r[1]==="contradicted by this")
+     && rows.some(r=>r[1]==="supersedes this") && rows.some(r=>r[1]==="superseded by this"));
 
   // Demo mode must not point a live read at sample ids.
   CFG.mode='demo';

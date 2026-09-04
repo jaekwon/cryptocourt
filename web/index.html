@@ -7157,9 +7157,9 @@ function associationSection(slug, id, lookup, chainRows, folders){
   chain.forEach(([other, chip]) => { rel.push([other, chip]); seen.add(other + "|" + chip); });
   mine.forEach(r=>{
     if((r.type==="bears" || r.type==="supersedes") && chain.length) return; // the chain answered these
-    if(r.type==="bears" && r.to===id) rel.push([r.from, r.stance==="supports"? "supports":"contradicts"]);
+    if(r.type==="bears" && r.to===id) rel.push([r.from, r.stance==="supports"? "supports this":"contradicts this"]);
     else if(r.type==="bears" && r.from===id) rel.push([r.to, r.stance==="supports"? "supported by this":"contradicted by this"]);
-    else if(r.type==="supersedes" && r.to===id) rel.push([r.from, "supersedes"]);
+    else if(r.type==="supersedes" && r.to===id) rel.push([r.from, "supersedes this"]);
     else if(r.type==="supersedes" && r.from===id) rel.push([r.to, "superseded by this"]);
   });
   const settledN = children.filter(i=>{ const d=dOf(i); return d && phaseClass(d.statusText).short==="settled"; }).length;
@@ -7217,15 +7217,21 @@ function associationSection(slug, id, lookup, chainRows, folders){
      membership within one folder only — and each links to the folder page. */
   if(fold.length){
     g += head("Filed in", esc("filed by this court's moderators")) + `<div class="docket">`
-      /* NO CHIP. Every other group here pairs its heading with one, and there
-         the chip earns its place by varying — "supports", "one part",
-         "superseded by this" — so it says something the heading cannot. A
-         folder's would be the same two words on every row, directly under a
-         heading that has just said them: "Filed in" over "filed here". */
+      /* THE CHIP IS THE SHELF'S SIZE. It said "filed here" — the same two words
+         on every row, directly under a heading that had just said them, which is
+         why it went. A count earns the slot on the test the other groups' chips
+         pass: it varies, so it says something the heading cannot. It also
+         answers the question the row invites — how much else is on this shelf —
+         without a page load.
+         Omitted, not zeroed, when the read failed: a folder holding this claim
+         can never truthfully be "0 claims", so a zero here would be a lie about
+         the shelf rather than an admission about the read. */
       + fold.map(f=>`<a class="crow assocrow" href="#/c/${esc(slug)}/f/${esc(String(f.fid))}">`
           + `<span class="id">${ICN_FOLDER}</span>`
           + `<span><span class="t">${safeInline(f.name)}</span></span>`
-          + `<span class="rt"></span></a>`).join("")
+          + `<span class="rt">` + (f.count > 0
+              ? `<span class="pill void">${f.count} claim${f.count===1?"":"s"}</span>` : "")
+          + `</span></a>`).join("")
       + `</div>`;
   }
   // The parent is CONTAINMENT, the same axis as "Rests on" and pointing the
@@ -7379,7 +7385,7 @@ async function chainAssociations(slug, id){
     // `by:Y,Z` — Y and Z re-file this one.
     for(const part of String(sh[1]||"").split(",")){
       const y = parseInt(part, 10);
-      if(Number.isInteger(y) && y > 0) rows.push([y, "supersedes"]);
+      if(Number.isInteger(y) && y > 0) rows.push([y, "supersedes this"]);
     }
   }
   if(typeof raw !== "string" || raw.indexOf("out:") !== 0) return rows.length? rows : null;
@@ -7391,8 +7397,16 @@ async function chainAssociations(slug, id){
       const other = parseInt(bits[0], 10);
       if(!Number.isInteger(other) || other < 1) continue;
       const contests = bits[1] === "c";
+      /* "SUPPORTS" ALONE DOES NOT SAY WHICH WAY. Asked of covid/19: it says
+         SUPPORTS, but which supports what? The chip is a predicate with the ROW
+         as its subject and the claim you are on as the implied object, and the
+         outbound half spells that out — "supported by this" — while the inbound
+         half left the object to a convention no reader was told. Two rows on one
+         page could read "supports" and "supported by this" and a reader had to
+         infer that the missing word in the first was "this".
+         So the object is said on both halves now. */
       rows.push([other, inbound
-        ? (contests ? "contradicts" : "supports")
+        ? (contests ? "contradicts this" : "supports this")
         : (contests ? "contradicted by this" : "supported by this")]);
     }
   };
@@ -10404,8 +10418,16 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
     const s3 = gstr(slug);
     const fids = uint64List(await tup(`ClaimFolders(${s3},${id})`).then(t=>t[0]).catch(()=>""));
     claimFolders = (await Promise.all(fids.slice(0,6).map(async fid => {
-      const nm = await one(`FolderName(${s3},${fid})`).then(unesc).catch(()=>"");
-      return nm? {fid, name:nm} : null;
+      /* HOW BIG THE SHELF IS, asked beside its name rather than after it. Both
+         reads are per folder because both are per folder — issued together so
+         the second costs no round trip of its own, the same shape chainFolders
+         uses. A folder this claim is filed in always holds at least this claim,
+         so the count is never a bare zero standing for "empty". */
+      const [nm, itemsRaw] = await Promise.all([
+        one(`FolderName(${s3},${fid})`).then(unesc).catch(()=>""),
+        tup(`FolderItems(${s3},${fid})`).then(t=>t[0]).catch(()=>null),
+      ]);
+      return nm? {fid, name:nm, count: itemsRaw==null? null : uint64List(itemsRaw).length} : null;
     }))).filter(Boolean);
   }
   /* TITLES FOR THE ASSOCIATION ROWS, and the gate on them was left behind when

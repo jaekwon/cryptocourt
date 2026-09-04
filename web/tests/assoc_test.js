@@ -106,7 +106,11 @@ ok("a title the window lacks is marked for fetching, not narrated",
 ok("#9: rests on 3, 1 settled", h9.includes("1 of 3 parts settled"));
 ok("#9: undecided banner", h9.includes("2 of 3 parts are still undecided — any verdict here is reached without them"));
 ok("#9: children rows 3/4/7 as 'one part'", ["/3","/4","/7"].every(x=>h9.includes(`#/c/orem${x}`)) && (h9.match(/one part/g)||[]).length===3);
-ok("#9: #6 supports (incoming)", h9.includes(">supports<") && h9.includes("#/c/orem/6"));
+/* NAMING THE OBJECT, on both halves. "supports" alone did not say which way —
+   asked of covid/19 — while the outbound half already read "supported by this".
+   Pinned as the whole predicate, so dropping the object fails here rather than
+   passing on a substring of it. */
+ok("#9: #6 supports this (incoming)", h9.includes(">supports this<") && h9.includes("#/c/orem/6"));
 ok("#9: fineprint", h9.includes("Curation, not mechanics: relations move no stake, no bond, no bar, no verdict"));
 ok("#9: no yes% or sparkline in rows", !h9.includes("YES now") && !h9.includes("spark"));
 
@@ -122,12 +126,18 @@ ok("#3: parent is a row, chipped by its relation", /assocrow[^]*?#\/c\/orem\/9/.
 ok("#3: chip does not claim to be the top of the tree", !h3.includes(">the whole<"));
 ok("#3: parent row carries the whole's status", h3.slice(headAt(h3, "Part of")).slice(0,700).includes("pill"));
 ok("#3: parent is NOT filed under Related", headAt(h3, "Part of") < (hasHead(h3, "Related")? headAt(h3, "Related") : Infinity));
-ok("#3: #11 contradicts", h3.includes(">contradicts<") && h3.includes("#/c/orem/11"));
+ok("#3: #11 contradicts this", h3.includes(">contradicts this<") && h3.includes("#/c/orem/11"));
 ok("#3: no rests-on subsection", !h3.includes("Rests on"));
 
 // ---- #5: superseded (incoming supersedes) ----
 const h5 = associationSection("orem", 5, demoLookup);
-ok("#5: #10 supersedes", h5.includes(">supersedes<") && h5.includes("#/c/orem/10"));
+ok("#5: #10 supersedes this", h5.includes(">supersedes this<") && h5.includes("#/c/orem/10"));
+/* Both directions on one page must not both read as the bare verb — that is the
+   ambiguity, not the wording of either one alone. */
+ok("no inbound chip is left without its object", (()=>{
+  const all = [h9, h3, h5].join("");
+  return !/>(supports|contradicts|supersedes)<\/span>/.test(all);
+})());
 
 // ---- #10: outgoing supersedes ----
 const h10 = associationSection("orem", 10, demoLookup);
@@ -483,6 +493,28 @@ ok("...and a claim with only relations is captioned only for them", (()=>{
 })());
 /* "Filed in" over "filed here" said it twice. The other groups' chips vary and
    so carry information; a folder's would be constant. */
+/* THE CHIP CAME BACK, EARNING THE SLOT THIS TIME. "filed here" was the same two
+   words on every row under a heading that had just said them. A count varies, so
+   it says what the heading cannot, and answers the question the row invites —
+   how much else is on this shelf — without a page load. Asked for directly. */
+ok("a folder row states how many claims the folder holds", (()=>{
+  const h = associationSection("covid", 11, null, null,
+    [{fid:3, name:"Gain-of-function funding", count:3}]);
+  return h.includes(">3 claims</span>") && h.includes("Gain-of-function funding");
+})());
+ok("...singular when it holds one", (()=>{
+  const h = associationSection("covid", 11, null, null, [{fid:4, name:"Solo", count:1}]);
+  return h.includes(">1 claim</span>") && !h.includes("1 claims");
+})());
+/* A folder holding this claim can never truthfully hold zero, so a zero here
+   would be a lie about the shelf rather than an admission that the read failed.
+   Omitted in both cases. */
+ok("...and omitted, not zeroed, when the count is unknown", (()=>{
+  const unread = associationSection("covid", 11, null, null, [{fid:4, name:"Unread", count:null}]);
+  const zero   = associationSection("covid", 11, null, null, [{fid:4, name:"Zero", count:0}]);
+  return !/\bclaims?<\/span>/.test(unread) && !/\bclaims?<\/span>/.test(zero)
+      && unread.includes("Unread") && zero.includes("Zero");
+})());
 ok("the folder row carries no chip repeating its own heading", (()=>{
   const h = associationSection("covid", 11, null, null, [{fid:4, name:"Proximal Origin"}]);
   return hasHead(h, "Filed in") && !h.includes("filed here");
