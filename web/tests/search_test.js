@@ -91,11 +91,18 @@ ok("C1: reveal outranks the hide", src.includes(".qactive .docket .offp:not(.qhi
 // placeholder text changed. Found by changing it.
 const QBAR_COURT = 'qBarHtml("title, folder or #id"';
 ok("C2: the court qbar exists to be placed", src.includes(QBAR_COURT));
-// ABOVE THE FOLDERS NOW, not merely above the docket. The box filters folder rows as
-// well as claim rows, and a filter drawn under half of what it filters reads as the
-// docket's own control.
-ok("C2: court qbar precedes the folders it filters",
-   src.indexOf(QBAR_COURT) < src.indexOf("+ foldersSec"));
+// AND BACK UNDER THE FOLDERS, by the owner's call. The argument for putting it
+// above them is kept because it is still a real one: the box filters folder rows
+// as well as claim rows, and a filter drawn under half of what it filters can
+// read as the docket's own control. What outweighed it is that the folder list
+// is short, fixed and the first thing a reader orients by, so pushing it below a
+// search box buried the court's own filing system under a control most visits
+// never touch. The pairing that keeps the first argument honest is that the
+// SEARCH heading names what it covers — "all 22 claims and folders" — so the
+// scope is stated in words where it used to be stated by position.
+ok("C2: court qbar follows the folders, and is scoped by its heading",
+   src.indexOf(QBAR_COURT) > src.indexOf("+ foldersSec")
+   && src.includes('claims and folders"'));
 ok("C2: court qbar precedes its section", src.indexOf(QBAR_COURT) < src.indexOf('<section data-qsec${foldersSec'));
 // FOLDERS ARE IN THE HAYSTACK. Two halves, and either one alone is the old behaviour:
 // the row must carry a data-q for the filter to test it, and the section must be qsec

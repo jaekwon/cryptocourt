@@ -9749,11 +9749,11 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
      The pager stays with the docket: it pages claims, not folders. */
   return `<div class="cols"><div id="qscope">`
     + courtStatsHtml(slug, s)
+    + foldersSec
     + searchHead
     + qBarHtml("title, folder or #id", idleCap)
-    + foldersSec
     + (pager||"")
-    + `<section data-qsec${foldersSec?' style="margin-top:22px"':""}><div class="sec-h">Open docket ${secHelp("A docket is the list of cases before a court. These are the claims this one has not settled yet — the ones you can still stake on. Settled claims move down to Recently settled.")}<span class="count">${openWin}</span></div>`
+    + `<section data-qsec${foldersSec?' style="margin-top:22px"':""}><div class="sec-h">Open ${secHelp("Claims this court has not settled yet — the ones you can still stake on. Settled claims move down to Recently settled.")}<span class="count">${openWin}</span></div>`
     + (open.length? `<div class="docket" data-sortable data-sortkind="dk">${rows(open)}</div><div class="actions" style="margin-top:10px">${btn("Open a claim","OpenClaimP",{courtSlug:slug,title:"Your claim of fact",body:"What would settle it — the evidence in view, and what this is NOT asking"},"","a body is optional")}</div><div id="courtcompose"></div>`
         : pageOf()>1? `<p class="small muted">Nothing on this page.</p>`
         : `<div class="empty"><div class="g">◌</div><p>No open claims.</p><p>${btn("Open the first claim","OpenClaimP",{courtSlug:slug,title:"Your claim of fact",body:"What would settle it — the evidence in view, and what this is NOT asking"},"","a body is optional")}</p></div>`)

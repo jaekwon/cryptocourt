@@ -109,8 +109,13 @@ ok("...and the fade is dropped for reduced motion",
    /prefers-reduced-motion:reduce\)\{ \.sqp\{transition:none/.test(src));
 
 // ---- the one caller today ---------------------------------------------------
-ok("Open docket is the heading that carries it",
-   /Open docket \$\{secHelp\("A docket is the list of cases before a court\./.test(src));
+/* The heading is "Open" now, not "Open docket", so the sentence no longer opens
+   by defining a word the reader can no longer see. What it must still do is say
+   what the section holds and where the rest of the claims went. */
+ok("Open is the heading that carries it",
+   /<div class="sec-h">Open \$\{secHelp\("Claims this court has not settled yet/.test(src));
+ok("...and it defines no word the heading stopped using",
+   !/secHelp\("A docket is/.test(src));
 ok("...and the sentence says what the section holds AND where the rest went",
    /not settled yet[\s\S]{0,80}Recently settled/.test(src));
 /* The pair it names has to exist, or the sentence sends a reader somewhere the
