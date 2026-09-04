@@ -138,7 +138,26 @@ ok("panel: demo sample note", html.includes("Sample data — computed from the d
 // affordance now, in the sign-help dialog, and demo mode has neither.
 ok("panel: demo offers no runnable command for sample data",
    !html.includes("--send") && !html.includes("gnokey") && !html.includes("data-cli"));
+/* THE FINE PRINT IS STILL THERE, AND IT IS BEHIND "details" NOW. Four rows and
+   two paragraphs sat above the Buy button; what a reader needs before pressing
+   is the unit price and the voice it buys, so those stayed and the rest moved
+   into a dialog. The disclosure is one click away, NOT gone — asserted as the
+   pair, since "present somewhere" and "present outside the dialog" are different
+   claims and only the first is true. */
 ok("panel: fineprint worst case", html.includes("private buyer, and there may not be one"));
+ok("panel: ...and it lives inside the details dialog", (()=>{
+   const i = html.indexOf('id="help-buy"');
+   const j = html.indexOf("private buyer, and there may not be one");
+   const k = html.indexOf("</dialog>", i);
+   return i >= 0 && j > i && j < k;
+})());
+ok("panel: one line in front carries the price and the voice share",
+   /<span class="l">You pay<\/span>[\s\S]{0,200}µGNOT\/unit[\s\S]{0,80}voice/.test(html));
+ok("panel: ...with a details trigger the generic helper handler opens",
+   /data-help="help-buy"/.test(html) && /<dialog class="helper" id="help-buy"/.test(html));
+ok("panel: the moved rows are in the dialog and not repeated outside it",
+   (html.match(/Average price you pay/g)||[]).length === 1
+   && html.indexOf("Average price you pay") > html.indexOf('id="help-buy"'));
 ok("panel: demo button inert", html.includes('data-inert="1"'));
 ok("panel: no banned words", !/backing|redeem|profit|APR/i.test(html));
 

@@ -6599,10 +6599,30 @@ function buyRowsHtml(q, price, slug, after){
   if(!q) return `<div class="line"><span class="l">You get</span><span class="r">— <small>enter a GNOT amount, like 100 or 2.5</small></span></div>`;
   if(q.units<=0n) return `<div class="line"><span class="l">You get</span><span class="r">0 <small>too small to mint — the court refuses it and your GNOT never leaves</small></span></div>`;
   const pct = q.share*100;
-  if(after) return `<div class="line"><span class="l">Average price you pay</span><span class="r tnum">${q.avg.toFixed(4)} <small>µGNOT/unit</small></span></div>`
-    + (q.refund>0n? `<div class="line"><span class="l">Returned to you</span><span class="r tnum">${q.refund.toLocaleString("en-US")} <small>µGNOT, sent back in the same transaction</small></span></div>` : "")
-    + `<div class="line"><span class="l">Price after this</span><span class="r tnum">${fmtN(q.priceAfter)} <small>µGNOT/unit · now ${fmtN(price)}</small></span></div>`
-    + `<div class="line"><span class="l">Your voice share</span><span class="r tnum">${pctText(pct, 100)}</span></div>`;
+  /* ONE LINE IN FRONT, THE REST BEHIND "details". Four rows and two paragraphs of
+     fine print sat above the Buy button; what a reader needs before pressing is
+     what the units cost and how much voice they buy, and those are the two
+     figures kept. Returned-to-you, the price after, and both caveats are one
+     click away rather than gone — a dialog, not a hover: hover text cannot be
+     read on a touch screen or reached by a keyboard, and the second paragraph is
+     the disclosure that says this is GNOT spent rather than moved.
+     THE DIALOG SHIPS INSIDE #buyrows2, which is what the amount field rewrites on
+     every keystroke — so the figures behind the link update with the ones in
+     front of it. Rendered where it is declared and shown in the top layer, which
+     is what <dialog> is for. */
+  if(after) return `<div class="line"><span class="l">You pay</span><span class="r tnum">${q.avg.toFixed(4)} <small>µGNOT/unit</small> · ${pctText(pct, 100)} <small>voice</small> <button type="button" class="helplink" data-help="help-buy">details →</button></span></div>`
+    + `<dialog class="helper" id="help-buy" aria-labelledby="help-buy-h">
+        <div class="hd"><h3 id="help-buy-h">What this buy costs</h3><button type="button" class="pill void" data-close>Close</button></div>
+        <div class="bd">
+          <div class="line"><span class="l">Average price you pay</span><span class="r tnum">${q.avg.toFixed(4)} <small>µGNOT/unit</small></span></div>
+          ${q.refund>0n? `<div class="line"><span class="l">Returned to you</span><span class="r tnum">${q.refund.toLocaleString("en-US")} <small>µGNOT, sent back in the same transaction</small></span></div>` : ""}
+          <div class="line"><span class="l">Price after this</span><span class="r tnum">${fmtN(q.priceAfter)} <small>µGNOT/unit · now ${fmtN(price)}</small></span></div>
+          <div class="line"><span class="l">Your voice share</span><span class="r tnum">${pctText(pct, 100)}</span></div>
+          <p class="small muted">${isLive()
+            ? "Quoted from the chain just now — if someone buys first you'll receive fewer units than shown, never more; the transaction's own result is final."
+            : "Sample data — computed from the demo court, no chain involved."}</p>
+          <p class="small muted">The only way out is a private buyer, and there may not be one. Treat this as GNOT spent for a voice, not GNOT moved.</p>
+        </div></dialog>`;
   /* NO RAW UNIT COUNT. "19,533,968 units" is the same figure in base units, and
      a reader has no use for it: the coin amount beside it already says what they
      get, and the conversion that would make the number mean anything was itself
@@ -9082,9 +9102,7 @@ function joinPanel(slug, s){
         <label class="ack small"><input type="checkbox" id="buyack"${ackAttr}> I understand ${sym} cannot be sold back to the court.</label>
         <div class="actions" style="margin-top:10px" id="buyactions">${buyActionsHtml(slug,q)}</div>
         <div class="ticket buyrcpt" style="margin-top:10px" id="buyrows2" aria-live="polite">${buyRowsHtml(q, s.price, slug, true)}</div>
-        <p id="buynote" class="small muted" style="margin:10px 0 0">${isLive()
-          ? "Quoted from the chain just now — if someone buys first you'll receive fewer units than shown, never more; the transaction's own result is final."
-          : "Sample data — computed from the demo court, no chain involved."}</p>`;
+        `;   /* the quoting note moved into #help-buy with the rows it qualifies */
   }
   /* THE CONTROL FIRST, THE CAVEATS AFTER. This opened with a paragraph on
      permanence, then the receipt, then a note on quoting, then the tick, and the
@@ -9106,8 +9124,7 @@ function joinPanel(slug, s){
   return `<div class="panel" id="join" tabindex="-1"><h4>Join this court</h4>
         <div class="kv oneline" id="joinheld" hidden><div class="k">You have</div><div class="v tnum" id="joinheldv"></div></div>
         ${body}
-        <p class="small muted" style="margin:10px 0 0">The only way out is a private buyer, and there may not be one. Treat this as GNOT spent for a voice, not GNOT moved.</p>
-       </div>`;
+       </div>`;   /* the worst-case paragraph moved into #help-buy too */
 }
 /* One read, and it says nothing rather than guessing when it fails: a wrong
    balance here is worse than an absent one, because this is the row somebody
