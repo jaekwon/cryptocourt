@@ -126,11 +126,15 @@ def before_end(days):
             - datetime.timedelta(days=days)).isoformat()
 EPOCH_BLOCKS = 720       # the twap bucket width, and the height a calendar step moves
 PERIOD_BLOCKS = 120_960  # one emission period = 168 buckets = the trailing window
-# The date the height crosses a whole trailing window. Claims already open by
-# then mature their trailing average on their next move; claims filed after it
-# do not, which is the realistic mix — an old claim has a trend, a new one does
-# not yet.
-TREND_AFTER = "2021-06-15"
+# HOW MANY CLAIMS CARRY A TREND. A window is crossed inside each of these
+# claims' lives — between two of its own moves — because that is the only thing
+# that matures a trailing average: 168 buckets have to pass between two
+# observations OF THE SAME CLAIM. A single window crossed at one date matured
+# exactly one claim on the first attempt, since claims here live about
+# twenty-six days and only one was mid-life on any given date.
+# Four, spread across the calendar, at 120,960 blocks each — see the budget note
+# where they are spent.
+TREND_CLAIMS = 4
 TWAP_BUCKETS = 3         # answerWindow / epochBlocks: distinct buckets needed to answer
 # Beside the scenario, not in web/: the web root is what deploy.sh ships, and
 # this is a local fixture the reader imports by hand.
@@ -779,6 +783,12 @@ def days(iso, n):
     return d.strftime("%Y-%m-%d")
 
 
+# The claims that will carry a trend: spread across the calendar by taking every
+# fourth one in date order, so the docket shows old-with-trend beside
+# new-without rather than a run of them together.
+_by_date = sorted(D, key=lambda c: (c["on"], D.index(c)))
+TREND_IDS = {ids[c["key"]] for c in _by_date[1::max(1, len(_by_date)//TREND_CLAIMS)][:TREND_CLAIMS]}
+
 events = []
 for c in D:
     cid, on, arc = ids[c["key"]], c["on"], c["arc"]
@@ -797,37 +807,44 @@ for c in D:
     if arc == "dead":
         events.append((days(on, 91), 3, "dead", cid, c))
 
-_trend = {"done": False}
+_trend = set()
 for iso, _, kind, cid, c in sorted(events, key=lambda e: (e[0], e[1], e[3])):
     if iso > END:
         raise ValueError(f"#{cid} {c['key']}: {kind} falls at {iso}, past {END}")
-    # A WHOLE TRAILING WINDOW OF BLOCKS, ONCE, so some of this docket has a trend.
+    # A WHOLE TRAILING WINDOW, INSIDE A CLAIM'S OWN LIFE.
     #
     # twap maturity is not a count of observations, it is a count of BUCKETS
-    # ADVANCED: Ring.Observe carries `last` into every bucket it skips and stops
-    # counting at n, so `filled` reaches 168 only when 168 buckets have gone by
-    # between two observations of the SAME claim. Staking a claim ten times in a
-    # day leaves filled at 1, which is why every row on this fixture read "no
-    # trend yet" — the whole five-year narrative fits inside one window, by
-    # design, since a calendar step moves 720 blocks and the height budget is ten
-    # periods.
+    # ADVANCED: Ring.Observe carries `last` into every bucket it skips, so
+    # `filled` reaches 168 only when 168 buckets have gone by between two
+    # observations of the SAME claim. Staking a claim ten times in a day leaves
+    # filled at 1, which is why every row on this fixture read "no trend yet" —
+    # the whole five-year narrative fits inside one window, by design, since a
+    # calendar step moves 720 blocks.
     #
-    # So the height crosses one window here, early, and the claims already open
-    # mature on their next move. EARLY is the whole trick: stake history is
-    # trimmed to the last 168 epochs on a claim's next WRITE, so a claim jumped
-    # over late would lose the chart it had built, while one jumped over on its
-    # first move loses that single point and builds its chart afterwards.
+    # SO THE WINDOW IS CROSSED BETWEEN A CLAIM'S FIRST AND SECOND MOVE. Crossing
+    # it once at a fixed date matured exactly one claim: these claims live about
+    # twenty-six days each and are spread over five years, so on any date only
+    # one is mid-life. Doing it per claim is what makes the number of trends
+    # something this file decides rather than something the calendar decides.
     #
-    # It costs one of the ten periods the realm allows — the cap is low because
-    # touch() walks periods one at a time and a court that runs out of gas mid
-    # touch is bricked for ever, which is the header's argument for spending
-    # height only where a gate needs it. This is such a place: without it no
-    # claim on the fixture can show what the docket's sparkline is for.
-    if not _trend["done"] and iso >= TREND_AFTER:
-        s.note("a full trailing window passes — the claims open by now will carry "
-               "a trend; the ones filed later will not, which is the honest mix")
-        s.advance_height(PERIOD_BLOCKS, why="one emission period, so twap matures")
-        _trend["done"] = True
+    # BETWEEN THE FIRST AND SECOND MOVE, not later: stake history is trimmed to
+    # the last 168 epochs on a claim's next WRITE, so a claim jumped over late
+    # loses the chart it had already built, while one jumped over on its second
+    # move loses only its opening point and builds the rest afterwards.
+    #
+    # Each costs one of the ten emission periods the realm allows. The cap is low
+    # because touch() walks periods one at a time and a court that runs out of
+    # gas mid-touch is bricked for ever — so these are counted, not sprinkled:
+    # four here, plus the 118,080 blocks the gates need, against 1,209,600.
+    # The claim's FIRST DATED move, whatever its index. Moves at offset zero are
+    # staked at open and never become events, so the first tuple here is index 2
+    # on this fixture — keying on a literal index matched nothing and emitted no
+    # jumps at all, which the height total said plainly: 118,080, unchanged.
+    if isinstance(kind, tuple) and cid in TREND_IDS and cid not in _trend:
+        _trend.add(cid)
+        s.note(f"#{cid} has been open a full trailing window — its next move "
+               f"matures the average behind the docket's trend line")
+        s.advance_height(PERIOD_BLOCKS, why=f"#{cid}: one emission period, so twap matures")
     if iso != _at["iso"]:
         goto(iso, "positions move" if isinstance(kind, tuple) else
              {"open": "filed", "answer": "answered", "settle": "settles",
