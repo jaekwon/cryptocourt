@@ -23,10 +23,9 @@ const gasDecls = slice('const GAS_WANTED', 'const CFG_DEFAULTS');
 const escFn = slice('function esc(', '\n');
 // tx/btn/cliCmd
 const btnBlock = slice('function tx(func', 'document.addEventListener("click"');
-// The Buy button's glyph. Sliced rather than stubbed: the assertion below is
-// that the button carries coins and not the pen, and a stub would let the page
+// The Buy button's glyph. Sliced rather than stubbed: a stub would let the page
 // lose the icon while this harness kept passing.
-const coinIcon = slice('const ICN_COINS', '\n');
+const plusIcon = slice('const ICN_PLUS', '\n');
 
 // ---- stubs ----
 global.document = { addEventListener: ()=>{}, getElementById: ()=>null };
@@ -34,7 +33,7 @@ global.CFG = { mode:'demo', gnoweb:'https://gno.land', rpc:'http://127.0.0.1:266
 global.PKG = 'gno.land/r/kourt/kourtv2';
 global.isLive = ()=> CFG.mode==='live';
 
-let code = gasDecls + escFn + helpers + coinIcon + btnBlock + curve;
+let code = gasDecls + escFn + helpers + plusIcon + btnBlock + curve;
 code = code.replace('let BUYQ=null, BUYCTX=null;', 'var BUYQ=null, BUYCTX=null;');
 code = code.replace(/document\.addEventListener\("(input|change)"[^\n]*\n/g, '');
 eval(code);

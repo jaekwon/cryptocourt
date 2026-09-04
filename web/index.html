@@ -6382,15 +6382,18 @@ const ICN_FOLDER = `<svg class="icn" viewBox="0 0 14 12" aria-hidden="true"><pat
 /* "Open the rewards" is the one button on this page that is not about signing a
    statement, it is about collecting — so it gets the object, not the pen. */
 const ICN_CHEST = `<svg class="icn" viewBox="0 0 14 12" aria-hidden="true"><path d="M1.3 1h11.4a.6.6 0 0 1 .6.6v2.1H.7V1.6A.6.6 0 0 1 1.3 1zM.7 4.7h5.1v1.1h2.4V4.7h5.1v5.7a.6.6 0 0 1-.6.6H1.3a.6.6 0 0 1-.6-.6zM6.3 2.2h1.4v2.4H6.3z" fill="currentColor"/></svg>`;
-/* COINS, for the one button that spends GNOT. It wore the pen, which is the
-   glyph for signing a statement — and buying is not one: nothing is asserted,
-   GNOT is burned and coin is minted. Same argument as ICN_CHEST, same 14x12 box.
-   TWO SHAPES, NOT THREE COINS. A stack drawn as three filled ellipses needs a
-   gap between them, and at the 14px this renders at the gap is a third of a
-   pixel — the three merge into one blurred column. So: the top coin's face, and
-   below it the rim of the coin under it, drawn as the band between two arcs.
-   That is a stack at a size where a stack of three is a smudge. */
-const ICN_COINS = `<svg class="icn" viewBox="0 0 14 12" aria-hidden="true"><ellipse cx="7" cy="2.8" rx="5.4" ry="2.2" fill="currentColor"/><path d="M1.6 6.4A5.4 2.2 0 0 0 12.4 6.4V9.2A5.4 2.2 0 0 1 1.6 9.2Z" fill="currentColor"/></svg>`;
+/* A PLUS, for the one button that adds to what you hold. It wore the pen, which
+   is the glyph for signing a statement — and buying is not one: nothing is
+   asserted, GNOT is burned and coin is minted. Same argument as ICN_CHEST, same
+   14x12 box. A coin stack said the same thing at 14px by drawing two ellipses
+   and hoping they read as three coins; a plus needs no interpreting, and it says
+   the direction as well as the subject — more of this, held by you.
+   DRAWN, NOT TYPED. A "+" in the glyph slot would be a character in the button's
+   own font: it inherits 560 weight and 14px and lands wherever the typeface puts
+   it, which is not where the other glyphs on this page sit. As a path it takes
+   .icn's box like ICN_CHEST and ICN_COURT, and its bar is 2 units thick because
+   the hairline a font gives a plus disappears against a filled button. */
+const ICN_PLUS = `<svg class="icn" viewBox="0 0 14 12" aria-hidden="true"><path d="M6 .8h2V5h4.2v2H8v4.2H6V7H1.8V5H6z" fill="currentColor"/></svg>`;
 /* A BIN, for the spam flag. Same 14x12 box as the rest so it sits on the text
    baseline the way ICN_CHEST and ICN_COURT do. Lid, body, two staves. */
 const ICN_BIN = `<svg class="icn" viewBox="0 0 14 12" aria-hidden="true"><path d="M5.4 0h3.2l.5.9h3.1v1.5H1.8V.9h3.1zM2.6 3.5h8.8l-.6 7.6a.9.9 0 0 1-.9.9H4.1a.9.9 0 0 1-.9-.9zM5.4 5h1.1v5H5.4zm2.7 0h1.1v5H8.1z" fill="currentColor"/></svg>`;
@@ -6607,9 +6610,10 @@ function buyActionsHtml(slug, q){
   // cc(), NOT ccText(): the coin wears the same gold bar here as in the row
   // above, so what you press names what you were just quoted. btn() takes {html}
   // for exactly this, and .btn.primary re-tunes the gold to the accent fill.
-  // COINS, NOT THE PEN: this button spends, it does not assert (see ICN_COINS).
+  // A PLUS, NOT THE PEN: this button adds to a holding, it does not assert
+  // anything (see ICN_PLUS).
   return btn(ok? {html:"Buy "+cc(Number(q.units),slug)} : "Buy the coin",
-             "Buy", {slug}, "primary", "", send, gate, false, "", ICN_COINS);
+             "Buy", {slug}, "primary", "", send, gate, false, "", ICN_PLUS);
 }
 /* ---------------- the court record (adverse disclosure) ----------------
    Outcomes only the chain can assert, published because they are the only
@@ -12066,7 +12070,15 @@ function verdictBanner(d){
      caveat — and the state is that a dispute is running. Where the difference
      actually matters (the ballot, the ballots page) the prose says it in full,
      including that the running count is readable off the chain. */
-  if(d.phase==="disputed") return `<span class="pill escrow">⚖ dispute under way</span>`;
+  /* "in dispute", NOT "dispute under way", and the reason is not brevity. This
+     page is the one surface that named the state in its own words: phaseClass —
+     the classifier this file opens by calling the one every status surface
+     agrees on — has said "in dispute" all along, and the docket rows and the map
+     dots have been saying it. A reader moving between them met two names for one
+     state and had to work out they meant the same thing.
+     It also reads as a state rather than an event, which is what the pills
+     beside it do: "open", "answered", "provisional", "closed". */
+  if(d.phase==="disputed") return `<span class="pill escrow">⚖ in dispute</span>`;
   if(d.phase==="provisional") return `<span class="pill escrow">provisional ${sideName(d.provisional)} · reopenable</span>`;
   if(d.phase==="answered") return `<span class="pill open">answered ${sideName(d.answer)}</span>`;
   return d.phase==="closed"? `<span class="pill void">closed · never answered</span>` : `<span class="pill void">open · no answer yet</span>`;
