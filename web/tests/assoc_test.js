@@ -413,6 +413,27 @@ ok("no banned words", ![h9,h3,h5,h10,h6,h11,L1,L2,L4].some(x=>/backing|redeem\b|
 
 // relation-chip layout + colour (owner report: "contradicts" overlapped the
 // wrapped title from orem/3; the contradiction family must read bright red)
+/* A ROW WITH NO CHIP MUST NOT KEEP THE CHIP'S COLUMN. The court's policing rows
+   stopped emitting a status pill when the verdict moved onto their sentence, and
+   the 268px track stayed — measured on /c/covid: two children in a three-track
+   row, the title squeezed into 196px of a 584px row with 268px empty beside it,
+   rows 162px tall. Reported as squished. The docket made the identical mistake
+   when its own pill left.
+   THE DEMO FIXTURE CANNOT CATCH THIS: every assocrow it renders has a chip, so a
+   browser check on the sample court passes either way. Asserted on the source,
+   where the pairing is visible — the class is derived from the cell so the two
+   cannot disagree, and that derivation is what is pinned. */
+ok("a chip-less policing row drops the chip's column",
+   src.includes('.docket a.crow.assocrow.nochip{grid-template-columns:52px minmax(0,1fr)}'));
+ok("...and the class is taken from the cell, not from a second reading of it",
+   (src.match(/const chip = byId\[r\.id\] && !sd\? statusPill\(byId\[r\.id\]\.statusText\) : "";/g)||[]).length === 2
+   && (src.match(/assocrow\$\{chip\? "" : " nochip"\}/g)||[]).length === 2);
+ok("...so a row for a claim outside the window loses it too", (()=>{
+  // byId misses the id: no side to show AND no status to draw, so no third cell.
+  // Deriving the class from `sd` alone would have left this row squeezed.
+  return !/assocrow\$\{sd\?/.test(src);
+})());
+
 /* THE CLAIM ROW'S ID TRACK. It was 52px, sized for the four-column template the
    row stopped using when the pill moved to the meta line; "#19" is 24px of mono
    and the assocrow already narrows to 44 at width. Measured on the sample court

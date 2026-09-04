@@ -1326,6 +1326,15 @@ p.sub{font-size:13.5px; color:var(--ink-2); max-width:54ch; margin-top:6px}
    few pixels from it and read as one sentence. Specificity matches
    `.docket a.crow`, which sets the docket's own four-track grid. */
 .docket a.crow.assocrow{grid-template-columns:52px minmax(0,1fr) 268px; gap:20px}
+/* AND NO THIRD COLUMN WHEN THERE IS NO CHIP TO PUT IN IT. The 268px above is
+   deliberate for a row that HAS a chip cluster — the note above says why — but
+   the court's policing rows stopped emitting one when the verdict moved onto
+   their sentence, and the track stayed. Measured on /c/covid: two children in a
+   three-track row, the title squeezed into 196px of a 584px row with 268px
+   standing empty beside it, and rows 162px tall. Reported as squished.
+   The same mistake the docket made when its pill left, and the same fix: only
+   the row that stopped filling a column loses it. */
+.docket a.crow.assocrow.nochip{grid-template-columns:52px minmax(0,1fr)}
 .docket a.crow.assocrow>.rt,.docket a.crow.assocrow>.pill{justify-self:end}
 .docket a.crow.assocrow .rt{justify-content:flex-end; gap:10px; flex-wrap:wrap}
 @media (max-width:820px){ .docket a.crow.assocrow{grid-template-columns:44px minmax(0,1fr); gap:10px}
@@ -9505,16 +9514,23 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
          was still being read on /c/covid. They carry titles like the rest, so
          they take the same shape — through one helper, so the next surface added
          here cannot answer the question differently again. */
+      /* THE CLASS COMES OFF THE CELL, not off a second reading of the same
+         condition. A row drops its third column when it has no third CELL, and
+         "settled" is not the only way to have none: a row whose claim is not in
+         this page's window has no status to draw either, and deriving the class
+         from `sd` alone would have left those squeezed in the same way. */
       const srow = r => { const sd = byId[r.id]? rowSide(byId[r.id].statusText) : "";
-        return `<a class="crow assocrow" href="#/c/${esc(slug)}/${r.id}">
+        const chip = byId[r.id] && !sd? statusPill(byId[r.id].statusText) : "";
+        return `<a class="crow assocrow${chip? "" : " nochip"}" href="#/c/${esc(slug)}/${r.id}">
         <span class="id">#${r.id}</span>
         <span><span class="t">${byId[r.id]? verdictSentence(r.title, sd) : safeInline(r.title)}</span>${r.deadline!=null?`<span class="m" style="display:block">settles at block ${fmtN(r.deadline)}</span>`:""}</span>
-        ${byId[r.id] && !sd? statusPill(byId[r.id].statusText) : ""}</a>`; };
+        ${chip}</a>`; };
       const prow = r => { const sd = byId[r.id]? rowSide(byId[r.id].statusText) : "";
-        return `<a class="crow assocrow" href="#/c/${esc(slug)}/${r.id}">
+        const chip = byId[r.id] && !sd? statusPill(byId[r.id].statusText) : "";
+        return `<a class="crow assocrow${chip? "" : " nochip"}" href="#/c/${esc(slug)}/${r.id}">
         <span class="id">#${r.id}</span>
         <span><span class="t">${byId[r.id]? verdictSentence(r.title, sd) : safeInline(r.title)}</span>${r.seeded?`<span class="m" style="display:block">seeded by a moderator</span>`:""}</span>
-        ${byId[r.id] && !sd? statusPill(byId[r.id].statusText) : ""}</a>`; };
+        ${chip}</a>`; };
       let g = "";
       if(stripQ && stripQ.rows && stripQ.rows.length){
         g += `<section data-qfold style="margin-top:22px"><div class="sec-h">Needs review <span class="count">${stripQ.more? `first ${stripQ.rows.length} of ${fmtN(stripQ.rows.length+stripQ.more)}` : stripQ.rows.length} · the chain's own list</span></div>
