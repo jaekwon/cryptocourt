@@ -413,6 +413,20 @@ ok("no banned words", ![h9,h3,h5,h10,h6,h11,L1,L2,L4].some(x=>/backing|redeem\b|
 
 // relation-chip layout + colour (owner report: "contradicts" overlapped the
 // wrapped title from orem/3; the contradiction family must read bright red)
+/* THE CLAIM ROW'S ID TRACK. It was 52px, sized for the four-column template the
+   row stopped using when the pill moved to the meta line; "#19" is 24px of mono
+   and the assocrow already narrows to 44 at width. Measured on the sample court
+   at 1280px: the title track goes 412px to 420px, the tallest row 141px to
+   119px, and the docket's total height 1258px to 1211px.
+   A NARROW-WIDTH RULE WAS TRIED AND DROPPED, which is worth recording so it is
+   not written again: collapsing the third track at 820px and moving the
+   percentage onto the meta line changed the title cell by 12px and the total
+   height by nothing, because at 390px that cell is already 160px on its own
+   line. The absence is deliberate. */
+ok("the claim row's id track is sized for a claim id", 
+   src.includes(".docket a.crow.claimrow{grid-template-columns:44px minmax(0,1fr) 64px}"));
+ok("...and no narrow-width override was left behind for it",
+   !/@media[^{]*\{[^}]*\.docket a\.crow\.claimrow\{/.test(src));
 ok("chip cluster is right-aligned in its own column", src.includes(".docket a.crow.assocrow{grid-template-columns:52px minmax(0,1fr) 268px"));
 ok("specificity matches .docket a.crow (which sets the docket grid)", !src.includes("\n.crow.assocrow{grid-template-columns"));
 ok("both pills ride one .rt cluster", src.includes('<span class="rt"><span class="pill ${/contradict/.test(chip)?"contra":"void"}">'));

@@ -599,7 +599,17 @@ a.card:hover{border-color:var(--line-2)}
    is that the pill moved onto the meta line and the 124px it had reserved was
    empty on every settled row. The other .crow users keep the four-column
    template, because each of them fills it. */
-.docket a.crow.claimrow{grid-template-columns:52px minmax(0,1fr) 64px}
+.docket a.crow.claimrow{grid-template-columns:44px minmax(0,1fr) 64px}
+/* 44px, NOT 52. The id track was sized for the four-column template it no longer
+   uses; "#19" is 24px of mono and even a five-digit court would not fill 44.
+   The assocrow already narrows to 44 and nothing about a claim id is wider. */
+/* NO NARROW-WIDTH RULE HERE, and that is a measurement rather than an omission.
+   One was written — collapse the third track and move the percentage onto the
+   meta line, the way the pill and the assocrow's .rt both do at 820px — and it
+   changed nothing worth keeping: at 390px the percentage cell is already 160px
+   on its own line, so the row has reflowed before the rule can help. Measured
+   before and after on the same fixture: the title cell gained 12px and the
+   docket's total height did not move at all. */
 /* .m is a flex row with a 12px gap, so the pill sits in the run of meta facts
    rather than starting a line of its own. margin-top:0 because the .m above it
    has already opened the gap, and the pill's own padding would double it. */
