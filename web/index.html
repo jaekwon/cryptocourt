@@ -1886,8 +1886,13 @@ tr.youare .mono{font-weight:600}
    no line of its own, which is the whole point of moving it.
    Scoped to .chips, not .schips: pagerHtml puts it in the pager's own chip
    wrapper, BEFORE the .schips group, which is what makes it sit to the left. */
-.pager .chips .chiplab{font:600 10.5px/1 var(--sans); letter-spacing:.08em; text-transform:uppercase;
-  color:var(--muted); margin-right:2px; white-space:nowrap}
+.pager .chips .chiplab,.sec-h .chiplab{font:600 10.5px/1 var(--sans); letter-spacing:.08em;
+  text-transform:uppercase; color:var(--muted); margin-right:2px; white-space:nowrap}
+/* In a heading the chooser is pushed to the far end, so the figure stays beside
+   the word it belongs to and the controls read as a group of their own. .sec-h
+   is a baseline flex row; the chips align to it like the count does. */
+.sec-h .chiplab{margin-left:auto}
+.sec-h .schips{margin-right:0}
 
 /* body / untrusted text frame */
 
@@ -6076,7 +6081,11 @@ function pagerHtml(base, page, shown, total, label, order, chips){
      count scroll away from the eye that was reading it. Reported as: I don't
      want text there, and I don't want that part to change when I click.
      So a pager WITH chips says only what it counts, and never changes. */
-  const tail = chips? "" : ` · ${esc(order||"newest first")}`;
+  /* TWO WAYS TO SAY "NOT HERE". `chips` means the chooser beside the caption is
+     already the statement; order==="" means the caller has put the count and the
+     chooser somewhere else entirely, which is what the court page does now — its
+     count rides the Search heading above the filter box. */
+  const tail = (chips || order==="")? "" : ` · ${esc(order||"newest first")}`;
   const cap = shown>0
     ? (page===1 && hi>=total? `all ${fmtN(total)} ${esc(lab)}${tail}`
                             : `showing ${fmtN(lo)}–${fmtN(hi)} of ${fmtN(total)} ${esc(lab)}${tail}`)
@@ -6203,6 +6212,8 @@ function parseJump(q, slugCtx){
   return null;
 }
 function qCaption(state){
+  // a caller whose surface states the count elsewhere asks for no caption at all
+  if(state.mode==="none") return "";
   // state: {mode:"idle"|"active"|"zero", demo, kind:"claims"|"court names",
   //         loaded, total, matches, q, orderTail}
   const noun = state.kind||"claim titles";
@@ -6256,6 +6267,12 @@ function applyQ(qRaw){
   if(cap) cap.textContent = qCaption(active
     ? (matches? {mode:"active", matches, loaded:QCTX.loaded, q, kind:QCTX.kind, orderTail:QCTX.orderTail}
               : {mode:"zero", demo:QCTX.demo, q, kind:QCTX.kind, loaded:QCTX.loaded, total:QCTX.total})
+    /* A SURFACE WITH A HEADING SAYS IT ONCE. The court page states the count in
+       "Search · all 22 claims and folders" above the box; the idle caption under
+       it then repeated the same figure in different words. While a query runs
+       the caption earns its line — it is the match count, which nothing else
+       shows — so only the IDLE branch is dropped. */
+    : QCTX.headed? {mode:"none"}
     : {mode:"idle", demo:QCTX.demo, kind:QCTX.kind, loaded:QCTX.loaded, total:QCTX.total});
   // shareable: ?q rides the hash without re-rendering
   try{
@@ -6494,9 +6511,20 @@ on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
     hiddenGap = Math.max(0, totalClaims - parsed.length); // the sample's own hidden claims
   }
   const hiddenNote = hiddenGap>0? `<p class="small muted" style="margin:2px 0 8px">${hiddenGap} hidden or unreadable claim${hiddenGap===1?"":"s"} omitted from this window — a hidden claim's page still answers by id.</p>` : "";
-  const dkChips = claims.length>=2
-    ? `<span class="schips" role="group" aria-label="sort order"><button class="pill void" data-sort="top" aria-pressed="${QP.sort==="top"}" title="most staked first — YES and NO together">top</button><button class="pill void" data-sort="ctv" aria-pressed="${QP.sort==="ctv"}" title="most stake against the answer, as a share — stakes, never ballots">controversial</button><button class="pill void" data-sort="new" aria-pressed="${QP.sort!=="old"&&QP.sort!=="ctv"&&QP.sort!=="top"}">newest</button><button class="pill void" data-sort="old" aria-pressed="${QP.sort==="old"}">oldest</button></span>` : "";
-  const docketPager = pagerHtml("/c/"+slug, page, claims.length, totalClaims, "claims", undefined, dkChips) + hiddenNote;
+  /* THE COUNT AND THE CHOOSER GO ABOVE THE FILTER BOX, in the shape every other
+     block on this page already uses: a heading, its figure in .count, and the
+     controls that belong to it on the same line. "FOLDERS 3 · read live from the
+     chain" is the model, and asked for by name.
+     They were below the folder list and above the docket, which put the control
+     that reorders the docket after the box that filters it and left the count
+     stranded between two sections it did not describe. Now: Search, what it
+     searches, and how to order it — one line, above the box.
+     THE PAGER KEEPS ONLY WHAT MOVED NOWHERE. It states no order (the chips do)
+     and no count (the heading does), so on a court that fits in one window it
+     renders nothing at all; on a paginated one it is the ‹ newer / older › nav
+     and the hidden-rows note, which is all it was ever for. */
+  const docketPager = ((totalClaims>PAGE_N || page>1)
+    ? pagerHtml("/c/"+slug, page, claims.length, totalClaims, "claims", "") : "") + hiddenNote;
   const docketPagerBot = (totalClaims>PAGE_N || page>1)? pagerHtml("/c/"+slug, page, claims.length, totalClaims, "claims") : "";
   /* TOGETHER, NOT ONE AFTER THE OTHER. The folder tree and the description are
      independent — nothing in either read decides what the other asks — and
@@ -6566,7 +6594,7 @@ on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
   const foldRows = document.querySelectorAll("#qscope .folderrow[data-q]").length;
   QCTX = {kind: foldRows? "claim titles and folder names" : "claim titles",
     demo:!isLive(), loaded:allRows.length + foldRows,
-    total:totalClaims + foldRows, slug, totalClaims, orderTail:""};
+    total:totalClaims + foldRows, slug, totalClaims, orderTail:"", headed:true};
   if(QP.sort) applySort(QP.sort); // before applyQ — the search caption reads QCTX.orderTail
   if(QP.q){ const qi=document.getElementById("q"); if(qi){ qi.value=QP.q; applyQ(QP.q); } }
   if(isLive()) fillCourtFaces([slug]);
@@ -9697,10 +9725,23 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
      reading "all 19 claim titles" over a filter that also matches six folder names is
      the small kind of untrue that makes a reader distrust the big numbers too. */
   const foldN = (pageOf()===1 && cur && cur.folders.length)? cur.folders.length : 0;
-  const idleCap = qCaption({mode:"idle", demo:!isLive(),
-    kind: foldN? "claim titles and folder names" : "claim titles",
-    loaded:rowsAll.length + foldN,
-    total:((isLive()&&s.claims!=null)? s.claims : rowsAll.length) + foldN});
+  /* "all 22 claims and folders" — the reader's noun, not the matcher's. The
+     caption under the box still says "claim titles and folder names" because
+     that one is about what a MATCH is tested against; this one is about what is
+     in the list. */
+  const searchCount = `all ${fmtN(rowsAll.length + foldN)} ${foldN? "claims and folders" : (rowsAll.length===1? "claim":"claims")}`;
+  /* BUILT HERE, NOT IN THE ROUTE, because this is where the two halves of it
+     live: rowsAll and foldN are the count, and `claims` is what decides whether
+     a chooser is worth showing at all. The route used to own the chips and
+     handed them down; that only worked while they sat in the pager it also
+     owned. */
+  const dkChips = claims.length>=2
+    ? `<span class="schips" role="group" aria-label="sort order"><button class="pill void" data-sort="top" aria-pressed="${QP.sort==="top"}" title="most staked first — YES and NO together">top</button><button class="pill void" data-sort="ctv" aria-pressed="${QP.sort==="ctv"}" title="most stake against the answer, as a share — stakes, never ballots">controversial</button><button class="pill void" data-sort="new" aria-pressed="${QP.sort!=="old"&&QP.sort!=="ctv"&&QP.sort!=="top"}">newest</button><button class="pill void" data-sort="old" aria-pressed="${QP.sort==="old"}">oldest</button></span>` : "";
+  const searchHead = `<div class="sec-h">Search <span class="count">${esc(searchCount)}</span>${dkChips? `<span class="chiplab">sort</span>${dkChips}`:""}</div>`;
+  /* "" AT REST. searchHead, immediately above the box, already says what is in
+     the list; this line said it again in the matcher's words. It fills in as
+     soon as a query runs. */
+  const idleCap = "";
   /* THE BOX SITS ABOVE THE FOLDERS, because they are the first thing it filters. It
      used to sit under them and over the docket, which read as the docket's own control
      — and while folders were unsearchable that was exactly what it was. Now that a
@@ -9708,6 +9749,7 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
      The pager stays with the docket: it pages claims, not folders. */
   return `<div class="cols"><div id="qscope">`
     + courtStatsHtml(slug, s)
+    + searchHead
     + qBarHtml("title, folder or #id", idleCap)
     + foldersSec
     + (pager||"")
