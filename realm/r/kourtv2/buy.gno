@@ -73,14 +73,27 @@ func Buy(cur realm, slug string) int64 {
 	b.SendCoins(cur.Address(), chain.PackageAddress(burnSinkPath),
 		chain.Coins{chain.NewCoin(gnotDenom, spent)})
 
-	// UNREACHABLE at this curve's granularity, and kept as defence. The mutation
-	// harness reports both this branch and its destination as survivors: delta is in
-	// base units (1e6 per CC), so one more base unit costs far under 1 ugnot, and
-	// Minted's step-up loop plus round-up Cost make `spent` land EXACTLY on `sent` for
-	// every payment probed. A fixture would have to coarsen the curve to reach it,
-	// i.e. pin a configuration this court does not have. It stays because a coarser
-	// curve is a parameter change away and the failure mode would be silently keeping
-	// a buyer's change. NOT claimed as verified — see PLAN §13 v0.62.
+	// THE BUYER'S CHANGE, and it is paid on most buys — which is the opposite of what
+	// this comment used to say. It read: unreachable at this curve's granularity, delta
+	// is in base units so one more of them costs far under 1 ugnot, Minted's step-up
+	// loop plus round-up Cost land `spent` EXACTLY on `sent` for every payment probed,
+	// and a fixture would have to coarsen the curve to reach it.
+	//
+	// Every clause of that is true BELOW d and false above it, and the only payments
+	// ever probed were below d. A base unit costs s/d: under 1 ugnot while s < d, so the
+	// round-up cost sequence steps by 0 or 1 and can always finish exactly on the
+	// payment. Past d it steps by s/d, and a payment lands BETWEEN two reachable totals
+	// with no way to spend the difference.
+	//
+	// Measured on the deployed covid court, which sits at s ≈ 5.1e9 — five times d, so
+	// one base unit costs 5 ugnot: 100 GNOT buys 19,533,968 of them for 99,999,999, and
+	// this line returns the last ugnot. The nearest reachable totals either side are
+	// 99,999,994 and 100,000,004.
+	//
+	// Pinned by TestBuyReturnsTheUnspendableRemainder, which builds its payment from
+	// Cost rather than from Minted so the assertion is not the function under test
+	// agreeing with itself. It also pins the burn above: sending `sent` instead of
+	// `spent` over-burns by exactly the ugnot owed back here.
 	if r := sent - spent; r > 0 {
 		b.SendCoins(cur.Address(), buyer, chain.Coins{chain.NewCoin(gnotDenom, r)})
 	}
