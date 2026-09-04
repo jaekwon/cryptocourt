@@ -318,16 +318,33 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
      Source assertions, because this harness has no browser — the GEOMETRY (that
      it lands right of the seal, on the same line) is measured in the deploy
      screenshot rather than here, and this side pins the things a rename or a
-     tidy-up would break: that the link is inside the h1 at all, that the old
-     paragraph is gone, and that the icon is the constellation rather than an
-     arrow character. */
+     tidy-up would break: that the link is inside the h1 at all, and that the old
+     paragraph is gone.
+
+     THE ARROW CAME BACK, and this assertion used to forbid it. Reported as "map
+     doesn't have an arrow" on /c/covid/f/4.
+     The original request was to replace an arrow-ONLY affordance with the map's
+     mark, and that reading held while this was the only jump of its kind. It
+     stopped holding when the claim page grew the same jump and settled the house
+     style at icon-noun-arrow — d3_test names it "the shared convention" and pins
+     `${ICN_CONSTEL}map<span` there. So the two map links in this app read
+     differently for no reason a reader could see, and the folder one was the odd
+     one out. The icon is not the arrow and never was: it says WHICH view, and
+     the arrow says there is one to go to. */
   ok("the folder's map jump is inside the heading",
      src.includes('<span class="seal">${esc(slug)}</span> `')
-     && src.includes('<a class="hjump" href="#/c/${esc(slug)}/map?ffocus=${esc(fpath)}">${ICN_CONSTEL}map</a>'));
+     && src.includes('<a class="hjump" href="#/c/${esc(slug)}/map?ffocus=${esc(fpath)}">${ICN_CONSTEL}map<span aria-hidden="true">→</span></a>'));
   ok("...and the paragraph it used to live in is gone",
      !src.includes('<p class="tacts" style="margin:0 0 10px"><a class="tlink" href="#/c/${esc(slug)}/map?ffocus='));
-  ok("...with no arrow glyph left on the folder heading",
-     !/hjump[^`]*→/.test(src));
+  /* Both map links, asserted together — one convention is only a convention if
+     the surfaces that follow it are checked against each other. Pinning them
+     apart is what let them drift. */
+  ok("...and both map jumps carry the constellation, the noun and the arrow",
+     (src.match(/\$\{ICN_CONSTEL\}map<span aria-hidden="true">→<\/span>/g)||[]).length === 2);
+  /* The arrow is decoration, not content: the link already reads "map", so a
+     screen reader announcing "map right-arrow" describes the ornament. */
+  ok("...with the arrow hidden from assistive tech on both",
+     !/\$\{ICN_CONSTEL\}map→/.test(src));
   /* The icon is a constellation: routes drawn BEHIND stars, which in SVG means
      the stroked path is emitted before the circles. Asserted as an order, not
      just a presence — circles first would put the joins over the points and the

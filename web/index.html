@@ -9945,7 +9945,17 @@ on(/^\/c\/([a-z0-9-]+)\/f\/([0-9.]+)$/, async (slug,fpath)=>{
        three elements down. Inline after the seal it reads as part of the title:
        "Fauci · COVID · on the map". */
     + `<h1 class="page-h">${ICN_FOLDER} ${safeInline(f.name)} <span class="seal">${esc(slug)}</span> `
-      + `<a class="hjump" href="#/c/${esc(slug)}/map?ffocus=${esc(fpath)}">${ICN_CONSTEL}map</a></h1>`
+      /* AND IT GOES SOMEWHERE, WHICH THE ARROW IS HOW THIS PAGE SAYS. Every other
+         link that leaves for another view ends in one — "Open claim page →",
+         "the moderation log →", "back to the docket →" — so the one that did not
+         read as a label sitting beside the title rather than as the way out to
+         the map. The icon is not the arrow: it is the map's own mark, and it
+         appears on the map's nodes too, so it says WHICH view, not that there is
+         one to go to.
+         aria-hidden on the arrow, the same way the claim page's map link writes
+         it: the link already reads "map", and a screen reader announcing "map
+         right-arrow" describes the decoration rather than the destination. */
+      + `<a class="hjump" href="#/c/${esc(slug)}/map?ffocus=${esc(fpath)}">${ICN_CONSTEL}map<span aria-hidden="true">→</span></a></h1>`
     /* THE FOLDER'S ONE PICTURE, at a size worth looking at. On the map it is a
        tint under a label, which is right there and not enough anywhere else:
        this is the page a reader lands on when they follow the folder, and the
