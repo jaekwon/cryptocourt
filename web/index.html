@@ -1881,7 +1881,13 @@ tr.youare .mono{font-weight:600}
    states identically is not a toggle, it is two buttons. */
 .pager .pill[aria-pressed="true"],.schips .pill[aria-pressed="true"]{background:var(--accent-wash); color:var(--accent-2); border-color:var(--accent)}
 .pager.hidenav .pnav{display:none}
-.schips{display:inline-flex; gap:6px; margin-right:8px}
+.schips{display:inline-flex; gap:6px; margin-right:8px; align-items:center}
+/* The word that used to be a sentence under the chips, now beside them. It costs
+   no line of its own, which is the whole point of moving it.
+   Scoped to .chips, not .schips: pagerHtml puts it in the pager's own chip
+   wrapper, BEFORE the .schips group, which is what makes it sit to the left. */
+.pager .chips .chiplab{font:600 10.5px/1 var(--sans); letter-spacing:.08em; text-transform:uppercase;
+  color:var(--muted); margin-right:2px; white-space:nowrap}
 
 /* body / untrusted text frame */
 
@@ -6039,15 +6045,24 @@ function pagerHtml(base, page, shown, total, label, order, chips){
   const lo=(page-1)*PAGE_N+1, hi=lo+shown-1;
   // links carry sort and p only — q mutates live, at/focus never belong on a listing
   const link=p=>{ const ps=new URLSearchParams(); if(QP.sort) ps.set("sort",QP.sort); if(p>1) ps.set("p",String(p)); const t=ps.toString(); return "#"+base+(t?"?"+t:""); };
+  /* THE CAPTION STATES THE ORDER ONLY WHEN NOTHING ELSE CAN. D4 made every
+     listing say how it is sorted, which is right for a fixed order nobody can
+     change — a folder page, a court's association list. It is wrong beside a
+     row of chips: the chips ARE the statement, the pressed one says which, and
+     rewriting a sentence under them on every click made the line jump and the
+     count scroll away from the eye that was reading it. Reported as: I don't
+     want text there, and I don't want that part to change when I click.
+     So a pager WITH chips says only what it counts, and never changes. */
+  const tail = chips? "" : ` · ${esc(order||"newest first")}`;
   const cap = shown>0
-    ? (page===1 && hi>=total? `all ${fmtN(total)} ${esc(lab)} · ${esc(order||"newest first")}`
-                            : `showing ${fmtN(lo)}–${fmtN(hi)} of ${fmtN(total)} ${esc(lab)} · ${esc(order||"newest first")}`)
+    ? (page===1 && hi>=total? `all ${fmtN(total)} ${esc(lab)}${tail}`
+                            : `showing ${fmtN(lo)}–${fmtN(hi)} of ${fmtN(total)} ${esc(lab)}${tail}`)
     : `page ${fmtN(page)} is past the end — ${fmtN(total)} ${esc(lab)} in all`;
   const nav = (total>PAGE_N || page>1)
     ? `${page>1?`<a class="pill void pnav" href="${esc(link(page-1))}">‹ newer</a>`:`<span class="pill void off pnav">‹ newer</span>`}${hi<total?`<a class="pill void pnav" href="${esc(link(page+1))}">older ›</a>`:`<span class="pill void off pnav">older ›</span>`}`
     : "";
   return `<div class="pager"><span class="mono small">${cap}</span>
-    <span class="chips">${chips||""}${nav}</span></div>`;
+    <span class="chips">${chips? `<span class="chiplab">sort</span>`:""}${chips||""}${nav}</span></div>`;
 }
 function pageSlice(list, page){ return list.slice((page-1)*PAGE_N, page*PAGE_N); }
 
@@ -6055,11 +6070,8 @@ function pageSlice(list, page){ return list.slice((page-1)*PAGE_N, page*PAGE_N);
    Scoped to [data-sortable] only — folder pages, the specimen tour, association
    dockets and /needs keep their load-bearing order. Keys ride data-* attrs
    stamped at build (demo) or by the spark fill (live); keyless rows sink. ---- */
-const SORT_TAILS = {
-  dk: { old: "oldest first (this window)",
-        ctv: "most stake against the answer, as a share (this window) — stakes, never ballots",
-        top: "most staked first, YES and NO together (this window) — stakes, never ballots" },
-  dir:{ claims: "most claims filed first — deeper pages exist only in burn order" } };
+/* SORT_TAILS is gone with the captions it fed. What a chip means is on the chip
+   — its word, and a title for the sentence that will not fit in one. */
 /* THE TWO STAKE SORTS, and both come free. DocketSeries already returns
    yesStake and noStake for up to 60 rows in ONE read — the same read the
    sparklines are drawn from — so neither of these costs the page anything it
@@ -6120,12 +6132,9 @@ function applySort(keyRaw){
   if(hadFocus && document.activeElement!==hadFocus){ try{ hadFocus.focus({preventScroll:true}); }catch(_){} }
   document.querySelectorAll(".schips [data-sort]").forEach(b=>
     b.setAttribute("aria-pressed", String(b.getAttribute("data-sort")===key)));
-  // captions were baked with the ledger's order — swap the order tail in place
-  document.querySelectorAll(".pager > span.mono.small").forEach(sp=>{
-    if(!sp.dataset.cap0) sp.dataset.cap0 = sp.textContent;
-    sp.textContent = dflt? sp.dataset.cap0
-      : sp.dataset.cap0.replace(/ · [^·]*$/, " · "+((SORT_TAILS[kind]||{})[key]||""));
-  });
+  /* NO CAPTION REWRITE. This used to swap the order tail in place on every
+     click; the caption beside chips no longer carries one, so there is nothing
+     to swap and nothing to jump. What each chip means lives on the chip. */
   // a client-side order has no deeper pages on the directory — hide its nav
   document.querySelectorAll(".pager").forEach(pg=>pg.classList.toggle("hidenav", kind==="dir" && !dflt));
   // pager hrefs were baked at render — keep them carrying the active sort
@@ -6134,11 +6143,10 @@ function applySort(keyRaw){
       if(dflt) ps.delete("sort"); else ps.set("sort", key);
       const t=ps.toString(); a.setAttribute("href", h+(t?"?"+t:"")); }catch(_){}
   });
-  if(QCTX){ if(QCTX.orderTail0===undefined) QCTX.orderTail0=QCTX.orderTail;
-    QCTX.orderTail = dflt? QCTX.orderTail0
-      : " · "+(kind==="dk"? (key==="old"? "oldest first"
-                            : key==="top"? "most staked first"
-                            : "most stake against the answer") : "most claims filed first"); }
+  /* AND THE SEARCH CAPTION STAYS PUT. It used to be rewritten here for the
+     same reason and with the same result — a sentence that moved under the
+     reader on every click. The two surfaces that offer chips now pass an empty
+     orderTail, so their search caption states the match count and stops. */
 }
 document.addEventListener("click", ev=>{
   const b = ev.target.closest(".schips [data-sort]"); if(!b) return;
@@ -6176,7 +6184,7 @@ function qCaption(state){
   //         loaded, total, matches, q, orderTail}
   const noun = state.kind||"claim titles";
   const unit = noun==="court names"? "name" : "title";
-  if(state.mode==="active") return `${fmtN(state.matches)} of ${fmtN(state.loaded)} loaded ${unit}s match "${state.q}"${state.orderTail||" · newest first"}`;
+  if(state.mode==="active") return `${fmtN(state.matches)} of ${fmtN(state.loaded)} loaded ${unit}s match "${state.q}"${state.orderTail!==undefined? state.orderTail : " · newest first"}`;
   if(state.mode==="zero")
     return state.demo? (state.total>state.loaded
         ? `no loaded ${unit} matches "${state.q}" — ${fmtN(state.total-state.loaded)} hidden claim${state.total-state.loaded===1?"":"s"} omitted; their pages still answer by id`
@@ -6398,7 +6406,7 @@ on(/^\/$/, async ()=>{
     + `<div id="qempty" class="empty qhide"><div class="g">◌</div><p>No loaded name matches.</p><p class="small muted">clear to browse, or go to a claim by id — orem/7</p></div>`
     + `</div>`;
   QCTX = {kind:"court names", demo:!isLive(), loaded:(page===1?featured.length:0)+listed.length,
-    total:listedTotal+(page===1?featured.length:0), slug:null, totalClaims:null, orderTail:" · ranked by GNOT burned"};
+    total:listedTotal+(page===1?featured.length:0), slug:null, totalClaims:null, orderTail:""};
   if(QP.sort) applySort(QP.sort); // before applyQ — the search caption reads QCTX.orderTail
   if(QP.q){ const qi=document.getElementById("q"); if(qi){ qi.value=QP.q; applyQ(QP.q); } }
   // stats fill for the visible rows only, chunked so a big directory cannot
@@ -6459,7 +6467,7 @@ on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
   }
   const hiddenNote = hiddenGap>0? `<p class="small muted" style="margin:2px 0 8px">${hiddenGap} hidden or unreadable claim${hiddenGap===1?"":"s"} omitted from this window — a hidden claim's page still answers by id.</p>` : "";
   const dkChips = claims.length>=2
-    ? `<span class="schips" role="group" aria-label="sort order"><button class="pill void" data-sort="new" aria-pressed="${QP.sort!=="old"&&QP.sort!=="ctv"&&QP.sort!=="top"}">newest</button><button class="pill void" data-sort="old" aria-pressed="${QP.sort==="old"}">oldest</button><button class="pill void" data-sort="ctv" aria-pressed="${QP.sort==="ctv"}" title="the share of stake sitting on the side the answer went against">controversial</button><button class="pill void" data-sort="top" aria-pressed="${QP.sort==="top"}" title="total staked, YES and NO together">top</button></span>` : "";
+    ? `<span class="schips" role="group" aria-label="sort order"><button class="pill void" data-sort="top" aria-pressed="${QP.sort==="top"}" title="most staked first — YES and NO together">top</button><button class="pill void" data-sort="ctv" aria-pressed="${QP.sort==="ctv"}" title="most stake against the answer, as a share — stakes, never ballots">controversial</button><button class="pill void" data-sort="new" aria-pressed="${QP.sort!=="old"&&QP.sort!=="ctv"&&QP.sort!=="top"}">newest</button><button class="pill void" data-sort="old" aria-pressed="${QP.sort==="old"}">oldest</button></span>` : "";
   const docketPager = pagerHtml("/c/"+slug, page, claims.length, totalClaims, "claims", undefined, dkChips) + hiddenNote;
   const docketPagerBot = (totalClaims>PAGE_N || page>1)? pagerHtml("/c/"+slug, page, claims.length, totalClaims, "claims") : "";
   /* TOGETHER, NOT ONE AFTER THE OTHER. The folder tree and the description are
@@ -6522,7 +6530,7 @@ on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
     mountCompose(document.getElementById("courtcompose"), slug);
   }
   QCTX = {kind:"claim titles", demo:!isLive(), loaded:allRows.length,
-    total:totalClaims, slug, totalClaims, orderTail:" · newest first"};
+    total:totalClaims, slug, totalClaims, orderTail:""};
   if(QP.sort) applySort(QP.sort); // before applyQ — the search caption reads QCTX.orderTail
   if(QP.q){ const qi=document.getElementById("q"); if(qi){ qi.value=QP.q; applyQ(QP.q); } }
   if(isLive()) fillCourtFaces([slug]);
@@ -6723,9 +6731,18 @@ function folderMeta(folders, prefix, map, ppath){
   });
   return map;
 }
+/* THE ROW IS SEARCHABLE, and the name is not the whole of what it says. A folder's
+   DESCRIPTION is the sentence a curator wrote about what belongs in it — "the grant
+   record and what it funded" — and it is the text a reader half-remembers when they
+   come back looking. It is in the haystack and not on the row, which is the one case
+   data-q exists for: the docket's claim rows put their whole title on screen, so
+   searching what is written and searching what is shown were the same thing until now.
+   No prefix. Claims carry "#id" and courts "/slug" because both are ADDRESSES you can
+   type instead of a word; a folder's id is not something a reader knows or jumps to. */
 function folderRowHtml(slug,f,path){
   const n = folderCount(f), subs = (f.folders||[]).length;
-  return `<a class="crow folderrow" href="#/c/${esc(slug)}/f/${path}">
+  return `<a class="crow folderrow" data-q="${esc(f.name + " " + (f.desc||""))}"
+    href="#/c/${esc(slug)}/f/${path}">
     <span class="id">${ICN_FOLDER}</span>
     <span><span class="t">${safeInline(f.name)}</span><span class="m" style="display:block">${n} claim${n===1?"":"s"}${subs?` · ${subs} subfolder${subs===1?"":"s"}`:""}</span></span>
     <span class="px"><b>${n}</b><small>claims</small></span>
@@ -9626,16 +9643,38 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
   const srcLabel = cur? (cur.source==="local"? ` · ${CUR_LABEL}`
     : cur.source==="chain"? ` · read live from the chain — moderator curation, zero economic weight${cur.capped?` · first ${CHAIN_FOLDER_CAP} of ${fmtN(cur.count)}`:""}` : "") : "";
   // folders are court-level organisation — they head page 1 only
+  //
+  // data-qsec, NOT data-qfold. The two markers are opposite answers to "what does the
+  // search box do with this section": qfold is display:none'd whole while a query is
+  // active (the pager, and the chain's own policing lists, which would double-count
+  // every claim already on the docket), qsec is filtered row by row and collapses only
+  // when nothing in it matches. Folders were qfold, so typing a letter deleted the
+  // filing system from the page — and their rows carried no data-q, so the one surface
+  // that could tell you WHICH DRAWER a word lives in was the surface that vanished
+  // when you asked.
   const foldersSec = (pageOf()===1 && cur && cur.folders.length)
-    ? `<section data-qfold><div class="sec-h">Folders <span class="count">${cur.folders.length}${srcLabel}</span></div>
+    ? `<section data-qsec><div class="sec-h">Folders <span class="count">${cur.folders.length}${srcLabel}</span></div>
        <div class="docket">${cur.folders.map((f,i)=>folderRowHtml(slug,f,f.path!=null? String(f.path):String(i))).join("")}</div></section>` : "";
   const rows = list => list.map(cl=>docketRow(slug,cl,fmeta[cl.id])).join("");
-  const idleCap = qCaption({mode:"idle", demo:!isLive(), kind:"claim titles", loaded:rowsAll.length, total:(isLive()&&s.claims!=null)? s.claims : rowsAll.length});
+  /* THE COUNT IS OF WHAT THE BOX SEARCHES, which is now rows and not just titles.
+     Folder rows are in the haystack, so they are in the number beside it: a caption
+     reading "all 19 claim titles" over a filter that also matches six folder names is
+     the small kind of untrue that makes a reader distrust the big numbers too. */
+  const foldN = (pageOf()===1 && cur && cur.folders.length)? cur.folders.length : 0;
+  const idleCap = qCaption({mode:"idle", demo:!isLive(),
+    kind: foldN? "claim titles and folder names" : "claim titles",
+    loaded:rowsAll.length + foldN,
+    total:((isLive()&&s.claims!=null)? s.claims : rowsAll.length) + foldN});
+  /* THE BOX SITS ABOVE THE FOLDERS, because they are the first thing it filters. It
+     used to sit under them and over the docket, which read as the docket's own control
+     — and while folders were unsearchable that was exactly what it was. Now that a
+     query reaches both, a filter under half of what it filters is a lie about scope.
+     The pager stays with the docket: it pages claims, not folders. */
   return `<div class="cols"><div id="qscope">`
     + courtStatsHtml(slug, s)
+    + qBarHtml("title, folder or #id", idleCap)
     + foldersSec
     + (pager||"")
-    + qBarHtml("title or #id", idleCap)
     + `<section data-qsec${foldersSec?' style="margin-top:22px"':""}><div class="sec-h">Open docket ${secHelp("A docket is the list of cases before a court. These are the claims this one has not settled yet — the ones you can still stake on. Settled claims move down to Recently settled.")}<span class="count">${openWin}</span></div>`
     + (open.length? `<div class="docket" data-sortable data-sortkind="dk">${rows(open)}</div><div class="actions" style="margin-top:10px">${btn("Open a claim","OpenClaimP",{courtSlug:slug,title:"Your claim of fact",body:"What would settle it — the evidence in view, and what this is NOT asking"},"","a body is optional")}</div><div id="courtcompose"></div>`
         : pageOf()>1? `<p class="small muted">Nothing on this page.</p>`
