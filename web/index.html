@@ -9489,14 +9489,22 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
     + (()=>{ // the chain's own policing lists — page 1, chain order, never sorted or filtered
       if(pageOf()>1) return "";
       const byId = {}; (allRows||claims).forEach(c2=>{ byId[c2.id]=c2; });
-      const srow = r => `<a class="crow assocrow" href="#/c/${esc(slug)}/${r.id}">
+      /* THESE TWO LISTS WERE MISSED. The docket, the map card, the related rows
+         and the claim page all moved the verdict onto the sentence; the court
+         page's own policing lists kept the pill, which is where "SETTLED YES"
+         was still being read on /c/covid. They carry titles like the rest, so
+         they take the same shape — through one helper, so the next surface added
+         here cannot answer the question differently again. */
+      const srow = r => { const sd = byId[r.id]? rowSide(byId[r.id].statusText) : "";
+        return `<a class="crow assocrow" href="#/c/${esc(slug)}/${r.id}">
         <span class="id">#${r.id}</span>
-        <span><span class="t">${safeInline(r.title)}</span>${r.deadline!=null?`<span class="m" style="display:block">settles at block ${fmtN(r.deadline)}</span>`:""}</span>
-        ${byId[r.id]? statusPill(byId[r.id].statusText) : ""}</a>`;
-      const prow = r => `<a class="crow assocrow" href="#/c/${esc(slug)}/${r.id}">
+        <span><span class="t">${byId[r.id]? verdictSentence(r.title, sd) : safeInline(r.title)}</span>${r.deadline!=null?`<span class="m" style="display:block">settles at block ${fmtN(r.deadline)}</span>`:""}</span>
+        ${byId[r.id] && !sd? statusPill(byId[r.id].statusText) : ""}</a>`; };
+      const prow = r => { const sd = byId[r.id]? rowSide(byId[r.id].statusText) : "";
+        return `<a class="crow assocrow" href="#/c/${esc(slug)}/${r.id}">
         <span class="id">#${r.id}</span>
-        <span><span class="t">${safeInline(r.title)}</span>${r.seeded?`<span class="m" style="display:block">seeded by a moderator</span>`:""}</span>
-        ${byId[r.id]? statusPill(byId[r.id].statusText) : ""}</a>`;
+        <span><span class="t">${byId[r.id]? verdictSentence(r.title, sd) : safeInline(r.title)}</span>${r.seeded?`<span class="m" style="display:block">seeded by a moderator</span>`:""}</span>
+        ${byId[r.id] && !sd? statusPill(byId[r.id].statusText) : ""}</a>`; };
       let g = "";
       if(stripQ && stripQ.rows && stripQ.rows.length){
         g += `<section data-qfold style="margin-top:22px"><div class="sec-h">Needs review <span class="count">${stripQ.more? `first ${stripQ.rows.length} of ${fmtN(stripQ.rows.length+stripQ.more)}` : stripQ.rows.length} · the chain's own list</span></div>
@@ -12187,11 +12195,31 @@ function verdictSentence(title, side, contested){
   // <s>, not a class on the caller's element: the element means "no longer
   // accurate", which is the claim about the sentence — and it keeps the oval
   // outside the strike, since the verdict is not itself struck.
-  return ((side === "NO" && !contested) ? `<s>${t}</s>` : t)
-    + ` <span class="sidetag vtag ${side === "NO" ? "n" : "y"}">${side}</span>`
+  return ((side === "NO" && !contested) ? `<s>${t}</s>` : t) + " " + sideOval(side, contested);
+}
+/* THE OVAL ALONE, for the surfaces that have no sentence to hang it on. Every
+   caller used to reach it through verdictSentence, which is right where there is
+   a title — but the holdings table has a status COLUMN, and emptying that column
+   on settled rows leaves a blank cell in every one of them. So the oval goes in
+   the cell instead of the pill, and it comes from here rather than from a second
+   copy of the same span. */
+function sideOval(side, contested){
+  if(side !== "YES" && side !== "NO") return "";
+  return `<span class="sidetag vtag ${side === "NO" ? "n" : "y"}">${side}</span>`
     + (contested
         ? `<span class="vq" title="under dispute — this answer is being contested">?</span>`
         : "");
+}
+/* WHAT A ROW SHOWS INSTEAD OF A PHASE PILL. Four surfaces answered this question
+   separately — the docket, the map card, the related rows and the claim page —
+   and the two policing lists and the sample dockets were simply missed, which is
+   how "SETTLED YES" was still on /c/covid after the rest had moved. One reading
+   of the status text, so there is one answer.
+   A settled claim whose status names no side keeps its pill: the sentence has
+   nothing to say for it. */
+function rowSide(statusText){
+  const pc = phaseClass(statusText);
+  return pc.short === "settled" ? pc.side : "";
 }
 function claimTitleHtml(d){
   const t = safeInline(d && d.title);
@@ -12600,8 +12628,8 @@ function aboutTour(){
         const d = DEMO.claims["orem/"+i];
         return `<a class="crow" href="#/c/orem/${i}">
       <span class="id">#${i}</span>
-      <span><span class="t">${safeInline(d.title)}</span><span class="m" style="display:block">${esc(cap)}</span></span>
-      ${statusPill(statusText(d))}</a>`;
+      <span><span class="t">${verdictSentence(d.title, rowSide(statusText(d)))}</span><span class="m" style="display:block">${esc(cap)}</span></span>
+      ${rowSide(statusText(d))? "" : statusPill(statusText(d))}</a>`;
       }).join("")}</div>
       <h2>Moderation specimens</h2>
       <p>The hidden sample court also holds moderation specimens — listing acts, never verdicts. (A purged tombstone exists on live courts only.)</p>
@@ -12613,8 +12641,8 @@ function aboutTour(){
         const d = DEMO.claims["annex/"+i];
         return `<a class="crow" href="#/c/annex/${i}">
       <span class="id">#${i}</span>
-      <span><span class="t">${safeInline(d.title)}</span><span class="m" style="display:block">${esc(cap)}</span></span>
-      ${statusPill(statusText(d))}</a>`;
+      <span><span class="t">${verdictSentence(d.title, rowSide(statusText(d)))}</span><span class="m" style="display:block">${esc(cap)}</span></span>
+      ${rowSide(statusText(d))? "" : statusPill(statusText(d))}</a>`;
       }).join("")}</div>`;
 }
 function introStrip(){
@@ -12960,7 +12988,7 @@ async function meHoldings(addr,courts){
                   if(d.phase==="provisional" && d.escrowUntil && nowH!=null && d.escrowUntil>nowH) personal += ` · reopenable until ≈block ${fmtN(d.escrowUntil)} — in ${wall(nowH,d.escrowUntil)}`;
                 }
                 return `<tr><td><a href="#/c/${esc(slug)}/${cl.id}" style="color:var(--accent-2);text-decoration:none">${safeInline(cl.title)}</a>${personal?`<span class="m" style="display:block">${esc(personal)}</span>`:""}</td>
-                <td>${d? statusPill(d.statusText):""}</td>
+                <td>${!d? "" : rowSide(d.statusText)? sideOval(rowSide(d.statusText)) : statusPill(d.statusText)}</td>
                 <td class="num">${cc(p.yes,slug)}</td><td class="num">${cc(p.no,slug)}</td><td class="num">${cc((p.cy||0)+(p.cn||0),slug)}</td></tr>`;
               }).join("")
             + `</tbody></table></div>`

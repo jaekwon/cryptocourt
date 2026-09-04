@@ -2,7 +2,7 @@
 // ?at allowlist, chip gating, map focus plumbing, crumbs orientation, §7.4.
 const fs = require('fs');
 const src = fs.readFileSync(require('path').join(__dirname,'..','index.html'),'utf8');
-const { slice } = require("./srcslice");
+const { slice, fn } = require("./srcslice");
 global.document = { addEventListener: ()=>{}, getElementById: ()=>null };
 global.CFG = { mode:'demo', chainid:'dev' };
 global.isLive = ()=> CFG.mode==='live';
@@ -23,6 +23,11 @@ code += slice('const sideName =', '\n').replace('const sideName =','var sideName
 code += slice('function statusText(', '\n/* =');
 code += 'function safeInline(x){ return esc(String(x)); }\n';
 code += slice('function statusPill(','function docketRow(');
+// docketRow renders the verdict as a sentence now, so the harness needs the
+// builders that make one.
+code += fn('verdictSentence');
+code += fn('sideOval');
+code += fn('rowSide');
 code += slice('function phaseClass(','function statusPill(');
 code += slice('/* The specimen tour','function introStrip(');
 eval(code);

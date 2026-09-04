@@ -34,6 +34,11 @@ code += 'const ICN_FOLDER="<svg/>";\n';   // stubbed as folders_test does: the r
 // sentence here as it does on the claim page and the map, so the builder has to
 // be in scope alongside the row that calls it.
 code += fn('verdictSentence');
+// verdictSentence delegates the oval to sideOval now, and the row builders ask
+// rowSide whether there is one — both are new and neither is inside the region
+// any existing anchor already cut.
+code += fn('sideOval');
+code += fn('rowSide');
 code += slice('function assocRow(', '/* ======================= local curation');
 code += 'var BLOCK_SECS=' + src.match(/const BLOCK_SECS\s*=\s*(\d+)/)[1] + ';\n';
 code += slice('const MON=', 'function resolutionLadder(').replace(/^const MON=/m,'var MON=');
@@ -576,6 +581,67 @@ ok("the folder name is escaped, being moderator-supplied text", (()=>{
   const h = associationSection("covid", 11, null, null,
     [{fid:4, name:'<img src=x onerror=alert(1)>Origins'}]);
   return !h.includes("<img src=x") && h.includes("Origins");
+})());
+
+
+/* NO SURFACE STILL SAYS "settled YES" IN A PILL. Reported after four surfaces
+   had already moved: /c/covid's policing lists were still doing it, and so were
+   the two sample dockets and the holdings table. They were missed one at a time
+   because each surface decided for itself what a settled row shows.
+   THE SOURCE IS THE SUBJECT HERE, deliberately. A rendered check can only cover
+   the rows a fixture happens to produce, and "the ones nobody thought of" is
+   exactly the set that was wrong. Every call is read instead, and each must be
+   guarded by the shared question rather than passing the status text straight
+   in. */
+ok("every statusPill call is gated on there being no side to show", (()=>{
+  const calls = [...src.matchAll(/statusPill\(/g)].map(m => {
+    const line = src.slice(src.lastIndexOf("\n", m.index) + 1, src.indexOf("\n", m.index));
+    return line.trim();
+  }).filter(l => !l.startsWith("function statusPill"));
+  // Every remaining call sits behind a "no side" test, or is the /needs ballot
+  // row, which is handed a literal phase and has no claim record to read a side
+  // from at all.
+  const guarded = l => /!sd\?|!side\?|dSide\?|side \? ""|rowSide\(/.test(l)
+                    || l.includes('statusPill("disputed")');
+  const bad = calls.filter(l => !guarded(l));
+  if(bad.length) console.log("   unguarded:", bad);
+  return calls.length >= 6 && bad.length === 0;
+})());
+/* The oval and the pill are alternatives, never both: a row wearing the verdict
+   on its sentence AND a pill repeating it is the state this was fixing. */
+ok("a settled row shows the oval and drops the pill", (()=>{
+  const settled = {title:"t", statusText:"settled NO — every stake withdraws 1×"};
+  const r = assocRow("orem", 4, "x", () => settled);
+  return r.includes('vtag n">NO<') && !r.includes('class="pill good"') && !/>settled NO</.test(r);
+})());
+ok("...and a row with no readable side keeps its pill", (()=>{
+  const bare = {title:"t", statusText:"settled — every stake withdraws 1×"};
+  const r = assocRow("orem", 4, "x", () => bare);
+  return !r.includes("vtag") && r.includes("pill");
+})());
+/* rowSide ANSWERS FOR SETTLED ONLY, and that is load-bearing now that a disputed
+   status names its side too: "disputed YES" has a readable side, and a row that
+   took the oval from it would drop its pill and show a bare YES — the verdict's
+   mark on a claim that has no verdict, with the question mark gone. */
+ok("rowSide answers for a settled claim and nothing else", (()=>{
+  return rowSide("settled YES — every stake withdraws 1×") === "YES"
+      && rowSide("settled NO — every stake withdraws 1×") === "NO"
+      && rowSide("disputed YES — a sealed vote is deciding") === ""
+      && rowSide("provisional verdict YES — reopenable") === ""
+      && rowSide("open — stake YES or NO") === "";
+})());
+ok("...so a disputed row keeps its questioned pill rather than a bare oval", (()=>{
+  const r = assocRow("orem", 4, "x",
+    () => ({title:"t", statusText:"disputed YES — a sealed vote is deciding"}));
+  // It wears the oval THROUGH the contested path, which carries the mark with it.
+  return r.includes('class="vq"') && r.includes('vtag y">YES<');
+})());
+/* sideOval is what makes the table cell possible — a column cannot go blank on
+   settled rows the way a row-end can — so it must build the same oval the
+   sentence does, not a second span that drifts. */
+ok("the oval in a cell is the same oval as in a sentence", (()=>{
+  return verdictSentence("t", "YES").includes(sideOval("YES"))
+      && verdictSentence("t", "NO").includes(sideOval("NO"));
 })());
 
 console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");

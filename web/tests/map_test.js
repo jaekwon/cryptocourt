@@ -242,6 +242,7 @@ ok("A-I pass on live 50-claim ring (both modes)", livepass);
   global.safeInline = x => esc(String(x));
   // The card dresses its title with the shared builder now — the same one the
   // claim page's heading uses — so it has to be in scope here too.
+  eval(fn('sideOval'));   // verdictSentence delegates the oval to it
   eval(fn('verdictSentence'));
   eval(slice('function mapSelCard(', 'function mapDotClass'));
   /* THE CARD DESCRIBES THE DRAWING, so the fixture has to be one. This was a
