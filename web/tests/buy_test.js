@@ -138,12 +138,12 @@ ok("panel: demo sample note", html.includes("Sample data — computed from the d
 // affordance now, in the sign-help dialog, and demo mode has neither.
 ok("panel: demo offers no runnable command for sample data",
    !html.includes("--send") && !html.includes("gnokey") && !html.includes("data-cli"));
-/* THE FINE PRINT IS STILL THERE, AND IT IS BEHIND "details" NOW. Four rows and
-   two paragraphs sat above the Buy button; what a reader needs before pressing
-   is the unit price and the voice it buys, so those stayed and the rest moved
-   into a dialog. The disclosure is one click away, NOT gone — asserted as the
-   pair, since "present somewhere" and "present outside the dialog" are different
-   claims and only the first is true. */
+/* THE FINE PRINT IS STILL THERE, AND EVERYTHING IS BEHIND "see details" NOW. Four
+   rows and two paragraphs sat above the Buy button; one summary line was kept in
+   front of the dialog for a while and has since gone in too, so what is left outside
+   is what you get, what you burn, and the acknowledgement. The disclosure is one
+   click away, NOT gone — asserted as the pair, since "present somewhere" and
+   "present outside the dialog" are different claims and only the first is true. */
 ok("panel: fineprint worst case", html.includes("private buyer, and there may not be one"));
 ok("panel: ...and it lives inside the details dialog", (()=>{
    const i = html.indexOf('id="help-buy"');
@@ -151,8 +151,20 @@ ok("panel: ...and it lives inside the details dialog", (()=>{
    const k = html.indexOf("</dialog>", i);
    return i >= 0 && j > i && j < k;
 })());
-ok("panel: one line in front carries the price and the voice share",
-   /<span class="l">You pay<\/span>[\s\S]{0,200}µGNOT\/unit[\s\S]{0,80}voice/.test(html));
+// THE SUMMARY LINE IS GONE, MERGED INTO THE DETAILS. It carried the unit price and the
+// voice share in front of the dialog, and the dialog carried both again verbatim — so
+// the panel stated them twice, and in a 250px rail the front copy wrapped to four
+// lines. Asserted as a pair, because "removed" and "still reachable" are different
+// claims and this change is only correct if both hold.
+ok("panel: no You-pay line in front of the dialog", !/>You pay</.test(html));
+ok("panel: ...and both of its figures are inside the dialog", (()=>{
+  const i = html.indexOf('id="help-buy"'), k = html.indexOf("</dialog>", i);
+  const price = html.indexOf("Average price you pay"), voice = html.indexOf("Your voice share");
+  return i >= 0 && price > i && price < k && voice > i && voice < k;
+})());
+// And the way in says what it does rather than pointing off the page: the arrow is
+// this file's mark for leaving, and a dialog does not leave.
+ok("panel: the trigger reads as an instruction", html.includes(">see details</button>"));
 ok("panel: ...with a details trigger the generic helper handler opens",
    /data-help="help-buy"/.test(html) && /<dialog class="helper" id="help-buy"/.test(html));
 ok("panel: the moved rows are in the dialog and not repeated outside it",

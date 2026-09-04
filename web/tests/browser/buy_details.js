@@ -1,10 +1,18 @@
-// WHERE "details →" LANDS, measured rather than read.
+// WHERE THE DETAILS TRIGGER LANDS, measured rather than read. It reads "see details"
+// now; the arrow went with the line described below, since an arrow is this page's
+// mark for leaving and a dialog does not leave.
 //
 // It was written at the end of the "You pay" value — after "µGNOT/unit · 0.4%
 // voice" — which is fine at 1280px and falls apart at 390px: the value wraps
 // across four lines and the link ends up on one of its own, roughly 120px below
 // the Buy button it belongs beside. Reported as: it should be next to the
 // button, or short enough to fit.
+//
+// That value is gone entirely now — merged into the dialog, which already carried
+// both its figures verbatim — so the wrap that started this cannot recur. The
+// measurements stay: what they actually pin is that the trigger sits with the button
+// rather than in whatever block happens to precede it, and that is a property of the
+// layout and not of the line that used to be there.
 //
 // A source test cannot see this. The markup is one string either way; what
 // changed is which flex container the button is in, and only a laid-out page can
@@ -106,22 +114,35 @@ const PAGE = 'file://' + path.join(__dirname, '..', '..', 'index.html');
   });
   ok("clicking it opens the dialog", opened === true, String(opened));
 
-  /* AND IT GOES WHEN THERE IS NOTHING TO DETAIL. buyRowsHtml draws the "You pay"
-     line only for a quote that mints something, so a details link surviving an
-     unquotable amount opens a dialog about figures the panel is not showing.
+  /* AND IT GOES WHEN THERE IS NOTHING TO DETAIL. buyRowsHtml emits the dialog only
+     for a quote that mints something, so a details link surviving an unquotable
+     amount opens a dialog about figures the panel is not showing.
      Typed rather than constructed: the link is redrawn by the keystroke handler,
-     which is the path that has to get this right. */
+     which is the path that has to get this right.
+     THE SECOND HALF USED TO CHECK THE "You pay" LINE, which has been merged into the
+     dialog — both its figures were in there verbatim, and in a 250px rail the copy in
+     front wrapped to four lines. So the container is checked for being EMPTY rather
+     than for lacking one line: it holds the dialog and nothing else now, and an
+     unquotable amount must leave it with neither. */
   const gone = await page.evaluate(async () => {
     const amt = document.querySelector('#buyamt');
     if (!amt) return null;
     amt.value = "not a number";
     amt.dispatchEvent(new Event('input', {bubbles: true}));
     await new Promise(r => setTimeout(r, 300));
+    const box = document.querySelector('#buyrows2');
     return {links: document.querySelectorAll('[data-help="help-buy"]').length,
-            pay: /You pay/.test(document.querySelector('#buyrows2')?.textContent || "")};
+            dialogs: document.querySelectorAll('#buyrows2 dialog').length,
+            text: (box?.textContent || "").trim(),
+            framed: !!box && box.className.trim() !== ""};
   });
   ok("an unquotable amount leaves no details link", gone && gone.links === 0, JSON.stringify(gone));
-  ok("...and no You-pay line for it to detail", gone && gone.pay === false, JSON.stringify(gone));
+  ok("...and nothing behind it either", gone && gone.dialogs === 0 && gone.text === "",
+     JSON.stringify(gone));
+  // The container carried .ticket .buyrcpt while it held a line. Holding only a
+  // dialog, a frame would draw an empty box with registration marks on it.
+  ok("...and the container draws no empty frame", gone && gone.framed === false,
+     JSON.stringify(gone));
 
   console.log(fail ? "\n" + fail + " FAILURES" : "\nALL PASS");
   await browser.close();
