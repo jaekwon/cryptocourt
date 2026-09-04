@@ -371,6 +371,31 @@ const run = async (rows, v, mode) => {
   ok("the strike carries the verdict's colour, not ink",
      /\.page-h s,\.mapsel-t s,\.crow \.t s\{[^}]*text-decoration-color:var\(--no\)/.test(src));
 
+
+  /* ONE NAME FOR ONE STATE. The claim page's pill said "dispute under way" while
+     phaseClass — the classifier this file's own header calls the one every
+     status surface agrees on — has said "in dispute" all along, and the docket
+     rows and map dots have been saying it. A reader moving between them met two
+     names for one state.
+     Asserted as a RELATIONSHIP, not as the string: pinning the literal would let
+     the two drift apart again so long as somebody updated this line too. What
+     must hold is that the pill uses the classifier's word. */
+  ok("the dispute pill uses the classifier's own word for the state", (()=>{
+    const pill = verdictBanner({phase:"disputed"});
+    const short = phaseClass("disputed — a sealed vote is deciding").short;
+    return short && pill.includes(short);
+  })());
+  ok("...and does not name it a second way", (()=>{
+    return !verdictBanner({phase:"disputed"}).includes("under way");
+  })());
+  /* The state pills read as states, the way their neighbours do. An event
+     phrase here would be the shape that let the two names diverge. */
+  ok("...and the neighbouring pills are states too", (()=>{
+    return verdictBanner({phase:"answered", answer:0}).includes("answered")
+        && verdictBanner({phase:"closed"}).includes("closed")
+        && verdictBanner({phase:"open"}).includes("open");
+  })());
+
   console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");
   process.exit(fail?1:0);
 })();
