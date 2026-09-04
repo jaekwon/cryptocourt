@@ -103,7 +103,7 @@ ok("C2: the court qbar exists to be placed", src.includes(QBAR_COURT));
 ok("C2: court qbar follows the folders, and is scoped by its heading",
    src.indexOf(QBAR_COURT) > src.indexOf("+ foldersSec")
    && src.includes('claims and folders"'));
-ok("C2: court qbar precedes its section", src.indexOf(QBAR_COURT) < src.indexOf('<section data-qsec${foldersSec'));
+ok("C2: court qbar precedes its section", src.indexOf(QBAR_COURT) < src.indexOf('<section data-qsec data-group="open"${foldersSec'));
 // FOLDERS ARE IN THE HAYSTACK. Two halves, and either one alone is the old behaviour:
 // the row must carry a data-q for the filter to test it, and the section must be qsec
 // rather than qfold or the whole filing system is display:none'd while a query runs.

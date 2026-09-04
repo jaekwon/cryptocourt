@@ -1886,7 +1886,19 @@ tr.youare .mono{font-weight:600}
    no line of its own, which is the whole point of moving it.
    Scoped to .chips, not .schips: pagerHtml puts it in the pager's own chip
    wrapper, BEFORE the .schips group, which is what makes it sit to the left. */
-.pager .chips .chiplab,.sec-h .chiplab{font:600 10.5px/1 var(--sans); letter-spacing:.08em;
+/* SHOW's own row: the chips, their label, and the line that explains why the
+   sort chips are off when one of the chain's lists is picked. */
+.gbar{display:flex; align-items:center; flex-wrap:wrap; gap:6px 10px; margin:10px 0 4px}
+.gchips{display:inline-flex; gap:6px; flex-wrap:wrap}
+.gchips .pill{cursor:pointer; font:inherit; font-size:11px; letter-spacing:.06em; text-transform:uppercase}
+.gchips .pill[aria-pressed="true"]{background:var(--accent-wash); color:var(--accent-2); border-color:var(--accent)}
+.gchips .pill .n{font-family:var(--mono); font-size:.92em; letter-spacing:0; opacity:.75; margin-left:.4em}
+#gnote{font-size:12px}
+/* A sort chip that cannot apply says so by being unavailable, not by vanishing —
+   a control that disappears under the cursor is worse than one that greys. */
+.schips .pill[disabled]{opacity:.4; cursor:not-allowed}
+.ghide{display:none}
+.pager .chips .chiplab,.sec-h .chiplab,.gbar .chiplab{font:600 10.5px/1 var(--sans); letter-spacing:.08em;
   text-transform:uppercase; color:var(--muted); margin-right:2px; white-space:nowrap}
 /* In a heading the chooser is pushed to the far end, so the figure stays beside
    the word it belongs to and the controls read as a group of their own. .sec-h
@@ -6133,6 +6145,41 @@ function stakeSortAttrs(yesStake, noStake, side){
   const against = side==="YES"? n : side==="NO"? y : null;
   return ` data-top="${tot}"` + (against!=null? ` data-ctv="${(against/tot).toFixed(6)}"` : "");
 }
+/* SHOW: which of the page's lists is on screen. A display filter over sections
+   that are already rendered — no re-read and no re-render, the same contract the
+   sort chips have.
+   THE SORT CHIPS GO OFF FOR THE CHAIN'S TWO LISTS. Needs review and Awaiting an
+   answer are published by the realm in its own order; this page shows them and
+   does not reorder them. Disabled rather than hidden, because a control that
+   vanishes under the cursor is worse than one that greys, and a line beside them
+   says why. */
+function applyShow(keyRaw){
+  const box = document.getElementById("qscope"); if(!box) return;
+  const groups = box.querySelectorAll("[data-group]");
+  if(!groups.length) return;
+  const have = {}; groups.forEach(g=>{ have[g.getAttribute("data-group")] = 1; });
+  const key = (keyRaw && have[keyRaw])? keyRaw : "all";
+  groups.forEach(g=>g.classList.toggle("ghide", key!=="all" && g.getAttribute("data-group")!==key));
+  document.querySelectorAll(".gchips [data-show]").forEach(b=>
+    b.setAttribute("aria-pressed", String(b.getAttribute("data-show")===key)));
+  const chain = key==="review" || key==="pending";
+  document.querySelectorAll(".schips [data-sort]").forEach(b=>{ b.disabled = chain; });
+  const note = document.getElementById("gnote");
+  if(note) note.textContent = chain? "the chain's own list, in the chain's order — sorting is off here" : "";
+}
+document.addEventListener("click", ev=>{
+  const b = ev.target.closest(".gchips [data-show]"); if(!b) return;
+  const key = b.getAttribute("data-show");
+  const dflt = key==="all";
+  try{ const raw=location.hash.replace(/^#/,"")||"/"; const [path,qs]=raw.split("?");
+    const ps=new URLSearchParams(qs||"");
+    if(dflt) ps.delete("show"); else ps.set("show", key);
+    const t=ps.toString().replace(/\+/g,"%20");
+    history.replaceState(null,"","#"+path+(t?"?"+t:""));
+  }catch(_){}
+  if(dflt) delete QP.show; else QP.show=key;
+  applyShow(key);
+});
 function applySort(keyRaw){
   const boxes = document.querySelectorAll("[data-sortable]");
   if(!boxes.length) return;
@@ -6596,6 +6643,7 @@ on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
     demo:!isLive(), loaded:allRows.length + foldRows,
     total:totalClaims + foldRows, slug, totalClaims, orderTail:"", headed:true};
   if(QP.sort) applySort(QP.sort); // before applyQ — the search caption reads QCTX.orderTail
+  applyShow(QP.show);             // always: it also sets the chips' own pressed state
   if(QP.q){ const qi=document.getElementById("q"); if(qi){ qi.value=QP.q; applyQ(QP.q); } }
   if(isLive()) fillCourtFaces([slug]);
   if(isLive() && s.claims!=null) fillCourtRecord(slug, s.claims, s.minted);
@@ -6855,8 +6903,16 @@ function parseGnot(v){
    real disclosures and stay, under the button, where they are a receipt rather
    than a queue. `after` picks which half. */
 function buyRowsHtml(q, price, slug, after){
-  if(!q) return `<div class="line"><span class="l">You get</span><span class="r">— <small>enter a GNOT amount, like 100 or 2.5</small></span></div>`;
-  if(q.units<=0n) return `<div class="line"><span class="l">You get</span><span class="r">0 <small>too small to mint — the court refuses it and your GNOT never leaves</small></span></div>`;
+  /* NOTHING BEHIND THE LINK WHEN THERE IS NOTHING TO DETAIL, and nothing in front of
+     it either: the two placeholder messages below belong to the row ABOVE the button,
+     which is the one a reader is looking at while they type. Returning them for the
+     `after` container too printed the same "enter a GNOT amount" line twice on screen. */
+  if(!q || q.units<=0n){
+    if(after) return "";
+    return !q
+      ? `<div class="line"><span class="l">You get</span><span class="r">— <small>enter a GNOT amount, like 100 or 2.5</small></span></div>`
+      : `<div class="line"><span class="l">You get</span><span class="r">0 <small>too small to mint — the court refuses it and your GNOT never leaves</small></span></div>`;
+  }
   const pct = q.share*100;
   /* ONE LINE IN FRONT, THE REST BEHIND "details". Four rows and two paragraphs of
      fine print sat above the Buy button; what a reader needs before pressing is
@@ -9737,6 +9793,33 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
      owned. */
   const dkChips = claims.length>=2
     ? `<span class="schips" role="group" aria-label="sort order"><button class="pill void" data-sort="top" aria-pressed="${QP.sort==="top"}" title="most staked first — YES and NO together">top</button><button class="pill void" data-sort="ctv" aria-pressed="${QP.sort==="ctv"}" title="most stake against the answer, as a share — stakes, never ballots">controversial</button><button class="pill void" data-sort="new" aria-pressed="${QP.sort!=="old"&&QP.sort!=="ctv"&&QP.sort!=="top"}">newest</button><button class="pill void" data-sort="old" aria-pressed="${QP.sort==="old"}">oldest</button></span>` : "";
+  /* SHOW: ONE LIST AT A TIME, instead of four headings stacked down the page.
+     Asked for as "maybe these are filter buttons like sort buttons", and they
+     are — same pill, same aria-pressed, same URL key.
+
+     TWO OF THESE FIVE ARE NOT OURS. Open and Recently settled are this page's
+     own docket split in two. Needs review and Awaiting an answer are lists the
+     CHAIN publishes: chain order, page 1 only, and they will happily list a
+     claim the docket above already showed. Putting all four behind one control
+     says they are peers, which they are not, so the control says the part it
+     cannot show by position — picking one of the chain's lists turns the sort
+     chips OFF, because that order is the chain's and reordering it here would be
+     an overlay editorial act, and a line under the chips says whose list it is.
+     A count on a chip that has none is left off rather than printed as 0. */
+  const gN = n => n? ` <span class="n">${fmtN(n)}</span>` : "";
+  const gChip = (k, label, n, on) => `<button class="pill void" data-show="${k}" aria-pressed="${on?"true":"false"}">${label}${gN(n)}</button>`;
+  const stripN = (stripQ&&stripQ.rows)? stripQ.rows.length : 0;
+  const pendN  = (pendQ&&pendQ.rows)? pendQ.rows.length : 0;
+  const showKey = ({open:1,settled:1,review:1,pending:1})[QP.show]? QP.show : "all";
+  const showChips = (done.length || stripN || pendN)
+    ? `<div class="gbar"><span class="chiplab">show</span><span class="gchips" role="group" aria-label="which list">`
+      + gChip("all","all", open.length+done.length, showKey==="all")
+      + gChip("open","open", open.length, showKey==="open")
+      + (done.length? gChip("settled","settled", done.length, showKey==="settled") : "")
+      + (stripN? gChip("review","needs review", stripN, showKey==="review") : "")
+      + (pendN? gChip("pending","awaiting an answer", pendN, showKey==="pending") : "")
+      + `</span><span id="gnote" class="small muted"></span></div>`
+    : "";
   const searchHead = `<div class="sec-h">Search <span class="count">${esc(searchCount)}</span>${dkChips? `<span class="chiplab">sort</span>${dkChips}`:""}</div>`;
   /* "" AT REST. searchHead, immediately above the box, already says what is in
      the list; this line said it again in the matcher's words. It fills in as
@@ -9752,13 +9835,14 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
     + foldersSec
     + searchHead
     + qBarHtml("title, folder or #id", idleCap)
+    + showChips
     + (pager||"")
-    + `<section data-qsec${foldersSec?' style="margin-top:22px"':""}><div class="sec-h">Open ${secHelp("Claims this court has not settled yet — the ones you can still stake on. Settled claims move down to Recently settled.")}<span class="count">${openWin}</span></div>`
+    + `<section data-qsec data-group="open"${foldersSec?' style="margin-top:22px"':""}><div class="sec-h">Open ${secHelp("Claims this court has not settled yet — the ones you can still stake on. Settled claims move down to Recently settled.")}<span class="count">${openWin}</span></div>`
     + (open.length? `<div class="docket" data-sortable data-sortkind="dk">${rows(open)}</div><div class="actions" style="margin-top:10px">${btn("Open a claim","OpenClaimP",{courtSlug:slug,title:"Your claim of fact",body:"What would settle it — the evidence in view, and what this is NOT asking"},"","a body is optional")}</div><div id="courtcompose"></div>`
         : pageOf()>1? `<p class="small muted">Nothing on this page.</p>`
         : `<div class="empty"><div class="g">◌</div><p>No open claims.</p><p>${btn("Open the first claim","OpenClaimP",{courtSlug:slug,title:"Your claim of fact",body:"What would settle it — the evidence in view, and what this is NOT asking"},"","a body is optional")}</p></div>`)
     + `</section>`
-    + (done.length? `<section data-qsec style="margin-top:22px"><div class="sec-h">Recently settled <span class="count">${doneWin}</span></div><div class="docket" data-sortable data-sortkind="dk">${rows(done)}</div></section>` : "")
+    + (done.length? `<section data-qsec data-group="settled" style="margin-top:22px"><div class="sec-h">Recently settled <span class="count">${doneWin}</span></div><div class="docket" data-sortable data-sortkind="dk">${rows(done)}</div></section>` : "")
     + (()=>{ // the chain's own policing lists — page 1, chain order, never sorted or filtered
       if(pageOf()>1) return "";
       const byId = {}; (allRows||claims).forEach(c2=>{ byId[c2.id]=c2; });
@@ -9787,13 +9871,13 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
       const prow = r => polrow(r, r.seeded? `<span class="m" style="display:block">seeded by a moderator</span>` : "");
       let g = "";
       if(stripQ && stripQ.rows && stripQ.rows.length){
-        g += `<section data-qfold style="margin-top:22px"><div class="sec-h">Needs review <span class="count">${stripQ.more? `first ${stripQ.rows.length} of ${fmtN(stripQ.rows.length+stripQ.more)}` : stripQ.rows.length} · the chain's own list</span></div>
+        g += `<section data-qfold data-group="review" style="margin-top:22px"><div class="sec-h">Needs review <span class="count">${stripQ.more? `first ${stripQ.rows.length} of ${fmtN(stripQ.rows.length+stripQ.more)}` : stripQ.rows.length} · the chain's own list</span></div>
         <p class="small muted" style="margin:0 0 8px">answered and not yet settled — nearest deadline first. This list ignores moderation: a claim hidden from the docket above still appears here while it can still be flagged.</p>
         <div class="docket">${stripQ.rows.map(srow).join("")}</div>
         ${stripQ.more? `<p class="small muted" style="margin:6px 0 0">…and ${fmtN(stripQ.more)} more — the chain's page shows the nearest 50; <a href="#/raw/${esc(slug)}" style="color:var(--accent-2)">the full queue is on the chain's own page →</a></p>`:""}</section>`;
       }
       if(pendQ && pendQ.rows && pendQ.rows.length){
-        g += `<section data-qfold style="margin-top:22px"><div class="sec-h">Awaiting an answer <span class="count">${pendQ.more? `first ${pendQ.rows.length} of ${fmtN(pendQ.rows.length+pendQ.more)}` : pendQ.rows.length} · the chain's own list</span></div>
+        g += `<section data-qfold data-group="pending" style="margin-top:22px"><div class="sec-h">Awaiting an answer <span class="count">${pendQ.more? `first ${pendQ.rows.length} of ${fmtN(pendQ.rows.length+pendQ.more)}` : pendQ.rows.length} · the chain's own list</span></div>
         <p class="small muted" style="margin:0 0 8px">Seeded and appeal claims that no one has answered yet — oldest first.</p>
         <div class="docket">${pendQ.rows.map(prow).join("")}</div>
         ${pendQ.more? `<p class="small muted" style="margin:6px 0 0">…and ${fmtN(pendQ.more)} more — <a href="#/raw/${esc(slug)}" style="color:var(--accent-2)">the full list is on the chain's own page →</a></p>`:""}</section>`;
