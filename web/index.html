@@ -458,6 +458,36 @@ section{margin-top:34px}
 .sec-h{font:600 11px/1 var(--sans); letter-spacing:.14em; text-transform:uppercase; color:var(--muted); border-bottom:1px solid var(--line-2); padding-bottom:6px; margin-bottom:10px; display:flex; align-items:baseline; gap:10px;
   border-image:linear-gradient(90deg, var(--edge), var(--line-2) 22%, transparent) 1}
 .sec-h .count{font-family:var(--mono); font-size:11px; color:var(--ink-2); font-weight:500; letter-spacing:0; text-transform:none}
+/* A HEADING THAT ANSWERS FOR ITSELF. "Open docket" is the courthouse word and it
+   is the right one — but a reader who does not already have it gets no way to
+   ask, and the answer is one sentence, which is too little for the helper dialog
+   that "How this vote works" opens and too much for the heading itself.
+   NOT title=. The page already has one `?` — .vq on the claim heading — and it
+   carries its text in a title attribute, which no keyboard reaches and no touch
+   screen shows. This one is a real button: hover OR focus reveals it, so a tab
+   stop and a tap both work, and the sentence is the button's accessible name so
+   a screen reader reads the explanation rather than the punctuation.
+   The panel resets text-transform and letter-spacing — .sec-h is uppercase with
+   .14em tracking, and a sentence set that way is a sign, not a sentence. */
+.sq{position:relative; flex:none; align-self:center; width:15px; height:15px; padding:0;
+  font:600 11px/1 var(--sans); letter-spacing:0; color:var(--muted); cursor:help;
+  background:none; border:1px solid var(--line-2); border-radius:50%}
+/* :focus, NOT :focus-visible. focus-visible is the right choice for a ring you
+   do not want on a mouse click — and the wrong one here, because a TAP focuses
+   without matching it, so on a touch screen the panel would never open and the
+   `?` would be a button that does nothing. Measured: programmatic focus does not
+   match focus-visible in Chrome either, which is what caught this. */
+.sq:hover,.sq:focus{color:var(--accent-2); border-color:var(--accent)}
+.sqp{position:absolute; left:50%; transform:translateX(-50%); top:calc(100% + 7px); z-index:5;
+  width:max-content; max-width:min(320px,70vw); text-align:left;
+  background:var(--surface); border:1px solid var(--line); border-radius:var(--r-sm); padding:8px 11px;
+  font:400 12px/1.5 var(--sans); letter-spacing:0; text-transform:none; color:var(--ink-2);
+  box-shadow:0 6px 18px rgba(0,0,0,.18); opacity:0; visibility:hidden; transition:opacity .12s ease}
+.sq:hover .sqp,.sq:focus .sqp{opacity:1; visibility:visible}
+/* Near the left edge the centred panel would hang off the page; the first
+   heading on a column is exactly where this sits. */
+.sec-h .sq:first-of-type .sqp{left:0; transform:none}
+@media(prefers-reduced-motion:reduce){ .sqp{transition:none} }
 
 /* cards + grids */
 .grid{display:grid; gap:14px}
@@ -6384,6 +6414,15 @@ on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
    are worth a word because they are exceptions; the middle is what "no pill"
    already means. */
 function tierPill(t){ return t===2?`<span class="pill open">★ Featured</span>`: t===0?`<span class="pill void">Hidden</span>`:""; }
+/* A `?` BESIDE A HEADING, for a word the page uses correctly and does not define.
+   The sentence is the button's OWN accessible name and is repeated in the panel
+   with aria-hidden — one string, said once to a screen reader and drawn once for
+   an eye. The alternative shapes both cost more than they buy here:
+   aria-describedby needs an id to thread through a template that has no id
+   scheme, and title= is the thing this exists to stop being. */
+function secHelp(text){
+  return `<button type="button" class="sq" aria-label="${esc(text)}">?<span class="sqp" aria-hidden="true">${esc(text)}</span></button>`;
+}
 const ICN_FOLDER = `<svg class="icn" viewBox="0 0 14 12" aria-hidden="true"><path d="M1 1.5h4.2l1.4 1.8H13a.6.6 0 0 1 .6.6v6.6a.9.9 0 0 1-.9.9H1.3a.9.9 0 0 1-.9-.9V2.1a.6.6 0 0 1 .6-.6z" fill="currentColor"/></svg>`;
 /* "Open the rewards" is the one button on this page that is not about signing a
    statement, it is about collecting — so it gets the object, not the pen. */
@@ -9350,7 +9389,7 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
     + foldersSec
     + (pager||"")
     + qBarHtml("title or #id", idleCap)
-    + `<section data-qsec${foldersSec?' style="margin-top:22px"':""}><div class="sec-h">Open docket <span class="count">${openWin}</span></div>`
+    + `<section data-qsec${foldersSec?' style="margin-top:22px"':""}><div class="sec-h">Open docket ${secHelp("A docket is the list of cases before a court. These are the claims this one has not settled yet — the ones you can still stake on. Settled claims move down to Recently settled.")}<span class="count">${openWin}</span></div>`
     + (open.length? `<div class="docket" data-sortable data-sortkind="dk">${rows(open)}</div><div class="actions" style="margin-top:10px">${btn("Open a claim","OpenClaimP",{courtSlug:slug,title:"Your claim of fact",body:"What would settle it — the evidence in view, and what this is NOT asking"},"","a body is optional")}</div><div id="courtcompose"></div>`
         : pageOf()>1? `<p class="small muted">Nothing on this page.</p>`
         : `<div class="empty"><div class="g">◌</div><p>No open claims.</p><p>${btn("Open the first claim","OpenClaimP",{courtSlug:slug,title:"Your claim of fact",body:"What would settle it — the evidence in view, and what this is NOT asking"},"","a body is optional")}</p></div>`)
