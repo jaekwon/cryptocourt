@@ -362,14 +362,14 @@ const run = async (rows, v, mode) => {
      /\.page-h \.vtag\{font-size:clamp\(/.test(src));
   /* And the strike is drawn in the losing side's hue: a grey rule through a
      title reads as "deleted", and nothing here was deleted.
-     BOTH SURFACES THAT STRIKE IN HTML. verdictSentence builds one <s> for the
-     claim page's heading and for the map's selection card, so a hue scoped to
-     .page-h alone would leave the card's rule in ink — the one thing this mark
+     EVERY SURFACE THAT STRIKES IN HTML. verdictSentence builds one <s> for the
+     claim page's heading, the map's selection card and the related rows, so a
+     hue scoped to .page-h alone would leave the others' rule in ink — the one thing this mark
      must not say. The selector is read as a whole rather than by substring: the
      shape being pinned is that the card is IN the rule, and a bare
      /.page-h s/ matched before the card existed. */
   ok("the strike carries the verdict's colour, not ink",
-     /\.page-h s,\.mapsel-t s\{[^}]*text-decoration-color:var\(--no\)/.test(src));
+     /\.page-h s,\.mapsel-t s,\.crow \.t s\{[^}]*text-decoration-color:var\(--no\)/.test(src));
 
   console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");
   process.exit(fail?1:0);

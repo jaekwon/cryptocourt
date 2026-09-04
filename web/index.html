@@ -955,7 +955,7 @@ html.embed .main{grid-column:1; grid-row:1; max-width:none; padding:0;
    scoped to the heading would have left the card's rule drawn in ink — which
    reads as "deleted", the one thing this mark must not say. Thickness in em, so
    it tracks the clamped heading and the card's 13px alike. */
-.page-h s,.mapsel-t s{text-decoration-thickness:.05em; text-decoration-color:var(--no)}
+.page-h s,.mapsel-t s,.crow .t s{text-decoration-thickness:.05em; text-decoration-color:var(--no)}
 /* NO FILL, A HAIRLINE, AND REGISTRATION MARKS AT THE CORNERS. A court of record
    is rules and type; a filled card is a slab floating over a page. Taking the
    fill away is what makes the one glowing line on the page mean something.
@@ -7026,11 +7026,24 @@ function assocRow(slug, rid, chip, lookup){
      of the claim. Marked for fillAssocTitles below, which asks the realm and
      writes the answer in; until it lands the id is shown alone, because a
      number with no sentence beside it is honest about not knowing yet. */
+  /* THE SIDE RIDES THE SENTENCE HERE TOO. These rows carried "SETTLED YES" as a
+     phase pill beside the related claim's title — the same shape the claim page
+     and the map both stopped using, and for the same reason: the row HAS a
+     title, so the verdict belongs on it. verdictSentence is the one builder, so
+     a related row now reads exactly as that claim's own heading does, oval and
+     all, and a settled NO is struck through.
+     THE RELATION PILL STAYS. "contradicts" is what this row is FOR — it is the
+     edge, not the phase — and nothing else on the row says it.
+     AND THE PHASE PILL STAYS FOR EVERYTHING ELSE. Only a settled claim with a
+     readable side has somewhere to put the fact; open, disputed and provisional
+     rows keep the pill, exactly as the map's card does. */
+  const pc = d? phaseClass(d.statusText) : null;
+  const side = (pc && pc.short === "settled")? pc.side : "";
   return `<a class="crow assocrow" href="#/c/${esc(slug)}/${rid}">
     <span class="id">#${rid}</span>
-    <span><span class="t"${d? "" : ` data-needtitle="${rid}"`}>${d? safeInline(d.title) : ""}</span></span>
+    <span><span class="t"${d? "" : ` data-needtitle="${rid}"`}>${d? verdictSentence(d.title, side) : ""}</span></span>
     <span class="rt"><span class="pill ${/contradict/.test(chip)?"contra":"void"}">${esc(chip)}</span>
-    ${d? statusPill(d.statusText) : ""}</span></a>`;
+    ${d && !side? statusPill(d.statusText) : ""}</span></a>`;
 }
 function associationSection(slug, id, lookup, chainRows, folders){
   const cur = curationFor(slug);
@@ -7082,15 +7095,22 @@ function associationSection(slug, id, lookup, chainRows, folders){
      and not as a definition of the heading. "Where this claim sits · the chain's
      own record" was two noun phrases with nothing joining them, and the owner
      read it as confusing. Every branch now names the thing being sourced. */
-  const srcNote = chain.length
+  /* THE CAPTION NAMES EVERYTHING UNDER IT, and it used to branch on the
+     relations alone. So a claim with a folder AND relations — which is most of
+     them — was captioned "relations read from the chain" with a FOLDER as the
+     first row beneath it. Read back as: the heading says relations, and then it
+     shows a filing.
+     Composed from the groups actually rendered, in the order they appear, so
+     the caption cannot promise one thing and be followed by another. */
+  const claimRows = !!parent || children.length > 0 || rel.length > 0;
+  const notes = [];
+  if(fold.length) notes.push("filed by this court's moderators");
+  if(claimRows) notes.push(chain.length
     ? (mine.some(r=>r.type!=="bears")
         ? "relations read from the chain; containment and supersedes are curation"
         : "relations read from the chain")
-    /* A FOLDER IS ALSO READ FROM THE CHAIN, so a claim that has one and no
-       relations must not be captioned "the chain stores no relations" — true of
-       relations, and flatly wrong about the row underneath it. */
-    : (fold.length? "filed by this court's moderators"
-      : cur && cur.source==="local"? CUR_LABEL : "sample curation — the chain stores no relations");
+    : (cur && cur.source==="local"? CUR_LABEL : "sample curation — the chain stores no relations"));
+  const srcNote = notes.join("; ");
   /* NOTHING TO SHOW MEANS NOTHING RENDERED. With no parent, no parts and no
      related claims — which is most claims — this printed a heading, a caption
      asserting that relations HAD been read from the chain, and a paragraph
@@ -7108,10 +7128,15 @@ function associationSection(slug, id, lookup, chainRows, folders){
      membership within one folder only — and each links to the folder page. */
   if(fold.length){
     g += `<div class="sec-h" style="margin-top:6px">Filed in</div><div class="docket">`
+      /* NO CHIP. Every other group here pairs its heading with one, and there
+         the chip earns its place by varying — "supports", "one part",
+         "superseded by this" — so it says something the heading cannot. A
+         folder's would be the same two words on every row, directly under a
+         heading that has just said them: "Filed in" over "filed here". */
       + fold.map(f=>`<a class="crow assocrow" href="#/c/${esc(slug)}/f/${esc(String(f.fid))}">`
           + `<span class="id">${ICN_FOLDER}</span>`
           + `<span><span class="t">${safeInline(f.name)}</span></span>`
-          + `<span class="rt"><span class="pill void">filed here</span></span></a>`).join("")
+          + `<span class="rt"></span></a>`).join("")
       + `</div>`;
   }
   // The parent is CONTAINMENT, the same axis as "Rests on" and pointing the

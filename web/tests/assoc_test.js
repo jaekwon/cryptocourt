@@ -1,7 +1,7 @@
 // B8 harness: associationSection + resolutionLadder + demo-data ripples.
 const fs = require('fs');
 const src = fs.readFileSync(require('path').join(__dirname,'..','index.html'),'utf8');
-const { slice } = require("./srcslice");
+const { slice, fn } = require("./srcslice");
 global.document = { addEventListener: ()=>{}, getElementById: ()=>null };
 global.CFG = { mode:'demo' };
 global.isLive = ()=> CFG.mode==='live';
@@ -30,6 +30,10 @@ code += "var store={get:k=>{try{return localStorage.getItem(k)}catch(_){return n
 code += "const demoCourt = slug => Object.hasOwn(DEMO.courts, slug)? DEMO.courts[slug] : null;\n";
 code += slice('const CURATION_V', '/* ======').replace('const CURATION_V','var CURATION_V');
 code += 'const ICN_FOLDER="<svg/>";\n';   // stubbed as folders_test does: the row needs the mark to exist, not to be drawn
+// verdictSentence dresses the related row's title now — the side rides the
+// sentence here as it does on the claim page and the map, so the builder has to
+// be in scope alongside the row that calls it.
+code += fn('verdictSentence');
 code += slice('function assocRow(', '/* ======================= local curation');
 code += 'var BLOCK_SECS=' + src.match(/const BLOCK_SECS\s*=\s*(\d+)/)[1] + ';\n';
 code += slice('const MON=', 'function resolutionLadder(').replace(/^const MON=/m,'var MON=');
@@ -137,8 +141,16 @@ CFG.mode='demo';
 // ---- status pills in rows reflect phases ----
 // #4's answer was NO and its verdict YES — a dispute that overturned the answer —
 // so "settled YES" also pins the precedence: the pill follows the VERDICT.
-ok("#9 rows: #4 settled pill, #3 in-dispute pill",
-   h9.includes(">settled YES<") && h9.includes(">in dispute<"));
+/* THE SETTLED ROW WEARS THE OVAL NOW, not a phase pill: these rows carry the
+   related claim's TITLE, so the verdict rides the sentence exactly as it does on
+   the claim page and the map. The precedence this assertion was written for is
+   unchanged and still pinned — #4's answer was NO and its verdict YES, and YES
+   is what the oval says — and the pill's ABSENCE is asserted beside it, since
+   dropping the pill is the change and a row carrying both would be the bug.
+   #3 is in dispute, has no readable side, and keeps its pill. */
+ok("#9 rows: #4 wears the verdict's oval, #3 keeps its in-dispute pill",
+   /vtag y">YES</.test(h9) && !h9.includes(">settled YES<")
+   && h9.includes(">in dispute<"));
 
 // ---- resolution ladder ----
 const d2 = Object.assign({id:2}, DEMO.claims["orem/2"], {answered:true});
@@ -404,6 +416,30 @@ ok("...and is captioned as filing, not as relations the chain does not store", (
   // either form rather than pinning the entity, which is an encoding detail.
   return /filed by this court(&#39;|')s moderators/.test(h)
       && !h.includes("the chain stores no relations");
+})());
+/* THE CAPTION COVERS BOTH GROUPS WHEN THERE ARE BOTH. It branched on relations
+   alone, so covid/18 — a folder and two relations — read "Where this claim sits
+   · relations read from the chain" with "Filed in / Proximal Origin" directly
+   under it. Reported as redundant, and it was worse than redundant: the caption
+   named one kind of thing and the first row was the other. */
+ok("a claim with both is captioned for both, filing first", (()=>{
+  const h = associationSection("covid", 18, null, [[11,"supports"]],
+                               [{fid:4, name:"Proximal Origin"}]);
+  const cap = (h.match(/<span class="count">(.*?)<\/span>/)||[])[1] || "";
+  return /filed by this court(&#39;|')s moderators/.test(cap)
+      && /relations read from the chain/.test(cap)
+      && cap.indexOf("filed") < cap.indexOf("relations");
+})());
+ok("...and a claim with only relations is captioned only for them", (()=>{
+  const h = associationSection("covid", 18, null, [[11,"supports"]], []);
+  const cap = (h.match(/<span class="count">(.*?)<\/span>/)||[])[1] || "";
+  return /relations read from the chain/.test(cap) && !/filed by/.test(cap);
+})());
+/* "Filed in" over "filed here" said it twice. The other groups' chips vary and
+   so carry information; a folder's would be constant. */
+ok("the folder row carries no chip repeating its own heading", (()=>{
+  const h = associationSection("covid", 11, null, null, [{fid:4, name:"Proximal Origin"}]);
+  return h.includes(">Filed in<") && !h.includes("filed here");
 })());
 ok("...and sits above the claim rows, being the coarser fact", (()=>{
   const h = associationSection("covid", 11, null, [[18,"supported by this"]],
