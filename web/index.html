@@ -1248,8 +1248,18 @@ dialog.helper .bd p{margin:0 0 8px}
 dialog.helper .bd ul{margin:4px 0 0; padding-left:18px}
 dialog.helper .bd li{margin:5px 0}
 dialog.helper .bd b{color:var(--ink)}
+/* A TARGET, NOT JUST A PHRASE. These are text buttons with no padding, so their
+   box is the line box — 23px at the sizes they are used at, under the 24px
+   .tagrow .tlink already holds itself to for SC 2.5.8. It never came up while
+   they sat inside a sentence, where the surrounding text sets the rhythm; the
+   buy panel's now stands on its own in the button row, beside a 42px button,
+   and is the smallest thing on the panel a thumb has to find.
+   inline-flex for the min-height to take effect on a button whose content is one
+   line, and it keeps the label centred in the taller box rather than sitting on
+   the old baseline. */
 button.helplink{color:var(--accent-2); cursor:pointer; text-decoration:underline; background:none;
-  border:0; padding:0; font:inherit; font-size:inherit}
+  border:0; padding:0; font:inherit; font-size:inherit;
+  display:inline-flex; align-items:center; min-height:24px}
 button.helplink:hover{color:var(--accent)}
 /* AN ASIDE IS MARKED BY A RULE IN THE MARGIN, not by a panel. This paragraph —
    the one that corrects what readers get wrong about conviction — was separated
@@ -6629,7 +6639,17 @@ function buyRowsHtml(q, price, slug, after){
      every keystroke — so the figures behind the link update with the ones in
      front of it. Rendered where it is declared and shown in the top layer, which
      is what <dialog> is for. */
-  if(after) return `<div class="line"><span class="l">You pay</span><span class="r tnum">${q.avg.toFixed(4)} <small>µGNOT/unit</small> · ${pctText(pct, 100)} <small>voice</small> <button type="button" class="helplink" data-help="help-buy">details →</button></span></div>`
+  /* THE LINK LEFT THIS LINE FOR THE BUTTON ROW. It sat at the end of the value,
+     after "µGNOT/unit · 0.4% voice", and at 390px that value wraps across four
+     lines — so "details →" landed on a line of its own, 120px below the Buy
+     button it belongs beside. Reported as: it should be next to the button, or
+     short enough to fit.
+     Next to the button, because .actions is a wrapping flex row with room in it,
+     and because the link is an action rather than part of the figure. The DIALOG
+     stays here: it is rebuilt with these numbers on every keystroke, which is
+     what keeps the figures behind the link the same as the ones in front of it.
+     The button finds it by id, so the two need not be siblings. */
+  if(after) return `<div class="line"><span class="l">You pay</span><span class="r tnum">${q.avg.toFixed(4)} <small>µGNOT/unit</small> · ${pctText(pct, 100)} <small>voice</small></span></div>`
     + `<dialog class="helper" id="help-buy" aria-labelledby="help-buy-h">
         <div class="hd"><h3 id="help-buy-h">What this buy costs</h3><button type="button" class="pill void" data-close>Close</button></div>
         <div class="bd">
@@ -6696,8 +6716,19 @@ function buyActionsHtml(slug, q){
   // for exactly this, and .btn.primary re-tunes the gold to the accent fill.
   // A PLUS, NOT THE PEN: this button adds to a holding, it does not assert
   // anything (see ICN_PLUS).
+  /* AND THE RECEIPT'S DETAILS BESIDE IT, on the same condition that draws the
+     receipt: buyRowsHtml emits the "You pay" line only for a quote that mints
+     something, so a details link on any other state would open a dialog about
+     figures the panel is not showing.
+     NO align-self. It was written with align-self:center to stop a text link
+     stretching to the button's height, and stretching turns out to be the point:
+     the label is centred either way — measured — so the only thing centring
+     changed was the TARGET, from the row's 42px down to 23px. That is under the
+     24px this file holds itself to elsewhere (SC 2.5.8), and it is the one
+     control here a thumb has to find beside a much larger button. */
   return btn(ok? {html:"Buy "+cc(Number(q.units),slug)} : "Buy the coin",
-             "Buy", {slug}, "primary", "", send, gate, false, "", ICN_PLUS);
+             "Buy", {slug}, "primary", "", send, gate, false, "", ICN_PLUS)
+    + (ok? `<button type="button" class="helplink" data-help="help-buy">details →</button>` : "");
 }
 /* ---------------- the court record (adverse disclosure) ----------------
    Outcomes only the chain can assert, published because they are the only
