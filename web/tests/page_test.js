@@ -48,9 +48,11 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
   ok("one window has no nav pills", !pg1.includes("older ›") && !pg1.includes("‹ newer"));
   ok("empty ledger renders nothing", pagerHtml("/c/orem",1,0,0,"claims")==="");
   ok("singular label at total 1", pagerHtml("/",1,1,1,"courts","ranked by GNOT burned").includes("all 1 court · ranked by GNOT burned"));
-  QP={sort:"yes"};
+  // "ctv" rather than the retired "yes": a test that carries a sort key the app
+  // no longer accepts still passes, and stops describing anything.
+  QP={sort:"ctv"};
   const pgS = pagerHtml("/c/orem", 2, 25, 214, "claims");
-  ok("links carry the active sort", pgS.includes('href="#/c/orem?sort=yes"') && (pgS.includes("sort=yes&amp;p=3") || pgS.includes("p=3&amp;sort=yes")));
+  ok("links carry the active sort", pgS.includes('href="#/c/orem?sort=ctv"') && (pgS.includes("sort=ctv&amp;p=3") || pgS.includes("p=3&amp;sort=ctv")));
   QP={at:"resolution",focus:"7"};
   const pgX = pagerHtml("/c/orem", 2, 25, 214, "claims");
   ok("links never carry at/focus", !pgX.includes("at=") && !pgX.includes("focus="));

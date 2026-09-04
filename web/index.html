@@ -6034,13 +6034,43 @@ function pageSlice(list, page){ return list.slice((page-1)*PAGE_N, page*PAGE_N);
    stamped at build (demo) or by the spark fill (live); keyless rows sink. ---- */
 const SORT_TAILS = {
   dk: { old: "oldest first (this window)",
-        yes: "YES-share of stakes, high to low (this window) — stakes, never ballots" },
+        ctv: "most stake against the answer, as a share (this window) — stakes, never ballots",
+        top: "most staked first, YES and NO together (this window) — stakes, never ballots" },
   dir:{ claims: "most claims filed first — deeper pages exist only in burn order" } };
+/* THE TWO STAKE SORTS, and both come free. DocketSeries already returns
+   yesStake and noStake for up to 60 rows in ONE read — the same read the
+   sparklines are drawn from — so neither of these costs the page anything it
+   was not already fetching.
+
+   TOP is the total: YES + NO together. The biggest positions in the court.
+
+   CONTROVERSIAL is the SHARE of that total sitting on the side the answer went
+   against — answered YES, so how much stake says NO. A share rather than an
+   amount, because an amount would just re-rank by size and TOP already does
+   that; ties break on the total, so between two claims equally split the bigger
+   one leads.
+
+   AND IT RANKS STAKE, NOT DOUBT. A settled claim with stake piled against its
+   answer means the stakers who backed that side were wrong and were paid
+   nothing for it — the verdict is not thereby suspect, and the caption says
+   what is being ranked so the chip cannot be read as "these answers are
+   contested". A claim with no answer yet has no side to disagree with, so it
+   has no score and sorts last.
+
+   REPLACING %YES, which sorted YES-leaning claims into one end and NO-leaning
+   into the other and told a reader nothing they could not see from the column
+   itself. */
+function stakeSortAttrs(yesStake, noStake, side){
+  const y = Number(yesStake)||0, n = Number(noStake)||0, tot = y + n;
+  if(!(tot > 0)) return "";
+  const against = side==="YES"? n : side==="NO"? y : null;
+  return ` data-top="${tot}"` + (against!=null? ` data-ctv="${(against/tot).toFixed(6)}"` : "");
+}
 function applySort(keyRaw){
   const boxes = document.querySelectorAll("[data-sortable]");
   if(!boxes.length) return;
   const kind = boxes[0].getAttribute("data-sortkind");
-  const ok = kind==="dk"? {new:1,old:1,yes:1} : {rank:1,claims:1};
+  const ok = kind==="dk"? {new:1,old:1,ctv:1,top:1} : {rank:1,claims:1};
   const key = ok[keyRaw]? keyRaw : (kind==="dk"? "new":"rank");
   const dflt = key==="new"||key==="rank";
   const num=(n,a)=>{ const v=n.getAttribute(a); return (v==null||v==="")? null : parseFloat(v); };
@@ -6052,8 +6082,13 @@ function applySort(keyRaw){
     }
     const ia=num(a,"data-id"), ib=num(b,"data-id");
     if(key==="old") return ia-ib;
-    if(key==="yes"){ const x=num(a,"data-yes"), y=num(b,"data-yes");
+    if(key==="top"){ const x=num(a,"data-top"), y=num(b,"data-top");
       if(x!=null||y!=null){ if(x==null) return 1; if(y==null) return -1; if(y!==x) return y-x; } }
+    if(key==="ctv"){ const x=num(a,"data-ctv"), y=num(b,"data-ctv");
+      if(x!=null||y!=null){ if(x==null) return 1; if(y==null) return -1; if(y!==x) return y-x; }
+      // equally split, so the bigger disagreement leads
+      const tx=num(a,"data-top"), ty=num(b,"data-top");
+      if(tx!=null&&ty!=null&&ty!==tx) return ty-tx; }
     return ib-ia;
   };
   // appendChild detaches-and-reinserts, which blurs a focused row — keep it
@@ -6078,7 +6113,9 @@ function applySort(keyRaw){
   });
   if(QCTX){ if(QCTX.orderTail0===undefined) QCTX.orderTail0=QCTX.orderTail;
     QCTX.orderTail = dflt? QCTX.orderTail0
-      : " · "+(kind==="dk"? (key==="old"? "oldest first":"%YES of stakes, high to low") : "most claims filed first"); }
+      : " · "+(kind==="dk"? (key==="old"? "oldest first"
+                            : key==="top"? "most staked first"
+                            : "most stake against the answer") : "most claims filed first"); }
 }
 document.addEventListener("click", ev=>{
   const b = ev.target.closest(".schips [data-sort]"); if(!b) return;
@@ -6399,7 +6436,7 @@ on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
   }
   const hiddenNote = hiddenGap>0? `<p class="small muted" style="margin:2px 0 8px">${hiddenGap} hidden or unreadable claim${hiddenGap===1?"":"s"} omitted from this window — a hidden claim's page still answers by id.</p>` : "";
   const dkChips = claims.length>=2
-    ? `<span class="schips" role="group" aria-label="sort order"><button class="pill void" data-sort="new" aria-pressed="${QP.sort!=="old"&&QP.sort!=="yes"}">newest</button><button class="pill void" data-sort="old" aria-pressed="${QP.sort==="old"}">oldest</button><button class="pill void" data-sort="yes" aria-pressed="${QP.sort==="yes"}">%YES now</button></span>` : "";
+    ? `<span class="schips" role="group" aria-label="sort order"><button class="pill void" data-sort="new" aria-pressed="${QP.sort!=="old"&&QP.sort!=="ctv"&&QP.sort!=="top"}">newest</button><button class="pill void" data-sort="old" aria-pressed="${QP.sort==="old"}">oldest</button><button class="pill void" data-sort="ctv" aria-pressed="${QP.sort==="ctv"}" title="the share of stake sitting on the side the answer went against">controversial</button><button class="pill void" data-sort="top" aria-pressed="${QP.sort==="top"}" title="total staked, YES and NO together">top</button></span>` : "";
   const docketPager = pagerHtml("/c/"+slug, page, claims.length, totalClaims, "claims", undefined, dkChips) + hiddenNote;
   const docketPagerBot = (totalClaims>PAGE_N || page>1)? pagerHtml("/c/"+slug, page, claims.length, totalClaims, "claims") : "";
   /* TOGETHER, NOT ONE AFTER THE OTHER. The folder tree and the description are
@@ -6512,6 +6549,15 @@ on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
           // sorted at all.
           const k = ser ? ser[2] : inst;
           const row = el.closest(".crow"); if(row && Number.isFinite(k)) row.dataset.yes = k;
+          /* The stake sorts ride the same fill. docketRow already set them from
+             a demo claim's own pools; live rows have nothing until this lands,
+             which is why applySort is re-run once the whole batch settles. */
+          if(row){ const tot = (Number(srow.yesStake)||0) + (Number(srow.noStake)||0);
+            if(tot > 0){ row.dataset.top = tot;
+              const sd = phaseClass(cl.statusText).side;
+              const against = sd==="YES"? (Number(srow.noStake)||0) : sd==="NO"? (Number(srow.yesStake)||0) : null;
+              if(against!=null) row.dataset.ctv = (against/tot).toFixed(6);
+              else delete row.dataset.ctv; } }
         });
       }catch(_){}
     }).then(()=>{ if(renderSeq===seq0 && QP.sort) applySort(QP.sort); }); // one settle once every key landed
@@ -10588,7 +10634,7 @@ function docketRow(slug,c,meta){
     ? `<span class="px" data-pct="${esc(slug)}-${c.id}">${docketSignal(c.series, c.inst)}</span>`
     : `<span class="px" data-pct="${esc(slug)}-${c.id}"></span>`;
   const sortKey = c.series ? c.series[2] : (Number.isFinite(c.inst) ? c.inst : null);
-  return `<a class="crow claimrow${c.offp?" offp":""}" data-id="${c.id}"${sortKey!=null?` data-yes="${sortKey}"`:""} data-q="${esc("#"+c.id+" "+c.title)}" href="#/c/${esc(slug)}/${c.id}">
+  return `<a class="crow claimrow${c.offp?" offp":""}" data-id="${c.id}"${sortKey!=null?` data-yes="${sortKey}"`:""}${stakeSortAttrs(c.yesStake, c.noStake, phaseClass(c.statusText).side)} data-q="${esc("#"+c.id+" "+c.title)}" href="#/c/${esc(slug)}/${c.id}">
     <span class="id">#${c.id}</span>
     <span><span class="t">${verdictSentence(c.title, dSide, dv.contested)}</span>${meta?`<span class="m" style="display:block">${safeInline(meta.label)}</span>`:""}<span class="m" style="display:block" id="clk-${esc(slug)}-${c.id}">${(()=>{ const t=clockLine(isLive()? null:NOW, phaseClass(c.statusText).short, c.settleAt, c.escrowUntil); return t? esc(t):""; })()}</span>${dSide? "" : `<span class="m rowpill">${statusPill(c.statusText)}</span>`}</span>
     ${px}</a>`;
