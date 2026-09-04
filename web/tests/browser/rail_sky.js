@@ -180,6 +180,24 @@ const crypto = require('crypto');
       return !re.test(plate);
     }).map(([xy]) => xy);
     ok("the figure's stars keep their spectral colours", missing.length === 0, missing.join(" "));
+    /* AND THE BRIGHT ONES BLOOM. A star in a photograph is not a hard disc — the
+       optics spread it — and the plate drew every star as one while giving the
+       three planets a halo each. The two brightest magnitude bins carry one now,
+       in the star's OWN colour, so Regulus blooms blue-white and Algieba orange.
+       BEHIND THE STARS, which is the whole of the effect: painted after them the
+       halo washes the core out instead of surrounding it. Asserted as an order,
+       not a presence. */
+    const haloAt = /<g>(<circle cx="\d+" cy="\d+" r="[59]\.[05]" fill="#[0-9a-f]{6}" opacity="0\.\d+"\/>)+<\/g>/.exec(plate);
+    ok("the bright stars carry a bloom", !!haloAt && (haloAt[0].match(/<circle/g) || []).length === 14,
+       haloAt ? String((haloAt[0].match(/<circle/g) || []).length) : "no halo group");
+    ok("...painted behind the stars, not over them",
+       !!haloAt && haloAt.index < plate.indexOf('<g fill="#fff" opacity="0.95">'));
+    ok("...each in its own star's colour", (()=>{
+      // Regulus is B7 blue-white and Algieba K1 orange; a halo that ignored the
+      // star's class would make both white and lose the point.
+      return /<circle cx="458" cy="647" r="9\.0" fill="#aabfff"/.test(plate)
+          && /<circle cx="411" cy="513" r="9\.0" fill="#ffd2a1"/.test(plate);
+    })());
     // And the rest of the field stays white: colouring 277 anonymous stars would
     // be inventing data, since only the named ten have a class on record here.
     ok("...and the anonymous field is still white",
