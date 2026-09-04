@@ -490,8 +490,29 @@ section{margin-top:34px}
    height to the box, so every rule on the page sits the same distance under the
    word it belongs to. The `?` is 15px against 11px of text and was doing a
    smaller version of the same thing. */
-.sec-h .schips,.sec-h .gchips{margin-block:-7px}
+/* SHORTER PILLS, NOT NEGATIVE MARGINS. The first version pulled the chip group
+   up with margin-block:-7px, which works only while the group is ONE line — at
+   390px the chips wrap and a negative margin then drags a two-line group up into
+   the rule above it. Sizing the pill to the heading's own text needs no trick and
+   survives wrapping. */
+.sec-h .schips .pill{padding:2px 6px; font-size:10px}
+/* AND THE LAST 8px, ONLY WHERE THE GROUP IS KNOWN TO BE ONE LINE. A 20px pill
+   cannot contribute the 13px of a text line, so a heading carrying chips still
+   stood 27px against its neighbours' 19. A negative margin closes that — and is
+   exactly what could not be used unconditionally, because below this width the
+   group wraps and the same margin would drag two lines of chips up into the rule
+   above. Gated on the width where the row has room, so the trick applies only
+   where it is true. */
+@media (min-width:1200px){ .sec-h .schips{margin-block:-4px} }
 .sec-h .sq{margin-block:-2px}
+/* AND THE GROUP MAY WRAP. .schips is an inline-flex with no wrap, so four chips
+   in a heading could not break — they pushed the heading, and the heading pushed
+   the column, and at 390px the whole page scrolled sideways: 493px of content in
+   a 390px viewport. WCAG 1.4.10, and my own regression from putting the chooser
+   in a heading. The heading wraps too, so the group drops to its own line rather
+   than stretching the row it sits in. */
+.sec-h{flex-wrap:wrap}
+.schips{flex-wrap:wrap}
 /* AND IT STANDS OFF WHAT IS ABOVE IT like its peers. The other headings are the
    first thing in a <section>, which carries the gap; this one is a bare div
    between the folder list and its own filter box, so it had none at all and read
