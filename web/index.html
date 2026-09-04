@@ -2305,6 +2305,16 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
 .clipprev{margin:0 0 10px; border:1px solid var(--line-2); border-radius:var(--r-sm);
   overflow:hidden; background:var(--inset); min-height:40px}
 .clipprev img{display:block; width:100%; height:auto}
+/* AN IMG WITH NO SRC IS A BROKEN IMAGE. This one has none until the canvas is
+   drawn — buildClip runs when the share dialog opens, and it can fail outright
+   on a page whose reads did not answer — so between opening the dialog and the
+   draw landing the reader was shown the browser's broken-image mark, and after a
+   failure they were shown it for good. Hidden until it HAS a source: nothing to
+   show yet is better said with nothing than with a torn-page icon. The alt text
+   is untouched, so what it will be is still announced.
+   :not([src]) rather than a class, because the attribute IS the state — there is
+   no second place to keep it in step. */
+.clipprev img:not([src]){visibility:hidden}
 #share-dlg h4 .hint{font-weight:400; font-size:10.5px; letter-spacing:.06em;
   font-family:var(--mono); color:var(--muted); margin-left:8px; text-transform:none}
 .txnote{flex-basis:100%; font-size:12px; color:var(--ink-2); margin-top:5px}
