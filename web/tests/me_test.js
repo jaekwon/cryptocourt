@@ -80,13 +80,22 @@ ok("...and per-claim details are fetched in chunks, not one await at a time",
 ok("last-visit copy verbatim", src.includes("this browser's memory of your last look") && src.includes("Clear storage and it forgets"));
 ok("senior owed-not-earned copy", src.includes("owed, not earned") && src.includes("paid as budget accrues, the court's pace, not a promise"));
 ok("needs deadline string", src.includes("you may dispute until ≈block"));
-// HONESTY IS STILL THE POINT, but the honest sentence changed when
-// DisputeVoteCloses shipped: the chain does publish a close now, so claiming it
-// does not was the dishonest version. The row still carries no countdown —
-// reading it here would be a query per row — and it says where to find one.
-ok("needs sealed-vote honesty",
-   src.includes("a sealed vote is deciding — its countdown is on the claim page")
-   && !src.includes("no close height is published"));
+/* HONESTY IS STILL THE POINT, and the honest sentence has moved twice. First it
+   claimed the chain published no close, which stopped being true when
+   DisputeVoteCloses shipped. Then it pointed at the claim page for a countdown —
+   while claimDetail was already reading that close into voteEndsAt for this very
+   row, so the page was sending a reader elsewhere for a number it held, and
+   sorting the row last on an Infinity key while it did.
+   WHAT MUST STAY TRUE is that no surface reports a TALLY: the vote is sealed
+   while it runs, the ballots are on chain for anyone who wants to sum them, and
+   this page does not. So: a countdown, never a score. */
+ok("the needs row counts down from the close it already read",
+   src.includes('txt: clockLine(nowH, "in dispute", null, null, d.voteEndsAt || null)')
+   && src.includes("h: d.voteEndsAt || Infinity"));
+ok("...and no surface claims the chain publishes no close height",
+   !src.includes("no close height is published"));
+ok("...and none of them reports who is winning a sealed vote",
+   !/sealed[^"]*(leading|ahead|winning|\bYES\b\s*%)/.test(src));
 ok("needs sections", src.includes(">Against your side <span") && src.includes(">With your side <span"));
 /* NO CROSS-COURT SUMS. This was a pin on the exact sentence "coins are per-court,
    never summed", and it fired when the coin-held stat was added — the wording

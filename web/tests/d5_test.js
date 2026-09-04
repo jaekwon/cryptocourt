@@ -30,13 +30,39 @@ eval(code);
 let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else console.log("ok:",n); };
 
 // clockLine table
-// The row still has no clock — reading DisputeVoteCloses here would be a query
-// per row on a page that draws fifty — but it no longer says the chain has
-// nothing to give, which stopped being true when that read shipped. It points
-// at the page that does have the countdown.
-ok("disputed = sealed line, mode/height-blind",
-   clockLine(null,"in dispute",null,null)==="a sealed vote is deciding — its countdown is on the claim page"
-   && clockLine(123,"in dispute",99,99)==="a sealed vote is deciding — its countdown is on the claim page");
+/* THE DISPUTED ROW HAS A CLOCK NOW. The old note said reading DisputeVoteCloses
+   would be a query per row on a page that draws fifty — but the docket's fill
+   already pays exactly that for `proposed` and `provisional`, and only for the
+   rows in those phases. Disputed was the last one sending a reader elsewhere for
+   a number the row could hold.
+   THE TALLY IS STILL SEALED, which is the realm's design: the ballots are on
+   chain and anyone may add them up, but this page does not sum a running vote.
+   So the line says WHEN, never who is winning — asserted below. */
+ok("disputed with no close read yet = the bare sealed line",
+   clockLine(null,"in dispute",null,null)==="a sealed vote is deciding"
+   && clockLine(123,"in dispute",99,99)==="a sealed vote is deciding");
+ok("...with a close and a height, it counts down",
+   /^the vote closes in .+ — ≈block /.test(clockLine(100,"in dispute",null,null,2000)));
+ok("...past the close, it says the verdict is available",
+   clockLine(3000,"in dispute",null,null,2000)==="the vote has closed — the verdict is one call away");
+ok("...and with no height to measure against, it states the block alone",
+   clockLine(null,"in dispute",null,null,2000)==="the vote closes at ≈block 2,000");
+ok("...and never reports a tally, which is sealed while it runs", (()=>{
+   const all = [clockLine(100,"in dispute",null,null,2000),
+                clockLine(3000,"in dispute",null,null,2000),
+                clockLine(null,"in dispute",null,null,null)].join(" ");
+   return !/%|YES|NO|winning|ahead/.test(all);
+})());
+/* AND THE DOCKET ACTUALLY FETCHES IT. clockLine renders a countdown only if it
+   is handed a close, so the phase has to be in the fill that reads one — the
+   same fill that already reads SettleDeadline and EscrowUntil for the other two
+   phases, and only for the rows in them. Source-asserted: the fill needs a chain.
+   Removing the phase from that condition left every clockLine test passing and
+   no row counting down. */
+ok("the docket reads the close for a disputed row",
+   src.includes('|| pcShort==="in dispute"')
+   && src.includes('`DisputeVoteCloses(${s2},${cl.id})`')
+   && src.includes('pcShort==="in dispute"? h:null'));
 ok("...and no surface still claims the chain publishes no close height",
    !src.includes("no close height is published"));
 ok("proposed ahead", clockLine(100,"proposed",200,null).startsWith("settles undisputed at ≈block 200 — in ") && clockLine(100,"proposed",200,null).endsWith(" unless disputed"));
