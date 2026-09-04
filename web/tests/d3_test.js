@@ -31,6 +31,11 @@ code += fn('verdictSentence');
    assertions keep passing over a control that had stopped being a button. */
 code += fn('sideOval');
 code += fn('secHelp');
+/* sideOval now delegates its mark to contestedMark, which chooses between the
+   real control and the flat span by whether the surface is inside a link. Both
+   are loaded, and CONTESTED_SAYS with them, so these assertions run against the
+   shape that actually ships rather than a stand-in. */
+code += slice('const CONTESTED_SAYS', '\nfunction sideOval');
 code += fn('rowVerdict');
 code += slice('function phaseClass(','function statusPill(');
 code += slice('/* The specimen tour','function introStrip(');

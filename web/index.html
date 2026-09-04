@@ -1117,7 +1117,13 @@ html.embed .main{grid-column:1; grid-row:1; max-width:none; padding:0;
 /* The oval's `?` rides a TITLE, not a heading row, so it needs its own sizing:
    .sec-h pulls its control back into a 13px line, and there is no line to pull
    against here. align-self:baseline keeps it sitting on the sentence. */
-.page-h .sq,.crow .sq,.mapsel-t .sq{margin-block:0; align-self:baseline; vertical-align:middle}
+.page-h .sq{margin-block:0; align-self:baseline; vertical-align:middle}
+/* The flat mark: the same ring, no control. It cannot be a button — every
+   surface that draws it is inside a link — so it is drawn and titled and its
+   sentence is carried beside it for a screen reader. */
+.vqm{display:inline-flex; align-items:center; justify-content:center; width:15px; height:15px;
+  margin-left:.25em; vertical-align:middle; font:600 11px/1 var(--sans); color:var(--muted);
+  border:1px solid var(--line-2); border-radius:50%}
 /* COLOUR AND WEIGHT ARE NOT SCOPED, for the reason .vtag.y is not: the mark now
    follows the oval on the related rows as well as in the heading, and the same
    qualification must read the same in both. Only the heading's clamp stays. */
@@ -12707,7 +12713,7 @@ function focusStakeSide(side){
    stays with the caller; all this does is dress the sentence.
    AN UNKNOWN SIDE RETURNS THE BARE SENTENCE rather than an empty oval — a ring
    with nothing in it would assert a decision nobody can read. */
-function verdictSentence(title, side, contested){
+function verdictSentence(title, side, contested, ask){
   const t = safeInline(title);
   if(side !== "YES" && side !== "NO") return t;
   /* CONTESTED IS THE SAME SENTENCE, QUESTIONED. The claim heading built this
@@ -12720,7 +12726,7 @@ function verdictSentence(title, side, contested){
   // <s>, not a class on the caller's element: the element means "no longer
   // accurate", which is the claim about the sentence — and it keeps the oval
   // outside the strike, since the verdict is not itself struck.
-  return ((side === "NO" && !contested) ? `<s>${t}</s>` : t) + " " + sideOval(side, contested);
+  return ((side === "NO" && !contested) ? `<s>${t}</s>` : t) + " " + sideOval(side, contested, ask);
 }
 /* THE OVAL ALONE, for the surfaces that have no sentence to hang it on. Every
    caller used to reach it through verdictSentence, which is right where there is
@@ -12728,7 +12734,29 @@ function verdictSentence(title, side, contested){
    on settled rows leaves a blank cell in every one of them. So the oval goes in
    the cell instead of the pill, and it comes from here rather than from a second
    copy of the same span. */
-function sideOval(side, contested){
+/* THE MARK IN TWO FORMS, AND WHICH ONE IS SAFE WHERE.
+   A docket row IS a link. Putting a <button> inside an <a> is invalid HTML and
+   behaves like it: the click lands on the anchor, so pressing the mark navigated
+   to the claim instead of explaining anything, and the tab stop inside the link
+   activated the link. That shipped an hour ago, in the change that made this
+   mark a real control — audit-live caught it with a nested-control check added
+   for exactly this shape.
+   So the CONTROL is opt-in and the flat mark is the default: a nested button is
+   a bug wherever it happens, and a span never is.
+   The flat form loses nothing that was there before it — it keeps the title a
+   mouse hovers — and gains the sentence for a screen reader, which the title
+   alone did not reliably give. What it cannot give is a keyboard or touch
+   affordance, because inside a link there is nowhere to put one. The claim page's
+   heading is not a link, so that is where the real control goes, and that is the
+   surface where a reader who wants the explanation has come to look for it. */
+const CONTESTED_SAYS = "Under dispute — this answer is being contested. The court is voting on whether to overturn it.";
+function contestedMark(ask){
+  return ask
+    ? secHelp(CONTESTED_SAYS)
+    : `<span class="vqm" title="${esc(CONTESTED_SAYS)}" aria-hidden="true">?</span>`
+      + `<span class="sr-only">${esc(CONTESTED_SAYS)}</span>`;
+}
+function sideOval(side, contested, ask){
   if(side !== "YES" && side !== "NO") return "";
   return `<span class="sidetag vtag ${side === "NO" ? "n" : "y"}">${side}</span>`
     /* THE SAME `?` AS EVERY OTHER `?`. This one was a span carrying a title, so
@@ -12740,7 +12768,7 @@ function sideOval(side, contested){
        secHelp is that control: a real button, the sentence as its accessible
        name, a panel on hover OR focus OR tap. Reusing it rather than teaching a
        second `?` the same lesson is the point. */
-    + (contested ? secHelp("Under dispute — this answer is being contested. The court is voting on whether to overturn it.") : "");
+    + (contested ? contestedMark(ask) : "");
 }
 /* WHAT A ROW SHOWS INSTEAD OF A PHASE PILL. Four surfaces answered this question
    separately — the docket, the map card, the related rows and the claim page —
@@ -12776,7 +12804,7 @@ function claimTitleHtml(d){
   if(d && d.phase === "disputed"){
     const a = d.answer;
     if(a !== 0 && a !== 1) return `<h1 class="page-h">${t}</h1>`;
-    return `<h1 class="page-h">${verdictSentence(d && d.title, sideName(a), true)}</h1>`;
+    return `<h1 class="page-h">${verdictSentence(d && d.title, sideName(a), true, true)}</h1>`;
   }
   if(!d || d.phase !== "settled") return `<h1 class="page-h">${t}</h1>`;
   const v = (d.verdict != null ? d.verdict : d.answer);

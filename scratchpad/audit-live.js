@@ -240,14 +240,52 @@ const audit = () => {
   //     and not others. Skipped where the element is also a link or button with
   //     its own visible text, where the title is a supplement rather than the
   //     whole story.
+  //     AN AFFORDANCE, NOT METADATA. The distinction is what the visible content
+  //     PROMISES. "?" promises an explanation and delivers it only to a mouse —
+  //     that is the defect, and it shipped twice here. A timeline row that reads
+  //     "opened / 4 Sep 2026" and carries the block height in a title promises
+  //     nothing it fails to deliver: the label is the content, the height is a
+  //     reference, and the chain's own page carries it for anyone who wants it.
+  //     So this fires on glyph-only elements — a mark whose whole job is to be
+  //     asked about.
   main.querySelectorAll("[title]").forEach(el => {
     if (!vis(el)) return;
     const own = (el.textContent || "").replace(/\s+/g, " ").trim();
-    const interactive = el.matches("a[href],button,input,select,[role=button]");
-    if (interactive && own.length > 1) return;
-    if (own.length > 12) return;
+    if (!own || /[a-z0-9]{2}/i.test(own)) return;   // it says a word — it is a label
+    // A mark that carries its sentence for a screen reader beside it is not
+    // explained to a mouse ALONE. Inside a link there is nowhere to put a
+    // control — a button in an anchor swallows its own click — so title plus
+    // sr-only is the most that surface can offer, and it is offered.
+    const sib = el.parentElement && el.parentElement.querySelector(".sr-only");
+    if (sib && sib.textContent.trim() === (el.getAttribute("title") || "").trim()) return;
     out.push({kind: "title-only-affordance", detail: (el.getAttribute("title") || "").slice(0, 40),
               el: (el.className || el.tagName).toString().slice(0, 30), text: own.slice(0, 12)});
+  });
+
+  // 22. an image with no alt at all — a decorative one says alt=""
+  main.querySelectorAll("img").forEach(im => {
+    if (!vis(im)) return;
+    if (!im.hasAttribute("alt"))
+      out.push({kind: "img-no-alt", detail: (im.getAttribute("src") || "").slice(0, 50)});
+  });
+
+  // 23. tab order that jumps backwards up the page — a keyboard reader is
+  //     walked somewhere they have already been
+  const tabbable = [...main.querySelectorAll("a[href],button,input,select,textarea,[tabindex]")]
+    .filter(el => vis(el) && el.getAttribute("tabindex") !== "-1" && !el.disabled);
+  let jumps = 0;
+  for (let i = 1; i < tabbable.length; i++) {
+    const a = tabbable[i - 1].getBoundingClientRect(), b2 = tabbable[i].getBoundingClientRect();
+    if (b2.top < a.top - 80) jumps++;
+  }
+  if (jumps > 2) out.push({kind: "tab-order-jumps-back", detail: `${jumps} of ${tabbable.length}`});
+
+  // 24. a control inside another control — the inner one may be unreachable and
+  //     the outer one activates when you meant the inner
+  main.querySelectorAll("a[href],button").forEach(el => {
+    const inner = el.querySelector("a[href],button");
+    if (inner) out.push({kind: "nested-control", detail: el.tagName + " > " + inner.tagName,
+                         text: (el.textContent || "").trim().slice(0, 26)});
   });
 
   // 19. SC 2.5.3: a control's accessible name must contain its visible label, or

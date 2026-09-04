@@ -42,6 +42,11 @@ code += fn('verdictSentence');
    assertions keep passing over a control that had stopped being a button. */
 code += fn('sideOval');
 code += fn('secHelp');
+/* sideOval now delegates its mark to contestedMark, which chooses between the
+   real control and the flat span by whether the surface is inside a link. Both
+   are loaded, and CONTESTED_SAYS with them, so these assertions run against the
+   shape that actually ships rather than a stand-in. */
+code += slice('const CONTESTED_SAYS', '\nfunction sideOval');
 code += fn('rowVerdict');
 code += slice('function assocRow(', '/* ======================= local curation');
 code += 'var BLOCK_SECS=' + src.match(/const BLOCK_SECS\s*=\s*(\d+)/)[1] + ';\n';
@@ -188,7 +193,9 @@ CFG.mode='demo';
    else on the row says it. */
 ok("#9 rows: #4 wears the verdict's oval, #3 wears it questioned",
    /vtag y">YES</.test(h9) && !h9.includes(">settled YES<")
-   && h9.includes('class="sq"')
+   /* A ROW IS A LINK, so its mark is the flat span, never the button —
+      nesting a control inside an anchor is invalid and swallows the click. */
+   && h9.includes('class="vqm"') && !h9.includes('class="sq"')
    /* The DISPUTE pill specifically, not the escrow class: a provisional row in
       this same section wears escrow too and rightly keeps its phase pill — it
       has no oval to carry the fact. Banning the class outright failed here and
@@ -197,7 +204,7 @@ ok("#9 rows: #4 wears the verdict's oval, #3 wears it questioned",
 ok("...and the contested mark follows the oval, not the row's chip cluster", (()=>{
   const lk = id => { const d = DEMO.claims["orem/"+id]; return d? {title:d.title, statusText:statusText(d)} : null; };
   const r = assocRow("orem", 3, "contradicts this", lk);
-  const oval = r.indexOf('sidetag vtag'), q = r.indexOf('class="sq"'), rt = r.indexOf('class="rt"');
+  const oval = r.indexOf('sidetag vtag'), q = r.indexOf('class="vqm"'), rt = r.indexOf('class="rt"');
   return oval >= 0 && q > oval && q < rt;
 })());
 /* THE MARK'S COLOUR TRAVELS WITH THE OVAL. .vtag.y is deliberately unscoped —
@@ -213,14 +220,23 @@ ok("...and the contested mark follows the oval, not the row's chip cluster", (()
    same reason. The old rule is gone — asserted, because a dead selector is how a
    stylesheet grows. */
 ok("the contested mark is coloured outside any one surface's scope",
-   /^\.sq\{[^}]*color:var\(--muted\)/m.test(src)
+   /^\.vqm\{[^}]*color:var\(--muted\)/m.test(src)
    && !/^\.vq\{/m.test(src) && !src.includes('class="vq"'));
+/* AND A ROW NEVER NESTS A CONTROL INSIDE ITS LINK. This is the regression that
+   made contestedMark take a flag at all: a <button> inside an <a> is invalid,
+   the click lands on the anchor, and the tab stop activates the link. Asserted
+   on the row builders rather than on one sample, because every one of them
+   renders inside an anchor. */
+ok("a row's mark is flat, and the asking control is opt-in",
+   /function contestedMark\(ask\)/.test(src)
+   && /ask\s*\?\s*secHelp\(/.test(src)
+   && !/verdictSentence\([^)]*,\s*true,\s*true\)[\s\S]{0,80}class="crow/.test(src));
 
 /* NOT STRUCK, even on a NO: the strike says "no longer accurate", which is a
    verdict, and a dispute has not reached one. */
 ok("...and a contested NO is not struck through", (()=>{
   const r = assocRow("orem", 3, "x", () => ({title:"t", statusText:"disputed NO — a sealed vote is deciding"}));
-  return r.includes('vtag n">NO<') && r.includes('class="sq"') && !r.includes("<s>");
+  return r.includes('vtag n">NO<') && r.includes('class="vqm"') && !r.includes("<s>");
 })());
 
 // ---- resolution ladder ----
@@ -732,7 +748,7 @@ ok("...so a disputed row shows the oval with its mark, not a pill", (()=>{
   const r = assocRow("orem", 4, "x",
     () => ({title:"t", statusText:"disputed YES — a sealed vote is deciding"}));
   // It wears the oval THROUGH the contested path, which carries the mark with it.
-  return r.includes('class="sq"') && r.includes('vtag y">YES<');
+  return r.includes('class="vqm"') && r.includes('vtag y">YES<');
 })());
 /* sideOval is what makes the table cell possible — a column cannot go blank on
    settled rows the way a row-end can — so it must build the same oval the

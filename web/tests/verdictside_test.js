@@ -300,8 +300,12 @@ const run = async (rows, v, mode) => {
    recognised by the class that IS the control. Pinned as .sq rather than as ">?<"
    because the glyph moved into its own element when the target grew to 24px —
    an assertion keyed to the punctuation would have missed that. */
+    /* The claim page's heading is not a link, so this is the one surface that
+       gets the real control — the fourth argument opts in. Everywhere else the
+       sentence rides a flat mark, because a button inside an anchor is invalid
+       and the click never reaches it. */
     ok("...marked as contested, by a control and not a hover",
-       dn.includes('class="sq"') && dn.includes("Under dispute") && !dn.includes('class="vq"'));
+       dn.includes('class="sq"') && dn.includes("Under dispute") && !dn.includes('class="vqm"'));
     ok("...and still never struck, either way",
        !dn.includes("<s>") && !dy.includes("<s>"));
     ok("...and an unreadable side still prints no mark",
