@@ -10926,7 +10926,19 @@ on(/^\/c\/([a-z0-9-]+)\/f\/([0-9.]+)$/, async (slug,fpath)=>{
     + (fdesc? `<p class="sub">${esc(fdesc)}</p>` : "")
     + `<p class="page-sub">A folder is moderator curation with zero economic weight — the claims below are ordinary claims of this court. ${curF.source==="chain"? "Read live from the chain." : curF.source==="local"? CUR_LABEL+"." : "Read from the sample data."}${omitted? ` ${omitted} hidden or unreadable row${omitted===1?" is":"s are"} omitted.`:""}</p>`
     + (subs? `<section><h2 class="sec-h">Subfolders</h2><div class="docket">${subs}</div></section>` : "")
-    + `<section${subs?' style="margin-top:22px"':""}><h2 class="sec-h">Claims <span class="count">${(f.claims||[]).length}</span></h2>`
+    /* WHAT THIS COUNT COUNTS, when the two possible answers differ. The court
+       page's folder row shows folderCount — the whole subtree — so Fauci reads
+       "9 claims" there; this section lists only what is filed DIRECTLY in the
+       folder, which for Fauci is none. One click apart, the same word carried
+       two numbers and the reader was told 9 and then 0.
+       Both figures are right and both are wanted: the row summarises a folder,
+       the section heads a list. So when they differ the heading says which is
+       which, and when they agree it stays a bare number — a folder with no
+       subfolders should not be made to explain a distinction it does not have. */
+    + (()=>{ const direct = (f.claims||[]).length, all = folderCount(f);
+        const count = all===direct? fmtN(direct)
+          : `${fmtN(direct)} filed here · ${fmtN(all)} with its subfolders`;
+        return `<section${subs?' style="margin-top:22px"':""}><h2 class="sec-h">Claims <span class="count">${count}</span></h2>`; })()
     + fpager
     + (fwin.length? `<div class="docket">${fwin.map(cl=>docketRow(slug,cl)).join("")}</div>`
         : `<div class="empty"><div class="g">◌</div><p>No claims filed directly in this folder.</p></div>`)
