@@ -94,6 +94,16 @@ img,svg{display:block;max-width:100%}
      --scan and --ring are none/transparent here for the same reason every glow
      is: a scanline is a CRT artifact and ink does not emit light. */
   --mark:#7d5c0f; --data:#0f6b7a; --retic:#0d6b5a;
+  /* THE SAME GOLD, ON A FILLED BUTTON, WHICH IS A DIFFERENT COLOUR.
+     .btn.primary paints itself --accent, and --accent INVERTS between the
+     themes: navy under white ink here, pale lavender under near-black ink in
+     the dark. So the gold tuned for the PAGE is the wrong gold on that button
+     in both — the page's mark is 1.2:1 on lavender, which is a coin symbol
+     nobody can read. Measured rather than picked, because the symbol on the
+     Buy button is 14px semibold and WCAG counts that as body text at 4.5:
+     #e2b552 on #2e3a7d is 5.4:1, #523a06 on #9aa8ee is 4.7:1. Both are the
+     same gold family the mark comes from, one lit and one deep. */
+  --mark-btn:#e2b552;
   --rule:rgba(46,58,125,.34); --rule-2:rgba(46,58,125,.18);
   --scan:transparent; --ring:none;
   --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,"Times New Roman",serif;
@@ -137,6 +147,9 @@ img,svg{display:block;max-width:100%}
     --edge:rgba(179,190,243,.9);
     /* A lit top edge on a panel, so a card reads as a slab with light on it. */
     --mark:#d7b264; --data:#5fd3e6; --retic:#7fe3d0;
+    /* Deep, not bright, because the accent fill is the PALE one here — see the
+       measurement beside --mark-btn in :root. */
+    --mark-btn:#523a06;
     --rule:rgba(154,168,238,.30); --rule-2:rgba(154,168,238,.16);
     /* 1px of black in every 3, multiplied. Imperceptible on near-black; the
        same value on near-white is a huge visible step, which is why the light
@@ -154,7 +167,7 @@ img,svg{display:block;max-width:100%}
   --shadow-sm:0 1px 2px rgba(27,27,33,.05); --shadow:0 1px 2px rgba(27,27,33,.05), 0 10px 30px -16px rgba(27,27,33,.22);
   --glow-a:none; --glow-y:none; --glow-n:none; --glow-e:none;
   --trace:none; --edge:transparent;
-  --mark:#7d5c0f; --data:#0f6b7a; --retic:#0d6b5a;
+  --mark:#7d5c0f; --data:#0f6b7a; --retic:#0d6b5a; --mark-btn:#e2b552;
   --rule:rgba(46,58,125,.34); --rule-2:rgba(46,58,125,.18);
   --scan:transparent; --ring:none;
 }
@@ -172,7 +185,7 @@ img,svg{display:block;max-width:100%}
   --glow-e:0 0 8px rgba(215,178,100,.50), 0 0 20px rgba(215,178,100,.20);
   --trace:drop-shadow(0 0 3px rgba(95,211,230,.85)) drop-shadow(0 0 11px rgba(95,211,230,.4));
   --edge:rgba(179,190,243,.9);
-  --mark:#d7b264; --data:#5fd3e6; --retic:#7fe3d0;
+  --mark:#d7b264; --data:#5fd3e6; --retic:#7fe3d0; --mark-btn:#523a06;
   --rule:rgba(154,168,238,.30); --rule-2:rgba(154,168,238,.16);
   --scan:rgba(0,0,0,.10); --ring:drop-shadow(0 0 4px rgba(215,178,100,.85));
 }
@@ -489,6 +502,15 @@ a.card:hover{border-color:var(--line-2)}
 .kv .k{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em}
 .kv .v{font-size:16px; font-weight:600; font-variant-numeric:tabular-nums; margin-top:2px}
 .kv .v small{font-weight:500; color:var(--ink-2); font-size:12px}
+/* ONE LINE, VALUE AGAINST THE RIGHT EDGE. A .kv stacks its label over its value,
+   which is right for a tile of figures standing in a row and wrong for a single
+   fact stated above a form: "You have" took two lines and left the coin adrift
+   in the middle of the panel, level with nothing. On one line the label reads as
+   the question and the figure answers it, flush right, where the receipt below
+   also keeps its numbers. Baseline, not centre: an 11px label and a 16px figure
+   centred on each other sit on no line at all. */
+.kv.oneline{display:flex; align-items:baseline; justify-content:space-between; gap:12px}
+.kv.oneline .v{margin-top:0; text-align:right}
 
 .stat{background:transparent; border:none; border-radius:0; padding:12px 14px; box-shadow:none}
 .stat .k{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em}
@@ -720,6 +742,15 @@ a.card:hover{border-color:var(--line-2)}
 @media (prefers-reduced-motion: reduce){ .btn.busy .g{animation:none} }
 .btn.primary{background:var(--accent); border-color:var(--accent); color:var(--accent-ink)}
 .btn.primary:hover{background:var(--accent-2)}
+/* THE COIN KEEPS ITS GOLD ON THE BUTTON FACE. The Buy button names the coin the
+   same way the receipt row above it does — bar, then court — so that the thing
+   being bought looks like the thing being counted. It cannot use --mark to do
+   it: this button is filled with --accent, and the page's gold vanishes into
+   that fill (see --mark-btn). BOTH HALVES take the swap, because the bar is a
+   hairline box and a border left at --mark draws a rectangle the eye cannot
+   find around a name it can. */
+.btn.primary .ccsym{color:var(--mark-btn)}
+.btn.primary .ccsym .ccbar{border-color:var(--mark-btn)}
 .btn.yes{border-color:var(--yes); color:var(--yes)} .btn.yes:hover{background:var(--yes-wash)}
 .btn.no{border-color:var(--no); color:var(--no)} .btn.no:hover{background:var(--no-wash)}
 /* On hover only: a page of permanently glowing buttons is a slot machine. */
@@ -4323,7 +4354,15 @@ function btn(label, func, args, cls, sub, send, gate, edit, blocked, glyph, amt)
      thing on a page of flat ink and reads as a sticker somebody left on the
      button. The variation selector costs three bytes and every platform that
      has no colour glyph ignores it. */
-  const inner = `<span class="g">${glyph || (CFG.mode==="demo"?"↗":"✍\uFE0E")}</span> ${esc(label)}${sub?` <small>${esc(sub)}</small>`:""}`;
+  /* A LABEL MAY ARRIVE AS {html}, AND ONLY THEN IS IT NOT ESCAPED. Every button
+     face on this page is escaped and that stays the rule — a face is not a place
+     to trust a string. The Buy button needs the coin's gold bar on it, which is
+     markup this page generated itself: cc() → ccSymHtml, whose one variable part
+     is the slug, escaped there. So the caller declares the exception in the shape
+     of what it passes, rather than the escape being dropped for every caller —
+     anything that is not that object is escaped exactly as before. */
+  const face = label && typeof label === "object" && label.html ? label.html : esc(label);
+  const inner = `<span class="g">${glyph || (CFG.mode==="demo"?"↗":"✍\uFE0E")}</span> ${face}${sub?` <small>${esc(sub)}</small>`:""}`;
   /* The demo carries `blocked` too. It exists to show what the live page looks
      like, and a control the chain would refuse is part of that — the click
      still answers "demo data", because the inert branch is tested first, but
@@ -6313,6 +6352,15 @@ const ICN_FOLDER = `<svg class="icn" viewBox="0 0 14 12" aria-hidden="true"><pat
 /* "Open the rewards" is the one button on this page that is not about signing a
    statement, it is about collecting — so it gets the object, not the pen. */
 const ICN_CHEST = `<svg class="icn" viewBox="0 0 14 12" aria-hidden="true"><path d="M1.3 1h11.4a.6.6 0 0 1 .6.6v2.1H.7V1.6A.6.6 0 0 1 1.3 1zM.7 4.7h5.1v1.1h2.4V4.7h5.1v5.7a.6.6 0 0 1-.6.6H1.3a.6.6 0 0 1-.6-.6zM6.3 2.2h1.4v2.4H6.3z" fill="currentColor"/></svg>`;
+/* COINS, for the one button that spends GNOT. It wore the pen, which is the
+   glyph for signing a statement — and buying is not one: nothing is asserted,
+   GNOT is burned and coin is minted. Same argument as ICN_CHEST, same 14x12 box.
+   TWO SHAPES, NOT THREE COINS. A stack drawn as three filled ellipses needs a
+   gap between them, and at the 14px this renders at the gap is a third of a
+   pixel — the three merge into one blurred column. So: the top coin's face, and
+   below it the rim of the coin under it, drawn as the band between two arcs.
+   That is a stack at a size where a stack of three is a smudge. */
+const ICN_COINS = `<svg class="icn" viewBox="0 0 14 12" aria-hidden="true"><ellipse cx="7" cy="2.8" rx="5.4" ry="2.2" fill="currentColor"/><path d="M1.6 6.4A5.4 2.2 0 0 0 12.4 6.4V9.2A5.4 2.2 0 0 1 1.6 9.2Z" fill="currentColor"/></svg>`;
 /* A BIN, for the spam flag. Same 14x12 box as the rest so it sits on the text
    baseline the way ICN_CHEST and ICN_COURT do. Lid, body, two staves. */
 const ICN_BIN = `<svg class="icn" viewBox="0 0 14 12" aria-hidden="true"><path d="M5.4 0h3.2l.5.9h3.1v1.5H1.8V.9h3.1zM2.6 3.5h8.8l-.6 7.6a.9.9 0 0 1-.9.9H4.1a.9.9 0 0 1-.9-.9zM5.4 5h1.1v5H5.4zm2.7 0h1.1v5H8.1z" fill="currentColor"/></svg>`;
@@ -6463,15 +6511,15 @@ function parseGnot(v){
   return x > 9223372036854775807n? null : x;
 }
 /* TWO ROWS ABOVE THE BUTTON, FOUR BELOW IT. All six sat between the amount and
-   the Buy button — you receive, average price, dust returned, price after, voice
+   the Buy button — you get, average price, dust returned, price after, voice
    share — which put the control six rows and a tick down the panel, far enough
    that a reader arriving at ?at=join had to scroll for the thing they came for.
    What a buyer needs BEFORE pressing is how much they get. The other four are
    real disclosures and stay, under the button, where they are a receipt rather
    than a queue. `after` picks which half. */
 function buyRowsHtml(q, price, slug, after){
-  if(!q) return `<div class="line"><span class="l">You receive</span><span class="r">— <small>enter a GNOT amount, like 100 or 2.5</small></span></div>`;
-  if(q.units<=0n) return `<div class="line"><span class="l">You receive</span><span class="r">0 <small>too small to mint — the court refuses it and your GNOT never leaves</small></span></div>`;
+  if(!q) return `<div class="line"><span class="l">You get</span><span class="r">— <small>enter a GNOT amount, like 100 or 2.5</small></span></div>`;
+  if(q.units<=0n) return `<div class="line"><span class="l">You get</span><span class="r">0 <small>too small to mint — the court refuses it and your GNOT never leaves</small></span></div>`;
   const pct = q.share*100;
   if(after) return `<div class="line"><span class="l">Average price you pay</span><span class="r tnum">${q.avg.toFixed(4)} <small>µGNOT/unit</small></span></div>`
     + (q.refund>0n? `<div class="line"><span class="l">Returned to you</span><span class="r tnum">${q.refund.toLocaleString("en-US")} <small>µGNOT, sent back in the same transaction</small></span></div>` : "")
@@ -6481,7 +6529,7 @@ function buyRowsHtml(q, price, slug, after){
      a reader has no use for it: the coin amount beside it already says what they
      get, and the conversion that would make the number mean anything was itself
      cut from the price tile for being meaningless without arithmetic. */
-  return `<div class="line"><span class="l">You receive</span><span class="r tnum">${cc(Number(q.units),slug)}</span></div>`;
+  return `<div class="line"><span class="l">You get</span><span class="r tnum">${cc(Number(q.units),slug)}</span></div>`;
 }
 let BUYQ=null, BUYCTX=null;
 /* THE FORM SURVIVES A RE-RENDER, and this is a bug fix rather than a nicety.
@@ -6520,14 +6568,18 @@ function buyActionsHtml(slug, q){
      already says the coin cannot be sold back, in the reader's own words and
      with a tick beside it; five more words of shorthand under the button says
      the same thing worse. */
-  // GET, NOT BUY, in every label. Buying implies a seller and a price you could
-  // sell back at; there is neither. The GNOT is burned and the coin is minted,
-  // which is what the acknowledgement beside this button already says. The
-  // second argument stays "Buy": that is the realm entrypoint, not copy.
-  // ccText, not cc: btn() escapes its label, so the coloured span would print
-  // as literal "&lt;span class=..." on the button face. The one place the coin
-  // name is not purple, and the only alternative is unescaping a button label.
-  return btn(ok? "Get "+ccText(Number(q.units),slug) : "Get the coin", "Buy", {slug}, "primary", "", send, gate);
+  // BUY, NOT GET — the owner's call, and it replaces the argument that stood
+  // here: that "buy" implies a seller and a price you could sell back at, and
+  // there is neither. That fact has a better home than a verb. It is the
+  // acknowledgement directly above this button, in a sentence, with a tick that
+  // has to be ticked before the button will do anything.
+  // The second argument stays "Buy": that is the realm entrypoint, not copy.
+  // cc(), NOT ccText(): the coin wears the same gold bar here as in the row
+  // above, so what you press names what you were just quoted. btn() takes {html}
+  // for exactly this, and .btn.primary re-tunes the gold to the accent fill.
+  // COINS, NOT THE PEN: this button spends, it does not assert (see ICN_COINS).
+  return btn(ok? {html:"Buy "+cc(Number(q.units),slug)} : "Buy the coin",
+             "Buy", {slug}, "primary", "", send, gate, false, "", ICN_COINS);
 }
 /* ---------------- the court record (adverse disclosure) ----------------
    Outcomes only the chain can assert, published because they are the only
@@ -8959,7 +9011,7 @@ function joinPanel(slug, s){
      wait on it. Hidden until it has an answer: a row reading "—" where a balance
      should be is worse than no row. */
   return `<div class="panel" id="join" tabindex="-1"><h4>Join this court</h4>
-        <div class="kv" id="joinheld" hidden><div class="k">You have</div><div class="v tnum" id="joinheldv"></div></div>
+        <div class="kv oneline" id="joinheld" hidden><div class="k">You have</div><div class="v tnum" id="joinheldv"></div></div>
         ${body}
         <p class="small muted" style="margin:10px 0 0">The only way out is a private buyer, and there may not be one. Treat this as GNOT spent for a voice, not GNOT moved.</p>
        </div>`;
