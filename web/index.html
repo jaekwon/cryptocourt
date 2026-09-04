@@ -3724,6 +3724,12 @@ function cc(n, slug){ const {fig,micro}=ccFigure(n);
    and spends decimals instead: enough of them that a non-zero amount is never
    shown as 0.00, which is the only thing the micro prefix was protecting
    against. Two decimals where two will do, four or six where they will not. */
+/* NOT ON THE VOTE-LOCK DISCLOSURE, which keeps cc() and the court's full symbol.
+   votelock_test pins "this vote would commit N KOURT:OREM" on purpose: that modal
+   is a disclosure under the §7.4 house style, and a disclosure is the one place
+   where saying the denomination in full is worth the width. Dropping to CC there
+   would have been trading a stated contract for tidiness on a surface whose job
+   is to be explicit. */
 function ccPlain(n){
   const v = (n||0)/1e6;
   if(Math.abs(v) >= 1000) return fmtN(v)+" CC";
@@ -10110,20 +10116,8 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
     // 30-second client cache on the way back.
     isLive()? one(`ClaimAuthor(${gstr(slug)},${id})`).catch(()=>null) : null,
   ]);
-  // titles for the association rows: demo reads its dataset; live reuses the
-  // docket's own render read ONCE, and only when local curation has relations
   let assocLookup = null;
   const cu = curationFor(slug);
-  {
-    if(cu && cu.relations.length){
-      if(!isLive()) assocLookup = i => { const dd=DEMO.claims[slug+"/"+i]; return dd? {title:dd.title, statusText:statusText(dd)} : null; };
-      else try{
-        const pl = await listClaims(slug);
-        const by = Object.fromEntries(pl.map(c2=>[c2.id, {title:c2.title, statusText:c2.statusText}]));
-        assocLookup = i => by[i] || null;
-      }catch(_){ assocLookup = ()=>null; }
-    }
-  }
   if(!d){ main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:courtCrumb(slug),href:"#/c/"+slug}]) + notFound("No claim by that id."); return; }
   // opened-by: a file names who opened it — one read, claim page only
   const author = isLive()? authorRead
@@ -10188,6 +10182,30 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
   // it equals the RPC height and nothing changes; on a skewed one it is the only
   // value the series can be read against.
   const chainAssocs = await chainAssociations(slug, id);
+  /* TITLES FOR THE ASSOCIATION ROWS, and the gate on them was left behind when
+     the chain learned to store relations.
+     It read "only when local curation has relations", which was right while
+     curation was the only thing that could produce a row. It is not: covid's
+     rows come from ClaimAssociations, no local curation is loaded, so the lookup
+     stayed null and EVERY row rendered with an empty title span — a heading, a
+     caption, and two rows carrying an id and a pill with the sentence missing.
+     fillAssocTitles then repaired them one at a time, two reads per row, which
+     is both the slowest way to get titles this page has already fetched and a
+     visible window in which the section looks like it found nothing. Reported
+     as: "Where this claim sits / relations read from the chain" is empty.
+     So the gate is now "are there rows to title", from either source, and the
+     titles come off the docket read the page makes anyway. fillAssocTitles is
+     left in place for the ids that read cannot answer — one outside the docket
+     window is still a real case, and it is the only one now. */
+  const needTitles = (cu && cu.relations.length) || (Array.isArray(chainAssocs) && chainAssocs.length);
+  if(needTitles){
+    if(!isLive()) assocLookup = i => { const dd=DEMO.claims[slug+"/"+i]; return dd? {title:dd.title, statusText:statusText(dd)} : null; };
+    else try{
+      const pl = await listClaims(slug);
+      const by = Object.fromEntries(pl.map(c2=>[c2.id, {title:c2.title, statusText:c2.statusText}]));
+      assocLookup = i => by[i] || null;
+    }catch(_){ assocLookup = ()=>null; }
+  }
   const seriesH = (tline && tline.now && tline.now.h != null)? tline.now.h : nowH;
   let ser=null;
   if(isLive()){ if(seriesH!=null) ser = await fetchStakeSeries(slug, id, seriesH); }
@@ -11353,7 +11371,7 @@ function stakeBar(d, slug){
       <div class="sbY" style="width:${py.toFixed(3)}%"></div>
       <div class="sbN" style="width:${pn.toFixed(3)}%"></div>
     </div>
-    <div class="sbout"><span class="y"><b><span class="sidetag">YES</span> ${py.toFixed(1)}%</b> · ${cc(y,slug)}</span><span class="n"><b><span class="sidetag">NO</span> ${pn.toFixed(1)}%</b> · ${cc(n,slug)}</span></div>`;
+    <div class="sbout"><span class="y"><b><span class="sidetag">YES</span> ${py.toFixed(1)}%</b> · ${ccPlain(y)}</span><span class="n"><b><span class="sidetag">NO</span> ${pn.toFixed(1)}%</b> · ${ccPlain(n)}</span></div>`;
 }
 function chartChips(d, slug){
   const chips=[
@@ -11394,7 +11412,7 @@ function chartChips(d, slug){
         + " this is that coin times how long it stayed."};
     })(),
     d.round? `${d.round} failed round${d.round>1?"s":""}`:null,
-    d.disputeBondNext? `next dispute bond ${cc(d.disputeBondNext,slug)}`:null,
+    d.disputeBondNext? `next dispute bond ${ccPlain(d.disputeBondNext)}`:null,
     d.phase==="settled"? `verdict ${sideName(d.verdict!=null?d.verdict:d.answer)}${d.route?" · "+esc(d.route):""}`:null,
     d.crystallized? "rewards open":null,
   /* A CHIP MAY CARRY A TOOLTIP, and one of them has to. "conviction 3,718 /
@@ -11970,7 +11988,7 @@ function resolutionSection(slug,id,d,nowH,tl){
       The court is voting on <i>“overturn the answer?”</i> — the verdict belongs to everyone but the claim\u2019s own participants.
       <p class="small" style="margin:8px 0 0">The ballot is beside the chart, above.</p></div></div>`;
   } else if(d.phase==="provisional"){
-    const cost = d.disputeBondNext? " The next dispute bond is "+cc(d.disputeBondNext,slug)+" (it doubles each failed round).":"";
+    const cost = d.disputeBondNext? " The next dispute bond is "+ccPlain(d.disputeBondNext)+" (it doubles each failed round).":"";
     const when = d.escrowUntil? (rH==null? " Reopenable until block "+fmtN(d.escrowUntil)+"."
       : (d.escrowUntil>rH? " Reopenable until block "+fmtN(d.escrowUntil)+" (in "+wall(rH,d.escrowUntil)+")."
         : " The reopen window has closed — participants may finalize now; anyone may after a week.")):"";

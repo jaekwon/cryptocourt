@@ -72,5 +72,21 @@ ok("no call site appends the symbol to a formatter that already carries it",
 ok("the reward row uses the plain formatter",
    /Reward to open[\s\S]{0,400}ccPlain\(d\.quote\.w \+ d\.quote\.a \+ d\.quote\.ans\)/.test(src));
 
+// ---- which surfaces say the symbol, and which do not ---------------------
+/* THE SWEEP, AND ITS ONE EXCEPTION. A claim page names its court in the crumbs,
+   the heading and the URL, so the stake bar and the chip row under the chart read
+   in CC. The vote-lock modal does NOT: it is a disclosure under the §7.4 house
+   style, votelock_test pins "this vote would commit N KOURT:OREM", and a
+   disclosure is the one surface where the denomination in full is worth its
+   width. Asserted here as a PAIR so neither half can drift into the other —
+   sweeping the disclosure by accident is exactly what this catches. */
+ok("the stake bar reads in CC, once per side",
+   /sidetag">YES<\/span> \$\{py\.toFixed\(1\)\}%<\/b> · \$\{ccPlain\(y\)\}/.test(src)
+   && /sidetag">NO<\/span> \$\{pn\.toFixed\(1\)\}%<\/b> · \$\{ccPlain\(n\)\}/.test(src));
+ok("the chip under the chart reads in CC",
+   /next dispute bond \$\{ccPlain\(d\.disputeBondNext\)\}/.test(src));
+ok("the vote-lock disclosure still names the court's own symbol",
+   /this vote would commit \$\{cc\(would,slug\)\}/.test(src));
+
 console.log(fail ? "\n" + fail + " FAILURES" : "\nALL PASS");
 process.exit(fail ? 1 : 0);
