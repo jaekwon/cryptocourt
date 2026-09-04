@@ -43,7 +43,34 @@ cd "$(dirname "$0")/.."
 CTL="${TMPDIR:-/tmp}/kourt-deploy-$$"
 SSH=(ssh -o ControlMaster=auto -o ControlPath="$CTL" -o ControlPersist=60)
 SCP=(scp -q -o ControlPath="$CTL")
-trap 'ssh -o ControlPath="$CTL" -O exit "$HOST" >/dev/null 2>&1 || true' EXIT
+
+# ONE TRAP, SET ONCE, DOING EVERY PART OF THE CLEANUP.
+#
+# There were three `trap ... EXIT` lines in this script, set at three points, and
+# bash keeps only the LAST one. So this socket-closer — the one the paragraph
+# above explains at length — was silently replaced by the temp-file cleanup a
+# hundred lines below it, and the control socket was never actually closed on the
+# way out. It expired on ControlPersist=60 instead, which is why nobody noticed:
+# the stated invariant ("no live root session after a failure") was false for a
+# minute at a time and looked true.
+#
+# A function guarded on what has been set yet cannot lose a step to ordering, and
+# a new cleanup step is a line inside it rather than a fourth trap.
+cleanup() {
+	rc=$?
+	# Remote staging files FIRST, while the socket is still up. Guarded on
+	# DEPLOYID because everything before the upload has nothing to clean.
+	if [ -n "${DEPLOYID:-}" ]; then
+		"${SSH[@]}" "$HOST" \
+			"rm -f $APPDIR/*.$DEPLOYID.new $WEBROOT/*.$DEPLOYID.new /tmp/kourtchat.service.$DEPLOYID" \
+			>/dev/null 2>&1 || true
+	fi
+	[ -n "${STAMPED:-}" ] && rm -f "$STAMPED"
+	rm -f /tmp/kourtchat-linux
+	ssh -o ControlPath="$CTL" -O exit "$HOST" >/dev/null 2>&1 || true
+	return $rc
+}
+trap cleanup EXIT
 
 say() { printf '==> %s\n' "$*"; }
 
@@ -140,8 +167,7 @@ say "stamping the overlay's chain config"
 #
 # Stamped on a COPY. Editing web/index.html in place would leave the working tree
 # dirty with deployment values and put them in the next commit.
-STAMPED="$(mktemp -t kourt-index).html"
-trap 'rm -f "$STAMPED" /tmp/kourtchat-linux' EXIT
+STAMPED="$(mktemp -t kourt-index).html"   # removed by cleanup(), which sees it now
 SITE_MODE="${SITE_MODE:-live}"
 SITE_RPC="${SITE_RPC:-https://rpc.kourt.xyz}"
 SITE_CHAINID="${SITE_CHAINID:-kourt-1}"
@@ -244,54 +270,82 @@ say "uploading"
 # Alongside, then rename. Replacing a running binary in place fails ETXTBSY,
 # and a half-written index.html served to a reader is a broken page — a rename
 # within the same filesystem is atomic, so nobody sees either.
-"${SCP[@]}" /tmp/kourtchat-linux "$HOST:$APPDIR/kourtchat.new"
-"${SCP[@]}" "$STAMPED" "$HOST:$WEBROOT/index.html.new"
-"${SCP[@]}" web/chat.js "$HOST:$WEBROOT/chat.js.new"
-"${SCP[@]}" web/media.js "$HOST:$WEBROOT/media.js.new"
+#
+# AND THE STAGING NAME IS THIS DEPLOY'S ALONE. It was a fixed ".new", which is
+# safe against ONE deploy and is exactly what broke with two. The observed
+# failure, on this host: deploy A renamed kourtchat.new into place while deploy
+# B's scp still held that same path open for writing, so the file systemd then
+# exec'd was open-for-write by another process — execve returns ETXTBSY, and
+# kourtchat.service died at 203/EXEC. (It came back: Restart=on-failure, and the
+# restart counter had reached 6.) A per-deploy suffix means B's upload can never
+# be the file A renames, whatever the timing; $LOCK below stops the two from
+# interleaving their renames and restarts on top of that. Two mechanisms because
+# they answer different halves — the suffix makes the collision impossible, the
+# lock makes the sequence serial.
+# Setting DEPLOYID is also what arms cleanup()'s remote half: a deploy that dies
+# mid-flight must not leave its staging files behind for the next one to inherit.
+DEPLOYID="$(date +%s)-$$"
+NEW=".$DEPLOYID.new"
+"${SCP[@]}" /tmp/kourtchat-linux "$HOST:$APPDIR/kourtchat$NEW"
+"${SCP[@]}" "$STAMPED" "$HOST:$WEBROOT/index.html$NEW"
+"${SCP[@]}" web/chat.js "$HOST:$WEBROOT/chat.js$NEW"
+"${SCP[@]}" web/media.js "$HOST:$WEBROOT/media.js$NEW"
 # `[ ... ] && cmd` would abort the whole script under `set -e` when the test is
 # false, which is the ordinary case of a page with no card.
 if [ -n "${OGFILE:-}" ]; then
-	"${SCP[@]}" "$OGFILE" "$HOST:$WEBROOT/$(basename "$OGFILE").new"
+	"${SCP[@]}" "$OGFILE" "$HOST:$WEBROOT/$(basename "$OGFILE")$NEW"
 fi
-"${SCP[@]}" deploy/kourtchat.service "$HOST:/tmp/kourtchat.service"
+"${SCP[@]}" deploy/kourtchat.service "$HOST:/tmp/kourtchat.service.$DEPLOYID"
 
-say "installing"
+say "installing and restarting kourtchat"
+# ONE CRITICAL SECTION, UNDER ONE LOCK. Installing and restarting used to be two
+# SSH calls, which left a window a second deploy could step into between them:
+# it would rename its own binary over the one this deploy was about to start, and
+# whichever restart lost the race exec'd a file the other was still writing.
+# flock serialises the whole rename-and-restart, so a concurrent deploy waits for
+# a coherent set of files rather than interleaving with them. -w 300 rather than
+# a blocking wait: a deploy that cannot get the lock in five minutes should say
+# so and exit non-zero, not hang on a CI runner until someone kills it.
+#
+# The web files are renamed INSIDE the lock too, even though nothing execs them.
+# index.html and chat.js are a matched pair — the comment below is about their
+# order — and two deploys interleaving there would pair one deploy's page with
+# the other's panel, which is the same class of bug with a quieter failure.
 "${SSH[@]}" "$HOST" "
   set -e
-  mv $APPDIR/kourtchat.new $APPDIR/kourtchat
-  chmod 0755 $APPDIR/kourtchat
-  chown kourt:kourt $APPDIR/kourtchat
+  flock -w 300 /run/lock/kourt-deploy.lock -c '
+    set -e
+    mv $APPDIR/kourtchat$NEW $APPDIR/kourtchat
+    chmod 0755 $APPDIR/kourtchat
+    chown kourt:kourt $APPDIR/kourtchat
 
-  # chat.js before index.html: for the moment between the two renames, a reader
-  # must never get a new page pointing at an old panel. The other order is the
-  # one that breaks.
-  mv $WEBROOT/chat.js.new $WEBROOT/chat.js
-  chmod 0644 $WEBROOT/chat.js
-  mv $WEBROOT/media.js.new $WEBROOT/media.js
-  chmod 0644 $WEBROOT/media.js
-  # the link-preview card, before index.html — so the page never names a file
-  # that is not there yet
-  if [ -f $WEBROOT/og.png.new ]; then mv $WEBROOT/og.png.new $WEBROOT/og.png; chmod 0644 $WEBROOT/og.png; fi
-  mv $WEBROOT/index.html.new $WEBROOT/index.html
-  chmod 0644 $WEBROOT/index.html
+    # chat.js before index.html: for the moment between the two renames, a reader
+    # must never get a new page pointing at an old panel. The other order is the
+    # one that breaks.
+    mv $WEBROOT/chat.js$NEW $WEBROOT/chat.js
+    chmod 0644 $WEBROOT/chat.js
+    mv $WEBROOT/media.js$NEW $WEBROOT/media.js
+    chmod 0644 $WEBROOT/media.js
+    # the link-preview card, before index.html — so the page never names a file
+    # that is not there yet
+    if [ -f $WEBROOT/og.png$NEW ]; then mv $WEBROOT/og.png$NEW $WEBROOT/og.png; chmod 0644 $WEBROOT/og.png; fi
+    mv $WEBROOT/index.html$NEW $WEBROOT/index.html
+    chmod 0644 $WEBROOT/index.html
 
-  # Keep the unit in step with the repo, and reload only when it changed — a
-  # daemon-reload on every deploy hides which one actually altered the service.
-  if ! cmp -s /tmp/kourtchat.service /etc/systemd/system/kourtchat.service; then
-    mv /tmp/kourtchat.service /etc/systemd/system/kourtchat.service
-    systemctl daemon-reload
-    systemctl enable kourtchat >/dev/null 2>&1
-    echo '    unit changed'
-  fi
-  rm -f /tmp/kourtchat.service
-"
+    # Keep the unit in step with the repo, and reload only when it changed — a
+    # daemon-reload on every deploy hides which one actually altered the service.
+    if ! cmp -s /tmp/kourtchat.service.$DEPLOYID /etc/systemd/system/kourtchat.service; then
+      mv /tmp/kourtchat.service.$DEPLOYID /etc/systemd/system/kourtchat.service
+      systemctl daemon-reload
+      systemctl enable kourtchat >/dev/null 2>&1
+      echo \"    unit changed\"
+    fi
+    rm -f /tmp/kourtchat.service.$DEPLOYID
 
-say "restarting kourtchat"
-"${SSH[@]}" "$HOST" "
-  set -e
-  systemctl restart kourtchat
-  sleep 1
-  systemctl is-active --quiet kourtchat || { journalctl -u kourtchat -n 40 --no-pager; exit 1; }
+    systemctl restart kourtchat
+    sleep 1
+    systemctl is-active --quiet kourtchat || { journalctl -u kourtchat -n 40 --no-pager; exit 1; }
+  ' || { echo \"    could not take /run/lock/kourt-deploy.lock, or the install failed\" >&2; exit 1; }
 "
 
 # ------------------------------------------------------------------- verifying
