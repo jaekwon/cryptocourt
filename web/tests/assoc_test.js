@@ -39,7 +39,9 @@ code += fn('verdictSentence');
 // any existing anchor already cut.
 code += fn('sideOval');
 code += fn('rowSide');
+code += fn('yesNowText');
 code += fn('pctMeta');
+code += 'var isLive=()=>false;\n';
 code += slice('function assocRow(', '/* ======================= local curation');
 code += 'var BLOCK_SECS=' + src.match(/const BLOCK_SECS\s*=\s*(\d+)/)[1] + ';\n';
 code += slice('const MON=', 'function resolutionLadder(').replace(/^const MON=/m,'var MON=');
@@ -421,26 +423,43 @@ ok("no banned words", ![h9,h3,h5,h10,h6,h11,L1,L2,L4].some(x=>/backing|redeem\b|
    the width the previous commit gave it back. */
 ok("a policing row states the YES percentage", (()=>{
   const c = {title:"t", statusText:"settled YES — every stake withdraws 1×", inst:53.14};
-  return pctMeta(c).includes("53.1%") && pctMeta(c).includes("YES now");
+  return pctMeta("orem",1,c).includes("53.1%") && pctMeta("orem",1,c).includes("YES now");
 })());
 ok("...from the series when there is no instant figure", (()=>{
   // 47.42, not 47.05: (47.05).toFixed(1) is "47.0" — the value is not exactly
   // representable — so the round number would have tested the float, not the
   // fallback. It failed here first for that reason.
-  return pctMeta({series:[0,0,47.42]}).includes("47.4%");
+  return pctMeta("orem",1,{series:[0,0,47.42]}).includes("47.4%");
 })());
 ok("...and says nothing when there is no figure to state", (()=>{
-  return pctMeta(null) === "" && pctMeta({}) === "" && pctMeta({inst:NaN}) === "";
+  return pctMeta("orem",1,null) === "" && pctMeta("orem",1,{}) === "" && pctMeta("orem",1,{inst:NaN}) === "";
 })());
 /* AND BOTH ROWS ACTUALLY CALL IT. The three assertions above test the helper in
    isolation, which a mutant that simply deleted the call from the rows sailed
    through — the figure was correct and nothing rendered it. */
+/* THE PLACEHOLDER IS USELESS UNLESS THE FILL FINDS IT, and on a live chain the
+   figure only arrives with that fill — the record the row is built from has no
+   percentage yet. The first version of this shipped and rendered NOTHING on
+   /c/covid for exactly that reason: the row emitted a placeholder and the fill
+   still wrote to one getElementById.
+   Asserted on the source because the fill needs a chain to run. */
+ok("the async fill writes to every list holding the claim",
+   src.includes('document.querySelectorAll(`[data-pct="${slug}-${cl.id}"]`)')
+   && /\.forEach\(m => \{ m\.innerHTML = body; \}\)/.test(src));
+/* pctText WAS ALREADY TAKEN — the buy panel's part/whole formatter — and a second
+   definition in the same scope would have replaced it and taken the receipt's
+   voice share with it. Caught by counting definitions, not by any behaviour:
+   both functions "work", and the collision only shows up where the other one is
+   called. */
+ok("the YES-now formatter did not collide with the buy panel's",
+   (src.match(/function pctText\(/g)||[]).length === 1
+   && (src.match(/function yesNowText\(/g)||[]).length === 1);
 ok("both policing rows render the percentage",
-   (src.match(/\$\{pctMeta\(c\)\}/g)||[]).length === 2);
+   (src.match(/\$\{pctMeta\(slug, r\.id, c\)\}/g)||[]).length === 2);
 /* It is a meta line, not a column: the row's grid is untouched, which is what
    keeps the 484px title from the previous fix. */
 ok("...on the meta line, not in a track of its own",
-   src.includes('<span class="m" style="display:block"><b>${t.toFixed(1)}%</b> YES now</span>')
+   src.includes('data-pct="${esc(slug)}-${id}"')
    && !/\.docket a\.crow\.assocrow\{grid-template-columns:52px minmax\(0,1fr\) 64px/.test(src));
 
 /* A ROW WITH NO CHIP MUST NOT KEEP THE CHIP'S COLUMN. The court's policing rows

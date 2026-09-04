@@ -614,6 +614,9 @@ a.card:hover{border-color:var(--line-2)}
    rather than starting a line of its own. margin-top:0 because the .m above it
    has already opened the gap, and the pill's own padding would double it. */
 .docket .m.rowpill{margin-top:5px}
+/* A placeholder waiting for its read is not a line. Scoped to the attribute so
+   this cannot hide any other empty meta line. */
+.docket .m[data-pct]:empty{display:none}
 .docket .m.rowpill .pill{font-size:10px; padding:3px 6px}
 .docket a.crow .px{justify-self:end}
 .docket a.crow .pill{justify-self:end}
@@ -4090,11 +4093,27 @@ function claimSeries(d){
    So the figure rides the meta line instead of a track of its own — where the
    pill and the clock already are, and where it costs the title none of the width
    it just got back. No new read: the record is the one the docket drew from. */
-function pctMeta(c){
-  if(!c) return "";
-  const t = Number.isFinite(c.inst)? c.inst : (c.series? c.series[2] : null);
-  if(!Number.isFinite(t)) return "";
-  return `<span class="m" style="display:block"><b>${t.toFixed(1)}%</b> YES now</span>`;
+/* yesNowText, NOT pctText: that name is taken by the buy panel's part/whole
+   formatter two dozen lines up, and a second definition would have replaced it —
+   same file, same scope, last one wins. It would have taken the voice share on
+   the buy receipt with it. */
+function yesNowText(t){
+  return Number.isFinite(t)? `<b>${t.toFixed(1)}%</b> YES now` : "";
+}
+/* KEYED BY CLAIM, NOT BY ROW, because a claim is in more than one list. The
+   docket's own percentage arrives after the paint — the row renders a placeholder
+   and a later read fills it — and that fill wrote into getElementById(`spk-…`),
+   one element per claim. A second list could not be filled by it and must not
+   reuse the id: the same claim sits in the docket and in Needs review, and two
+   elements with one id is the bug that would follow.
+   So the fill targets an attribute and writes to every match. Demo records carry
+   the figure already and render it inline; a live row emits the placeholder empty
+   and the fill finds it. */
+function pctMeta(slug, id, c){
+  const t = c? (Number.isFinite(c.inst)? c.inst : (c.series? c.series[2] : null)) : null;
+  const body = yesNowText(t);
+  if(!body && !isLive()) return "";
+  return `<span class="m" style="display:block" data-pct="${esc(slug)}-${id}">${body}</span>`;
 }
 function docketSignal(ser, inst){
   if(ser) return `${sparkSvg(ser)}<b>${ser[2].toFixed(1)}%</b><small>YES now</small>`;
@@ -6478,6 +6497,15 @@ on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
         const ser = claimSeries(srow);
         if(renderSeq!==seq0) return;
         const el = document.getElementById(`spk-${slug}-${cl.id}`);
+        {
+          // The figure reaches the other lists whether or not the docket row for
+          // this claim is on the page — a court's policing lists carry claims the
+          // current docket page does not.
+          const inst0 = pctYes(srow.yesStake, srow.noStake);
+          const body = yesNowText(ser? ser[2] : inst0);
+          document.querySelectorAll(`[data-pct="${slug}-${cl.id}"]`)
+            .forEach(m => { m.innerHTML = body; });
+        }
         if(el){
           const inst = pctYes(srow.yesStake, srow.noStake);
           el.innerHTML = docketSignal(ser, inst);
@@ -9543,14 +9571,14 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
         const chip = c && !sd? statusPill(c.statusText) : "";
         return `<a class="crow assocrow${chip? "" : " nochip"}" href="#/c/${esc(slug)}/${r.id}">
         <span class="id">#${r.id}</span>
-        <span><span class="t">${c? verdictSentence(r.title, sd) : safeInline(r.title)}</span>${r.deadline!=null?`<span class="m" style="display:block">settles at block ${fmtN(r.deadline)}</span>`:""}${pctMeta(c)}</span>
+        <span><span class="t">${c? verdictSentence(r.title, sd) : safeInline(r.title)}</span>${r.deadline!=null?`<span class="m" style="display:block">settles at block ${fmtN(r.deadline)}</span>`:""}${pctMeta(slug, r.id, c)}</span>
         ${chip}</a>`; };
       const prow = r => { const c = byId[r.id];
         const sd = c? rowSide(c.statusText) : "";
         const chip = c && !sd? statusPill(c.statusText) : "";
         return `<a class="crow assocrow${chip? "" : " nochip"}" href="#/c/${esc(slug)}/${r.id}">
         <span class="id">#${r.id}</span>
-        <span><span class="t">${c? verdictSentence(r.title, sd) : safeInline(r.title)}</span>${r.seeded?`<span class="m" style="display:block">seeded by a moderator</span>`:""}${pctMeta(c)}</span>
+        <span><span class="t">${c? verdictSentence(r.title, sd) : safeInline(r.title)}</span>${r.seeded?`<span class="m" style="display:block">seeded by a moderator</span>`:""}${pctMeta(slug, r.id, c)}</span>
         ${chip}</a>`; };
       let g = "";
       if(stripQ && stripQ.rows && stripQ.rows.length){
