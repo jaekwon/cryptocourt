@@ -481,6 +481,22 @@ section{margin-top:34px}
 .sec-h{font:600 11px/1 var(--sans); letter-spacing:.14em; text-transform:uppercase; color:var(--muted); border-bottom:1px solid var(--line-2); padding-bottom:6px; margin-bottom:10px; display:flex; align-items:baseline; gap:10px;
   border-image:linear-gradient(90deg, var(--edge), var(--line-2) 22%, transparent) 1}
 .sec-h .count{font-family:var(--mono); font-size:11px; color:var(--ink-2); font-weight:500; letter-spacing:0; text-transform:none}
+/* A CONTROL IN A HEADING DOES NOT GROW THE HEADING. A .sec-h is one line of text
+   with a rule under it; a pill is half again as tall as that text, so the Search
+   heading stood 32px where every other heading stands 19 — its underline sat
+   13px further from its own word than the one above it, which is exactly the
+   "FOLDERS ____ vs SEARCH ____" mismatch that was reported. Negative block
+   margins let each control keep its own size while contributing the TEXT's
+   height to the box, so every rule on the page sits the same distance under the
+   word it belongs to. The `?` is 15px against 11px of text and was doing a
+   smaller version of the same thing. */
+.sec-h .schips,.sec-h .gchips{margin-block:-7px}
+.sec-h .sq{margin-block:-2px}
+/* AND IT STANDS OFF WHAT IS ABOVE IT like its peers. The other headings are the
+   first thing in a <section>, which carries the gap; this one is a bare div
+   between the folder list and its own filter box, so it had none at all and read
+   as part of the list above it. 22px is what the sections next to it use. */
+.sec-h.shead{margin-top:22px}
 /* A HEADING THAT ANSWERS FOR ITSELF. "Open docket" is the courthouse word and it
    is the right one — but a reader who does not already have it gets no way to
    ask, and the answer is one sentence, which is too little for the helper dialog
@@ -637,6 +653,8 @@ a.card:hover{border-color:var(--line-2)}
    rather than starting a line of its own. margin-top:0 because the .m above it
    has already opened the gap, and the pill's own padding would double it. */
 .docket .m.rowpill{margin-top:5px}
+/* Waiting for the height sweep, not an empty row of meta. */
+.docket .m[data-settle]:empty{display:none}
 .docket .m.rowpill .pill{font-size:10px; padding:3px 6px}
 .docket a.crow .px{justify-self:end}
 .docket a.crow .pill{justify-self:end}
@@ -6652,6 +6670,16 @@ on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
     const s2=gstr(slug);
     const seq0 = renderSeq; // fills die with their render — never write into a newer paint
     const nowHq = await chainHeight(); // one /status for the whole page's clocks
+    /* EVERY DEADLINE ON THE PAGE, TURNED INTO A DURATION, off that one height.
+       The policing rows carry their settle height in an attribute rather than a
+       read of their own — the render already handed it to them — so this costs
+       nothing beyond the /status above. */
+    document.querySelectorAll("[data-settle]").forEach(el => {
+      const h = Number(el.dataset.settle);
+      if(!Number.isFinite(h)) return;
+      const t = clockLine(nowHq, "proposed", h, null);
+      if(t) el.textContent = t;
+    });
     await docketSeriesPreload(s2, claims.slice(0, 60).map(cl=>cl.id));
     if(renderSeq!==seq0) return;
     inChunks(claims, 6, async cl=>{
@@ -6942,9 +6970,19 @@ function buyRowsHtml(q, price, slug, after){
      stays here: it is rebuilt with these numbers on every keystroke, which is
      what keeps the figures behind the link the same as the ones in front of it.
      The button finds it by id, so the two need not be siblings. */
+  /* THE DIALOG BODY IS A qrows, and that is load-bearing rather than decorative. A
+     label-and-value row is styled by the pair of selectors ".ticket .line" and
+     ".qrows .line", so it needs one of those two over it — and this dialog used to
+     get the first for free by sitting inside #buyrows2 while that was a .ticket. With
+     the frame gone the rows fell back to stacked inline spans; rowscope_layout is the
+     harness that noticed, which is its whole job. .qrows is the existing name for a
+     group of these rows with no ticket around them.
+     NO BACKTICK IN THE MARKUP BELOW. It is one template literal, and this note lived
+     inside it as an HTML comment for about a minute — the two backticks quoting those
+     selectors closed the literal early and took the whole page's script with them. */
   if(after) return `<dialog class="helper" id="help-buy" aria-labelledby="help-buy-h">
         <div class="hd"><h3 id="help-buy-h">What this buy costs</h3><button type="button" class="pill void" data-close>Close</button></div>
-        <div class="bd">
+        <div class="bd qrows">
           <div class="line"><span class="l">Average price you pay</span><span class="r tnum">${q.avg.toFixed(4)} <small>µGNOT/unit</small></span></div>
           ${q.refund>0n? `<div class="line"><span class="l">Returned to you</span><span class="r tnum">${q.refund.toLocaleString("en-US")} <small>µGNOT, sent back in the same transaction</small></span></div>` : ""}
           <div class="line"><span class="l">Price after this</span><span class="r tnum">${fmtN(q.priceAfter)} <small>µGNOT/unit · now ${fmtN(price)}</small></span></div>
@@ -9847,7 +9885,7 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
       + (pendN? gChip("pending","awaiting an answer", pendN, showKey==="pending") : "")
       + `</span><span id="gnote" class="small muted"></span></div>`
     : "";
-  const searchHead = `<div class="sec-h">Search <span class="count">${esc(searchCount)}</span>${dkChips? `<span class="chiplab">sort</span>${dkChips}`:""}</div>`;
+  const searchHead = `<div class="sec-h shead">Search <span class="count">${esc(searchCount)}</span>${dkChips? `<span class="chiplab">sort</span>${dkChips}`:""}</div>`;
   /* "" AT REST. searchHead, immediately above the box, already says what is in
      the list; this line said it again in the matcher's words. It fills in as
      soon as a query runs. */
@@ -9894,7 +9932,17 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
         <span class="id">#${r.id}</span>
         <span><span class="t">${c? verdictSentence(r.title, sd, rv.contested) : safeInline(r.title)}</span>${metaLine}${c && !sd? `<span class="m rowpill">${statusPill(c.statusText)}</span>` : ""}</span>
         ${px}</a>`; };
-      const srow = r => polrow(r, r.deadline!=null? `<span class="m" style="display:block">settles at block ${fmtN(r.deadline)}</span>` : "");
+      /* A DEADLINE IS A WHEN, NOT A HEIGHT. This printed the realm's own wording —
+         "settles at block 168,480" — which is the machinery rather than the
+         answer, the same thing the docket's clock lines stopped doing.
+         THE HEIGHT RIDES THE ATTRIBUTE AND THE FILL SPENDS NO READ ON IT. The
+         court page already asks the chain for its height once, for every clock
+         on the page; this row hands that sweep the deadline it was given by the
+         render, so the duration costs nothing. Demo mode has NOW at hand and
+         says it outright. */
+      const srow = r => polrow(r, r.deadline==null? ""
+        : `<span class="m" style="display:block" data-settle="${r.deadline}">${
+            isLive()? "" : esc(clockLine(NOW, "proposed", r.deadline, null))}</span>`);
       const prow = r => polrow(r, r.seeded? `<span class="m" style="display:block">seeded by a moderator</span>` : "");
       let g = "";
       if(stripQ && stripQ.rows && stripQ.rows.length){

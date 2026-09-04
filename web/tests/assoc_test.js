@@ -635,6 +635,23 @@ ok("the folder name is escaped, being moderator-supplied text", (()=>{
 })());
 
 
+/* A DEADLINE IS A WHEN. The policing rows printed the realm's own wording,
+   "settles at block 168,480" — the machinery rather than the answer, and the
+   same thing the docket's clock lines stopped doing. Reported on /c/covid.
+   THE HEIGHT RIDES AN ATTRIBUTE so the duration costs no read: the court page
+   already asks the chain for its height once for every clock on it, and the
+   render already handed this row its deadline. */
+ok("a policing row carries its deadline for the sweep, not a block number",
+   src.includes('data-settle="${r.deadline}"')
+   && !/settles at block \$\{fmtN\(r\.deadline\)\}/.test(src));
+ok("...and one sweep turns every one of them into a duration",
+   src.includes('document.querySelectorAll("[data-settle]").forEach(el => {')
+   && src.includes('const t = clockLine(nowHq, "proposed", h, null);'));
+/* The raw view MIRRORS the realm's own markdown, so it keeps the block: changing
+   it there would misreport what the chain actually emits. */
+ok("...while the raw render still quotes the chain verbatim",
+   src.includes("` — settles at block ${r.deadline}`"));
+
 /* NO SURFACE STILL SAYS "settled YES" IN A PILL. Reported after four surfaces
    had already moved: /c/covid's policing lists were still doing it, and so were
    the two sample dockets and the holdings table. They were missed one at a time
