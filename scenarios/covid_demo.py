@@ -125,6 +125,12 @@ def before_end(days):
     return (datetime.date.fromisoformat(END)
             - datetime.timedelta(days=days)).isoformat()
 EPOCH_BLOCKS = 720       # the twap bucket width, and the height a calendar step moves
+PERIOD_BLOCKS = 120_960  # one emission period = 168 buckets = the trailing window
+# The date the height crosses a whole trailing window. Claims already open by
+# then mature their trailing average on their next move; claims filed after it
+# do not, which is the realistic mix — an old claim has a trend, a new one does
+# not yet.
+TREND_AFTER = "2021-06-15"
 TWAP_BUCKETS = 3         # answerWindow / epochBlocks: distinct buckets needed to answer
 # Beside the scenario, not in web/: the web root is what deploy.sh ships, and
 # this is a local fixture the reader imports by hand.
@@ -791,9 +797,37 @@ for c in D:
     if arc == "dead":
         events.append((days(on, 91), 3, "dead", cid, c))
 
+_trend = {"done": False}
 for iso, _, kind, cid, c in sorted(events, key=lambda e: (e[0], e[1], e[3])):
     if iso > END:
         raise ValueError(f"#{cid} {c['key']}: {kind} falls at {iso}, past {END}")
+    # A WHOLE TRAILING WINDOW OF BLOCKS, ONCE, so some of this docket has a trend.
+    #
+    # twap maturity is not a count of observations, it is a count of BUCKETS
+    # ADVANCED: Ring.Observe carries `last` into every bucket it skips and stops
+    # counting at n, so `filled` reaches 168 only when 168 buckets have gone by
+    # between two observations of the SAME claim. Staking a claim ten times in a
+    # day leaves filled at 1, which is why every row on this fixture read "no
+    # trend yet" — the whole five-year narrative fits inside one window, by
+    # design, since a calendar step moves 720 blocks and the height budget is ten
+    # periods.
+    #
+    # So the height crosses one window here, early, and the claims already open
+    # mature on their next move. EARLY is the whole trick: stake history is
+    # trimmed to the last 168 epochs on a claim's next WRITE, so a claim jumped
+    # over late would lose the chart it had built, while one jumped over on its
+    # first move loses that single point and builds its chart afterwards.
+    #
+    # It costs one of the ten periods the realm allows — the cap is low because
+    # touch() walks periods one at a time and a court that runs out of gas mid
+    # touch is bricked for ever, which is the header's argument for spending
+    # height only where a gate needs it. This is such a place: without it no
+    # claim on the fixture can show what the docket's sparkline is for.
+    if not _trend["done"] and iso >= TREND_AFTER:
+        s.note("a full trailing window passes — the claims open by now will carry "
+               "a trend; the ones filed later will not, which is the honest mix")
+        s.advance_height(PERIOD_BLOCKS, why="one emission period, so twap matures")
+        _trend["done"] = True
     if iso != _at["iso"]:
         goto(iso, "positions move" if isinstance(kind, tuple) else
              {"open": "filed", "answer": "answered", "settle": "settles",
