@@ -336,11 +336,25 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
      && src.includes('<a class="hjump" href="#/c/${esc(slug)}/map?ffocus=${esc(fpath)}">${ICN_CONSTEL}map<span aria-hidden="true">→</span></a>'));
   ok("...and the paragraph it used to live in is gone",
      !src.includes('<p class="tacts" style="margin:0 0 10px"><a class="tlink" href="#/c/${esc(slug)}/map?ffocus='));
-  /* Both map links, asserted together — one convention is only a convention if
-     the surfaces that follow it are checked against each other. Pinning them
-     apart is what let them drift. */
-  ok("...and both map jumps carry the constellation, the noun and the arrow",
-     (src.match(/\$\{ICN_CONSTEL\}map<span aria-hidden="true">→<\/span>/g)||[]).length === 2);
+  /* Every map link, asserted against every other — one convention is only a
+     convention if the surfaces that follow it are checked against each other.
+     Pinning them apart is what let them drift.
+
+     AND COUNTED AS AN EQUALITY, NOT AS A NUMBER. This read `=== 2` and so only
+     ever described the two surfaces that had the icon on the day it was written.
+     The court page's row and the curate page's row carried the same jump BARE,
+     which is a third and fourth surface the assertion could not see: the two it
+     did count still numbered two, so a bare "map→" shipped green. Reported as
+     "the map→ doesn't have the map icon like other places do" on /c/covid.
+     The invariant is not "there are N of them" — it is that no link whose noun
+     is "map" is missing the mark. So the counts have to agree, whatever the
+     fifth surface turns out to be. */
+  {
+    const jumps  = (src.match(/map<span aria-hidden="true">→<\/span>/g)||[]).length;
+    const marked = (src.match(/\$\{ICN_CONSTEL\}map<span aria-hidden="true">→<\/span>/g)||[]).length;
+    ok("...and every map jump carries the constellation, the noun and the arrow",
+       jumps >= 4 && marked === jumps);
+  }
   /* The arrow is decoration, not content: the link already reads "map", so a
      screen reader announcing "map right-arrow" describes the ornament. */
   ok("...with the arrow hidden from assistive tech on both",
