@@ -497,7 +497,7 @@ func renderClaim(slug string, id uint64) string {
 		}
 		if cs.crystallized {
 			w, a, ans, carrot := cs.drawWinners, cs.drawAuthor, cs.drawAnswerer, cs.carrotPool
-			b.WriteString("- rewards crystallized — pools (" + qualifiedSymbol(c) +
+			b.WriteString("- rewards open — pools (" + qualifiedSymbol(c) +
 				"): accuracy " + strconv.FormatInt(w, 10) +
 				", author " + strconv.FormatInt(a, 10) + ", answerer " + strconv.FormatInt(ans, 10) +
 				", participation remaining " + strconv.FormatInt(carrot, 10) + "\n")

@@ -387,7 +387,7 @@ func TestTheClaimPageNumbersNameTheirCoin(cur realm, t *testing.T) {
 	cs.crystallized = true
 	cs.drawWinners, cs.drawAuthor, cs.drawAnswerer, cs.carrotPool = 11, 22, 33, 44
 	done := Render(path)
-	if !strings.Contains(done, "- rewards crystallized — pools ("+unit+"): accuracy 11") {
+	if !strings.Contains(done, "- rewards open — pools ("+unit+"): accuracy 11") {
 		t.Fatalf("the reward pools must name the coin:\n%s", done)
 	}
 	if strings.Contains(done, "CC units") {

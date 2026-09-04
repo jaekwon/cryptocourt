@@ -4692,6 +4692,20 @@ function confirmArgs(func, args, bodyKey, sendPre){
   });
 }
 
+/* The human name of each write a reader can press, for the sent-toast. Keyed by
+   the entrypoint the tx calls, valued as the thing the button said. */
+const TX_SENT = {
+  Crystallize:    "the reward draw",
+  WithdrawStake:  "your withdrawal",
+  WithdrawBonus:  "your accuracy reward",
+  AuthorBonus:    "the author bonus",
+  AnswererBonus:  "the answerer bonus",
+  PullCarrot:     "your voter reward",
+  OpenDispute:    "your dispute",
+  CastVote:       "your vote",
+  Stake:          "your stake",
+  Answer:         "your answer",
+};
 async function adenaSign(func, args, el){
   const a = window.adena;
   if(!a){ adenaAbsent(); return; }
@@ -4938,9 +4952,20 @@ async function adenaSign(func, args, el){
          would promise something the chain has not agreed to yet. It says the
          thing that IS certain, and points at where the truth will appear. */
       const hash = String(res.data && res.data.hash || "");
+      /* WHAT THE READER PRESSED, NOT WHAT THE CHAIN CALLS IT. This printed the
+         raw entrypoint name, so pressing "Open the rewards" answered
+         "Sent. Crystallize is on its way." — a word that appears nowhere else on
+         the site, in a sentence about a button that does not carry it. Every
+         name in this table is one a reader can actually have pressed on a claim
+         page; anything unmapped still falls back to the function name, which is
+         better than a blank, and is a bug to be reported the same way this one
+         was rather than hidden behind a generic "Sent."
+         THE FUNCTION NAME ITSELF IS NOT RENAMED. Crystallize is the realm's
+         entrypoint and the tx has to call it; what changes is only what the page
+         says out loud. */
       const base = func === "Buy"
         ? "Sent. The coin is on its way — this panel will show what you hold."
-        : "Sent. " + func + " is on its way.";
+        : "Sent. " + (TX_SENT[func] || func) + " is on its way.";
       note(base + " Updating in 7s…", true, hash? "tx "+hash : "");
       /* THE DRAFT CLEARS ONLY HERE. A rejected signature, a wallet on the wrong
          chain, a closed prompt — every one of those must leave the work exactly
@@ -11503,7 +11528,22 @@ function stakeTicket(slug,id,d){
              The slice sizes come from DrawSlices, already in hand: the author's
              and the answerer's are the WHOLE slice and can be stated exactly;
              the accuracy and voter pools are shared, so those name the pool. */
-          ? `<span data-pull="winner" data-pool="${(d.draw&&d.draw.w)||0}">`
+          /* THE FIGURE DOES NOT VANISH WHEN THE DRAW OPENS. Before opening, this
+             ticket states what the claim has earned; after opening it showed the
+             pull buttons and no total at all, so the number a reader had just
+             been looking at disappeared at the moment they acted on it.
+             "drawn", NOT "unclaimed", and that is a limit of what the chain
+             publishes rather than a choice of wording: drawWinners, drawAuthor
+             and drawAnswerer are set once at the draw and never decremented —
+             who has pulled is a per-position flag, and PullState answers for ONE
+             address — so no global "still unclaimed" figure exists to print. The
+             carrot pool is the only one that decrements. What is true, and what
+             the reader saw a moment ago, is the size of the draw. */
+          ? `<div class="line"><span class="l">Rewards drawn</span><span class="r tnum">`
+              + ccPlain(((d.draw&&d.draw.w)||0) + ((d.draw&&d.draw.a)||0)
+                        + ((d.draw&&d.draw.ans)||0))
+              + `</span></div>`
+            + `<span data-pull="winner" data-pool="${(d.draw&&d.draw.w)||0}">`
               + btn("Pull accuracy reward","WithdrawBonus",{courtSlug:slug,claimID:id,side:v}) + `</span>`
             +`<span data-pull="author" data-pool="${(d.draw&&d.draw.a)||0}">`
               + btn("Pull author bonus","AuthorBonus",{courtSlug:slug,claimID:id}) + `</span>`

@@ -10371,8 +10371,8 @@
   "pkg": "kourtv2",
   "file": "render.gno",
   "label": "v0.58 units: claim: the reward pools revert to a generic CC",
-  "find": "\t\t\tb.WriteString(\"- rewards crystallized \u2014 pools (\" + qualifiedSymbol(c) +\n\t\t\t\t\"): accuracy \" + strconv.FormatInt(w, 10) +",
-  "replace": "\t\t\tb.WriteString(\"- rewards crystallized \u2014 pools (CC units): accuracy \" + strconv.FormatInt(w, 10) +"
+  "find": "\t\t\tb.WriteString(\"- rewards open \u2014 pools (\" + qualifiedSymbol(c) +\n\t\t\t\t\"): accuracy \" + strconv.FormatInt(w, 10) +",
+  "replace": "\t\t\tb.WriteString(\"- rewards open \u2014 pools (CC units): accuracy \" + strconv.FormatInt(w, 10) +"
  },
  {
   "pkg": "kourtv2",
