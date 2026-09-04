@@ -29,6 +29,7 @@ code += slice('function phaseClass(', 'function docketRow');
 code += "var store={get:k=>{try{return localStorage.getItem(k)}catch(_){return null}},set:()=>{},del:()=>{}};\n";
 code += "const demoCourt = slug => Object.hasOwn(DEMO.courts, slug)? DEMO.courts[slug] : null;\n";
 code += slice('const CURATION_V', '/* ======').replace('const CURATION_V','var CURATION_V');
+code += 'const ICN_FOLDER="<svg/>";\n';   // stubbed as folders_test does: the row needs the mark to exist, not to be drawn
 code += slice('function assocRow(', '/* ======================= local curation');
 code += 'var BLOCK_SECS=' + src.match(/const BLOCK_SECS\s*=\s*(\d+)/)[1] + ';\n';
 code += slice('const MON=', 'function resolutionLadder(').replace(/^const MON=/m,'var MON=');
@@ -382,6 +383,53 @@ ok("...and the lookup is built after the chain read it depends on",
    src.indexOf("const chainAssocs = await chainAssociations") < src.indexOf("const needTitles ="));
 ok("...with the repair pass kept for ids the docket read cannot answer",
    src.includes("fillAssocTitles(slug);"));
+
+
+/* WHERE THIS CLAIM SITS INCLUDES THE SHELF IT IS ON. Asked as: "where this
+   claim sits... should show its parent folder?" It did not, and on a chain court
+   nothing else on the page did either — the "filed under" chip beside the title
+   is built from curation, so a court read live from the chain has none.
+   Kept as its own row rather than folded into "Part of": COURTS_STRUCTURE.md §5
+   names two edges that must not be merged, containment between claims and the
+   argument graph, and a folder is neither — it is moderator filing with no
+   economic weight. */
+ok("a folder alone renders the section", (()=>{
+  const h = associationSection("covid", 11, null, null, [{fid:4, name:"Proximal Origin"}]);
+  return h.includes(">Filed in<") && h.includes("Proximal Origin")
+      && h.includes('href="#/c/covid/f/4"');
+})());
+ok("...and is captioned as filing, not as relations the chain does not store", (()=>{
+  const h = associationSection("covid", 11, null, null, [{fid:4, name:"Proximal Origin"}]);
+  // The caption goes through esc(), so the apostrophe arrives as &#39; — match
+  // either form rather than pinning the entity, which is an encoding detail.
+  return /filed by this court(&#39;|')s moderators/.test(h)
+      && !h.includes("the chain stores no relations");
+})());
+ok("...and sits above the claim rows, being the coarser fact", (()=>{
+  const h = associationSection("covid", 11, null, [[18,"supported by this"]],
+                               [{fid:4, name:"Proximal Origin"}]);
+  return h.indexOf(">Filed in<") < h.indexOf(">Related<");
+})());
+ok("a cross-filed claim lists every folder it is in", (()=>{
+  const h = associationSection("covid", 11, null, null,
+    [{fid:4, name:"Proximal Origin"}, {fid:1, name:"Origins"}]);
+  return (h.match(/class="crow assocrow"/g)||[]).length === 2;
+})());
+ok("no folder, no row — and no section when there is nothing else either", (()=>{
+  return associationSection("covid", 11, null, null, []) === ""
+      && associationSection("covid", 11, null, null, null) === "";
+})());
+ok("a folder with no readable name is not rendered as a blank shelf", (()=>{
+  return associationSection("covid", 11, null, null, [{fid:4, name:""}]) === "";
+})());
+/* A source match would not have held this: the same safeInline(f.name) call
+   appears in folderRowHtml too, so grepping for it passes even if THIS row
+   drops it. Rendered and inspected instead. */
+ok("the folder name is escaped, being moderator-supplied text", (()=>{
+  const h = associationSection("covid", 11, null, null,
+    [{fid:4, name:'<img src=x onerror=alert(1)>Origins'}]);
+  return !h.includes("<img src=x") && h.includes("Origins");
+})());
 
 console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");
 process.exit(fail?1:0);

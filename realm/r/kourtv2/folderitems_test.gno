@@ -115,3 +115,103 @@ func TestMovingAClaimThatIsNotInTheFolderIsRefused(cur realm, t *testing.T) {
 		t.Fatalf("a member must move, got %v", got)
 	}
 }
+
+// THE REVERSE READ, and the three things it must not get wrong.
+//
+// ClaimFolders exists so a claim page can say where the claim sits without
+// walking the court. The forward read is FolderItems; this asserts they agree,
+// and then asserts the two cases where agreeing would be wrong.
+func TestClaimFoldersAnswersTheReverseOfFolderItems(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("cf-alice")
+	testCourt(cur, "cf", alice, 10_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "cf", "filed somewhere")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	other := OpenClaim(cross(cur), "cf", "filed nowhere")
+
+	// Nothing filed yet: an empty answer, not a panic and not a nil surprise.
+	uassert.Equal(t, 0, len(ClaimFolders("cf", id)))
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	f1 := CreateFolder(cross(cur), "cf", "First", "")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	f2 := CreateFolder(cross(cur), "cf", "Second", "")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	AddToFolder(cross(cur), "cf", f1, id)
+
+	got := ClaimFolders("cf", id)
+	if len(got) != 1 || got[0] != f1 {
+		t.Fatal("a filed claim must name the folder it is filed in")
+	}
+	// And the claim nobody filed still says so, on the same court, with folders
+	// that exist — the case a "return every folder" bug would pass the first
+	// assertion and fail here.
+	uassert.Equal(t, 0, len(ClaimFolders("cf", other)))
+
+	// A CLAIM MAY SIT IN TWO FOLDERS, which is the whole reason this returns a
+	// list. AddToFolder checks membership within ONE folder, so cross-filing is
+	// allowed by design and a reverse read that stopped at the first match would
+	// quietly pick one.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	AddToFolder(cross(cur), "cf", f2, id)
+	got = ClaimFolders("cf", id)
+	if len(got) != 2 || got[0] != f1 || got[1] != f2 {
+		t.Fatal("a cross-filed claim must name both folders, in the tree's order")
+	}
+}
+
+// A PURGED FOLDER IS NOT AN ANSWER. PurgeFolder blanks the name and the picture
+// and deliberately leaves the item list — TestFolderPurgeMofN pins exactly that
+// — so the forward read still reports the claim. The reverse read must not,
+// because it is used to LINK: naming a purged folder sends a reader to a
+// tombstone and republishes the association the purge severed.
+func TestClaimFoldersSkipsAPurgedFolder(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("cfp-alice")
+	g2 := testutils.TestAddress("cfp-g2")
+	testCourt(cur, "cfp", alice, 10_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "cfp", "in a folder about to go")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	keep := CreateFolder(cross(cur), "cfp", "Kept", "")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	doomed := CreateFolder(cross(cur), "cfp", "Defamatory Name", "")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	AddToFolder(cross(cur), "cfp", keep, id)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	AddToFolder(cross(cur), "cfp", doomed, id)
+	uassert.Equal(t, 2, len(ClaimFolders("cfp", id)))
+
+	dadmin := DirectoryAdmin()
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	AddGlobalMod(cross(cur), g2)
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	SetPurgeThreshold(cross(cur), 2)
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	PurgeFolder(cross(cur), "cfp", doomed, "DEFAMATION")
+	testing.SetRealm(testing.NewUserRealm(g2))
+	PurgeFolder(cross(cur), "cfp", doomed, "DEFAMATION")
+	if !FolderPurged("cfp", doomed) {
+		t.Fatal("fixture: the folder should be purged by now")
+	}
+
+	// The forward read still holds the claim — that is the documented shape.
+	if got := FolderItems("cfp", doomed); len(got) != 1 {
+		t.Fatal("fixture: purge tombstones text, not the claim-ID list")
+	}
+	// The reverse read must not offer it.
+	got := ClaimFolders("cfp", id)
+	if len(got) != 1 || got[0] != keep {
+		t.Fatal("a purged folder must not be named as where a claim sits")
+	}
+}
+
+// A court that has never been moderated has no folder store at all. The other
+// folder reads panic or return zero on it; this one answers "nowhere", which is
+// the truthful answer and the one a claim page can render without a branch.
+func TestClaimFoldersOnAnUnmoderatedCourt(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("cfu-alice")
+	testCourt(cur, "cfu", alice, 10_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "cfu", "no folders anywhere")
+	uassert.Equal(t, 0, len(ClaimFolders("cfu", id)))
+}

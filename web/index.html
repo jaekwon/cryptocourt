@@ -2514,6 +2514,20 @@ function parseTyped(out){
 }
 const one = async expr => parseTyped(await qeval(expr))[0];
 const tup = async expr => parseTyped(await qeval(expr));
+/* A []uint64 COMES BACK AS ONE LINE, not as a list. parseTyped splits on
+   newlines and matches `(value type)`, and a slice answers
+   `(slice[(7 uint64),(11 uint64)] []uint64)` — one line whose value is not a
+   number, so it falls through to being returned as a string. Every caller
+   therefore has to dig the elements out, and this is where that is done once.
+   PER-ELEMENT TOKENS FIRST, bare digits only as a fallback: the type name is
+   full of digits itself, so a naive \d+ over the whole line reads the 64 of
+   "uint64" as an id. The fallback strips the type before it counts, and exists
+   for a node that answers in the barer shape rather than as an optimisation. */
+function uint64List(raw){
+  const s = String(raw==null? "" : raw);
+  const el = [...s.matchAll(/\((\d+)\s+uint64\)/g)].map(m=>Number(m[1]));
+  return el.length? el : ((s.replace(/\[\]uint64|uint64/g,"").match(/\d+/g)||[]).map(Number));
+}
 const gstr = s => JSON.stringify(String(s));   // gno string literal
 
 /* ======================== the comment board's wire ======================= */
@@ -7477,11 +7491,7 @@ async function chainFolders(slug){
         one(`FolderName(${s2},${fid})`),
         tup(`FolderItems(${s2},${fid})`).then(t=>t[0]),
         sh0 && sh0.hasImage ? one(`FolderImage(${s2},${fid})`).then(unesc).catch(()=>null) : null]);
-      // ids: prefer per-element "(N uint64)" tokens (their 64s must not leak);
-      // fall back to bare digits with any type token stripped first
-      const rawS = String(itemsRaw);
-      const el = [...rawS.matchAll(/\((\d+)\s+uint64\)/g)].map(m2=>Number(m2[1]));
-      const ids = el.length? el : ((rawS.replace(/\[\]uint64|uint64/g,"").match(/\d+/g)||[]).map(Number));
+      const ids = uint64List(itemsRaw);
       const sh = shape.get(fid);
       // ARCHIVE-ONLY, like a claim node's thumbnail and for the same reason
       // (media.js mediaSrc): a map draw is fifty boxes at once, and a
@@ -10252,6 +10262,26 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
   // it equals the RPC height and nothing changes; on a skewed one it is the only
   // value the series can be read against.
   const chainAssocs = await chainAssociations(slug, id);
+  /* WHICH SHELF THIS CLAIM IS ON, in one read plus a name. ClaimFolders is the
+     realm's reverse of FolderItems, added for this: without it the only way to
+     answer was to walk the court — FolderCount, FolderTree, then a name and an
+     item list per folder, fourteen round trips on a six-folder court to print
+     one name — which is why the claim page never told a reader the folder at
+     all on a chain court.
+     The names are a read each because they are user text, the same reason
+     chainFolders fetches them per folder rather than in the tree; a claim sits
+     in one folder almost always, so this is two reads in practice.
+     Fails soft in both halves: a realm without ClaimFolders answers nothing and
+     the row is absent, which is exactly the page's behaviour before it existed. */
+  let claimFolders = [];
+  if(isLive()){
+    const s3 = gstr(slug);
+    const fids = uint64List(await tup(`ClaimFolders(${s3},${id})`).then(t=>t[0]).catch(()=>""));
+    claimFolders = (await Promise.all(fids.slice(0,6).map(async fid => {
+      const nm = await one(`FolderName(${s3},${fid})`).then(unesc).catch(()=>"");
+      return nm? {fid, name:nm} : null;
+    }))).filter(Boolean);
+  }
   /* TITLES FOR THE ASSOCIATION ROWS, and the gate on them was left behind when
      the chain learned to store relations.
      It read "only when local curation has relations", which was right while
@@ -10346,7 +10376,7 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
       })()
     + resolutionSection(slug,id,d,nowH,tline)
     + rewardsSection(slug,id,d)
-    + associationSection(slug,id,assocLookup,chainAssocs)
+    + associationSection(slug,id,assocLookup,chainAssocs,claimFolders)
     + `<section id="claimcomments"></section>`;
   // Unconditional: the board is the one action on this page that needs no
   // address, and the sample answers it offline like everything else here.

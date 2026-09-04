@@ -538,6 +538,47 @@ func FolderItems(courtSlug string, folderID uint64) []uint64 {
 	return out
 }
 
+// ClaimFolders is FolderItems read backwards: which folders is this claim filed
+// in. A claim page needs it to answer the question its own heading asks — where
+// this claim sits — and until it existed the only answer was to walk every
+// folder in the court, which is FolderCount + FolderTree + a name and an item
+// list per folder. Fourteen round trips on a six-folder court, to print one
+// name. The overlay declined to pay that, so a claim on a chain court said
+// nothing at all about its folder while a curated one said "filed under X".
+//
+// PURGED FOLDERS ARE SKIPPED, and that is not tidiness. PurgeFolder blanks the
+// name and the picture but deliberately leaves the item list alone — retiring is
+// what un-files claims — so a purged folder still knows which claims it held.
+// Answering with it would send a reader to a tombstone with no name on it, and
+// would republish the association a purge exists to sever.
+//
+// Retired folders need no such guard: RetireFolder clears the item list, so they
+// cannot match. Said rather than assumed, because the two verbs are one word
+// apart and only one of them empties the folder.
+//
+// Order is the tree's own — folderRows, the curator's ordering — so a claim in
+// two folders lists them the way the court lists them, not the way the avl tree
+// happens to key them.
+func ClaimFolders(courtSlug string, claimID uint64) []uint64 {
+	c := mustCourt(courtSlug)
+	if c.mod == nil {
+		return nil
+	}
+	var out []uint64
+	for _, f := range c.mod.folderRows() {
+		if f.purged {
+			continue
+		}
+		for _, it := range f.items {
+			if it == claimID {
+				out = append(out, f.id)
+				break
+			}
+		}
+	}
+	return out
+}
+
 // RetireFolder strikes a folder from the tree. The gap this fills is small and
 // real: a folder created by mistake could not be got rid of at all — PurgeFolder
 // is the global DAO's m-of-n act carrying a statutory category code, for illegal
