@@ -7082,35 +7082,32 @@ function associationSection(slug, id, lookup, chainRows, folders){
   });
   const settledN = children.filter(i=>{ const d=dOf(i); return d && phaseClass(d.statusText).short==="settled"; }).length;
   const undecided = children.length - settledN;
-  // NOT "The argument". COURTS_STRUCTURE.md §5 names two kinds of edge and says
-  // they must not be merged: containment (a tree, at most one parent, no stance)
-  // and argument (a graph on top of it, any number, supports/counters). This
-  // section renders BOTH, so heading it with the name of one axis labelled half
-  // its own contents — and a reader asked what it meant, which is the evidence.
-  // THE CAPTION HAD TO CHANGE, because it asserted something that stopped being
-  // true: "the chain stores no relations". It stores associations now. What it
-  // still does not store is containment and supersedes, so the caption names the
-  // source that actually applies rather than one blanket disclaimer.
-  /* IT SITS IN THE SLOT A COUNT NORMALLY SITS IN, so it has to read as a caption
-     and not as a definition of the heading. "Where this claim sits · the chain's
-     own record" was two noun phrases with nothing joining them, and the owner
-     read it as confusing. Every branch now names the thing being sourced. */
-  /* THE CAPTION NAMES EVERYTHING UNDER IT, and it used to branch on the
-     relations alone. So a claim with a folder AND relations — which is most of
-     them — was captioned "relations read from the chain" with a FOLDER as the
-     first row beneath it. Read back as: the heading says relations, and then it
-     shows a filing.
-     Composed from the groups actually rendered, in the order they appear, so
-     the caption cannot promise one thing and be followed by another. */
+  /* WHAT SOURCED THE CLAIM ROWS, in the slot a count normally sits in, so it
+     reads as a caption rather than as a definition of the heading.
+     It says "the chain stores no relations" only when that is the live answer:
+     the chain stores associations now, and what it still does not store is
+     containment and supersedes, so the note names the source that applies
+     instead of one blanket disclaimer. */
   const claimRows = !!parent || children.length > 0 || rel.length > 0;
-  const notes = [];
-  if(fold.length) notes.push("filed by this court's moderators");
-  if(claimRows) notes.push(chain.length
+  const relNote = chain.length
     ? (mine.some(r=>r.type!=="bears")
         ? "relations read from the chain; containment and supersedes are curation"
         : "relations read from the chain")
-    : (cur && cur.source==="local"? CUR_LABEL : "sample curation — the chain stores no relations"));
-  const srcNote = notes.join("; ");
+    : (cur && cur.source==="local"? CUR_LABEL : "sample curation — the chain stores no relations");
+  /* SPENT ON THE FIRST GROUP THAT NEEDS IT, once. It describes the claim rows,
+     and repeating it over "Part of", "Rests on" and "Related" would be the same
+     redundancy this section keeps growing back in a new place. */
+  let relLeft = claimRows;
+  const relCount = () => { if(!relLeft) return ""; relLeft = false; return esc(relNote); };
+  /* ONE BUILDER FOR EVERY HEADING HERE, so a group cannot drift from its
+     neighbours on spacing or on whether its note is wrapped in a .count. */
+  let emitted = false;
+  const head = (label, count) => {
+    const mt = emitted? 14 : 0;
+    emitted = true;
+    return `<div class="sec-h" style="margin-top:${mt}px">${label}`
+      + (count? ` <span class="count">${count}</span>` : "") + `</div>`;
+  };
   /* NOTHING TO SHOW MEANS NOTHING RENDERED. With no parent, no parts and no
      related claims — which is most claims — this printed a heading, a caption
      asserting that relations HAD been read from the chain, and a paragraph
@@ -7119,7 +7116,17 @@ function associationSection(slug, id, lookup, chainRows, folders){
      caption was the worst of them: it read as a claim that something was found.
      The absence of relations is unremarkable and needs no announcement. */
   if(!parent && !children.length && !rel.length && !fold.length) return "";
-  let g = `<section style="margin-top:22px"><div class="sec-h">Where this claim sits <span class="count">${esc(srcNote)}</span></div>`;
+  /* NO SECTION HEADING. It was "Where this claim sits", and it sat above the
+     group headings with nothing of its own underneath — a title, a caption, and
+     then immediately "Filed in". Reported as an empty redundant thing, and as
+     verbose besides.
+     The groups already name themselves better than a heading over them could:
+     "Filed in", "Part of", "Rests on", "Related" are each the answer to where
+     this claim sits, in fewer words and about the rows directly beneath. The
+     provenance note moves onto the group it describes rather than trying to
+     caption all of them at once, which is what made it contradict the first row
+     it sat above. */
+  let g = `<section style="margin-top:22px">`;
   /* FIRST, because it is the coarsest thing true of the claim: which shelf a
      moderator put it on. The rows below it are about other claims; this one is
      about the court's own arrangement, and a reader scanning for "where am I"
@@ -7127,7 +7134,7 @@ function associationSection(slug, id, lookup, chainRows, folders){
      One row per folder — a claim may be cross-filed, AddToFolder checks
      membership within one folder only — and each links to the folder page. */
   if(fold.length){
-    g += `<div class="sec-h" style="margin-top:6px">Filed in</div><div class="docket">`
+    g += head("Filed in", esc("filed by this court's moderators")) + `<div class="docket">`
       /* NO CHIP. Every other group here pairs its heading with one, and there
          the chip earns its place by varying — "supports", "one part",
          "superseded by this" — so it says something the heading cannot. A
@@ -7157,16 +7164,16 @@ function associationSection(slug, id, lookup, chainRows, folders){
   // parent — so the only parent it can render genuinely IS the top, and the label
   // looked right for the one case the fixture is able to show.
   if(parent){
-    g += `<div class="sec-h" style="margin-top:6px">Part of</div>`
+    g += head("Part of", relCount())
       + `<div class="docket">${assocRow(slug, parent.to, "contains this", lookup)}</div>`;
   }
   if(children.length){
-    g += `<div class="sec-h" style="margin-top:${parent?14:6}px">Rests on <span class="count">${settledN} of ${children.length} part${children.length===1?"":"s"} settled</span></div>`
+    g += head("Rests on", [`${settledN} of ${children.length} part${children.length===1?"":"s"} settled`, relCount()].filter(Boolean).join(" · "))
       + (undecided? `<p class="small muted" style="margin:0 0 8px">${undecided} of ${children.length} parts are still undecided — any verdict here is reached without them.</p>`:"")
       + `<div class="docket">${children.map(i=>assocRow(slug,i,"one part",lookup)).join("")}</div>`;
   }
   if(rel.length){
-    g += `<div class="sec-h" style="margin-top:${children.length||parent?14:6}px">Related</div>`
+    g += head("Related", relCount())
       + `<div class="docket">${rel.map(([i,c])=>assocRow(slug,i,c,lookup)).join("")}</div>`;
   }
   g += `<p class="small muted" style="margin:10px 0 0">Curation, not mechanics: relations move no stake, no bond, no bar, no verdict — each claim is decided alone. They are here so you need not leave the page you vote on to find the argument.</p></section>`;

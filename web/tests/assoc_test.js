@@ -42,6 +42,15 @@ code += slice('function demoCensus(', 'function courtRecordPanel');
 code += slice('function folderCount(', 'function folderMeta');
 eval(code);
 
+
+/* A GROUP HEADING, WITH OR WITHOUT ITS NOTE. These were pinned as ">Part of<",
+   which stopped matching the moment a heading could carry a count beside its
+   label. The label is what matters; whether a note rides with it is the other
+   assertions' business. */
+const headAt = (h, label) => h.indexOf(`>${label}</div>`) >= 0
+  ? h.indexOf(`>${label}</div>`) : h.indexOf(`>${label} <span class="count">`);
+const hasHead = (h, label) => headAt(h, label) >= 0;
+
 let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else console.log("ok:",n); };
 
 // ---- data ripples ----
@@ -58,7 +67,8 @@ ok("one parent max per claim", (()=>{ const p={}; for(const r of DEMO.relations.
 // ---- association section: #9 the parent ----
 const demoLookup = i => { const dd=DEMO.claims["orem/"+i]; return dd? {title:dd.title, statusText:statusText(dd)} : null; };
 const h9 = associationSection("orem", 9, demoLookup);
-ok("#9: section renders", h9.includes("Where this claim sits"));
+// The section no longer wears a title of its own — the group headings are it.
+ok("#9: section renders", hasHead(h9, "Related") || hasHead(h9, "Part of") || hasHead(h9, "Rests on"));
 // The heading must not name ONE of the two axes it renders — COURTS_STRUCTURE
 // §5 keeps containment and association separate, and the old head merged them.
 ok("#9: heading names neither axis alone", !h9.includes("The argument"));
@@ -87,7 +97,7 @@ ok("...and its section is empty, not a heading over nothing",
    associationSection("orem", noRelId, demoLookup) === "");
 ok("...also with an empty chain answer rather than none",
    associationSection("orem", noRelId, demoLookup, []) === "");
-ok("...and a claim that HAS relations still renders", h9.includes("Where this claim sits"));
+ok("...and a claim that HAS relations still renders", hasHead(h9, "Related") || hasHead(h9, "Part of"));
 // The id-only fallback: a related claim outside the loaded window is marked for
 // the filler rather than explained in terms of this page's pagination.
 ok("a title the window lacks is marked for fetching, not narrated",
@@ -105,13 +115,13 @@ const h3 = associationSection("orem", 3, demoLookup);
 // The parent is a ROW like every other relation, on the containment axis with
 // "Rests on" rather than in the association graph under "Related". It was a bare
 // paragraph: no chip, and no status pill on the whole it is a part of.
-ok("#3: Part of subsection", h3.includes(">Part of<"));
+ok("#3: Part of subsection", hasHead(h3, "Part of"));
 // "the whole" asserted the parent was the top of the tree. Containment is a
 // tree and the design runs three levels, so a parent is usually a part too.
 ok("#3: parent is a row, chipped by its relation", /assocrow[^]*?#\/c\/orem\/9/.test(h3) && h3.includes(">contains this<"));
 ok("#3: chip does not claim to be the top of the tree", !h3.includes(">the whole<"));
-ok("#3: parent row carries the whole's status", h3.slice(h3.indexOf(">Part of<")).slice(0,700).includes("pill"));
-ok("#3: parent is NOT filed under Related", h3.indexOf(">Part of<") < (h3.includes(">Related<")? h3.indexOf(">Related<") : Infinity));
+ok("#3: parent row carries the whole's status", h3.slice(headAt(h3, "Part of")).slice(0,700).includes("pill"));
+ok("#3: parent is NOT filed under Related", headAt(h3, "Part of") < (hasHead(h3, "Related")? headAt(h3, "Related") : Infinity));
 ok("#3: #11 contradicts", h3.includes(">contradicts<") && h3.includes("#/c/orem/11"));
 ok("#3: no rests-on subsection", !h3.includes("Rests on"));
 
@@ -407,7 +417,7 @@ ok("...with the repair pass kept for ids the docket read cannot answer",
    economic weight. */
 ok("a folder alone renders the section", (()=>{
   const h = associationSection("covid", 11, null, null, [{fid:4, name:"Proximal Origin"}]);
-  return h.includes(">Filed in<") && h.includes("Proximal Origin")
+  return hasHead(h, "Filed in") && h.includes("Proximal Origin")
       && h.includes('href="#/c/covid/f/4"');
 })());
 ok("...and is captioned as filing, not as relations the chain does not store", (()=>{
@@ -417,18 +427,54 @@ ok("...and is captioned as filing, not as relations the chain does not store", (
   return /filed by this court(&#39;|')s moderators/.test(h)
       && !h.includes("the chain stores no relations");
 })());
-/* THE CAPTION COVERS BOTH GROUPS WHEN THERE ARE BOTH. It branched on relations
-   alone, so covid/18 — a folder and two relations — read "Where this claim sits
-   · relations read from the chain" with "Filed in / Proximal Origin" directly
-   under it. Reported as redundant, and it was worse than redundant: the caption
-   named one kind of thing and the first row was the other. */
-ok("a claim with both is captioned for both, filing first", (()=>{
+/* EACH NOTE RIDES THE GROUP IT DESCRIBES. There used to be one caption over
+   everything, on a "Where this claim sits" heading that had nothing of its own
+   beneath it — a title, a caption, then immediately "Filed in". Reported as an
+   empty redundant thing, and as verbose.
+   Splitting the note is what removes the contradiction rather than papering
+   over it: the folder note cannot sit above a relations row, because it is
+   attached to the folder row's own heading. */
+ok("the folder note rides Filed in, not a heading above everything", (()=>{
   const h = associationSection("covid", 18, null, [[11,"supports"]],
                                [{fid:4, name:"Proximal Origin"}]);
-  const cap = (h.match(/<span class="count">(.*?)<\/span>/)||[])[1] || "";
-  return /filed by this court(&#39;|')s moderators/.test(cap)
-      && /relations read from the chain/.test(cap)
-      && cap.indexOf("filed") < cap.indexOf("relations");
+  const filed = h.slice(headAt(h,"Filed in"), headAt(h,"Related"));
+  return /filed by this court(&#39;|')s moderators/.test(filed)
+      && !/relations read from the chain/.test(filed);
+})());
+ok("...and the relations note rides Related", (()=>{
+  const h = associationSection("covid", 18, null, [[11,"supports"]],
+                               [{fid:4, name:"Proximal Origin"}]);
+  return /relations read from the chain/.test(h.slice(headAt(h,"Related")));
+})());
+ok("...each note appearing once, not once per group", (()=>{
+  // TWO claim-row groups, which is what makes this bite: with only "Related"
+  // present a note emitted per group is indistinguishable from one emitted once.
+  // Claim 3 carries a curation parent, so "Part of" renders above "Related".
+  const h = associationSection("orem", 3, demoLookup, [[11,"supports"]],
+                               [{fid:4, name:"Proximal Origin"}]);
+  const groups = ["Part of","Related"].filter(l=>hasHead(h,l));
+  return groups.length === 2
+      && (h.match(/relations read from the chain/g)||[]).length === 1
+      && (h.match(/filed by this court/g)||[]).length === 1;
+})());
+/* AND THE GROUPS STAY APART. With the section title gone the first heading sits
+   flush at the top, so the gap that separates one group from the next has to
+   come from the headings themselves — one rule, or they drift. */
+ok("the first group heading is flush, the rest are spaced", (()=>{
+  const h = associationSection("orem", 3, demoLookup, [[11,"supports"]],
+                               [{fid:4, name:"Proximal Origin"}]);
+  const mts = [...h.matchAll(/class="sec-h" style="margin-top:(\d+)px"/g)].map(m=>+m[1]);
+  return mts.length >= 3 && mts[0] === 0 && mts.slice(1).every(v=>v === 14);
+})());
+/* THE SECTION HAS NO TITLE OF ITS OWN, and that is the fix, not a side effect.
+   "Where this claim sits" sat above the group headings with nothing beneath it
+   before the first of them. */
+ok("no heading sits above the groups with nothing under it", (()=>{
+  const h = associationSection("covid", 18, null, [[11,"supports"]],
+                               [{fid:4, name:"Proximal Origin"}]);
+  // The section opens straight onto a group heading.
+  return !h.includes("Where this claim sits")
+      && /^<section[^>]*><div class="sec-h"[^>]*>Filed in /.test(h);
 })());
 ok("...and a claim with only relations is captioned only for them", (()=>{
   const h = associationSection("covid", 18, null, [[11,"supports"]], []);
@@ -439,12 +485,12 @@ ok("...and a claim with only relations is captioned only for them", (()=>{
    so carry information; a folder's would be constant. */
 ok("the folder row carries no chip repeating its own heading", (()=>{
   const h = associationSection("covid", 11, null, null, [{fid:4, name:"Proximal Origin"}]);
-  return h.includes(">Filed in<") && !h.includes("filed here");
+  return hasHead(h, "Filed in") && !h.includes("filed here");
 })());
 ok("...and sits above the claim rows, being the coarser fact", (()=>{
   const h = associationSection("covid", 11, null, [[18,"supported by this"]],
                                [{fid:4, name:"Proximal Origin"}]);
-  return h.indexOf(">Filed in<") < h.indexOf(">Related<");
+  return headAt(h, "Filed in") < headAt(h, "Related");
 })());
 ok("a cross-filed claim lists every folder it is in", (()=>{
   const h = associationSection("covid", 11, null, null,
