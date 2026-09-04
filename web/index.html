@@ -9442,6 +9442,13 @@ function courtStatsHtml(slug, s){
   // Each figure carries its own history directly under it, so the shape and the
   // number are read together rather than the reader matching a line in a
   // combined chart back to the tile it belongs to.
+  /* MATERIAL, NOT MERELY NON-ZERO — hoisted above the tiles because the supply
+     cell now reads it too. Both extra figures are unminted claims on future
+     supply, so what a reader can do with them depends on their size next to the
+     supply they would dilute: a reservoir of 1.48 against 5,103 is 0.03%, true
+     and not worth saying. They earn their place at a hundredth of supply, the
+     point at which they could move the figure they qualify. */
+  const material = v => v > 0 && s.supply > 0 && v >= s.supply / 100;
   const tiles = [
     /* NO SUB-LINE. It ran to three sentences trying to pre-empt every
        misreading of the figure: which price this is, that the GNOT is burned,
@@ -9458,8 +9465,16 @@ function courtStatsHtml(slug, s){
     // A SHARE, NOT AN AMOUNT. "0.01 KOURT:COVID of it earned as rewards" made
     // the reader divide two figures to learn the one thing the line is for:
     // how much of this supply nobody paid for.
+    /* THE RESERVOIR FOLDS IN HERE, and this is the cell it belongs under: it is
+       an unminted claim on THIS figure, so a fourth tile stated it a row away
+       from the number it qualifies — and, being optional, it wrapped the strip
+       onto a second line whenever it was material.
+       THE FIGURE ALONE, no symbol: the coin is named by the supply figure two
+       lines above it, in the same cell. */
     statTile("coin supply", cc(s.supply,slug),
-      s.emitted>0? `${pctText(s.emitted, s.supply)} earned as rewards` : ""),
+      [ s.emitted>0? `${pctText(s.emitted, s.supply)} earned as rewards` : "",
+        material(s.reservoir)? `${ccFig(s.reservoir)} in the reward reservoir` : "",
+      ].filter(Boolean).join(" · ")),
     // THE THIRD COLUMN, and the only graph on the strip. Price and supply are
     // figures; this is the one worth a shape, because it is the one that cannot
     // be faked — supply grows on emissions nobody paid for and price is the
@@ -9474,15 +9489,6 @@ function courtStatsHtml(slug, s){
       sinceLabel(burnSer, s.nowUnix),
       tileSpark(burnSer)),
   ];
-  // MATERIAL, NOT MERELY NON-ZERO. Both of these are unminted claims on future
-  // supply, so what a reader can do with them depends entirely on their size
-  // next to the supply they would dilute. A reservoir of 1.48 against a supply
-  // of 5,103 is 0.03% — true, and not worth a cell or the sentence under it.
-  // They earn their place at a hundredth of supply, which is the point they
-  // could move the figure above them.
-  const material = v => v > 0 && s.supply > 0 && v >= s.supply / 100;
-  if(material(s.reservoir)) tiles.push(statTile("reward reservoir", cc(s.reservoir,slug),
-    "available to claims settling and paying out"));
   if(material(s.seniorOwed)) tiles.push(statTile("senior queue owed", cc(s.seniorOwed,slug),
     "earned payouts, paid as budget accrues"));
   return `<section class="courtstats"><div class="grid stats">
