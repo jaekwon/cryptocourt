@@ -39,9 +39,6 @@ code += fn('verdictSentence');
 // any existing anchor already cut.
 code += fn('sideOval');
 code += fn('rowSide');
-code += fn('yesNowText');
-code += fn('pctMeta');
-code += 'var isLive=()=>false;\n';
 code += slice('function assocRow(', '/* ======================= local curation');
 code += 'var BLOCK_SECS=' + src.match(/const BLOCK_SECS\s*=\s*(\d+)/)[1] + ';\n';
 code += slice('const MON=', 'function resolutionLadder(').replace(/^const MON=/m,'var MON=');
@@ -416,76 +413,42 @@ ok("no banned words", ![h9,h3,h5,h10,h6,h11,L1,L2,L4].some(x=>/backing|redeem\b|
 
 // relation-chip layout + colour (owner report: "contradicts" overlapped the
 // wrapped title from orem/3; the contradiction family must read bright red)
-/* THE PERCENTAGE THE POLICING ROWS DID NOT HAVE. Asked: how come Recently
-   settled shows a % and Needs review does not? Different builders — the docket's
-   row has a .px track, the association row it borrows says "no sparkline slot".
-   It rides the meta line here rather than a track, so it costs the title none of
-   the width the previous commit gave it back. */
-ok("a policing row states the YES percentage", (()=>{
-  const c = {title:"t", statusText:"settled YES — every stake withdraws 1×", inst:53.14};
-  return pctMeta("orem",1,c).includes("53.1%") && pctMeta("orem",1,c).includes("YES now");
+/* THE TWO LISTS SHOW ONE FIGURE, RENDERED ONCE. Asked: are they the same
+   measure, and if so make them match. They are — claimSeries puts ratios().inst
+   at ser[2], and ratios().inst is pctYes(yesStake,noStake), which is exactly what
+   the no-series branch of docketSignal prints — so the docket and the court's
+   policing lists were showing the same number in two different renderings: a
+   15px figure in its own column on one, 12.5px muted on a meta line on the other.
+   Now they are one cell, filled once, from one markup. The intermediate design
+   that put the figure on the meta line is gone, and so are the helpers written
+   for it — a second rendering of one number is what this removes. */
+ok("the policing rows are claim rows, so the shape is shared not copied",
+   src.includes('const polrow = (r, metaLine) => { const c = byId[r.id];')
+   && /const srow = r => polrow\(r,/.test(src)
+   && /const prow = r => polrow\(r,/.test(src));
+ok("...drawing the percentage with the docket's own builder", (()=>{
+  const i = src.indexOf("const polrow = (r, metaLine)");
+  const body = src.slice(i, src.indexOf("const srow = r => polrow", i));
+  return body.includes("docketSignal(c.series, c.inst)");
 })());
-ok("...from the series when there is no instant figure", (()=>{
-  // 47.42, not 47.05: (47.05).toFixed(1) is "47.0" — the value is not exactly
-  // representable — so the round number would have tested the float, not the
-  // fallback. It failed here first for that reason.
-  return pctMeta("orem",1,{series:[0,0,47.42]}).includes("47.4%");
+ok("...and the status pill on the meta line, as the docket puts it", (()=>{
+  const i = src.indexOf("const polrow = (r, metaLine)");
+  const body = src.slice(i, src.indexOf("const srow = r => polrow", i));
+  return body.includes('<span class="m rowpill">');
 })());
-ok("...and says nothing when there is no figure to state", (()=>{
-  return pctMeta("orem",1,null) === "" && pctMeta("orem",1,{}) === "" && pctMeta("orem",1,{inst:NaN}) === "";
-})());
-/* AND BOTH ROWS ACTUALLY CALL IT. The three assertions above test the helper in
-   isolation, which a mutant that simply deleted the call from the rows sailed
-   through — the figure was correct and nothing rendered it. */
-/* THE PLACEHOLDER IS USELESS UNLESS THE FILL FINDS IT, and on a live chain the
-   figure only arrives with that fill — the record the row is built from has no
-   percentage yet. The first version of this shipped and rendered NOTHING on
-   /c/covid for exactly that reason: the row emitted a placeholder and the fill
-   still wrote to one getElementById.
-   Asserted on the source because the fill needs a chain to run. */
-ok("the async fill writes to every list holding the claim",
-   src.includes('document.querySelectorAll(`[data-pct="${slug}-${cl.id}"]`)')
-   && /\.forEach\(m => \{ m\.innerHTML = body; \}\)/.test(src));
-/* pctText WAS ALREADY TAKEN — the buy panel's part/whole formatter — and a second
-   definition in the same scope would have replaced it and taken the receipt's
-   voice share with it. Caught by counting definitions, not by any behaviour:
-   both functions "work", and the collision only shows up where the other one is
-   called. */
-ok("the YES-now formatter did not collide with the buy panel's",
-   (src.match(/function pctText\(/g)||[]).length === 1
-   && (src.match(/function yesNowText\(/g)||[]).length === 1);
-ok("both policing rows render the percentage",
-   (src.match(/\$\{pctMeta\(slug, r\.id, c\)\}/g)||[]).length === 2);
-/* It is a meta line, not a column: the row's grid is untouched, which is what
-   keeps the 484px title from the previous fix. */
-ok("...on the meta line, not in a track of its own",
-   src.includes('data-pct="${esc(slug)}-${id}"')
-   && !/\.docket a\.crow\.assocrow\{grid-template-columns:52px minmax\(0,1fr\) 64px/.test(src));
-
-/* A ROW WITH NO CHIP MUST NOT KEEP THE CHIP'S COLUMN. The court's policing rows
-   stopped emitting a status pill when the verdict moved onto their sentence, and
-   the 268px track stayed — measured on /c/covid: two children in a three-track
-   row, the title squeezed into 196px of a 584px row with 268px empty beside it,
-   rows 162px tall. Reported as squished. The docket made the identical mistake
-   when its own pill left.
-   THE DEMO FIXTURE CANNOT CATCH THIS: every assocrow it renders has a chip, so a
-   browser check on the sample court passes either way. Asserted on the source,
-   where the pairing is visible — the class is derived from the cell so the two
-   cannot disagree, and that derivation is what is pinned. */
-ok("a chip-less policing row drops the chip's column",
-   src.includes('.docket a.crow.assocrow.nochip{grid-template-columns:52px minmax(0,1fr)}'));
-ok("...and the class is taken from the cell, not from a second reading of it",
-   // The chip is bound once and the class asks THAT, so the two cannot disagree.
-   // Pinned as the pairing rather than as either spelling: the rows were later
-   // refactored to hold the record in a local and the assertion should survive
-   // that, while still failing if the class goes back to keying on the side.
-   (src.match(/const chip = c && !sd\? statusPill\(c\.statusText\) : "";/g)||[]).length === 2
-   && (src.match(/assocrow\$\{chip\? "" : " nochip"\}/g)||[]).length === 2);
-ok("...so a row for a claim outside the window loses it too", (()=>{
-  // byId misses the id: no side to show AND no status to draw, so no third cell.
-  // Deriving the class from `sd` alone would have left this row squeezed.
-  return !/assocrow\$\{sd\?/.test(src);
-})());
+/* The fill is keyed by claim rather than by row, because one claim is in more
+   than one list. An id cannot name two elements; that is why the first attempt
+   at this rendered nothing on the second list. */
+ok("the cell is keyed by claim, and the fill writes to all of them",
+   // three emitters: the policing row's one cell, and the docket's two branches
+   (src.match(/data-pct="\$\{esc\(slug\)\}-\$\{(c\.id|r\.id)\}"/g)||[]).length === 3
+   && src.includes('const cells = document.querySelectorAll(`[data-pct="${slug}-${cl.id}"]`)')
+   && !src.includes('getElementById(`spk-'));
+/* The helpers the meta-line version needed are gone with it. A second formatter
+   for the same number is the thing that let the two drift. */
+ok("no second renderer for the same figure survives",
+   !/function yesNowText\(/.test(src) && !/function pctMeta\(/.test(src)
+   && (src.match(/function pctText\(/g)||[]).length === 1);
 
 /* THE CLAIM ROW'S ID TRACK. It was 52px, sized for the four-column template the
    row stopped using when the pill moved to the meta line; "#19" is 24px of mono
