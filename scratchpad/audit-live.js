@@ -99,8 +99,14 @@ const audit = () => {
 
   // 8. an image that did not load
   main.querySelectorAll("img").forEach(im => {
-    if (im.complete && im.naturalWidth === 0)
-      out.push({kind: "image-failed", detail: (im.getAttribute("src") || "").slice(0, 60)});
+    // A FAILED image is one that was ASKED FOR and did not arrive. An <img> with
+    // no src attribute is an empty slot waiting to be filled — the share
+    // preview is one, drawn on a canvas when its dialog opens — and reporting it
+    // as a failure is reporting the absence of a request. The page hides those
+    // so they never paint as broken; what matters here is a src that 404'd.
+    const src = im.getAttribute("src");
+    if (src && im.complete && im.naturalWidth === 0)
+      out.push({kind: "image-failed", detail: src.slice(0, 60)});
   });
 
   // 9. a control smaller than the 24px minimum target (SC 2.5.8)
