@@ -469,7 +469,15 @@ section{margin-top:34px}
    a screen reader reads the explanation rather than the punctuation.
    The panel resets text-transform and letter-spacing — .sec-h is uppercase with
    .14em tracking, and a sentence set that way is a sign, not a sentence. */
-.sq{position:relative; flex:none; align-self:center; width:15px; height:15px; padding:0;
+/* THE PANEL IS ANCHORED TO THE HEADING, NOT TO THE BUTTON. It was
+   position:relative here, so the panel resolved against a 15px circle sitting
+   partway along the heading — and at 390px "left:0" meant the LEFT EDGE OF THAT
+   CIRCLE, ~127px in, plus a 273px panel: 400px of content in a 390px viewport,
+   and the whole page scrolled sideways. WCAG 1.4.10, shipped, and found by
+   measuring the deployed page rather than by reading this rule, which looks
+   correct until you ask what it is positioned against.
+   .sec-h spans the column, so a panel bounded by it is bounded by the page. */
+.sq{position:static; flex:none; align-self:center; width:15px; height:15px; padding:0;
   font:600 11px/1 var(--sans); letter-spacing:0; color:var(--muted); cursor:help;
   background:none; border:1px solid var(--line-2); border-radius:50%}
 /* :focus, NOT :focus-visible. focus-visible is the right choice for a ring you
@@ -478,15 +486,13 @@ section{margin-top:34px}
    `?` would be a button that does nothing. Measured: programmatic focus does not
    match focus-visible in Chrome either, which is what caught this. */
 .sq:hover,.sq:focus{color:var(--accent-2); border-color:var(--accent)}
-.sqp{position:absolute; left:50%; transform:translateX(-50%); top:calc(100% + 7px); z-index:5;
-  width:max-content; max-width:min(320px,70vw); text-align:left;
+.sec-h{position:relative}
+.sqp{position:absolute; left:0; top:calc(100% + 7px); z-index:5;
+  width:max-content; max-width:min(320px,100%); text-align:left;
   background:var(--surface); border:1px solid var(--line); border-radius:var(--r-sm); padding:8px 11px;
   font:400 12px/1.5 var(--sans); letter-spacing:0; text-transform:none; color:var(--ink-2);
   box-shadow:0 6px 18px rgba(0,0,0,.18); opacity:0; visibility:hidden; transition:opacity .12s ease}
 .sq:hover .sqp,.sq:focus .sqp{opacity:1; visibility:visible}
-/* Near the left edge the centred panel would hang off the page; the first
-   heading on a column is exactly where this sits. */
-.sec-h .sq:first-of-type .sqp{left:0; transform:none}
 @media(prefers-reduced-motion:reduce){ .sqp{transition:none} }
 
 /* cards + grids */
@@ -589,6 +595,16 @@ a.card:hover{border-color:var(--line-2)}
 .docket .m{font-size:12.5px; color:var(--muted); margin-top:3px; display:flex; gap:12px; flex-wrap:wrap}
 .docket .rt{display:flex; align-items:center; gap:10px}
 .docket a.crow{grid-template-columns:52px minmax(0,1fr) 64px 124px; align-items:baseline; padding:11px 14px}
+/* THE CLAIM ROW GAVE UP ITS PILL COLUMN. See docketRow for why; the short of it
+   is that the pill moved onto the meta line and the 124px it had reserved was
+   empty on every settled row. The other .crow users keep the four-column
+   template, because each of them fills it. */
+.docket a.crow.claimrow{grid-template-columns:52px minmax(0,1fr) 64px}
+/* .m is a flex row with a 12px gap, so the pill sits in the run of meta facts
+   rather than starting a line of its own. margin-top:0 because the .m above it
+   has already opened the gap, and the pill's own padding would double it. */
+.docket .m.rowpill{margin-top:5px}
+.docket .m.rowpill .pill{font-size:10px; padding:3px 6px}
 .docket a.crow .px{justify-self:end}
 .docket a.crow .pill{justify-self:end}
 .docket .t{overflow-wrap:anywhere}
@@ -10441,7 +10457,21 @@ function docketRow(slug,c,meta){
      a settled NO is struck through.
      THE PILL STAYS FOR EVERY OTHER PHASE. Only a settled claim with a readable
      side has somewhere to put the fact; open, in dispute and provisional rows
-     keep the pill, which is also what stops the row losing its phase entirely. */
+     keep the pill, which is also what stops the row losing its phase entirely.
+
+     AND IT NO LONGER OWNS A COLUMN. Dropping it from settled rows left the
+     124px reserved for it standing empty on 14 of this court's 35 rows — a
+     fifth of every settled row, blank, while the title beside it wrapped to
+     three and four lines in 346px. Reported as wasted space, with a picture.
+     The pill moves onto the meta line under the title, where the folder and the
+     clock already are: it is the same kind of fact as those, it is read after
+     the sentence rather than beside it, and a row that has one is no taller for
+     it because that line exists either way. Measured on /c/covid: the title
+     column goes 346px to 484px and rows of four lines or more fall from 14 to 9.
+     A MODIFIER, NOT THE SHARED TEMPLATE. `.docket a.crow` is also the folder
+     rows, the directory's court cards and the chain-list rows, and each of them
+     fills all the columns it declares. Only the claim row has a column it stopped
+     using, so only the claim row changes shape. */
   const dSide = (()=>{ const pc = phaseClass(c.statusText);
     return pc.short === "settled"? pc.side : ""; })();
   // A claim with no series is not always a claim awaiting a live fill: in demo
@@ -10450,11 +10480,10 @@ function docketRow(slug,c,meta){
     ? `<span class="px">${docketSignal(c.series, c.inst)}</span>`
     : `<span class="px" id="spk-${esc(slug)}-${c.id}"></span>`;
   const sortKey = c.series ? c.series[2] : (Number.isFinite(c.inst) ? c.inst : null);
-  return `<a class="crow${c.offp?" offp":""}" data-id="${c.id}"${sortKey!=null?` data-yes="${sortKey}"`:""} data-q="${esc("#"+c.id+" "+c.title)}" href="#/c/${esc(slug)}/${c.id}">
+  return `<a class="crow claimrow${c.offp?" offp":""}" data-id="${c.id}"${sortKey!=null?` data-yes="${sortKey}"`:""} data-q="${esc("#"+c.id+" "+c.title)}" href="#/c/${esc(slug)}/${c.id}">
     <span class="id">#${c.id}</span>
-    <span><span class="t">${verdictSentence(c.title, dSide)}</span>${meta?`<span class="m" style="display:block">${safeInline(meta.label)}</span>`:""}<span class="m" style="display:block" id="clk-${esc(slug)}-${c.id}">${(()=>{ const t=clockLine(isLive()? null:NOW, phaseClass(c.statusText).short, c.settleAt, c.escrowUntil); return t? esc(t):""; })()}</span></span>
-    ${px}
-    ${dSide? "" : statusPill(c.statusText)}</a>`;
+    <span><span class="t">${verdictSentence(c.title, dSide)}</span>${meta?`<span class="m" style="display:block">${safeInline(meta.label)}</span>`:""}<span class="m" style="display:block" id="clk-${esc(slug)}-${c.id}">${(()=>{ const t=clockLine(isLive()? null:NOW, phaseClass(c.statusText).short, c.settleAt, c.escrowUntil); return t? esc(t):""; })()}</span>${dSide? "" : `<span class="m rowpill">${statusPill(c.statusText)}</span>`}</span>
+    ${px}</a>`;
 }
 
 /* --- a claim: the stake panel + the three ratio series + resolution --- */

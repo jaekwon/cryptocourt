@@ -93,10 +93,18 @@ ok("the panel resets the heading's uppercase and tracking",
    /\.sqp\{[^}]*text-transform:none/.test(css) && /\.sqp\{[^}]*letter-spacing:0/.test(css), css.slice(0, 400));
 ok("...and is bounded so it cannot run off a narrow screen",
    /\.sqp\{[^}]*max-width:min\(/.test(css), css.slice(0, 400));
-/* Centred under the `?` normally, left-aligned on the first heading of a column
-   — which is exactly where a centred panel would hang off the page edge. */
-ok("...with the leftmost heading's panel pinned to the left edge",
-   /\.sec-h \.sq:first-of-type \.sqp\{left:0/.test(src));
+/* ANCHORED TO THE HEADING, NOT TO THE BUTTON — the bug that shipped. The panel
+   was positioned against the 15px circle, which sits partway along the heading,
+   so "left:0" meant the left edge of THAT: ~127px in, plus a 273px panel, on a
+   390px viewport. The page scrolled sideways. WCAG 1.4.10.
+   Asserted as the three facts that together bound it — the button is NOT the
+   containing block, the heading IS, and the width is a share of that container
+   rather than of the viewport. A vw max-width is what let a panel be wider than
+   the column it hangs off. */
+ok("the button is not the panel's containing block", /\.sq\{position:static/.test(src));
+ok("...the heading is", /\.sec-h\{position:relative\}/.test(src));
+ok("...and the panel is bounded by that container, not by the viewport",
+   /\.sqp\{[^}]*max-width:min\(320px,100%\)/.test(css) && !/\.sqp\{[^}]*vw/.test(css), css.slice(0, 300));
 ok("...and the fade is dropped for reduced motion",
    /prefers-reduced-motion:reduce\)\{ \.sqp\{transition:none/.test(src));
 
