@@ -39,6 +39,7 @@ code += fn('verdictSentence');
 // any existing anchor already cut.
 code += fn('sideOval');
 code += fn('rowSide');
+code += fn('pctMeta');
 code += slice('function assocRow(', '/* ======================= local curation');
 code += 'var BLOCK_SECS=' + src.match(/const BLOCK_SECS\s*=\s*(\d+)/)[1] + ';\n';
 code += slice('const MON=', 'function resolutionLadder(').replace(/^const MON=/m,'var MON=');
@@ -413,6 +414,35 @@ ok("no banned words", ![h9,h3,h5,h10,h6,h11,L1,L2,L4].some(x=>/backing|redeem\b|
 
 // relation-chip layout + colour (owner report: "contradicts" overlapped the
 // wrapped title from orem/3; the contradiction family must read bright red)
+/* THE PERCENTAGE THE POLICING ROWS DID NOT HAVE. Asked: how come Recently
+   settled shows a % and Needs review does not? Different builders — the docket's
+   row has a .px track, the association row it borrows says "no sparkline slot".
+   It rides the meta line here rather than a track, so it costs the title none of
+   the width the previous commit gave it back. */
+ok("a policing row states the YES percentage", (()=>{
+  const c = {title:"t", statusText:"settled YES — every stake withdraws 1×", inst:53.14};
+  return pctMeta(c).includes("53.1%") && pctMeta(c).includes("YES now");
+})());
+ok("...from the series when there is no instant figure", (()=>{
+  // 47.42, not 47.05: (47.05).toFixed(1) is "47.0" — the value is not exactly
+  // representable — so the round number would have tested the float, not the
+  // fallback. It failed here first for that reason.
+  return pctMeta({series:[0,0,47.42]}).includes("47.4%");
+})());
+ok("...and says nothing when there is no figure to state", (()=>{
+  return pctMeta(null) === "" && pctMeta({}) === "" && pctMeta({inst:NaN}) === "";
+})());
+/* AND BOTH ROWS ACTUALLY CALL IT. The three assertions above test the helper in
+   isolation, which a mutant that simply deleted the call from the rows sailed
+   through — the figure was correct and nothing rendered it. */
+ok("both policing rows render the percentage",
+   (src.match(/\$\{pctMeta\(c\)\}/g)||[]).length === 2);
+/* It is a meta line, not a column: the row's grid is untouched, which is what
+   keeps the 484px title from the previous fix. */
+ok("...on the meta line, not in a track of its own",
+   src.includes('<span class="m" style="display:block"><b>${t.toFixed(1)}%</b> YES now</span>')
+   && !/\.docket a\.crow\.assocrow\{grid-template-columns:52px minmax\(0,1fr\) 64px/.test(src));
+
 /* A ROW WITH NO CHIP MUST NOT KEEP THE CHIP'S COLUMN. The court's policing rows
    stopped emitting a status pill when the verdict moved onto their sentence, and
    the 268px track stayed — measured on /c/covid: two children in a three-track
@@ -426,7 +456,11 @@ ok("no banned words", ![h9,h3,h5,h10,h6,h11,L1,L2,L4].some(x=>/backing|redeem\b|
 ok("a chip-less policing row drops the chip's column",
    src.includes('.docket a.crow.assocrow.nochip{grid-template-columns:52px minmax(0,1fr)}'));
 ok("...and the class is taken from the cell, not from a second reading of it",
-   (src.match(/const chip = byId\[r\.id\] && !sd\? statusPill\(byId\[r\.id\]\.statusText\) : "";/g)||[]).length === 2
+   // The chip is bound once and the class asks THAT, so the two cannot disagree.
+   // Pinned as the pairing rather than as either spelling: the rows were later
+   // refactored to hold the record in a local and the assertion should survive
+   // that, while still failing if the class goes back to keying on the side.
+   (src.match(/const chip = c && !sd\? statusPill\(c\.statusText\) : "";/g)||[]).length === 2
    && (src.match(/assocrow\$\{chip\? "" : " nochip"\}/g)||[]).length === 2);
 ok("...so a row for a claim outside the window loses it too", (()=>{
   // byId misses the id: no side to show AND no status to draw, so no third cell.

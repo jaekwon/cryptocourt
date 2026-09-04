@@ -4077,6 +4077,25 @@ function claimSeries(d){
    node: the docket showed nothing at all.
    So: draw the line when there is a line, show the ratio when only the ratio is
    known, and say plainly when there is neither. */
+/* THE SAME PERCENTAGE, ON A ROW THAT HAS NO COLUMN FOR IT. Asked: how come
+   Recently settled shows a % and Needs review does not?
+   Because they are different builders. The docket's rows carry a .px track;
+   these borrow the ASSOCIATION row, whose own note says "no sparkline slot" —
+   it was built for the Related rows on a claim page, where the third column is a
+   relation chip.
+   Not fixed by handing these rows to docketRow, though it is the same claim in a
+   list: docketRow stamps data-q, and these sections are data-qfold precisely to
+   stay out of the search's count. Reusing it would silently double-count every
+   claim that appears in both the docket and this list.
+   So the figure rides the meta line instead of a track of its own — where the
+   pill and the clock already are, and where it costs the title none of the width
+   it just got back. No new read: the record is the one the docket drew from. */
+function pctMeta(c){
+  if(!c) return "";
+  const t = Number.isFinite(c.inst)? c.inst : (c.series? c.series[2] : null);
+  if(!Number.isFinite(t)) return "";
+  return `<span class="m" style="display:block"><b>${t.toFixed(1)}%</b> YES now</span>`;
+}
 function docketSignal(ser, inst){
   if(ser) return `${sparkSvg(ser)}<b>${ser[2].toFixed(1)}%</b><small>YES now</small>`;
   if(Number.isFinite(inst))
@@ -9519,17 +9538,19 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
          "settled" is not the only way to have none: a row whose claim is not in
          this page's window has no status to draw either, and deriving the class
          from `sd` alone would have left those squeezed in the same way. */
-      const srow = r => { const sd = byId[r.id]? rowSide(byId[r.id].statusText) : "";
-        const chip = byId[r.id] && !sd? statusPill(byId[r.id].statusText) : "";
+      const srow = r => { const c = byId[r.id];
+        const sd = c? rowSide(c.statusText) : "";
+        const chip = c && !sd? statusPill(c.statusText) : "";
         return `<a class="crow assocrow${chip? "" : " nochip"}" href="#/c/${esc(slug)}/${r.id}">
         <span class="id">#${r.id}</span>
-        <span><span class="t">${byId[r.id]? verdictSentence(r.title, sd) : safeInline(r.title)}</span>${r.deadline!=null?`<span class="m" style="display:block">settles at block ${fmtN(r.deadline)}</span>`:""}</span>
+        <span><span class="t">${c? verdictSentence(r.title, sd) : safeInline(r.title)}</span>${r.deadline!=null?`<span class="m" style="display:block">settles at block ${fmtN(r.deadline)}</span>`:""}${pctMeta(c)}</span>
         ${chip}</a>`; };
-      const prow = r => { const sd = byId[r.id]? rowSide(byId[r.id].statusText) : "";
-        const chip = byId[r.id] && !sd? statusPill(byId[r.id].statusText) : "";
+      const prow = r => { const c = byId[r.id];
+        const sd = c? rowSide(c.statusText) : "";
+        const chip = c && !sd? statusPill(c.statusText) : "";
         return `<a class="crow assocrow${chip? "" : " nochip"}" href="#/c/${esc(slug)}/${r.id}">
         <span class="id">#${r.id}</span>
-        <span><span class="t">${byId[r.id]? verdictSentence(r.title, sd) : safeInline(r.title)}</span>${r.seeded?`<span class="m" style="display:block">seeded by a moderator</span>`:""}</span>
+        <span><span class="t">${c? verdictSentence(r.title, sd) : safeInline(r.title)}</span>${r.seeded?`<span class="m" style="display:block">seeded by a moderator</span>`:""}${pctMeta(c)}</span>
         ${chip}</a>`; };
       let g = "";
       if(stripQ && stripQ.rows && stripQ.rows.length){
