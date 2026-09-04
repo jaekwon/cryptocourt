@@ -220,7 +220,7 @@ class Scenario:
         The twin of advance(). Conviction accrues per block, emission rolls per
         period, votes close on a block and the twap ring matures on one — so
         before the height override existed, every one of those could only be
-        reached by mining: ~2,160 blocks to answer, 17,280 to crystallize,
+        reached by mining: ~2,160 blocks to answer, 17,280 to open the rewards,
         120,960 to resolve a dispute. Those are minutes to hours of real time
         for something the chain will happily be told.
 

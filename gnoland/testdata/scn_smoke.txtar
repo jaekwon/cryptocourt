@@ -12,7 +12,7 @@
 # date rather than by waiting for it.
 #
 # The seeded demo (a longer scenario, run by hand) is where answering, settling
-# and crystallizing belong, because there the 3.7 minutes buys real conviction.
+# and opening the rewards belong, because there the 3.7 minutes buys real conviction.
 
 loadpkg gno.land/p/kourt/checkpoint/v0
 loadpkg gno.land/p/kourt/grc20votes/v0

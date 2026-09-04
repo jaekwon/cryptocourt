@@ -66,7 +66,7 @@ LIVE = re.compile(r"\.(BalanceOf|VotesOf|TotalSupply)\(")
 TALLY_LIVE_ALLOWED = {
     ("kourtv2", "dispute.gno"): 0,
     ("kourtv2", "modvote.gno"): 0,
-    ("kourtv2", "crystallize.gno"): 0,
+    ("kourtv2", "openrewards.gno"): 0,
     ("kourtv2", "meta.gno"): 0,
 }
 
@@ -344,7 +344,7 @@ DOC_MOVABLE = re.compile(r"^\s*//.*\bSpendableOf\b.*(?:min\(| minus )|"
 # is the safe one to forget, so there is one, qualityQuestionOpen, and this counts it.
 #
 # TWO lines legitimately hold such a disjunction, and the second is why this arm pins a
-# SHAPE rather than a filename. crystallize.gno asks its own question —
+# SHAPE rather than a filename. openrewards.gno asks its own question —
 # `cs.flagOpen || cs.counterOpen || cs.pendingSlash > 0` — which deliberately excludes
 # disputeOpen and adds a pending slash. It is not a copy of ours and must not be
 # "simplified" into one. So: exactly two such lines, the definition carries all three
@@ -548,12 +548,12 @@ BOARD_READS = re.compile(
 #
 # A claim's draw is scaled twice — by its SIZE (tierBpsFor, the money proxy) and
 # by the deciding round's SPAM share (spamNetBps, the human read) — and the two
-# compose. Each has thorough unit tests; neither notices if crystallize stops
+# compose. Each has thorough unit tests; neither notices if open the rewards stops
 # CALLING it. Measured: deleting `want = mulDiv128(want, spamNetBps(cs), ...)`
-# from crystallize passed every assertion in the realm suite.
+# from open the rewards passed every assertion in the realm suite.
 #
 # A behavioural test would be better and was attempted; driving a claim through
-# answer, settle and crystallize inside this suite ran into fixture trouble
+# answer, settle and open the rewards inside this suite ran into fixture trouble
 # unrelated to the thing under test, and a test that does not run is worse than
 # an honest source guard. This is the guard. If someone writes the behavioural
 # one, delete this.
@@ -809,7 +809,7 @@ def main() -> int:
     # qualityQuestionOpen — because a copy that reached the weight readers but not
     # the vote lock would free coin whose vote could still be counted. Both the
     # function and the three flags it disjoined (cs.flagOpen, cs.counterOpen, and
-    # pendingSlash on crystallize's own variant) went with the quality lane, so the
+    # pendingSlash on open the rewards's own variant) went with the quality lane, so the
     # arm now has no subject: there is one question, and cs.disputeOpen is it.
     #
     # NOT re-pointed at cs.disputeOpen alone. The hazard this guarded was a
@@ -1078,12 +1078,12 @@ def main() -> int:
         at = i
 
     # THE DRAW'S TWO MULTIPLIERS, both applied and in order.
-    cry = (ROOT / "realm/r/kourtv2/crystallize.gno").read_text(encoding="utf-8")
+    cry = (ROOT / "realm/r/kourtv2/openrewards.gno").read_text(encoding="utf-8")
     at = -1
     for line in DRAW_MULTIPLIERS:
         i = cry.find(line)
         if i < 0:
-            print(f"check-epoch-coherence: crystallize.gno no longer applies "
+            print(f"check-epoch-coherence: openrewards.gno no longer applies "
                   f"`{line}`. The draw is scaled by the claim's SIZE and by the "
                   f"deciding round's SPAM share, and dropping either silently "
                   f"changes every payout while both functions keep passing "

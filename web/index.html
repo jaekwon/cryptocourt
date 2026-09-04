@@ -2890,12 +2890,12 @@ const DEMO_CHAIN = {
       author:"g1oremfiler0000000000000000000000000000", phase:"disputed", answer:0, answerer:"g1answerkeeper00000000000000000000000000",
       answerBond:80_000_000, round:1, disputeBondNext:64_000_000, quorumFloor:5_925_000_000 },
     // settled by vote — the NO answer was overturned; an overturned answerer
-    // draws NO answerer slice (crystallize.gno: bond burned, record reset)
+    // draws NO answerer slice (openrewards.gno: bond burned, record reset)
     "orem/4":{ timeline:"opened:1785554400:4500000;answered:1786454400:4680000;verdict:1786754400:4740000;now:1787054400:4800000", title:"Q3 city revenue exceeded the June forecast.",
       author:"g1youdemoholder0000000000000000000000000",
       yesStake:180_000_000, noStake:20_000_000, convYes:1707589, convNo:189732, trailYes:90,
       phase:"settled", verdict:0, answer:1, answerer:"g1answerkeeper00000000000000000000000000", route:"vote", record:3,
-      crystallized:true, draw:{w:1_644_800, a:164_480, ans:0, carrot:12_320},
+      rewardsOpened:true, draw:{w:1_644_800, a:164_480, ans:0, carrot:12_320},
       pulls:{winnerPaid:false, authorPaid:false, answererPaid:false} },
     // provClose — three failed rounds, everyone 1×
     "orem/5":{ timeline:"opened:1785054400:4400000;answered:1786054400:4600000;verdict:1786554400:4700000;now:1787054400:4800000", title:"The mayor privately opposed the rezoning before the vote.",
@@ -3038,7 +3038,7 @@ async function courtStats(slug){
 }
 /* The chain's per-court policing lists, derived from the sample exactly as
    strips.gno defines membership: the review strip enters at PostAnswer and
-   exits at crystallize/provClose/dead-close (NOT at settle), nearest deadline
+   exits at open the rewards/provClose/dead-close (NOT at settle), nearest deadline
    first, and it IGNORES hide bits by construction — a hidden claim stays
    policeable. Pending = seeded claims nobody answered, oldest first. */
 function demoStrips(slug){
@@ -3046,7 +3046,7 @@ function demoStrips(slug){
   const rows = c.claims.map(id=>[id, DEMO.claims[slug+"/"+id]]).filter(([,d])=>d);
   const strip = rows
     .filter(([,d])=> d.phase==="answered" || d.phase==="disputed" || d.phase==="provisional"
-                  || (d.phase==="settled" && !d.crystallized))
+                  || (d.phase==="settled" && !d.rewardsOpened))
     .map(([id,d])=>({id, title:d.title, deadline:d.settleAt!=null? d.settleAt:null}))
     .sort((a,b)=>(a.deadline==null?Infinity:a.deadline)-(b.deadline==null?Infinity:b.deadline));
   const pending = rows
@@ -3125,7 +3125,7 @@ async function nameTheSide(slug, rows){
   const sq = gstr(slug);
   await inChunks(need, 6, async r=>{
     const v = await one(`Verdict(${sq},${r.id})`).catch(()=>null);
-    if(v==null) return;                    // mid-crystallise, or closed without a decision
+    if(v==null) return;                    // mid-open the rewards, or closed without a decision
     const side = sideName(Number(v));
     if(side==="—") return;                 // never print a dash where a side belongs
     r.statusText = String(r.statusText).replace(/settled/i, m=>m+" "+side);
@@ -3181,7 +3181,7 @@ async function claimHeadOf(s, i){
     answer:n(14), answerBond:n(15), settleAt:n(16), answerer:f[17], answerRecord:n(18),
     round:n(19), disputeBondNext:n(20), escrowUntil:n(21),
     quorumFloor:n(22) || null, voteCloses:n(23) || null,
-    verdict:n(24), route:f[25], crystallized:b(26),
+    verdict:n(24), route:f[25], rewardsOpened:b(26),
     drawW:n(27), drawA:n(28), drawAns:n(29), drawCarrot:n(30),
     author:f[31] || null, hidden:b(32), redacted:b(33), purged:b(34), seeded:b(35),
     stakeOpenDelay:n(36), boardSize:n(37), boardOpen:b(38),
@@ -3259,7 +3259,7 @@ async function claimDetail(slug,id){
   }
   /* ONE WAVE, NOT NINE. Every read below was awaited on its own line, so a claim
      page walked FailedRounds -> DisputeBondNext -> EscrowUntil -> QuorumFloorOf
-     -> DisputeVoteCloses -> Crystallized -> ... one round trip at a time.
+     -> DisputeVoteCloses -> RewardsOpened -> ... one round trip at a time.
      Measured on kourt.xyz before this: the reads marched from 1610ms to 3220ms
      in thirteen steps of about 80ms each, while the node answered every one of
      them in under a hundred. Nothing here reads a value the line above it
@@ -3277,7 +3277,7 @@ async function claimDetail(slug,id){
     const ready = settled && !provClose;
     const [round, bondNext, escrow, quorum, voteEnds, verdict, route, cryst] = head
       ? [head.round, head.disputeBondNext, head.escrowUntil, head.quorumFloor,
-         head.voteCloses, head.verdict, head.route, head.crystallized]
+         head.voteCloses, head.verdict, head.route, head.rewardsOpened]
       : await Promise.all([
       live? one(`FailedRounds(${s},${i})`).catch(()=>0) : null,
       live? one(`DisputeBondNext(${s},${i})`).catch(()=>0) : null,
@@ -3292,9 +3292,9 @@ async function claimDetail(slug,id){
       (live && disputeOpen)? one(`DisputeVoteCloses(${s},${i})`).catch(()=>0) : null,
       ready? one(`Verdict(${s},${i})`).catch(()=>-1) : null,
       ready? one(`VerdictRoute(${s},${i})`).catch(()=>"") : null,
-      one(`Crystallized(${s},${i})`).catch(()=>false),
+      one(`RewardsOpened(${s},${i})`).catch(()=>false),
     ]);
-    // the draw slices ride in the record too, so a crystallized claim costs no
+    // the draw slices ride in the record too, so a rewardsOpened claim costs no
     // extra round trip either
     if(head && cryst) d.draw = {w:head.drawW, a:head.drawA, ans:head.drawAns, carrot:head.drawCarrot};
     if(live){
@@ -3303,7 +3303,7 @@ async function claimDetail(slug,id){
     }
     if(ready){ d.verdict = verdict; d.route = route; }
     if(cryst){
-      d.crystallized = true;
+      d.rewardsOpened = true;
       if(!d.draw){ const ds = await tup(`DrawSlices(${s},${i})`);
         d.draw = {w:ds[0], a:ds[1], ans:ds[2], carrot:ds[3]}; }
     }
@@ -3377,7 +3377,7 @@ async function claimParties(slug, id, d){
    and failed in the wallet with a realm panic after the extension had woken.
    The same rule the settled ticket already applies to its withdraw sides.
 
-   HIDDEN RATHER THAN GREYED, unlike the crystallize button: a greyed control
+   HIDDEN RATHER THAN GREYED, unlike the open the rewards button: a greyed control
    says "not yet, and here is why", which is true of a reward that has to wait
    for a window. There is no story for unstaking a position you never took, and a
    permanently dead button is furniture.
@@ -3459,7 +3459,7 @@ async function fillStakeBalance(slug){
 }
 async function fillTicketPulls(slug, id, d, p){
   const wraps = [...document.querySelectorAll(".stakewrap .ticket [data-pull]")];
-  if(!wraps.length || !d || !d.crystallized) return;
+  if(!wraps.length || !d || !d.rewardsOpened) return;
   const addr = CFG.addr;
   let pulls = d.pulls || null;
   if(!pulls && isLive()){
@@ -3519,11 +3519,11 @@ async function fillWithdrawSides(slug, id, d, nowH, vAt, nowT, vT){
   let p;
   try{ p = await positionOf(slug, id, CFG.addr); }catch(_){ return; }   // unknown: leave both
   if(!p) return;
-  /* THE PARTICIPANT WEEK, NOW THAT WE KNOW WHO IS ASKING. Crystallize is
+  /* THE PARTICIPANT WEEK, NOW THAT WE KNOW WHO IS ASKING. OpenRewards is
      participant-only for FINALIZE_GRACE blocks after the verdict, and the page
      used to offer it to everyone and let Adena relay the panic — which is
      exactly what a reader got: a button they could press, and
-     "kourtv2: Crystallize is participant-only for its first week" from a wallet.
+     "kourtv2: OpenRewards is participant-only for its first week" from a wallet.
      isParticipant is author, answerer, or a stake on either side (dispute.gno),
      and all three are in hand here.
      GREYED ONLY WHEN ALL THREE ARE KNOWN AND ALL THREE ARE NO. A missing
@@ -3538,7 +3538,7 @@ async function fillWithdrawSides(slug, id, d, nowH, vAt, nowT, vT){
      chain holds 5s a block — and on kourt-1 it does not: claim covid/10 was
      settled 7 Apr 2022 and read 53,280 blocks of a 120,960-block window in
      December 2026, so the page told a reader the "first week" was still running
-     1,713 days later while crystallize.gno would have let them straight through.
+     1,713 days later while openrewards.gno would have let them straight through.
      A page that greys a control the chain would accept is the same defect as
      the reopen link that contradicted its own gate, on a third surface.
      Stamps first, blocks only for a verdict recorded before ClaimTimeline
@@ -4695,7 +4695,7 @@ function confirmArgs(func, args, bodyKey, sendPre){
 /* The human name of each write a reader can press, for the sent-toast. Keyed by
    the entrypoint the tx calls, valued as the thing the button said. */
 const TX_SENT = {
-  Crystallize:    "the reward draw",
+  OpenRewards:    "the reward draw",
   WithdrawStake:  "your withdrawal",
   WithdrawBonus:  "your accuracy reward",
   AuthorBonus:    "the author bonus",
@@ -4954,13 +4954,13 @@ async function adenaSign(func, args, el){
       const hash = String(res.data && res.data.hash || "");
       /* WHAT THE READER PRESSED, NOT WHAT THE CHAIN CALLS IT. This printed the
          raw entrypoint name, so pressing "Open the rewards" answered
-         "Sent. Crystallize is on its way." — a word that appears nowhere else on
+         "Sent. OpenRewards is on its way." — a word that appears nowhere else on
          the site, in a sentence about a button that does not carry it. Every
          name in this table is one a reader can actually have pressed on a claim
          page; anything unmapped still falls back to the function name, which is
          better than a blank, and is a bug to be reported the same way this one
          was rather than hidden behind a generic "Sent."
-         THE FUNCTION NAME ITSELF IS NOT RENAMED. Crystallize is the realm's
+         THE FUNCTION NAME ITSELF IS NOT RENAMED. OpenRewards is the realm's
          entrypoint and the tx has to call it; what changes is only what the page
          says out loud. */
       const base = func === "Buy"
@@ -11439,7 +11439,7 @@ function chartChips(d, slug){
     d.round? `${d.round} failed round${d.round>1?"s":""}`:null,
     d.disputeBondNext? `next dispute bond ${ccPlain(d.disputeBondNext)}`:null,
     d.phase==="settled"? `verdict ${sideName(d.verdict!=null?d.verdict:d.answer)}${d.route?" · "+esc(d.route):""}`:null,
-    d.crystallized? "rewards open":null,
+    d.rewardsOpened? "rewards open":null,
   /* A CHIP MAY CARRY A TOOLTIP, and one of them has to. "conviction 3,718 /
      3,225" sits beside a stake bar reading "17.00 / 15.00" — two pairs, same
      shape, different quantities, and the word that distinguishes them is jargon
@@ -11517,7 +11517,7 @@ function stakeTicket(slug,id,d){
       <div class="actions" style="margin-top:12px">
         <span data-wside="0">${btn("Withdraw YES","WithdrawStake",{courtSlug:slug,claimID:id,side:0},d.phase==="settled"?"yes":"")}</span>
         <span data-wside="1">${btn("Withdraw NO","WithdrawStake",{courtSlug:slug,claimID:id,side:1},d.phase==="settled"?"no":"")}</span>
-        ${d.phase!=="settled"? "" : d.crystallized
+        ${d.phase!=="settled"? "" : d.rewardsOpened
           /* FOUR PULLS, AND AT MOST ONE OR TWO ARE YOURS. They were all four
              offered to everybody, unpriced: the author's slice to readers who
              did not file the claim, the answerer's to readers who did not
@@ -11543,6 +11543,24 @@ function stakeTicket(slug,id,d){
               + ccPlain(((d.draw&&d.draw.w)||0) + ((d.draw&&d.draw.a)||0)
                         + ((d.draw&&d.draw.ans)||0))
               + `</span></div>`
+            /* AND THE POOL THAT IS NOT PART OF THAT SUM, said out loud rather
+               than left in an attribute. The three slices above are the draw and
+               the carrot is deliberately not added to them — it decrements as it
+               is pulled and they never do, so one figure could not mean both.
+               But excluding it from the SUM is not a reason to leave it unsaid.
+               Every crystallized claim on the seeded covid court drew zero into
+               those three slices while carrying a real carrot pool, and the
+               carrot button is removed for anyone who cannot pull it — author,
+               answerer, anyone who staked — so the whole ticket read "Rewards
+               drawn 0.00 CC" and nothing else, on a claim that has coin in it.
+               Asked as: it says rewards drawn 0.00, but what is the total?
+               Stated whenever there is a pool, not only when the reader may pull
+               it: how much is in it is a fact about the claim, and who may take
+               it is a different question the button already answers. */
+            + (((d.draw&&d.draw.carrot)||0) > 0
+                ? `<div class="line"><span class="l">Voter pool left</span>`
+                  + `<span class="r tnum">${ccPlain(d.draw.carrot)}</span></div>`
+                : "")
             + `<span data-pull="winner" data-pool="${(d.draw&&d.draw.w)||0}">`
               + btn("Pull accuracy reward","WithdrawBonus",{courtSlug:slug,claimID:id,side:v}) + `</span>`
             +`<span data-pull="author" data-pool="${(d.draw&&d.draw.a)||0}">`
@@ -11552,7 +11570,7 @@ function stakeTicket(slug,id,d){
             +`<span data-pull="carrot" data-pool="${(d.draw&&d.draw.carrot)||0}">`
               + btn("Pull voter reward","PullCarrot",{courtSlug:slug,claimID:id},"","if you voted with the verdict") + `</span>`
           /* WHAT THE REALM WILL REFUSE, said before the signature rather than
-             after it. Crystallize is turned down in four states — an open
+             after it. OpenRewards is turned down in four states — an open
              quality question, the 24h quiet window after the last flag event,
              and the first week of the verdict for anyone who is not a
              participant. Only the first is greyed, because it is the only one
@@ -11587,7 +11605,7 @@ function stakeTicket(slug,id,d){
                    would be a promise to the wrong person. */
                 + `<div class="hint">What this claim has earned: the winning side's accuracy reward, the author's slice and the answerer's. Opening pays whoever is owed, not whoever presses. The court's reservoir caps what settles today.</div>`
               : "")
-            + `<span data-crys="1">` + btn("Open the rewards","Crystallize",{courtSlug:slug,claimID:id},"",
+            + `<span data-crys="1">` + btn("Open the rewards","OpenRewards",{courtSlug:slug,claimID:id},"",
                 "",null,null,null,
                 /* NO QUALITY QUESTION LEFT TO WAIT ON. This passed a reason when a
                    flag or counter window was open; both are gone, and the only
@@ -12022,7 +12040,7 @@ function resolutionSection(slug,id,d,nowH,tl){
     const v=(d.verdict!=null?d.verdict:d.answer);
     inner = `<div class="notice good"><span class="g">✓</span><div><b>Settled ${sideName(v)}</b>${d.route?" — "+esc(d.route)+"":""}.
       Both sides withdraw principal 1×; the winning side also draws its accuracy reward once the rewards are opened.
-      ${d.crystallized && d.route==="vote"? `<p class="small" style="margin:8px 0 0">Voters whose ballot matched the final verdict may pull a small participation carrot — newly issued, capped just under half the court's base bond — 2% of its trailing average stake, or 1 KOURT, whichever is larger — and queued behind earlier awards; abstain and against-verdict ballots receive nothing.</p>`:""}</div></div>`;
+      ${d.rewardsOpened && d.route==="vote"? `<p class="small" style="margin:8px 0 0">Voters whose ballot matched the final verdict may pull a small participation carrot — newly issued, capped just under half the court's base bond — 2% of its trailing average stake, or 1 KOURT, whichever is larger — and queued behind earlier awards; abstain and against-verdict ballots receive nothing.</p>`:""}</div></div>`;
   } else if(d.phase==="disputed"){
     inner = `<div class="notice warn"><span class="g">⚖</span><div><b>A dispute is under way</b>${d.round?` (after ${d.round} failed round${d.round>1?"s":""})`:""}.
       The court is voting on <i>“overturn the answer?”</i> — the verdict belongs to everyone but the claim\u2019s own participants.
@@ -12065,11 +12083,11 @@ function resolutionSection(slug,id,d,nowH,tl){
    Every entrypoint behind them — VoteQuality, OpenFlag, ResolveFlag, CounterFlag,
    ResolveCounter, ResolveSlashWindow — was deleted with the quality lane, so the
    buttons offered transactions the chain would refuse to even parse.
-   What is left is real: a crystallized claim has four pools and they are worth
+   What is left is real: a rewardsOpened claim has four pools and they are worth
    showing. The claim's RATING is the realm's own business now and appears in its
    Render, so the page does not restate it. */
 function rewardsSection(slug,id,d){
-  if(!d.crystallized || !d.draw) return "";
+  if(!d.rewardsOpened || !d.draw) return "";
   return `<section><div class="sec-h">Rewards</div>
     <div class="panel"><div class="qrows"><div class="line"><span class="l">Reward pools</span><span class="r">${ccRow([["accuracy",d.draw.w],["author",d.draw.a],["answerer",d.draw.ans],["voters",d.draw.carrot]], slug)}</span></div></div></div></section>`;
 }
@@ -12253,7 +12271,7 @@ function claimables(slug, id, d, p, addr, nowH){
       out.now.push({id, label:`unstake your ${sideName(side)} stake — the claim died unanswered; stakes were never frozen`, act:["Unstake",{courtSlug:slug,claimID:id,side,amount:(side===0?p.yes:p.no)}]});
     }
   }
-  if(d.crystallized){
+  if(d.rewardsOpened){
     // a vote-settled claim whose Verdict read failed gets NO winner row —
     // guessing the side from the (possibly overturned) answer could build a
     // button the realm would panic on
@@ -12291,14 +12309,14 @@ function diffSeen(prev, curr){
   return out;
 }
 /* one claimDetail per claim per render, shared by /me and /needs; live adds
-   the two marginal reads (author, paid flags) only on crystallized claims */
+   the two marginal reads (author, paid flags) only on rewardsOpened claims */
 let DETC = new Map();
 async function meDetail(slug, id, addr){
   const k=slug+"/"+id+"/"+(addr||"");
   if(DETC.has(k)) return DETC.get(k);
   const pr=(async()=>{
     const d=await claimDetail(slug,id);
-    if(d && isLive() && d.crystallized){
+    if(d && isLive() && d.rewardsOpened){
       const s2=gstr(slug);
       d.author = await one(`ClaimAuthor(${s2},${id})`).catch(()=>null);
       // a seeded claim's author draws nothing (I5) — read the bit or the row
@@ -12417,7 +12435,7 @@ async function meHoldings(addr,courts){
       const d = details[hi];
       if(!d){ rows.push({cl:{id,title:"claim #"+id+" — read failed"}, p, d:null}); continue; }
       snapshot.claims[slug+"/"+id]=d.phase;
-      if(d.route==="vote" && d.crystallized && d.draw && d.draw.carrot>0) courtHasVoteSettle=true;
+      if(d.route==="vote" && d.rewardsOpened && d.draw && d.draw.carrot>0) courtHasVoteSettle=true;
       const c = claimables(slug, id, d, p, addr, nowH);
       c.now.forEach(r=>pullsNow.push({slug, ...r, d}));
       rows.push({cl:{id, title: d.title || ("claim #"+id)}, p, d});

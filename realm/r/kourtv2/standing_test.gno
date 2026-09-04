@@ -144,7 +144,7 @@ func TestStandingSaturatesRatherThanAbortingASettlement(cur realm, t *testing.T)
 	alice := testutils.TestAddress("sg7-alice")
 	c, _, _ := standingFixture(cur, "sg7", alice)
 
-	// Every credit site sits inside Crystallize, ResolveFlag or ResolveDispute.
+	// Every credit site sits inside OpenRewards, ResolveFlag or ResolveDispute.
 	// A checked add would panic there and strand a settlement, which is the
 	// failure econ vet F4 named ("checked-abort on a shared path is a settlement
 	// DoS — clamp instead"). Saturating is safe here only because standing is a
@@ -264,7 +264,7 @@ func TestAWinningStakerEarnsStandingThroughARealLifecycle(cur realm, t *testing.
 	SettleUndisputed(cross(cur), "sg12", id)
 	testing.SkipHeights(100_000)
 	testing.SetRealm(testing.NewUserRealm(alice))
-	Crystallize(cross(cur), "sg12", id)
+	OpenRewards(cross(cur), "sg12", id)
 
 	// Nothing is credited until the position is actually drawn. The hook lives
 	// at the draw so that crediting and paying are the same event — not because
@@ -331,7 +331,7 @@ func TestConvictionStandingIsRatedByWhatTheCourtDecided(cur realm, t *testing.T)
 	uassert.Equal(t, half+full, Standing("sg13", alice))
 
 	// provClose needs no arm of its own, and the arm it once had was wrong:
-	// crystallize says provClose DRAWS, so refusing it withheld a credit on a
+	// open the rewards says provClose DRAWS, so refusing it withheld a credit on a
 	// path that pays MID emission. It is rated on its tier and its adjudication
 	// like anything else.
 	cs.provClose = true
@@ -404,8 +404,8 @@ func TestTheDisputeHookFiresAtFinalizeAndPaysTheOverturner(cur realm, t *testing
 	uassert.Equal(t, int64(0), Standing("sh2", alice))
 }
 
-// TestTheAuthorHookFiresAtCrystallizeAndOnlyAtHigh went with creditAuthorHigh.
-// It pinned that the author's STANDING credit fires from Crystallize (not from
+// TestTheAuthorHookFiresAtOpenRewardsAndOnlyAtHigh went with creditAuthorHigh.
+// It pinned that the author's STANDING credit fires from OpenRewards (not from
 // the AuthorBonus pull, so it does not depend on the author bothering to draw)
 // and only at tier HIGH. With the multiplier derived from stake size there is no
 // HIGH to gate on, and gating the record on size would pay standing for volume —
@@ -490,14 +490,14 @@ func TestLookupStandingToleratesACourtBuiltByHand(cur realm, t *testing.T) {
 
 // THE 7.9x TRAP, kept on the credit that survived it.
 //
-// Crystallize calls advancePools, which settles the SIDE integrals and never a
+// OpenRewards calls advancePools, which settles the SIDE integrals and never a
 // per-position rawHi/rawLo — so a position whose last stake predates the freeze
 // carries a stale integral, and a credit that reads it without accruing first
 // under-counts every block between the two. Measured at ~7.9x when this was
 // found.
 //
 // creditAuthorHigh accrued INTERNALLY and this test drove it directly.
-// creditWinConviction does not: its caller accrues (crystallize.gno, "settle to
+// creditWinConviction does not: its caller accrues (openrewards.gno, "settle to
 // the freeze pin") and then credits. So what is pinned here is the DEPENDENCE —
 // that the credit reads the accrued integral and is worth ~stake x held once it
 // has been accrued, and near nothing before. A caller that dropped its accrue
@@ -533,14 +533,14 @@ func TestWinConvictionCreditReadsTheAccruedIntegral(cur realm, t *testing.T) {
 func TestTimeAvgStakeClampsWhereDiv128WouldPanic(cur realm, t *testing.T) {
 	cs := &claimState{openBlocks: 1_000}
 
-	// div128 PANICS on hi >= den, and this helper now runs inside Crystallize,
+	// div128 PANICS on hi >= den, and this helper now runs inside OpenRewards,
 	// where that panic would strand the whole claim's draw rather than one
 	// address's pull. Unreachable at real magnitudes; clamped anyway, because
 	// every guard in this file was told the same thing about itself.
 	uassert.Equal(t, int64(0), timeAvgStake(cs, uint64(cs.openBlocks), 0))
 	uassert.Equal(t, int64(0), timeAvgStake(cs, ^uint64(0), ^uint64(0)))
 
-	// openBlocks is floored at 1 by Crystallize, but a hand-built claimState is
+	// openBlocks is floored at 1 by OpenRewards, but a hand-built claimState is
 	// not, and a zero denominator is div128's other panic arm.
 	uassert.Equal(t, int64(0), timeAvgStake(&claimState{openBlocks: 0}, 0, 5_000))
 

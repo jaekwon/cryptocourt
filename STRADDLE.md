@@ -334,11 +334,11 @@ stake → withdraw (≈ 1.5 × T_c: adds 72h + escrow)"*. **The "+ escrow" term 
 
 ### 8.5 It is not risk-free in aggregate — and one open item would remove the margin
 
-LOW pays the straddler **0**; a dead claim pays **0** and never crystallizes. So `E > 0` requires
-**P(claim reaches a ≥MID crystallize) > 91.1%** (78.3% for the self-dealt variant).
+LOW pays the straddler **0**; a dead claim pays **0** and never open the rewardss. So `E > 0` requires
+**P(claim reaches a ≥MID open the rewards) > 91.1%** (78.3% for the self-dealt variant).
 
 > **Any court where more than 1 in 11 claims dies unanswered, is voted conclusive-LOW, or fails to
-> crystallize prices the ordinary straddle out with no code change at all.**
+> open the rewards prices the ordinary straddle out with no code change at all.**
 
 **⚠️ Sequencing conflict:** `TODOs.md` §4 proposes making dead-claim conviction recoverable. **That
 removes this 8.8% margin**, which is currently doing most of the work at the ordinary tier. Two open

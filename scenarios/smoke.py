@@ -9,7 +9,7 @@ folders, and — the point of the test clock — a deadline crossed by moving th
 date rather than by waiting for it.
 
 The seeded demo (a longer scenario, run by hand) is where answering, settling
-and crystallizing belong, because there the 3.7 minutes buys real conviction.
+and opening the rewards belong, because there the 3.7 minutes buys real conviction.
 """
 
 import sys, pathlib

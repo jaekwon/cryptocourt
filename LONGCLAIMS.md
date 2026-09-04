@@ -525,7 +525,7 @@ self-answer, let 72h of silence settle:
 
 ```
 bond posted 510.166666   deposit+fee 112.200000   slash reserve 45.914999   (all return)
-attacker CC delta after Crystallize and all pulls:   +0.116651 CC   <-- NET GAIN
+attacker CC delta after OpenRewards and all pulls:   +0.116651 CC   <-- NET GAIN
 ```
 
 **Manufacturing the verdict that "vindicates" a 22,950 CC expired position pays the attacker
@@ -586,7 +586,7 @@ match.** Six rules, each measured:
    > — **that combination bricks the principal**, which is §5's exact failure mode. Pin instead by
    > giving `rawHeight` a `closed` arm capping at `openedAt + deadClaimTimeout`. Every consumer of
    > the raw integral was checked: `lifeAvgStake` is read only by `PostAnswer` (refuses `closed`)
-   > and `capBonus` only via paths that refuse `closed` or require `crystallized`. **Touches no
+   > and `capBonus` only via paths that refuse `closed` or require `rewardsOpened`. **Touches no
    > live money path.**
 2. **Key on the RAW `∫stake·dt`, not rate-weighted conviction** — raw is `d_eff`-invariant, so the
    straddle-safe exchange rate is a frozen constant instead of one that moves with the emission

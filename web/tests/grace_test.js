@@ -1,12 +1,12 @@
 #!/usr/bin/env node
 // THE PARTICIPANT-ONLY WEEK, AS THE PAGE DECIDES IT.
 //
-// Crystallize is participant-only for a week after the verdict, and the page
+// OpenRewards is participant-only for a week after the verdict, and the page
 // greys "Open the rewards" while that week runs. It decided in BLOCKS — 120,960
 // of them — which is a week only while the chain holds 5s a block. kourt-1 does
 // not: claim covid/10 was settled 7 Apr 2022 and read 53,280 blocks of that
 // window in December 2026, so the page told a reader the first week was still
-// running 1,713 days later while crystallize.gno would have let them through.
+// running 1,713 days later while openrewards.gno would have let them through.
 //
 // A page that greys a control the chain would accept is the reopen link's bug
 // on a third surface, and the fix is the same: read the moment, not the height.

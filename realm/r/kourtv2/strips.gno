@@ -17,7 +17,7 @@
 // and exit compute the same key from immutable fields, so membership is
 // idempotent and needs no stored key.
 //
-// Every write here is called BY the money path (PostAnswer, Crystallize,
+// Every write here is called BY the money path (PostAnswer, OpenRewards,
 // provCloseClaim, CloseDeadClaim) and therefore must never panic: a
 // moderation-side invariant may not block a lifecycle transition (§2).
 
@@ -59,7 +59,7 @@ func beHeightKey(h int64) string {
 // rather than tracking the live actionable height — a stable key never needs
 // re-keying, and §5.3 only claims the ordering APPROXIMATES urgency once a
 // claim leaves the dominant path (flag/escrow/counter windows restamp
-// crystallize-eligibility, never this key).
+// open the rewards-eligibility, never this key).
 func stripDeadline(cs *claimState) int64 { return cs.answerHeight + settleDelay }
 
 func stripKey(cs *claimState) string {
@@ -94,7 +94,7 @@ func stripEnter(c *Court, cs *claimState) {
 	cs.inStrip = true
 }
 
-// stripExit removes a claim once it is no longer policeable: crystallized,
+// stripExit removes a claim once it is no longer policeable: rewardsOpened,
 // provClosed, or dead-closed. Idempotent.
 func stripExit(c *Court, cs *claimState) {
 	if !cs.inStrip {
@@ -177,7 +177,7 @@ func stripPageIDs(c *Court, offset, limit int) []uint64 {
 }
 
 // StripPage is the per-court policing strip: the claims that are answered but
-// not yet crystallized/provClosed/closed, nearest-deadline first, regardless of
+// not yet rewardsOpened/provClosed/closed, nearest-deadline first, regardless of
 // any courtMod or meta hide bit. Paginated so the guarantee never bottoms out
 // at one page (§4).
 func StripPage(courtSlug string, offset, limit int) []uint64 {

@@ -375,7 +375,7 @@ func TestTheSeniorQuoteIsWhatGetsPaid(cur realm, t *testing.T) {
 // exact-equality state is not reachable by waiting.
 //
 // It IS reachable by SPENDING. A junior draw of exactly the overshoot lands R on the
-// cap, and reserveJunior is the same call crystallize makes — so this is a state a
+// cap, and reserveJunior is the same call open the rewards makes — so this is a state a
 // real court reaches whenever a draw happens to clear the bank exactly.
 //
 // TWO ORDERINGS CARRY THE TEST. The draw must come after the overshoot exists, or it

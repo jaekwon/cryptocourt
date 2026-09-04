@@ -27,8 +27,8 @@ The document exists to be attacked. §9 lists what must be proven, §10 what is 
 >
 > 4. **"Every comp permanently shrinks the reservoir" is FALSE.** `cumAccrual` is monotone and
 >    *unbounded*; `reservedTail` is a high-water **cursor**, not a balance. A comp is a
->    **drought**, not a permanent tax — **M:** a bystander crystallizing after the drought is
->    paid bit-identically to the control. The bug is **timing**, and `Crystallize` being
+>    **drought**, not a permanent tax — **M:** a bystander opening the rewards after the drought is
+>    paid bit-identically to the control. The bug is **timing**, and `OpenRewards` being
 >    permissionless is now the whole of it.
 > 5. **C0's proposed cap is the wrong lever and must not ship.** **M:** it strands **73% of the
 >    challenger's compensation** and moves their break-even overturn probability from 20% to
@@ -94,7 +94,7 @@ court. And comp is unbounded relative to the budget: `min(2×ownBond, 80%×burne
 `reservedTail` 0 → 12,001,200,000 and the reservoir 13,481,280 → **0** — **ten weeks of the
 whole court's emission, consumed by one comp.** `reserveJunior` then clamps the draw to zero
 *silently*, by design (S — "Clamps to R — never aborts a shared settlement path (F4)",
-`emission.gno:186-199`), and `Crystallize` is permissionless after the grace week, so **an
+`emission.gno:186-199`), and `OpenRewards` is permissionless after the grace week, so **an
 attacker picks the moment** the zero becomes permanent.
 
 **Change — REVISED by audit; the original cap proposal must NOT ship.** See §11.8 for the
@@ -104,7 +104,7 @@ time-delayed, never scaled** (**M:** a 12,000 CC comp pays out to 12,000.000000 
 Capping is the *only* thing that would strand a challenger.
 
 **The defect is on the JUNIOR side, not the senior side.** Seniors are *whole but late*;
-juniors are *scaled once at crystallize and final*. So:
+juniors are *scaled once at open the rewards and final*. So:
 
 > **Make the junior draw delayed rather than scaled.** `reserveJunior` reserves the full `want`
 > on the accrual line, and the pulls become partially payable as coverage arrives — exactly as
@@ -112,7 +112,7 @@ juniors are *scaled once at crystallize and final*. So:
 
 This satisfies **both** §6 ("the claim must eventually mint the prize it should have minted")
 and §4.1 (the challenger keeps the 2:1 premium), which the cap could not do simultaneously. It
-also **removes the timing attack entirely**, because no crystallize moment is worse than
+also **removes the timing attack entirely**, because no open the rewards moment is worse than
 another. Honest cost: `bonusPaid` becomes an amount rather than a flag, and the F9 `capBonus`
 interaction needs re-derivation.
 
@@ -315,7 +315,7 @@ locked in the very stake being defended. And the defender's price is
 
 **Change:** a per-claim pull-settled pool for **each** bond — one for the answer, one for the
 dispute — modelled on the existing `carrotPool`/`PullCarrot` pattern (S —
-`crystallize.gno:113,143,286-352`), which exists because `governor.gno:980-983` forbids
+`openrewards.gno:113,143,286-352`), which exists because `governor.gno:980-983` forbids
 unbounded iteration. Declarant of record stays a single address in both lanes; the *funding*
 becomes plural in both. **No path may iterate either pool.**
 
@@ -328,7 +328,7 @@ becomes plural in both. **No path may iterate either pool.**
    backers vote on the verdict *and* the quality of the answer they funded, and pull the
    carrot.
 2. **The answerer's slice and the credential must go pro-rata**, not to `cs.answerer` alone
-   (S — `crystallize.gno:256`, `records.gno:31`). Otherwise the declarant keeps the 5-point
+   (S — `openrewards.gno:256`, `records.gno:31`). Otherwise the declarant keeps the 5-point
    slice, the credential and the 24h priority head start while backers carry 1/N of the bond
    — **reputation bought with other people's money.**
 
@@ -368,7 +368,7 @@ stake being defended — is fixed by C4b and by nothing else in this document.
 An ordinary overturn restores `cs.tier = tierMidX` (S — `dispute.gno:462-464`), so honest
 winners are paid as if the answer had stood — **M: 4.955068 CC, bit-identical.** But
 `resolveQualityRide` can set `tier = tierLowX = 0` on **the same tally that overturned the
-answer** (S — `quality.gno:618`), and `crystallize.gno:83` then zeroes the entire draw
+answer** (S — `quality.gno:618`), and `openrewards.gno:83` then zeroes the entire draw
 (**M: 0**). So the vote that proved the answer false simultaneously declares the claim junk.
 `quality.gno:24-28` and `:639-641` argue at length that these are *different questions*.
 
@@ -379,8 +379,8 @@ its own mandate.
 
 `provCloseClaim` refunds the deposit **and** fee with the explicit comment *"provClose is not
 a conclusive low — §3.1.7"* (S — `dispute.gno:385`), then sets `tier = tierLowX` and
-`tierFinal = true` (S — `:390`), and `Crystallize` refuses on top (S —
-`crystallize.gno:32-34`). It treats itself as not-a-low for the deposit and as a low for the
+`tierFinal = true` (S — `:390`), and `OpenRewards` refuses on top (S —
+`openrewards.gno:32-34`). It treats itself as not-a-low for the deposit and as a low for the
 draw. Honest winners get principal at 1× and nothing else, on a claim where **nobody was found
 at fault** (**M: 0**).
 
@@ -435,11 +435,11 @@ Structural, not a tuning miss: the pot is 7%·midGross = O(X̄) and the per-vote
 the required turnout is unpayable by construction.** C3 improves the ratio to ~4.7% for free
 (comp falls to 68.5 CC while the carrot is bond-independent); a real fix needs both the pot
 and the clamp rescaled, which touches the P2 sybil-margin invariant
-(`crystallize.gno:336-342`) and needs its own econ vet. **Deferred, not solved.**
+(`openrewards.gno:336-342`) and needs its own econ vet. **Deferred, not solved.**
 
 ### 4.4 What the bond level trades against
 
-`CloseDeadClaim` + `crystallize.gno:32-34` mean an **unanswered** claim destroys exactly what
+`CloseDeadClaim` + `openrewards.gno:32-34` mean an **unanswered** claim destroys exactly what
 a **sniped** claim destroys — the whole draw, principal intact both ways (S). So:
 
 > **The bond level trades snipe-destruction against timeout-destruction one-for-one.**
@@ -460,7 +460,7 @@ more via timeout than it saves via snipe on any court with a thin answerer bench
 - **Re-answerability / reopening a verdict. Dead, three independent reasons, trichotomy
   exhaustive.** Reset `provisional` → the claim **bricks 72h after any UNDISPUTED re-answer,
   with no adversary at all** (**M:** 7 of 7 exits refuse — `OpenDispute`,
-  `SettleUndisputed`, `Finalize`, `CloseDeadClaim`, `Crystallize`, `WithdrawStake`,
+  `SettleUndisputed`, `Finalize`, `CloseDeadClaim`, `OpenRewards`, `WithdrawStake`,
   `Unstake`; 30,000 CC of principal locked in `c.locked` forever; no admin, no upgrade path,
   S — `court.gno:266-267`) — and "nobody disputes" is the **modal** outcome, which
   `dispute.gno:519-521` names as the lane's known failure mode. Keep `provisional` → no-op.
@@ -523,7 +523,7 @@ the design, so the check becomes a sanity bound.
 2. **C0 — demoted, and rescoped.** The cap must **not** ship (§11.8: it strands 73% of the
    challenger's comp and destroys §4.1). The real fix is *make the junior draw delayed rather
    than scaled*, which is a larger rework than the draft assumed. The **cheap interim** is to
-   refuse `Crystallize` while the reservoir cannot cover `want` and senior mass is unpaid.
+   refuse `OpenRewards` while the reservoir cannot cover `want` and senior mass is unpaid.
    Whichever ships, also cap or delay the **flag bounty** — it has the same defect at 1/5 the
    magnitude and C0-as-drafted missed it.
 3. **C1 + C6 together** — C1 makes C6's path reachable, so they must not be split.
@@ -598,7 +598,7 @@ budget clamp verified not binding:
 DESTROYED = 361,015,973   bond posted = 279,046,163   LEVERAGE = 1.2937
 ```
 
-**The correct derivation.** Destroyed prize (`crystallize.gno:63-90,113`; deposit and fee
+**The correct derivation.** Destroyed prize (`openrewards.gno:63-90,113`; deposit and fee
 refund on both paths, principal is 1× on both, `capBonus` never binds):
 
 ```
@@ -779,11 +779,11 @@ of X̄). Three structurally identical bystander claims, opened and settled toget
 
 | bystander | winners / author / answerer |
 |---|---|
-| crystallized **before** the comp | `0.065186 / 0.006518 / 0.004074` |
-| crystallized **inside** the drought | **`0 / 0 / 0`** |
-| crystallized **after** the drought (8 wk) | `0.065186 / 0.006518 / 0.004074` — **bit-identical to control** |
+| rewardsOpened **before** the comp | `0.065186 / 0.006518 / 0.004074` |
+| rewardsOpened **inside** the drought | **`0 / 0 / 0`** |
+| rewardsOpened **after** the drought (8 wk) | `0.065186 / 0.006518 / 0.004074` — **bit-identical to control** |
 
-So the destruction is real and *total*, but it is a **timing** bug — and `Crystallize` being
+So the destruction is real and *total*, but it is a **timing** bug — and `OpenRewards` being
 permissionless is now the entire attack, not an aggravating detail. Drought length at
 1/5/10/30% of supply: **2/6/11/36 weeks** from an empty reservoir, 0/2/8/33 from a full one.
 
@@ -832,9 +832,9 @@ looked safe.
 the same shape at 1/5 the magnitude — **6 weeks of drought at 30% of supply**; the **carrot** is
 ~30× smaller than comp and negligible.
 
-**Cheap interim if the junior-delay rework is deferred:** refuse `Crystallize` while
+**Cheap interim if the junior-delay rework is deferred:** refuse `OpenRewards` while
 `reservoirR() < want` and the senior queue still has unpaid mass. F4's "never aborts a shared
-settlement path" does **not** apply — `Crystallize` is its own entrypoint and already panics on
+settlement path" does **not** apply — `OpenRewards` is its own entrypoint and already panics on
 five preconditions, and **principal is not gated on it** (S — `session.gno:107` needs only
 `verdictAt != 0`). Costs: it withholds the author's deposit and fee during the wait, and it
 needs a deadline so a griefer cannot block forever.
@@ -998,8 +998,8 @@ not a participant. Grepped, exactly **5** call sites, and they do not want the s
 |---|---|---|
 | `dispute.gno:188` | `VoteDispute` | **must add** (exclusion) |
 | `quality.gno:194` | `VoteQuality` | **must add** (exclusion) |
-| `crystallize.gno:302` | `PullCarrot` | **must add** (exclusion) |
-| `crystallize.gno:42` | `Crystallize` grace week | **grants** the A13 privilege |
+| `openrewards.gno:302` | `PullCarrot` | **must add** (exclusion) |
+| `openrewards.gno:42` | `OpenRewards` grace week | **grants** the A13 privilege |
 | `dispute.gno:444` | `Finalize` grace week | **grants** the A13 privilege |
 
 So: `isExcludedVoter` (add co-funders) and `isGraceInsider` (decide explicitly) — exactly the
@@ -1130,7 +1130,7 @@ restores the junior draw *in the same call*, and `reservedTail` is monotone — 
 reserved **ahead of** the draw C5 exists to restore. **M** immediately after an overturn:
 `comp = 280 CC`, `cumAccrual = 3.6 CC`, **`reservoir = 0`**.
 
-| X̄ as share of supply | comp in weeks of budget | reservoir at crystallize | winners |
+| X̄ as share of supply | comp in weeks of budget | reservoir at open the rewards | winners |
 |---|---|---|---|
 | 0.87% | 0.94 | 25.5 CC | **19,584** |
 | 3.56% | 3.80 | **0** | **0** |
@@ -1215,13 +1215,13 @@ c3fix (sizer re-keyed too):        bond0 249.735907  refund   0.000000 =  0.00% 
    0.000000`. The only post-settle forfeiture is the flag-lane slash, and it shares the sizer.
    **Nothing leaks.**
 3. **The prescribed fix costs more than the bug.** Re-keying `quality.gno:531` withholds **100%
-   of the bond from settle until crystallize** on the *modal* path (undisputed, no flag, ≥1 week),
+   of the bond from settle until open the rewards** on the *modal* path (undisputed, no flag, ≥1 week),
    and it breaks a shipped test asserting the slash's **definition, not a bug** —
    `TestSlashSizeForDrawProportional`: *"a NO answer must read the NO pool, not the (large) YES
    pool."* `quality.gno:510-517` defines the slash as 1.6× the **answered** side's forgone draw.
 
 **The correct reading, which I had inverted.** The answered-keyed sizer is **slash collateral**,
-whose risk window runs to crystallize — retain it. The max-keyed excess is an **anti-snipe
+whose risk window runs to open the rewards — retain it. The max-keyed excess is an **anti-snipe
 premium**, whose risk window is the 72h dispute window, where the *whole* bond burns on an
 overturn (including the slash reserve via `unslash`). **Releasing the premium at settle is
 correct disposition, not a leak.**
@@ -1274,7 +1274,7 @@ applied everywhere.
 | 600 | 1.2937 | 0.6687 | **1.0000** |
 | 5000 (today) | 0.7980 | 0.4125 | 0.7980 (inert) |
 
-**One clause at `crystallize.gno:83`:**
+**One clause at `openrewards.gno:83`:**
 
 ```go
 if capd := cs.answerBond0 - mulDiv128(midGross, splitCarrot, 100); want > capd {
@@ -1292,7 +1292,7 @@ verified, standalone and safe.
 it keys on the MID-weight gross. So "the tier the bond was sized against" is `tierMidX` on *every*
 claim, and the freeze is arithmetically just `min(cs.tier, tierMidX)`.
 
-**Every reader of `cs.tier`, by grep — money readers are exactly three, all in `crystallize.gno`:**
+**Every reader of `cs.tier`, by grep — money readers are exactly three, all in `openrewards.gno`:**
 `:83` (the draw — **the only site the fix touches**), `:265` (the `AnswererBonus` cap) and `:276`
 (`capBonus`, the F9 per-position cap). The latter two must **not** be lowered independently or
 coin strands. One authority reader: `quality.gno:613`, the v0.54 promotion ratchet, must keep
@@ -1412,7 +1412,7 @@ answer-bond cut ships unchanged.
 
 ### 14.1 The decisive measurement: the destroyed prize contains no bond term
 
-`D = (tier + splitCarrot/100)·mg_win` (`crystallize.gno:83,113`). Swept **1,728 grid points**
+`D = (tier + splitCarrot/100)·mg_win` (`openrewards.gno:83,113`). Swept **1,728 grid points**
 (6 ages × 2 rates × 4 splits × 3 X̄ × 3 bond levels × 2 keyings × 2 tiers) comparing `D` across
 every bond level and both keyings: **0 divergences.**
 
@@ -1689,7 +1689,7 @@ Four cross-tree runs, each executed alone so the shared clock starts at the same
 | tree | window | rounds | exit | tier | winners / author / answerer |
 |---|---|---|---|---|---|
 | baseline | default | 2 | Finalize | 1 | **19,584 / 1,958 / 1,224** |
-| baseline | widened | 3 | provClose | 0, final | Crystallize **REFUSED** → 0 / 0 / 0 |
+| baseline | widened | 3 | provClose | 0, final | OpenRewards **REFUSED** → 0 / 0 / 0 |
 | patched | widened | 3 | provClose | 1 | **19,584 / 1,958 / 1,224** |
 | patched | **default** | 3 | provClose | 1 | **19,584 / 1,958 / 1,224** |
 

@@ -131,12 +131,12 @@ func TestTheEscrowHoldsExactlyWhatItOwes(cur realm, t *testing.T) {
 	// ablatable to a FAILURE by this fixture, and if one is not, the fixture is short a
 	// state rather than the sum being short a term.
 
-	// And the whole way out: crystallize releases the deposit and fee, and the escrow
+	// And the whole way out: open the rewards releases the deposit and fee, and the escrow
 	// must end owing exactly what it holds — which for this claim is nothing.
 	testing.SkipHeights(periodBlocks)
 	testing.SetRealm(testing.NewUserRealm(alice))
-	Crystallize(cross(cur), "esum", id)
-	mustReconcile(t, c, "after Crystallize releases the deposit and fee")
+	OpenRewards(cross(cur), "esum", id)
+	mustReconcile(t, c, "after OpenRewards releases the deposit and fee")
 }
 
 // THE ELECTION LANE GETS ITS OWN FIXTURE, because the claim lifecycle above cannot
@@ -255,8 +255,8 @@ func TestTheEscrowHoldsExactlyWhatItOwesOnTheOtherTerminalPaths(cur realm, t *te
 	testing.SkipHeights(priorityWindowBlocks + 1)
 	testing.SkipHeights(periodBlocks)
 	testing.SetRealm(testing.NewUserRealm(alice))
-	Crystallize(cross(cur), "esum3", id)
-	mustReconcile(t, c, "after the undisputed claim crystallizes")
+	OpenRewards(cross(cur), "esum3", id)
+	mustReconcile(t, c, "after the undisputed claim open the rewardss")
 
 	// THE DEAD PATH: the deposit comes back, the fee burns. The escrow must lose both,
 	// and the sum has to drop by exactly the pair.

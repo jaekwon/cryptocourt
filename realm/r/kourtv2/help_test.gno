@@ -382,16 +382,16 @@ func TestTheClaimPageNumbersNameTheirCoin(cur realm, t *testing.T) {
 		t.Fatal("an answered claim must not quote a generic CC")
 	}
 
-	// CRYSTALLIZED, which is a different branch again — and mutually exclusive
+	// OPEN THE REWARDSD, which is a different branch again — and mutually exclusive
 	// with the flag slot, since the switch takes only one arm.
-	cs.crystallized = true
+	cs.rewardsOpened = true
 	cs.drawWinners, cs.drawAuthor, cs.drawAnswerer, cs.carrotPool = 11, 22, 33, 44
 	done := Render(path)
 	if !strings.Contains(done, "- rewards open — pools ("+unit+"): accuracy 11") {
 		t.Fatalf("the reward pools must name the coin:\n%s", done)
 	}
 	if strings.Contains(done, "CC units") {
-		t.Fatal("a crystallized claim must not quote a generic CC")
+		t.Fatal("a rewardsOpened claim must not quote a generic CC")
 	}
 }
 
@@ -453,7 +453,7 @@ func TestTheHelpPageQuotesTheRealStatusWords(cur realm, t *testing.T) {
 //
 // cs.tier is the ZERO VALUE — which is tierLowX — until a settle or a finalize
 // writes mid, so every answered-but-unsettled claim rendered "quality: low".
-// And the tier is a payout multiplier: crystallize computes tier × midGross,
+// And the tier is a payout multiplier: open the rewards computes tier × midGross,
 // and low is 0. The page therefore told the answerer and every staker that the
 // claim currently pays nothing, when its outcome absent a flag vote is mid.
 // THE SAME HAZARD, ONE DESIGN LATER. The old failure was that cs.tier's zero

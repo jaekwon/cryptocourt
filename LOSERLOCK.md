@@ -118,13 +118,13 @@ One bool, one line, one clause:
 ```go
 // stake.gno   — stakePos gains:  heldAtFreeze bool
 // session.gno — WithdrawStake, before zeroing p.stake:  p.heldAtFreeze = true
-// crystallize.gno — WithdrawBonus:
+// openrewards.gno — WithdrawBonus:
 //   if p.stake <= 0 && !p.heldAtFreeze { panic("… drained before the answer …") }
 ```
 
 `WithdrawStake` is the **only** path that can empty a position after the freeze (`Unstake` panics
 on `frozenAt != 0`), so one latch at one site makes `p.stake > 0 || heldAtFreeze` mean exactly
-"live when the answer landed". **No snapshot, no iteration, no new tree** — crystallize stays
+"live when the answer landed". **No snapshot, no iteration, no new tree** — open the rewards stays
 walk-free.
 
 | | measured |
@@ -212,7 +212,7 @@ already rejected once.**
 
 The five: `TestDisputeUpholdPath`, `TestDisputeOverturnPath`, `TestDisputeFailedRoundsToProvClose`,
 `TestSettleUndisputedAndWithdraw`, `TestWithdrawStakeDebitsItsOwnSidesPool`. **Nothing** in emission,
-quality, drawcap, stakeseries, render, moderation, meta or crystallize.
+quality, drawcap, stakeseries, render, moderation, meta or open the rewards.
 
 **The ones that change the design:**
 
@@ -243,7 +243,7 @@ quality, drawcap, stakeseries, render, moderation, meta or crystallize.
 
 **And two simplifications:** `lock.gno` needs **zero new state** (the schedule is
 `verdictAt + claimLife`, and its "a lock, not custody" contract is unchanged); and `claimLife()`
-should be **hoisted** so crystallize and the lock share one expression rather than two copies of a
+should be **hoisted** so open the rewards and the lock share one expression rather than two copies of a
 divisor whose re-anchoring already has a documented history of being forgotten.
 
 **Refuted, and recorded:** nothing depends on the losing side leaving while the claim is live —
@@ -371,7 +371,7 @@ HIGH/cold needs λ ≈ 1.67 and MID/hot needs 3.45, both past the design's own e
 Vet 2 recommends `λ = 1/8` on the grounds that `λ = 1` amputates **2.6× what `ECONOMICS.md` already
 rejected**. That objection rests on **line 39** — the 0.85-vs-0.75 argument about the 0.59–0.67
 band. **Line 39 predates the 80/93 correction recorded nine lines EARLIER, at line 30:** *"the true
-honest break-even is `p_min ≈ 0.68`"*, repeated verbatim in `crystallize.gno`.
+honest break-even is `p_min ≈ 0.68`"*, repeated verbatim in `openrewards.gno`.
 
 > **The 0.68 target already excludes the entire 0.59–0.67 band by itself.** Both sentences cannot be
 > the design's position, and the later one is the corrected one.
@@ -427,6 +427,6 @@ transferable. The lock deepens that tension.
   the load-bearing sentence in the strongest argument *against* this change. Needs correcting either
   way.
 - **A forfeited share stays in `juniorReserved` and is never minted** — the same channel
-  `crystallize.gno`'s header already names for cap-cut, dust, seeded authors and overturned
+  `openrewards.gno`'s header already names for cap-cut, dust, seeded authors and overturned
   answerers (*"economically a burn, always on the conservative side of the ceiling"*). A delay
   rather than a loss, but it can transiently tighten the next claim's reservation.

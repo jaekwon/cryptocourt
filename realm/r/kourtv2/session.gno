@@ -47,7 +47,7 @@ func SettleUndisputed(cur realm, courtSlug string, claimID uint64) {
 	// WHAT USED TO BE HERE, because deleting it outright would invite somebody to
 	// reintroduce it: twenty-one lines sizing a slash-sized reserve to keep
 	// collateralized past settle (audit M3-HIGH-1, v0.40, v0.44), because a
-	// conclusive-low flag could still land while flags ran until crystallize.
+	// conclusive-low flag could still land while flags ran until open the rewards.
 	// Every mechanism that paragraph reasoned about — the quality slot,
 	// slotConsumed, OpenFlag, ResolveFlag, pendingSlash — went with the quality
 	// lane, and none of them has a single non-comment line left in this realm.

@@ -28,7 +28,7 @@
   below: the CODE pays a winner 80/93 of the claim draw (the 8/5 author/answerer
   points come out of the same D, not on top), so the winner's effective rate is
   `0.85 × 80/93 = 0.731` and the true honest break-even is **`p_min ≈ 0.68`**
-  (econ-vet P7, crystallize.gno:69). The 0.59 figure assumes a gross-up the code
+  (econ-vet P7, openrewards.gno:69). The 0.59 figure assumes a gross-up the code
   deliberately does not do (it is ~16% more conservative, ceiling-safer). A
   p = 0.7 staker still nets slightly positive; a p = 0.6 staker is neutral-to-
   negative on the reward (principal always returns 1× regardless). Accepted

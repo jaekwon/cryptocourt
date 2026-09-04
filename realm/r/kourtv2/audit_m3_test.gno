@@ -22,15 +22,15 @@ import (
 //	           TestFinalizeRetainsNothingAfterDustLowNoSlash — retention had to be
 //	           conditional on an adjudication. It is now unconditionally nothing,
 //	           and TestSettleRefundsTheWholeAnswerBond below pins that directly.
-//	M3-MED-1   TestCrystallizeGriefThrottled — a griefer re-flagging to stall
-//	           Crystallize. The vector required OpenFlag; there is no flag to
+//	M3-MED-1   TestOpenRewardsGriefThrottled — a griefer re-flagging to stall
+//	           OpenRewards. The vector required OpenFlag; there is no flag to
 //	           re-open, so the cooldown that bounded it is gone too.
 //	M3-LOW-1   TestReopenSupersedesCounter — a reopen landing on a pending slash
 //	           and an open counter re-vote. Both states are unreachable.
 //
 // THE ONE TO WATCH. M3-MED-1 was a liveness finding: something cheap could delay
-// Crystallize. Removing the flag removed that particular lever, but disputes are
-// still openable and still delay crystallization, so if a stall vector is ever
+// OpenRewards. Removing the flag removed that particular lever, but disputes are
+// still openable and still delay the reward draw, so if a stall vector is ever
 // looked for again, that is where it will be — not here.
 
 // SETTLE RETURNS THE WHOLE ANSWER BOND. Three tests above used to assert this
@@ -83,7 +83,7 @@ func TestReservoirNoOvermintJuniorThenSenior(cur realm, t *testing.T) {
 	if d != r0 || c.reservoirR() != 0 {
 		t.Fatalf("junior should drain R: d=%d r0=%d left=%d", d, r0, c.reservoirR())
 	}
-	mintEmission(c, alice, d) // the eager junior mint (as crystallize's pulls do)
+	mintEmission(c, alice, d) // the eager junior mint (as open the rewards's pulls do)
 
 	// A senior (carrot/comp/bounty) enqueued AFTER the junior. Before the fix
 	// it started at reservedTail (== 0 here) and PullSenior re-paid the drained
@@ -144,10 +144,10 @@ func TestOverturnedAnswererDrawsNoSlice(cur realm, t *testing.T) {
 		t.Fatal("an overturn resets the record")
 	}
 
-	// Cross a period so the reservoir has a budget, then crystallize.
+	// Cross a period so the reservoir has a budget, then open the rewards.
 	testing.SkipHeights(periodBlocks)
 	testing.SetRealm(testing.NewUserRealm(alice))
-	Crystallize(cross(cur), "mf1", id)
+	OpenRewards(cross(cur), "mf1", id)
 	_, _, ans, _ := DrawSlices("mf1", id)
 	if ans != 0 {
 		t.Fatalf("an overturned answer draws NO answerer slice: got %d", ans)

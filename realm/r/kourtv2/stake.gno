@@ -41,7 +41,7 @@ type stakePos struct {
 	// rate (Q7).
 	rawHi, rawLo uint64
 	lastRawAt    int64
-	bonusPaid    bool // the winner draw is one-shot (crystallize.gno)
+	bonusPaid    bool // the winner draw is one-shot (openrewards.gno)
 }
 
 // rateBpsFP is the current published rate in bps × 1e6 per week:
@@ -89,7 +89,7 @@ func accrue(c *Court, cs *claimState, p *stakePos, side int) {
 // advancePools settles the per-side POOL integrals analytically from the side
 // totals — sideStake × Δ over exactly the interval since the last mutation,
 // during which the total was constant. This makes the pool EXACT at any
-// moment (crystallize's denominator) with no dependence on when individual
+// moment (open the rewards's denominator) with no dependence on when individual
 // positions settle: Σ position integrals == the side integral by construction.
 // MUST run before any yesStake/noStake mutation.
 func advancePools(c *Court, cs *claimState) {
@@ -128,7 +128,7 @@ func rawHeight(cs *claimState) int64 {
 // lifeAvgStake is the claim's LIFETIME time-averaged TOTAL stake:
 // (∫yesStake·dt + ∫noStake·dt) / (now − openedAt), read from the raw integrals
 // advancePools already keeps — the same integral, over the same denominator,
-// that crystallize's capBonus uses for the F9 flash-proof base. Callers must
+// that open the rewards's capBonus uses for the F9 flash-proof base. Callers must
 // have settled the pools to `now` first. The denominator runs from the claim's
 // OPEN, not its first stake, so an idle head only ever lowers it: conservative
 // by construction. Unlike the trailing ring, no withdrawal can lower this —
@@ -340,7 +340,7 @@ func ratePreview(c *Court) int64 {
 
 // convPreviewCC settles ONE position against that preview and returns the CC-unit draw
 // base — the same figure ConvictionOf has always answered, now in one place because two
-// readers need it. Duplicating these six lines is the shape crystallize.gno records
+// readers need it. Duplicating these six lines is the shape openrewards.gno records
 // getting caught for: the mutation harness reported four rows as matching TWICE because
 // PullSenior and SeniorEntitlement each carried their own copy of one formula.
 func convPreviewCC(cs *claimState, p *stakePos, acc int64) int64 {

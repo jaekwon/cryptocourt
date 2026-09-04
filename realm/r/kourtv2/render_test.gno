@@ -132,9 +132,9 @@ func TestRenderLifecycleLines(cur realm, t *testing.T) {
 	// THE FLAG ARM IS GONE. It pinned that an open flag vote renders NO running
 	// count. The rule survives for the vote that still exists — the dispute — and
 	// is pinned on that lane; what went is the second lane it was pinned on.
-	cs.crystallized, cs.drawWinners, cs.carrotPool = true, 12345, 77
-	mustContain("crystallized", "accuracy 12345")
-	mustContain("crystallized", "participation remaining 77")
+	cs.rewardsOpened, cs.drawWinners, cs.carrotPool = true, 12345, 77
+	mustContain("rewardsOpened", "accuracy 12345")
+	mustContain("rewardsOpened", "participation remaining 77")
 
 	cs.provClose = true
 	mustContain("provclose", "closed without a decision")
@@ -314,7 +314,7 @@ func TestPctNoOverflowAtWhaleConviction(cur realm, t *testing.T) {
 // quarter of its surface is close to unenforced.
 //
 // Driven through a FULL lifecycle so the pages have real figures to leak: stake, an
-// answer, a flag with a conclusive tier, settle, and crystallize. A page that renders
+// answer, a flag with a conclusive tier, settle, and open the rewards. A page that renders
 // nothing cannot violate §7.4, so an empty-state check would prove little.
 func TestNoRenderPathLeaksTheForbiddenTerms(cur realm, t *testing.T) {
 	alice := testutils.TestAddress("s74-alice")
@@ -332,7 +332,7 @@ func TestNoRenderPathLeaksTheForbiddenTerms(cur realm, t *testing.T) {
 	upholdByVote(cur, "s74", id, c, flagger, voter)
 	testing.SkipHeights(priorityWindowBlocks + 1)
 	testing.SetRealm(testing.NewUserRealm(alice))
-	Crystallize(cross(cur), "s74", id)
+	OpenRewards(cross(cur), "s74", id)
 
 	idStr := strconv.FormatUint(id, 10)
 	pages := map[string]string{
@@ -533,12 +533,12 @@ func TestFrontPageRanksByBurnAndSkipsHidden(cur realm, t *testing.T) {
 // TestNoRenderPathLeaksTheForbiddenTerms above already walks all four render paths, so
 // the pages themselves are covered. What it cannot cover is the STATE it renders them in:
 // it drives one claim through its whole life and reads the pages at the END, after
-// Crystallize. renderClaim branches on state, and several of those branches exist ONLY
+// OpenRewards. renderClaim branches on state, and several of those branches exist ONLY
 // before that point — the flag-slot line, the counter-re-vote line, the escrowed-slash
 // line. Copy on any of them is invisible to a sweep taken at the end.
 //
 // Measured, not assumed: injecting "backing" into the flag-slot branch — reachable only
-// while `!crystallized && !slotConsumed && !provClose` — is caught HERE and not by the
+// while `!rewardsOpened && !slotConsumed && !provClose` — is caught HERE and not by the
 // sweep above.
 //
 // "ceiling" is included though §7.4 names only the inflation ceiling: a bare "ceiling" in
@@ -585,8 +585,8 @@ func TestNoRenderSurfaceLeaksTheForbiddenVocabulary(cur realm, t *testing.T) {
 	sweep("settled")
 	testing.SkipHeights(100_000)
 	testing.SetRealm(testing.NewUserRealm(alice))
-	Crystallize(cross(cur), "r74", id)
-	sweep("crystallized")
+	OpenRewards(cross(cur), "r74", id)
+	sweep("rewardsOpened")
 }
 
 // No user string can open page structure of its own, on ANY page.

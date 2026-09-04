@@ -192,7 +192,7 @@ func TestMetaLifecycleGuards(cur realm, t *testing.T) {
 	}
 	testing.SkipHeights(priorityWindowBlocks + 1)
 	testing.SetRealm(testing.NewUserRealm(alice))
-	Crystallize(cross(cur), metaSlug, ap2)
+	OpenRewards(cross(cur), metaSlug, ap2)
 	if AppealLatchHolder(verbHide, "mtx2", 1) != 0 {
 		t.Fatal("a terminal transition must free the target's review slot")
 	}

@@ -392,7 +392,7 @@ func ResolveDispute(cur realm, courtSlug string, claimID uint64) {
 		// one withholds.
 		//
 		// It must stay a read of the TALLY and never a re-derivation from
-		// PastVotes. crystallize.gno's carrot had exactly that bug — re-deriving
+		// PastVotes. openrewards.gno's carrot had exactly that bug — re-deriving
 		// a numerator the tally had capped — and over-paid every capped voter
 		// until it was made to read the recorded figure instead. A mutation row
 		// pins this one, caught by TestMetaLifecycleGuards.
@@ -519,7 +519,7 @@ func compAmount(ownBond, burned int64) int64 {
 // for from one the court looked at and threw out.
 //
 // No draw is written and none is possible: the claim's own spam share is past
-// half, so spamNetBps is zero and crystallize multiplies the draw to nothing.
+// half, so spamNetBps is zero and open the rewards multiplies the draw to nothing.
 // Belt and braces, in opposite directions — the money is refused here and the
 // arithmetic refuses it again there.
 // spamDiscards and spamBurnsDeposit are the two thresholds, as predicates.
@@ -626,7 +626,7 @@ func provCloseClaim(c *Court, cs *claimState) {
 // slash-eligible, mirroring SettleUndisputed's M3-HIGH-1 retention), and the
 // answer record moves once, from the final verdict (P13). Participant-only for
 // the first week of eligibility (A13), permissionless after. Deposit, fee, and
-// any retained reserve wait for QUALITY_FINAL (crystallize).
+// any retained reserve wait for QUALITY_FINAL (open the rewards).
 func Finalize(cur realm, courtSlug string, claimID uint64) {
 	if !cur.IsCurrent() {
 		panic(errStaleRealm)
@@ -647,7 +647,7 @@ func Finalize(cur realm, courtSlug string, claimID uint64) {
 	if !escrowPassed(cs) {
 		panic("kourtv2: the escrow window has not passed")
 	}
-	/* THE TWIN OF crystallize.gno's GATE, and it drifts the same way: counted in
+	/* THE TWIN OF openrewards.gno's GATE, and it drifts the same way: counted in
 	   blocks the week outlasts itself on any chain slower than 5s, so a claim
 	   parked in 2022 was still refusing strangers years later. escrowUntilAt is
 	   already a FUTURE stamp (set beside escrowUntil above), so the grace runs

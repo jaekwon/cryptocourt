@@ -13,7 +13,7 @@
 //	time-delayed, never scaled (2A-T1).
 //	JUNIOR — the tier-scaled claim draws: D = min(Σg, R) where R is accrual
 //	past the senior tail minus prior junior reservations; scaled once at
-//	crystallize, then pulled.
+//	open the rewards, then pulled.
 //
 // The R_max pause (ceiling-not-floor): accrual stops while the junior pool is
 // full AND every senior is covered; the skipped budget is forgone forever.
@@ -183,7 +183,7 @@ func enqueueSenior(c *Court, to address, amount int64, purpose string) uint64 {
 	// accrual the junior already minted, driving emittedTotal past cumAccrual
 	// and breaking the ceiling. Placing it past juniorReserved keeps the whole
 	// number line disjoint: seniors and juniors tile [0, reservedTail+juniorReserved)
-	// without overlap. (Pre-crystallize, juniorReserved==0 → unchanged.)
+	// without overlap. (Pre-open the rewards, juniorReserved==0 → unchanged.)
 	start := mustAdd(c.reservedTail, c.juniorReserved)
 	e := &entitlement{to: to, amount: amount, start: start, purpose: purpose}
 	c.reservedTail = mustAdd(c.reservedTail, amount)
@@ -200,7 +200,7 @@ func enqueueSenior(c *Court, to address, amount int64, purpose string) uint64 {
 	return c.queueSeq
 }
 
-// reserveJunior reserves D from the junior pool at crystallize time (later
+// reserveJunior reserves D from the junior pool at open the rewards time (later
 // modules). Clamps to R — never aborts a shared settlement path (F4).
 func reserveJunior(c *Court, want int64) int64 {
 	touch(c)

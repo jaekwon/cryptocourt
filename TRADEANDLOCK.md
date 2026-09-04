@@ -264,7 +264,7 @@ serves; and conviction pays zero either way.
 3. `WithdrawStake`: **delete the early-exit clause**; refuse while `isLockedSide && !pastRelease`.
 4. `pastRelease` **date-gated with a height fallback** (per `clock.gno`'s ruling that a published
    deadline must be block time); `ReleaseAt(slug, id, side)` publishes it.
-5. `claimLife()` hoisted — **one** definition shared by the lock and crystallize's F9 denominator,
+5. `claimLife()` hoisted — **one** definition shared by the lock and open the rewards's F9 denominator,
    replacing the same expression written twice.
 6. `Transfer` gated on `spendable()` — **§0**, non-negotiable.
 

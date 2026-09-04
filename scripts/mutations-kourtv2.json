@@ -78,14 +78,14 @@
  },
  {
   "pkg": "kourtv2",
-  "file": "crystallize.gno",
+  "file": "openrewards.gno",
   "label": "PullCarrot: the carrot is not once-per-address, so it can be claimed twice",
   "find": "\tif cs.voted.Has(claimedKey) {",
   "replace": "\tif false {"
  },
  {
   "pkg": "kourtv2",
-  "file": "crystallize.gno",
+  "file": "openrewards.gno",
   "label": "P2 per-voter carrot clamp removed",
   "find": "\tif clamp := b0/2 - 1; share > clamp {\n\t\tshare = clamp // P2: the sybil-margin invariant, per voter\n\t}",
   "replace": ""
@@ -163,14 +163,14 @@
  },
  {
   "pkg": "kourtv2",
-  "file": "crystallize.gno",
+  "file": "openrewards.gno",
   "label": "capBonus F9 bound loosened 1000x",
   "find": "\tbound := mulDiv128(rawAvg, tierBpsFor(cs), 2*tierParBps)",
   "replace": "\tbound := mulDiv128(rawAvg, tierBpsFor(cs)*1000, 2*tierParBps)"
  },
  {
   "pkg": "kourtv2",
-  "file": "crystallize.gno",
+  "file": "openrewards.gno",
   "label": "capBonus drops its negative floor",
   "find": "\tif gross < 0 {\n\t\tgross = 0\n\t}",
   "replace": ""
@@ -583,28 +583,28 @@
  },
  {
   "pkg": "kourtv2",
-  "file": "crystallize.gno",
+  "file": "openrewards.gno",
   "label": "P7: winners take the whole draw (the section 3.5 'fix')",
   "find": "\twinners = d * splitWinners / (splitWinners + splitAuthor + splitAnswerer)",
   "replace": "\twinners = d"
  },
  {
   "pkg": "kourtv2",
-  "file": "crystallize.gno",
+  "file": "openrewards.gno",
   "label": "DrawQuote: the quote is not the entitlement the payment path computes",
   "find": "\treturn drawSplit(cs, drawEntitlement(c, cs, midGross))",
   "replace": "\treturn drawSplit(cs, drawEntitlement(c, cs, midGross)/2)"
  },
  {
   "pkg": "kourtv2",
-  "file": "crystallize.gno",
+  "file": "openrewards.gno",
   "label": "P7: the author slice is not paid",
   "find": "\tauthor = d * splitAuthor / (splitWinners + splitAuthor + splitAnswerer)",
   "replace": "\tauthor = 0"
  },
  {
   "pkg": "kourtv2",
-  "file": "crystallize.gno",
+  "file": "openrewards.gno",
   "label": "P7: the answerer slice is not paid",
   "find": "\tanswerer = d * splitAnswerer / (splitWinners + splitAuthor + splitAnswerer)",
   "replace": "\tanswerer = 0"
@@ -821,28 +821,28 @@
  },
  {
   "pkg": "kourtv2",
-  "file": "crystallize.gno",
+  "file": "openrewards.gno",
   "label": "AnswererBonus: the tier bound never binds",
   "find": "\tif bound := mulDiv128(cs.answerBond0, tierBpsFor(cs), 2*tierParBps); pay > bound {",
   "replace": "\tif bound := mulDiv128(cs.answerBond0, tierBpsFor(cs)*1000, 2*tierParBps); pay > bound {"
  },
  {
   "pkg": "kourtv2",
-  "file": "crystallize.gno",
+  "file": "openrewards.gno",
   "label": "AnswererBonus: the bound is a whole bond, not half",
   "find": "\tif bound := mulDiv128(cs.answerBond0, tierBpsFor(cs), 2*tierParBps); pay > bound {",
   "replace": "\tif bound := mulDiv128(cs.answerBond0, tierBpsFor(cs), tierParBps); pay > bound {"
  },
  {
   "pkg": "kourtv2",
-  "file": "crystallize.gno",
+  "file": "openrewards.gno",
   "label": "AnswererBonus: the slice can be drawn twice",
   "find": "\tif cs.answererPaid {\n\t\tpanic(\"kourtv2: the answerer slice was already drawn\")\n\t}",
   "replace": ""
  },
  {
   "pkg": "kourtv2",
-  "file": "crystallize.gno",
+  "file": "openrewards.gno",
   "label": "AnswererBonus: anyone may draw the answerer's slice",
   "find": "\tif who != cs.answerer {",
   "replace": "\tif false {"
@@ -863,21 +863,21 @@
  },
  {
   "pkg": "kourtv2",
-  "file": "crystallize.gno",
+  "file": "openrewards.gno",
   "label": "AuthorBonus: anyone may draw the author's slice",
   "find": "\tif who != cs.author {",
   "replace": "\tif false {"
  },
  {
   "pkg": "kourtv2",
-  "file": "crystallize.gno",
+  "file": "openrewards.gno",
   "label": "AuthorBonus: the slice can be drawn twice",
   "find": "\tif cs.authorPaid {\n\t\tpanic(\"kourtv2: the author slice was already drawn\")\n\t}",
   "replace": ""
  },
  {
   "pkg": "kourtv2",
-  "file": "crystallize.gno",
+  "file": "openrewards.gno",
   "label": "AuthorBonus: the author's slice skips the F9 cap",
   "find": "\t\tpay = capBonus(cs, cs.drawAuthor, p.rawHi, p.rawLo)",
   "replace": "\t\tpay = cs.drawAuthor"
@@ -926,35 +926,35 @@
  },
  {
   "pkg": "kourtv2",
-  "file": "crystallize.gno",
+  "file": "openrewards.gno",
   "label": "WithdrawBonus: the losing side draws too",
   "find": "\tif side != int(cs.provisional) {",
   "replace": "\tif false {"
  },
  {
   "pkg": "kourtv2",
-  "file": "crystallize.gno",
+  "file": "openrewards.gno",
   "label": "PullCarrot: a participant draws the carrot as well as its slice",
   "find": "\tif isParticipant(cs, who) {",
   "replace": "\tif false {"
  },
  {
   "pkg": "kourtv2",
-  "file": "crystallize.gno",
+  "file": "openrewards.gno",
   "label": "PullCarrot: an against-verdict voter draws the carrot",
   "find": "\tif v == nil || v.(string) != cs.carrotChoice {",
   "replace": "\tif v == nil {"
  },
  {
   "pkg": "kourtv2",
-  "file": "crystallize.gno",
+  "file": "openrewards.gno",
   "label": "PullCarrot: a share may exceed what is left in the pool",
   "find": "\tif share > cs.carrotPool {",
   "replace": "\tif false {"
  },
  {
   "pkg": "kourtv2",
-  "file": "crystallize.gno",
+  "file": "openrewards.gno",
   "label": "PullCarrot: the claim latch is never written",
   "find": "\tcs.voted.Set(claimedKey, true)",
   "replace": ""
@@ -1885,15 +1885,15 @@
  },
  {
   "pkg": "kourtv2",
-  "file": "crystallize.gno",
-  "label": "crystallize: the court's deposit ledger is not decremented",
+  "file": "openrewards.gno",
+  "label": "open the rewards: the court's deposit ledger is not decremented",
   "find": "\t\tc.deposit -= cs.deposit",
   "replace": ""
  },
  {
   "pkg": "kourtv2",
-  "file": "crystallize.gno",
-  "label": "crystallize: the court's ledger is not decremented for the fee",
+  "file": "openrewards.gno",
+  "label": "open the rewards: the court's ledger is not decremented for the fee",
   "find": "\t\tc.deposit -= cs.fee",
   "replace": ""
  },
@@ -4588,43 +4588,43 @@
  },
  {
   "pkg": "kourtv2",
-  "file": "crystallize.gno",
+  "file": "openrewards.gno",
   "label": "capBonus: the F9 cap clause never binds",
   "find": "\tif gross > bound {\n\t\tgross = bound\n\t}",
   "replace": "\t_ = bound"
  },
  {
   "pkg": "kourtv2",
-  "file": "crystallize.gno",
+  "file": "openrewards.gno",
   "label": "capBonus: the F9 base is the frozen height, not the claim's open life",
   "find": "\treturn div128(rawHi, rawLo, cs.openBlocks)\n",
   "replace": "\treturn div128(rawHi, rawLo, cs.openBlocks+1)\n"
  },
  {
   "pkg": "kourtv2",
-  "file": "crystallize.gno",
+  "file": "openrewards.gno",
   "label": "P2: the sybil margin loses its minus-one",
   "find": "\tif clamp := b0/2 - 1; share > clamp {",
   "replace": "\tif clamp := b0/2; share > clamp {"
  },
  {
   "pkg": "kourtv2",
-  "file": "crystallize.gno",
-  "label": "Crystallize: the participant-only week ends on its exact second",
+  "file": "openrewards.gno",
+  "label": "OpenRewards: the participant-only week ends on its exact second",
   "find": "pastDeadline(cs.verdictAtTime, finalizeGraceSecs)",
   "replace": "pastDeadline(cs.verdictAtTime, finalizeGraceSecs+1)"
  },
  {
   "pkg": "kourtv2",
-  "file": "crystallize.gno",
-  "label": "Crystallize: the participant-only grace week is not enforced",
+  "file": "openrewards.gno",
+  "label": "OpenRewards: the participant-only grace week is not enforced",
   "find": "if passed, known := pastDeadline(cs.verdictAtTime, finalizeGraceSecs); ((known && !passed) ||\n\t\t(!known && now < cs.verdictAt+finalizeGraceBlocks)) && !isParticipant(cs, who) {",
   "replace": "if false && !isParticipant(cs, who) {"
  },
  {
   "pkg": "kourtv2",
-  "file": "crystallize.gno",
-  "label": "Crystallize: a pre-stamp claim's grace ends on its exact block",
+  "file": "openrewards.gno",
+  "label": "OpenRewards: a pre-stamp claim's grace ends on its exact block",
   "find": "(!known && now < cs.verdictAt+finalizeGraceBlocks)",
   "replace": "(!known && now <= cs.verdictAt+finalizeGraceBlocks)"
  },
@@ -5617,49 +5617,49 @@
  },
  {
   "pkg": "kourtv2",
-  "file": "crystallize.gno",
-  "label": "crystallize: midGross reads the LOSING pool's conviction",
+  "file": "openrewards.gno",
+  "label": "open the rewards: midGross reads the LOSING pool's conviction",
   "find": "\tif int(cs.provisional) == sideYES {",
   "replace": "\tif int(cs.provisional) != sideYES {"
  },
  {
   "pkg": "kourtv2",
-  "file": "crystallize.gno",
-  "label": "crystallize: the draw cap binds on the OVERTURN path instead of the standing one",
+  "file": "openrewards.gno",
+  "label": "open the rewards: the draw cap binds on the OVERTURN path instead of the standing one",
   "find": "\tif int(cs.provisional) == int(cs.answer) {",
   "replace": "\tif int(cs.provisional) != int(cs.answer) {"
  },
  {
   "pkg": "kourtv2",
-  "file": "crystallize.gno",
-  "label": "crystallize: the answerer slice is zeroed on the STANDING path instead of the overturn",
+  "file": "openrewards.gno",
+  "label": "open the rewards: the answerer slice is zeroed on the STANDING path instead of the overturn",
   "find": "\tif int(cs.provisional) != int(cs.answer) {\n\t\tanswerer = 0",
   "replace": "\tif int(cs.provisional) == int(cs.answer) {\n\t\tanswerer = 0"
  },
  {
   "pkg": "kourtv2",
-  "file": "crystallize.gno",
-  "label": "crystallize: the author slice is zeroed for every UNSEEDED claim",
+  "file": "openrewards.gno",
+  "label": "open the rewards: the author slice is zeroed for every UNSEEDED claim",
   "find": "\tif cs.seeded {\n\t\tauthor = 0",
   "replace": "\tif !cs.seeded {\n\t\tauthor = 0"
  },
  {
   "pkg": "kourtv2",
-  "file": "crystallize.gno",
-  "label": "crystallize: a zero deposit is still transferred and decremented",
+  "file": "openrewards.gno",
+  "label": "open the rewards: a zero deposit is still transferred and decremented",
   "find": "\tif cs.deposit > 0 {",
   "replace": "\tif cs.deposit >= 0 {"
  },
  {
   "pkg": "kourtv2",
-  "file": "crystallize.gno",
+  "file": "openrewards.gno",
   "label": "PullCarrot: a with-verdict voter is one who EITHER voted or agreed",
   "find": "\tif v == nil || v.(string) != cs.carrotChoice {",
   "replace": "\tif v == nil && v.(string) != cs.carrotChoice {"
  },
  {
   "pkg": "kourtv2",
-  "file": "crystallize.gno",
+  "file": "openrewards.gno",
   "label": "PullState: a YES verdict reports no winner pull",
   "find": "\tif cs.provisional >= 0 {",
   "replace": "\tif cs.provisional > 0 {"
@@ -7342,18 +7342,18 @@
  {
   "pkg": "kourtv2",
   "file": "answerbond.gno",
-  "label": "crystallize: the answer bond is paid out but the field still claims it",
+  "label": "open the rewards: the answer bond is paid out but the field still claims it",
   "find": "\tc.coin.Transfer(c.escrow, cs.answerer, cs.answerBond)\n\tcs.answerBond = 0",
   "replace": "\tc.coin.Transfer(c.escrow, cs.answerer, cs.answerBond)",
-  "why": "The claim's LAST escrow disposal, and the corpus had nothing on it \u2014 the three crystallize.gno rows mentioning answerBond are all about AnswererBonus's tier bound. Both halves are now caught by TestTheEscrowHoldsExactlyWhatItOwes, which reconciles the escrow's balance against every obligation recorded against it; the two mutations break it in opposite directions and the failure prints both sides. Here the coin leaves and the field stays: the escrow holds 0 and owes 18000000."
+  "why": "The claim's LAST escrow disposal, and the corpus had nothing on it \u2014 the three openrewards.gno rows mentioning answerBond are all about AnswererBonus's tier bound. Both halves are now caught by TestTheEscrowHoldsExactlyWhatItOwes, which reconciles the escrow's balance against every obligation recorded against it; the two mutations break it in opposite directions and the failure prints both sides. Here the coin leaves and the field stays: the escrow holds 0 and owes 18000000."
  },
  {
   "pkg": "kourtv2",
   "file": "answerbond.gno",
-  "label": "crystallize: the answer-bond field is cleared but the coin never moves",
+  "label": "open the rewards: the answer-bond field is cleared but the coin never moves",
   "find": "\tc.coin.Transfer(c.escrow, cs.answerer, cs.answerBond)\n\tcs.answerBond = 0",
   "replace": "\tcs.answerBond = 0",
-  "why": "The claim's LAST escrow disposal, and the corpus had nothing on it \u2014 the three crystallize.gno rows mentioning answerBond are all about AnswererBonus's tier bound. Both halves are now caught by TestTheEscrowHoldsExactlyWhatItOwes, which reconciles the escrow's balance against every obligation recorded against it; the two mutations break it in opposite directions and the failure prints both sides. Here the field is cleared and the coin stays: the escrow holds 18000000 and owes 0."
+  "why": "The claim's LAST escrow disposal, and the corpus had nothing on it \u2014 the three openrewards.gno rows mentioning answerBond are all about AnswererBonus's tier bound. Both halves are now caught by TestTheEscrowHoldsExactlyWhatItOwes, which reconciles the escrow's balance against every obligation recorded against it; the two mutations break it in opposite directions and the failure prints both sides. Here the field is cleared and the coin stays: the escrow holds 18000000 and owes 0."
  },
  {
   "pkg": "kourtv2",
@@ -7952,14 +7952,14 @@
  },
  {
   "pkg": "kourtv2",
-  "file": "crystallize.gno",
+  "file": "openrewards.gno",
   "label": "PullCarrot: a zero share is enqueued instead of returning nothing",
   "find": "\tif share <= 0 {\n\t\treturn 0\n\t}",
   "replace": "\tif share < 0 {\n\t\treturn 0\n\t}"
  },
  {
   "pkg": "kourtv2",
-  "file": "crystallize.gno",
+  "file": "openrewards.gno",
   "label": "PullCarrot: the carrot's denominator is the voter's OWN weight, so every with-verdict voter draws the whole carrot",
   "find": "\tw, denom := vw.(int64), cs.carrotDenom",
   "replace": "\tw, denom := vw.(int64), vw.(int64)",
@@ -7967,7 +7967,7 @@
  },
  {
   "pkg": "kourtv2",
-  "file": "crystallize.gno",
+  "file": "openrewards.gno",
   "label": "PullCarrot: the tallied weight is read from a round other than the deciding one",
   "find": "\tvw := cs.voted.Get(\"dw\" + beClaimKey(uint64(cs.decidedPID)) + string(who))",
   "replace": "\tvw := cs.voted.Get(\"dw\" + beClaimKey(uint64(cs.decidedPID+1)) + string(who))",
@@ -9005,7 +9005,7 @@
  {
   "pkg": "kourtv2",
   "file": "standing.gno",
-  "label": "scaleBps: the bps clamp (mulDiv128's panic arm reaches Crystallize)",
+  "label": "scaleBps: the bps clamp (mulDiv128's panic arm reaches OpenRewards)",
   "find": "\tif bps > 10_000 {\n\t\tbps = 10_000\n\t}\n",
   "replace": ""
  },

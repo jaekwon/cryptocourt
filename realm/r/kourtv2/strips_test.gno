@@ -98,20 +98,20 @@ func TestStripOrderingAndExit(cur realm, t *testing.T) {
 	if p := StripPage("str2", 1, 1); len(p) != 1 || p[0] != idB {
 		t.Fatalf("offset paging is wrong: %v", p)
 	}
-	// Exit: settle + crystallize the first claim.
+	// Exit: settle + open the rewards the first claim.
 	testing.SkipHeights(settleDelay + 1)
 	testing.SetRealm(testing.NewUserRealm(alice))
 	SettleUndisputed(cross(cur), "str2", idA)
 	testing.SkipHeights(priorityWindowBlocks + 1)
 	testing.SetRealm(testing.NewUserRealm(alice))
-	Crystallize(cross(cur), "str2", idA)
+	OpenRewards(cross(cur), "str2", idA)
 	if OnStrip("str2", idA) {
-		t.Fatal("a crystallized claim must leave the strip")
+		t.Fatal("a rewardsOpened claim must leave the strip")
 	}
 	page = StripPage("str2", 0, 50)
 	for _, x := range page {
 		if x == idA {
-			t.Fatal("the crystallized row must be gone from the page")
+			t.Fatal("the rewardsOpened row must be gone from the page")
 		}
 	}
 }
@@ -172,7 +172,7 @@ func TestSeededAuthorDrawIsZero(cur realm, t *testing.T) {
 	SettleUndisputed(cross(cur), "str5", id)
 	testing.SkipHeights(priorityWindowBlocks + 1)
 	testing.SetRealm(testing.NewUserRealm(alice))
-	Crystallize(cross(cur), "str5", id)
+	OpenRewards(cross(cur), "str5", id)
 
 	cs := mustClaim(c, id)
 	if cs.drawAuthor != 0 {

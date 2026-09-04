@@ -86,7 +86,7 @@ letting it look routine. The guards these fixes need, and what each would catch:
 |---|---|---|
 | **S1** quorum floor | a fixture that reads `quorumFloor` **at all** — prior work found **zero** hits across every `*_test.gno`, so the verdict lane's turnout bar has no shipped assertion of its value | restoring the supply arm; and separately, dropping the credential re-anchor (which silently cuts a documented 1.25%-of-supply price by 5.01×) |
 | **S2** reachable provClose | a default court reaching `provClose`, PLUS the bystander: one decided round finalizes on today's schedule bit-identically | removing the `failedRounds > 0` gate (which would apply the long window to decided chains too, doubling the grind); and the `Params.mustSane` invariant firing on a config one block short |
-| **S3** provClose pays | a provClosed claim paying **bit-identically** to the 2-failed-round Finalize path, with non-clamping asserted as a precondition — otherwise it passes against the wrong zero | reinstating `tierFinal = true`; reinstating `tierLowX`; restoring `Crystallize`'s `provClose` refusal; restoring `OpenFlag`'s arm |
+| **S3** provClose pays | a provClosed claim paying **bit-identically** to the 2-failed-round Finalize path, with non-clamping asserted as a precondition — otherwise it passes against the wrong zero | reinstating `tierFinal = true`; reinstating `tierLowX`; restoring `OpenRewards`'s `provClose` refusal; restoring `OpenFlag`'s arm |
 | **S4** demotion mandate | the cheap demotion NOT landing on an overturn round, paired with the priced one that still MUST land | dropping `cs.provisional >= 0` (an existing fixture already catches this — verify it still does); widening to "any decided round", which an existing uphold fixture should catch |
 
 **Three traps for whoever writes these**, each already paid for once:
@@ -166,8 +166,8 @@ opposite sides are observationally identical to two people who disagree, so nett
 > **CORRECTED — see `GAMETHEORY.md` §11.8, which falsified two things below.** The starvation
 > is a **drought**, not a permanent tax: `cumAccrual` is monotone and *unbounded*, and
 > `reservedTail` is a high-water **cursor**, not a balance. **M:** a bystander claim
-> crystallizing *after* the drought is paid bit-identically to the control. So this is a
-> **timing** bug, and `Crystallize` being permissionless is the whole of it rather than an
+> opening the rewards *after* the drought is paid bit-identically to the control. So this is a
+> **timing** bug, and `OpenRewards` being permissionless is the whole of it rather than an
 > aggravating detail. Drought length at 1/5/10/30% of supply: 2/6/11/36 weeks.
 >
 > **And the fix proposed at the bottom of this item must NOT ship.** Capping comp strands
@@ -212,8 +212,8 @@ weeks of the WHOLE court's emission consumed by that single comp:  10
 
 Then `reserveJunior` **silently clamps** the draw to the empty reservoir — its own comment
 says why: *"Clamps to R — never aborts a shared settlement path (F4)"* (emission.gno:186-199).
-So the honest winners' draw comes out **0**, and because `cs.crystallized` is a one-way
-latch and `Crystallize` is **permissionless** after the grace week, **an attacker chooses the
+So the honest winners' draw comes out **0**, and because `cs.rewardsOpened` is a one-way
+latch and `OpenRewards` is **permissionless** after the grace week, **an attacker chooses the
 moment** at which that zero is made permanent.
 
 ### Why this corrects item 2's headline
@@ -243,10 +243,10 @@ week 1 → 0.95% at week 208), so any fixed constant drives comp → 0 asymptoti
 > the full `want` on the accrual line and the pulls become partially payable as coverage
 > arrives, exactly as `PullSenior` already works. That satisfies both "the claim must eventually
 > mint the prize it should have minted" *and* the challenger's 2:1 premium, which the cap could
-> not do together — and it removes the timing attack entirely, because no crystallize moment is
+> not do together — and it removes the timing attack entirely, because no open the rewards moment is
 > worse than another.
 >
-> **Cheap interim:** refuse `Crystallize` while `reservoirR() < want` and the senior queue still
+> **Cheap interim:** refuse `OpenRewards` while `reservoirR() < want` and the senior queue still
 > has unpaid mass. Needs a deadline so a griefer cannot block forever, and it withholds the
 > author's deposit and fee during the wait.
 >
@@ -492,7 +492,7 @@ enable it without forming an opinion.
 > **FIXED**: `answerBondBps = 600`, hardcoded rather than derived (deriving it makes the
 > `:232` check a tautology), and the floor is re-keyed to `max` over BOTH sides' conviction
 > rather than the answered side alone. Shipped WITH fixtures and mutation verification, plus
-> the draw cap it exposed — `crystallize.gno` caps `want` at `answerBond0 − carrot`, gated on
+> the draw cap it exposed — `openrewards.gno` caps `want` at `answerBond0 − carrot`, gated on
 > `provisional == answer` because on an overturn the bond has already burned. **Two of my own
 > errors here are worth not repeating:** the leverage ceiling I claimed was FALSE at HIGH tier
 > (measured 1.2937 > 1 — I had conflated the bond ceiling with the leverage ceiling and omitted
@@ -603,8 +603,8 @@ a free destructive action? If not, the lever is the bar, not a new gate on the a
 
 `provCloseClaim` (dispute.gno:386-413) refunds the deposit **and** the fee, with the
 explicit comment *"provClose is not a conclusive low — §3.1.7"* (dispute.gno:385). Then it
-sets `tier = tierLowX` and `tierFinal = true` (dispute.gno:390) — and `Crystallize` refuses
-outright on top of that (`crystallize.gno:32-34`, "closed claims have no draw"). So it
+sets `tier = tierLowX` and `tierFinal = true` (dispute.gno:390) — and `OpenRewards` refuses
+outright on top of that (`openrewards.gno:32-34`, "closed claims have no draw"). So it
 treats itself as not-a-low for the deposit and as a low for the draw.
 
 Honest winners get principal back at 1× and **no winnings**, on a claim where nobody was

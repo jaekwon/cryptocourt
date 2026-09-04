@@ -169,7 +169,7 @@ type claimState struct {
 	// size that would have earned exactly 1x here (tier.gno). Frozen beside
 	// xBarFrozen and for the same reason: the multiplier is the ratio of the
 	// two, and a live denominator would let whoever calls the permissionless
-	// Crystallize choose it. Zero on any claim frozen before this shipped, which
+	// OpenRewards choose it. Zero on any claim frozen before this shipped, which
 	// tierBpsFor reads as par.
 	tierRef int64
 
@@ -268,10 +268,10 @@ type claimState struct {
 	// merely fail, it permanently shrinks the reservoir for every later junior
 	// draw. That hazard belongs to enqueueSenior and reservedTail, which are both
 	// live, and it is written here rather than deleted with the dead latches.
-	// Crystallize marker (Q6-Q8): after it, quality is immutable.
-	crystallized bool
+	// OpenRewards marker (Q6-Q8): after it, quality is immutable.
+	rewardsOpened bool
 	// Carrot pull-claim anchors (set at the conclusive tally)
-	// The draw (crystallize.gno): D's slices, denominators, one-shot flags.
+	// The draw (openrewards.gno): D's slices, denominators, one-shot flags.
 	drawWinners   int64
 	drawAuthor    int64
 	drawAnswerer  int64
@@ -284,7 +284,7 @@ type claimState struct {
 	decidedPID    int64
 	// The deciding round's spam tally, frozen beside decidedPID and for exactly
 	// its reason: cs.proposalID is OVERWRITTEN by every later round, so by
-	// Crystallize it may name a round that did not decide anything. The
+	// OpenRewards it may name a round that did not decide anything. The
 	// governor's counters do survive a ReleaseRoll — Tally reads yes/no/abstain,
 	// not the roll — so this is not about the figures disappearing; it is about
 	// reading the WRONG round's figures.
@@ -347,7 +347,7 @@ func OpenClaimP(cur realm, courtSlug, title, body string) uint64 {
 // OpenClaimSeeded posts a claim with the CC deposit and fee WAIVED, for a
 // moderator bootstrapping a young court (MODERATION.md §8). Mod-only; a
 // suspended set is refused. The GNOT storage deposit is still the mod's to pay,
-// and the author emission slice never mints on a seeded claim (I5, crystallize)
+// and the author emission slice never mints on a seeded claim (I5, open the rewards)
 // so the waiver cannot be farmed. Refused on a purged court.
 func OpenClaimSeeded(cur realm, courtSlug, title string) uint64 {
 	if !cur.IsCurrent() {

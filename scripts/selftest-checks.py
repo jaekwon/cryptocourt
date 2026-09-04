@@ -325,7 +325,7 @@ control("a second writer of the proposal state", f"{GOVERNORDIR}/governor.gno",
 #
 # The rule itself is untouched and live: arm 17 fires on a file that is not in
 # BOARD_LANE, contains a coin.Transfer/Mint/Burn, and reads board state.
-# crystallize.gno still satisfies all three preconditions — measured: 2 money
+# openrewards.gno still satisfies all three preconditions — measured: 2 money
 # moves (lines 222 and 227), not in BOARD_LANE, and 0 board reads today.
 #
 # The new plant is a STRICTER reading of the arm's own sentence than the old one:
@@ -334,7 +334,7 @@ control("a second writer of the proposal state", f"{GOVERNORDIR}/governor.gno",
 # gates is a coin.Transfer to that same address. Anchored on the deposit refund
 # rather than the fee refund on line 227, which is the same shape — cs.deposit
 # makes it unique.
-control("a money path reading board state", f"{KOURTV2}/crystallize.gno",
+control("a money path reading board state", f"{KOURTV2}/openrewards.gno",
         "\t\tc.coin.Transfer(c.escrow, cs.author, cs.deposit)",
         "\t\tif postLevel(c, cs.author) > 0 {\n"
         "\t\t\tc.coin.Transfer(c.escrow, cs.author, cs.deposit)\n\t\t}",
@@ -542,11 +542,11 @@ control("a fresh restatement of the release rule", "VOTEFLOOR.md",
         "stated somewhere new", argv=["python3", EPOCHCOH])
 # ARM 10's controls, one per sub-check, each with its own expected string. The arm has
 # to tell three situations apart: a COPY of the liveness disjunction, a second
-# DEFINITION of it, and crystallize's own question stopping being its own question.
+# DEFINITION of it, and open the rewards's own question stopping being its own question.
 # ARM 10'S THREE CONTROLS ARE RETIRED, because ARM 10 ITSELF IS GONE.
 #
 # They were BROKEN CONTROL ("anchor matched 0x") and hid better than the five that
-# named quality.gno: they plant into voteweight.gno and crystallize.gno, which both
+# named quality.gno: they plant into voteweight.gno and openrewards.gno, which both
 # still EXIST, so a pass that counts missing plant FILES does not see them. What is
 # gone is the code they name — qualityQuestionOpen, cs.qualityEpoch,
 # cs.pendingSlash, cs.tierFinal, cs.flagOpen and cs.counterOpen all have ZERO

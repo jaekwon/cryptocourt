@@ -495,7 +495,7 @@ func renderClaim(slug string, id uint64) string {
 		// flag entrypoints still exist and are removed with the lane; the page
 		// stops advertising them here.
 		}
-		if cs.crystallized {
+		if cs.rewardsOpened {
 			w, a, ans, carrot := cs.drawWinners, cs.drawAuthor, cs.drawAnswerer, cs.carrotPool
 			b.WriteString("- rewards open — pools (" + qualifiedSymbol(c) +
 				"): accuracy " + strconv.FormatInt(w, 10) +
@@ -626,7 +626,7 @@ func renderPositions(slug string, id uint64, addrStr string) string {
 		b.WriteString("- answered, awaiting the verdict — principal is never withheld; withdraw once it is final\n")
 	default:
 		b.WriteString("- the verdict is final — withdraw your principal on either side (1×)\n")
-		if cs.crystallized {
+		if cs.rewardsOpened {
 			win := int(cs.provisional)
 			if !cs.provClose && ((win == sideYES && yStake+yConv > 0) || (win == sideNO && nStake+nConv > 0)) {
 				b.WriteString("- you backed the winning side — pull your accuracy reward\n")

@@ -31,7 +31,7 @@ import "testing"
 // a policy, the expectation is a LITERAL, and a deliberate change is expected to
 // edit the pin in the same commit. What it does NOT assert is the emission
 // arithmetic downstream of the budget; that is covered by the rows on accrual and
-// crystallize, which do not depend on this figure's value.
+// open the rewards, which do not depend on this figure's value.
 func TestTheMetaCourtsWeeklyBudgetIsTheCalibratedValue(t *testing.T) {
 	c := mustCourt(metaSlug)
 	const wantBudget = int64(100_000_000) // 100 CC/week (§13.8), before any step-down

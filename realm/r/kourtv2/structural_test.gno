@@ -41,7 +41,7 @@ import (
 //	S2  drop the mustSane ladder clause ............. killed by the bound test
 //	S3  reinstate tierFinal = true .................. killed by both S3 tests
 //	S3  provCloseClaim sets tierLowX ................ killed by both S3 tests
-//	S3  restore Crystallize's provClose refusal ..... killed at line 321, Crystallize
+//	S3  restore OpenRewards's provClose refusal ..... killed at line 321, OpenRewards
 //	S4  drop the demotion supply floor .............. killed by the floor test
 //	S4  drop the demotion votable clamp ............. killed by the escrowed-court test
 //
@@ -55,7 +55,7 @@ import (
 // drainUntilUnclamped advances until the court's reservoir covers `want`, so a
 // draw of that size is not clamped by the junior reservation. Loops rather than
 // skipping a constant, and fails loudly rather than silently under-waiting —
-// a fixture that crystallizes into a dry reservoir asserts nothing.
+// a fixture that open the rewardss into a dry reservoir asserts nothing.
 func drainUntilUnclamped(cur realm, slug string, want int64) {
 	for i := 0; i < 400; i++ {
 		if Reservoir(slug) >= want {
@@ -251,7 +251,7 @@ func TestS2TheLadderMustFitTheEscrowWindow(cur realm, t *testing.T) {
 // The mutations this must catch: reinstating `tierFinal = true` in provCloseClaim
 // (which makes its own guard SELF-BLOCKING, so the claim pays 0 forever — my own
 // first spec had this), reinstating tierLowX (which is 0, so the whole draw
-// vanishes), restoring Crystallize's provClose refusal, and restoring OpenFlag's
+// vanishes), restoring OpenRewards's provClose refusal, and restoring OpenFlag's
 // provClose arm.
 func TestS3ProvCloseDrawsLikeTheTwoFailedRoundFinalize(cur realm, t *testing.T) {
 	alice := testutils.TestAddress("s3-alice")
@@ -338,9 +338,9 @@ func TestS3ProvCloseDrawsLikeTheTwoFailedRoundFinalize(cur realm, t *testing.T) 
 	drainUntilUnclamped(cur, "s3a", mustMul(want, 3))
 
 	testing.SetRealm(testing.NewUserRealm(alice))
-	Crystallize(cross(cur), "s3a", refID)
+	OpenRewards(cross(cur), "s3a", refID)
 	testing.SetRealm(testing.NewUserRealm(alice))
-	Crystallize(cross(cur), "s3a", pcID)
+	OpenRewards(cross(cur), "s3a", pcID)
 
 	rw, ra, rn, rc := DrawSlices("s3a", refID)
 	pw, pa, pn, pc2 := DrawSlices("s3a", pcID)
@@ -361,7 +361,7 @@ func TestS3ProvCloseDrawsLikeTheTwoFailedRoundFinalize(cur realm, t *testing.T) 
 }
 
 // S3's other half: the winners of a provClosed claim can actually COLLECT. A
-// draw that crystallizes and then cannot be pulled is the same stranding in a
+// draw that open the rewardss and then cannot be pulled is the same stranding in a
 // different place, and DrawSlices alone would not notice.
 func TestS3ProvCloseWinnersCanCollect(cur realm, t *testing.T) {
 	alice := testutils.TestAddress("s3-alice2")
@@ -383,7 +383,7 @@ func TestS3ProvCloseWinnersCanCollect(cur realm, t *testing.T) {
 	want := mustMul(tierMidX, convToCC(cs.yesConvHi, cs.yesConvLo))
 	drainUntilUnclamped(cur, "s3b", mustMul(want, 2))
 	testing.SetRealm(testing.NewUserRealm(alice))
-	Crystallize(cross(cur), "s3b", id)
+	OpenRewards(cross(cur), "s3b", id)
 
 	before := c.coin.BalanceOf(alice)
 	testing.SetRealm(testing.NewUserRealm(alice))

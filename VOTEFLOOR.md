@@ -320,13 +320,13 @@ done". That is what an unrecorded closure costs, and it is cheaper to pay once h
 **Item 1, the money paths.** Both recorded survivors are closed and named:
 
     (a) emission's early return at exactly R_max   TestTheReservoirPauseHoldsAtExactlyTheCap
-    (b) Crystallize's participant-only window      TestTheParticipantOnlyWindowsEndOnTheir-
+    (b) OpenRewards's participant-only window      TestTheParticipantOnlyWindowsEndOnTheir-
                                                    ExactBlock — plural, because it covers
                                                    Finalize's window in dispute.gno by the
                                                    same shape, which is what was asked
 
-And the third clause, "emission, crystallize and the senior queue are essentially unswept",
-is refuted by counting: 46 rows touch that surface — emission.gno 22, crystallize.gno 15 —
+And the third clause, "emission, open the rewards and the senior queue are essentially unswept",
+is refuted by counting: 46 rows touch that surface — emission.gno 22, openrewards.gno 15 —
 and the two functions the item names by hand carry 12 between them, `PullSenior` 7 and
 `enqueueSenior` 5, including `enqueueSenior: the start cursor ignores juniorReserved
 (M3-CRITICAL-1)`. Every one of them was observed caught in the third full pass. The premise
@@ -1062,7 +1062,7 @@ them:
     ...
     dispute.gno     31             24            61
     quality.gno     23             53           151
-    crystallize.gno 18             23            48
+    openrewards.gno 18             23            48
     stake.gno       15             16            52
 
 The money files are at the BOTTOM of the uncovered ranking and the top of the row counts.
@@ -1143,7 +1143,7 @@ transfers create an escrow obligation, across THREE subsystems:
     quality.gno:118   -> cs.flagBond
     modvote.gno:345   -> e.bond, in a different tree entirely
 
-Against 29 outflows (transfers and burns) spread over claim, crystallize, dispute, quality and
+Against 29 outflows (transfers and burns) spread over claim, open the rewards, dispute, quality and
 modvote. So the invariant is six components, not one, and a walk over claims alone would not
 close it.
 
@@ -1355,8 +1355,8 @@ commits added or re-pointed were measured:
     12/12 caught, harness mtime checked either side
 
 Coverage held, and the catching tests are pleasingly diverse —
-`TestDecidedRoundBuysNoSlashImmunity`, `TestCrystallizeMidHappyPathDrainsEscrow`,
-`TestSlashSurvivesSettle`, `TestCrystallizeLowTierZeroDrawCarrotStillPays` — which is what
+`TestDecidedRoundBuysNoSlashImmunity`, `TestOpenRewardsMidHappyPathDrainsEscrow`,
+`TestSlashSurvivesSettle`, `TestOpenRewardsLowTierZeroDrawCarrotStillPays` — which is what
 a helper reached through many paths should look like.
 
 **FOUR HYPOTHESES, ALL REFUTED BY READING, and none of them written up as a finding.** The
@@ -1366,8 +1366,8 @@ its own docstring; an escrow→answerer refund needs no spendability guard. (2) 
 `COIN_OUT_N` still hold? Yes, and by construction: `ESCROW_SRC` excludes escrow-sourced
 lines, so the count is of USER-sourced movement and refunds were never in it. (3)
 `settleAnswerBond` deliberately retains a reserve while a future flag could still slash,
-and Crystallize returns the WHOLE bond — can a flag land after crystallize and find nothing
-to take? No: `OpenFlag` refuses outright on `cs.crystallized`. (4) Is that refusal pinned?
+and OpenRewards returns the WHOLE bond — can a flag land after open the rewards and find nothing
+to take? No: `OpenFlag` refuses outright on `cs.rewardsOpened`. (4) Is that refusal pinned?
 Yes, by `TestOpenFlagRefusesEveryClosedState`, which constructs each terminal state,
 restores between arms, and even carries a positive arm (a `provClose`d claim must NOT be
 refused). A grep for the panic's first half missed it because the assertion uses its
@@ -1786,7 +1786,7 @@ output with `errors='replace'`; a mutant can emit any bytes at all.
 **THE MONEY PATHS ARE NO LONGER THE THIN SURFACE — MEASURE BEFORE PICKING A TARGET.**
 The standing backlog calls them "the weakest surface in the repo", which was true when it
 was written and is now inverted by the sweeps it asked for. emission.gno alone carries 40
-rows over 185 lines of code, so "emission, crystallize and the senior queue are
+rows over 185 lines of code, so "emission, open the rewards and the senior queue are
 essentially unswept" is stale.
 
 **COUNT CODE LINES, NOT FILE LINES — 45% OF THIS SOURCE IS COMMENTARY.** The first version
@@ -2024,21 +2024,21 @@ answered a narrower question than the one asked, and its answer looked like an
 answer to the broad one.
 
 **RANKED ITEM 1(b) VERIFIED COMPLETE, AND THE QUESTION IT RAISES REFUTED.** The backlog
-asks for ONE test covering both participant-only windows, because Crystallize's
+asks for ONE test covering both participant-only windows, because OpenRewards's
 `now < verdictAt+finalizeGraceBlocks` shares its shape with Finalize's in dispute.gno.
 TestTheParticipantOnlyWindowsEndOnTheirExactBlock does exactly that — it drives Finalize
-at dispute.gno:554 and Crystallize at crystallize.gno:44 in one test, each at its edge.
+at dispute.gno:554 and OpenRewards at openrewards.gno:44 in one test, each at its edge.
 
 Reading the two together raises an obvious suspicion: the SAME constant on DIFFERENT
 anchors, `escrowUntil + finalizeGraceBlocks` against `verdictAt + finalizeGraceBlocks`.
 That looks like one site having copied the other and kept the wrong base. It is correct.
 Each window is a week of participant-only measured from the moment its own call becomes
 available: Finalize's from the escrow window lapsing ("a stranger must not pick the settle
-block", v0.11 A13), Crystallize's from the verdict existing. Shared policy, shared
+block", v0.11 A13), OpenRewards's from the verdict existing. Shared policy, shared
 constant, different triggers.
 
 The only thing left is a naming smell worth nobody's time to fix: `finalizeGraceBlocks` is
-named for one of its two callers, so at the Crystallize site the constant reads as if it
+named for one of its two callers, so at the OpenRewards site the constant reads as if it
 were borrowed. Recorded rather than renamed — a rename touches two money paths to make a
 comment read better.
 
@@ -2785,7 +2785,7 @@ finished congratulating the harness for catching the same class of error.
    was `spendable()`. With `BalanceOf` every one of them is still **true** — staked
    coin is in the balance and does vote — so they were left alone. What was actually
    stale was the opposite class: four comments asserting the rental was OPEN
-   (`governor.gno` ×2, `electorate.gno`, `crystallize.gno`).
+   (`governor.gno` ×2, `electorate.gno`, `openrewards.gno`).
 
 2. **`ResolveElection` PASS 2's second install condition was already covered.** The
    plan said to add a row because nothing pinned it; the row is caught by the
@@ -3873,7 +3873,7 @@ which three needed correcting.
 
 **THE GAP THIS CLOSES WAS MINE, not the repo's.** Every guard run in this session
 executed against a working tree that also held another session's uncommitted work —
-claim.gno, court.gno, crystallize.gno, dispute.gno, quality.gno,
+claim.gno, court.gno, openrewards.gno, dispute.gno, quality.gno,
 check-read-purity.py, standing.gno and standing_test.gno. So each green result was a
 statement about that mixed tree. `make check-frozen` adds a DETACHED WORKTREE at
 HEAD and runs the full gate inside it, which is the only way to ask whether the

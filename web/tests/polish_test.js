@@ -84,9 +84,9 @@ ok("gone when the realm cannot say", polishLink("orem",7,open,null,null,null)===
 ok("offered when the court opted into one", polishLink("orem",7,open,null,null,1).includes("fix the title"));
 
 
-/* A CONTROL THE CHAIN WOULD REFUSE SAYS SO BEFORE THE SIGNATURE. Crystallize was
-   offered on every settled, un-crystallized claim, and the realm turns it down in
-   four states (crystallize.gno): an open quality question, the 24h quiet window
+/* A CONTROL THE CHAIN WOULD REFUSE SAYS SO BEFORE THE SIGNATURE. OpenRewards was
+   offered on every settled, un-rewardsOpened claim, and the realm turns it down in
+   four states (openrewards.gno): an open quality question, the 24h quiet window
    after the last flag event, and the first week of the verdict for anyone who is
    not a participant.
    Only the first is greyed, because it is the only one this page can evaluate —
@@ -96,12 +96,12 @@ ok("offered when the court opted into one", polishLink("orem",7,open,null,null,1
    GREYING A CONTROL SOMEBODY COULD HAVE USED is worse than offering one they
    cannot, so the unknown cases stay live. */
 {
-  const settled = {phase:"settled", verdict:0, answer:0, route:"vote", crystallized:false,
+  const settled = {phase:"settled", verdict:0, answer:0, route:"vote", rewardsOpened:false,
                    yesStake:180, noStake:20};
   const clear = stakeTicket("orem", 4, settled);
   const crysOf = h => (h.match(/<button[^>]*>(?:(?!<\/button>)[\s\S])*?Open the rewards[\s\S]*?<\/button>/)||[""])[0];
   /* THE GREYED CASE IS GONE, not weakened. Three assertions here covered
-     Crystallize being blocked while a quality question was open — an open flag
+     OpenRewards being blocked while a quality question was open — an open flag
      vote or a counter window — and named the reason ("the draw waits, not the
      principal") and its aria-disabled state. Both states went with the quality
      lane, so there is no longer any reason the page can KNOW that blocks the
@@ -110,7 +110,7 @@ ok("offered when the court opted into one", polishLink("orem",7,open,null,null,1
      Kept: the control must stay LIVE when the page cannot know, because greying
      something somebody could have used is the worse error. That is the half of
      this block that still has a subject. */
-  ok("crystallize stays live when the page cannot know the answer",
+  ok("open the rewards stays live when the page cannot know the answer",
      !/data-blocked=/.test(crysOf(clear)));
   /* THE RULE MOVED INTO THE HINT, where a sentence fits. "participants first
      week" assumed the reader knew there was a priority window, what a
@@ -133,10 +133,10 @@ ok("offered when the court opted into one", polishLink("orem",7,open,null,null,1
   // press answers.
   ok("...and no eligibility schedule under the button",
      !/participants first week/.test(clear) && !/then anyone/.test(clear));
-  /* THE PARTICIPANT WEEK IS GREYED, NOT DISCOVERED IN THE WALLET. Crystallize
+  /* THE PARTICIPANT WEEK IS GREYED, NOT DISCOVERED IN THE WALLET. OpenRewards
      is participant-only for FINALIZE_GRACE blocks after the verdict, and the
      page used to offer it to everyone — a reader pressed it and got
-     "kourtv2: Crystallize is participant-only for its first week" relayed
+     "kourtv2: OpenRewards is participant-only for its first week" relayed
      through Adena. isParticipant is author, answerer, or a stake on either side
      (dispute.gno:803), and fillWithdrawSides has all three in hand.
      Driven through all six cases in a browser besides: a stranger inside the
@@ -201,9 +201,9 @@ ok("offered when the court opted into one", polishLink("orem",7,open,null,null,1
   ok("...and the button says the verb, with the rule as its note",
      /Open the rewards/.test(crysOf(clear)));
   // Once they are open the card stops explaining how to open them.
-  ok("a crystallized claim does not still describe opening",
+  ok("a rewardsOpened claim does not still describe opening",
      !/have to be opened first/.test(
-       stakeTicket("orem", 4, Object.assign({}, settled, {crystallized:true}))));
+       stakeTicket("orem", 4, Object.assign({}, settled, {rewardsOpened:true}))));
   // The withdraw buttons beside it are never blocked — principal is never gated.
   ok("withdrawing principal is never blocked",
      !/data-blocked/.test((clear.match(/<button[^>]*>(?:(?!<\/button>)[\s\S])*?Withdraw[\s\S]*?<\/button>/)||[""])[0]));

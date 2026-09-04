@@ -569,14 +569,14 @@ func TestBannerNamesTheBlocks(cur realm, t *testing.T) {
 }
 
 // THE ACCEPTANCE TEST for the whole height override: a claim walked from open
-// to crystallized WITHOUT MINING A SINGLE BLOCK, in four transactions.
+// to rewardsOpened WITHOUT MINING A SINGLE BLOCK, in four transactions.
 //
-// The ~17,280-block cost this was built to remove was Crystallize's quiet window,
+// The ~17,280-block cost this was built to remove was OpenRewards's quiet window,
 // which is gone with the quality lane — so the journey is now cheap for two
 // independent reasons. The override still earns its keep on the emission path
 // (third acceptance test below), where the barrier is 120,960 blocks and is not
 // going anywhere.
-func TestClaimReachesCrystallizeWithoutMining(cur realm, t *testing.T) {
+func TestClaimReachesOpenRewardsWithoutMining(cur realm, t *testing.T) {
 	alice := testutils.TestAddress("acc-a")
 	bob := testutils.TestAddress("acc-b")
 	resetTestClock(alice)
@@ -621,21 +621,21 @@ func TestClaimReachesCrystallizeWithoutMining(cur realm, t *testing.T) {
 		t.Fatal("the claim should have settled")
 	}
 
-	// THE HEIGHT GATE THIS TEST WAS BUILT AROUND IS GONE. Crystallize was barred
+	// THE HEIGHT GATE THIS TEST WAS BUILT AROUND IS GONE. OpenRewards was barred
 	// until priorityWindowBlocks past the last flag event, and on a young chain
 	// that anchor was block 0, so the journey cost ~17,280 real blocks. The quality
-	// lane took the anchor with it (crystallize.gno records why), so crystallize is
+	// lane took the anchor with it (openrewards.gno records why), so open the rewards is
 	// reachable here with no height advance at all.
 	//
 	// The advance stays, and deliberately: the override is still the thing under
 	// test, the third acceptance test below still needs it for EMISSION, and a
-	// height advance that crystallize no longer requires must not START failing.
+	// height advance that open the rewards no longer requires must not START failing.
 	// What is no longer asserted is a refusal, because there is no longer a refusal.
 	testing.SetRealm(testing.NewUserRealm(alice))
 	AdvanceTestHeight(cross(cur), priorityWindowBlocks+1)
-	Crystallize(cross(cur), "acc1", id)
-	if !cs.crystallized {
-		t.Fatal("the claim should have crystallized after advancing past the quiet window")
+	OpenRewards(cross(cur), "acc1", id)
+	if !cs.rewardsOpened {
+		t.Fatal("the claim should have rewardsOpened after advancing past the quiet window")
 	}
 
 	// And the point: the chain never produced a block for any of it.

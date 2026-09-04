@@ -41,7 +41,7 @@ func TestSettleUndisputedAndWithdraw(cur realm, t *testing.T) {
 	}
 	// Settle returns the bond IN FULL. It used to return the bond minus a
 	// slash-sized reserve held through the quality slot (M3-HIGH-1), with the
-	// remainder following at crystallize if no flag landed; with no lane to levy a
+	// remainder following at open the rewards if no flag landed; with no lane to levy a
 	// slash there is nothing to reserve against.
 	if c.coin.BalanceOf(alice) != beforeBond+bond {
 		t.Fatalf("settle returns the whole bond: got %d want %d",
@@ -81,7 +81,7 @@ func TestSettleUndisputedAndWithdraw(cur realm, t *testing.T) {
 	uassert.AbortsContains(t, cur, "nothing staked", func() {
 		WithdrawStake(cross(cur), "se1", id, sideNO)
 	})
-	// Escrow now holds the claim's deposit+fee and nothing else — crystallize owns
+	// Escrow now holds the claim's deposit+fee and nothing else — open the rewards owns
 	// their disposition. Every stake and the whole bond are out; the retained slash
 	// reserve that used to be a third term here no longer exists.
 	dep := c.params.minClaimDepositCC

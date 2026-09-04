@@ -294,7 +294,7 @@ func mustInvariants() {
 	if metaLifetimeEmission := metaWeeklyBudget * 151; curveCap > maxSupply-metaLifetimeEmission {
 		panic("kourtv2: curveCap + meta's lifetime emission exceeds the tally-safe supply ceiling")
 	}
-	// THE DRAW CAP MUST BE INERT AT THE ORDINARY TIER. crystallize.gno caps a
+	// THE DRAW CAP MUST BE INERT AT THE ORDINARY TIER. openrewards.gno caps a
 	// claim's draw at answerBond0 minus the carrot, and PostAnswer's floor gives
 	// answerBond0 >= (bondFloorConvBps/1e4)·mg_max >= (bondFloorConvBps/1e4)·mg_win, so
 	// capd >= (bondFloorConvBps/1e4 − splitCarrot/100)·mg_win. Requiring that to cover
@@ -308,7 +308,7 @@ func mustInvariants() {
 	// justifying it as "L <= 1 at MID" would make it certify something already
 	// true, which is precisely the defect the check below had for years. Constants
 	// only, no runtime term — its premises are unconditional facts in answer.gno
-	// and crystallize.gno, not a falsifiable model. Verified by mutation in this
+	// and openrewards.gno, not a falsifiable model. Verified by mutation in this
 	// form: it fires on bondFloorConvBps AND on splitCarrot.
 	//
 	// This replaces a check on answerBondBps, and note it contains no bond term at
@@ -644,7 +644,7 @@ type Court struct {
 	periodIndex     int64 // completed periods (step-down n)
 	createdAt       int64 // height at StartCourt
 	reservedTail    int64 // Σ senior amounts ever enqueued (interval tail)
-	juniorReserved  int64 // Σ junior reservations (crystallized draws)
+	juniorReserved  int64 // Σ junior reservations (rewardsOpened draws)
 	seniorOwed      int64 // enqueued − paid
 	seniorPaid      int64
 	emittedTotal    int64          // every CC ever minted via emission

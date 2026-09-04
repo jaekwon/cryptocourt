@@ -194,7 +194,7 @@ ruling, so they are settled here and the implementation is ready when the ruling
 comes:
 
 1. **At the author hook, the author's own position has NOT been accrued.**
-   `Crystallize` calls `advancePools`, and that settles the *side* integrals
+   `OpenRewards` calls `advancePools`, and that settles the *side* integrals
    only — `cs.yesRawHi/Lo` and `cs.noRawHi/Lo` — never a per-position
    `p.rawHi/p.rawLo`. `AuthorBonus` knows this and calls
    `accrue(c, cs, p, int(cs.provisional))` explicitly before reading them. So a
@@ -203,11 +203,11 @@ comes:
    The fix is one line — call `accrue` at the hook, which is legal there because
    it is a write path — but it must be *written*, not assumed.
 
-2. **The conversion would put a new panic arm on `Crystallize`.** Time-averaged
+2. **The conversion would put a new panic arm on `OpenRewards`.** Time-averaged
    stake is `raw / openBlocks`, and that divide currently lives inside
    `capBonus` via `div128`, which panics on `hi >= den`. Today `div128` runs only
    inside the *pull* functions, where a panic strands one address. Moving it into
-   `Crystallize` widens the blast radius to the whole claim's draw — the exact
+   `OpenRewards` widens the blast radius to the whole claim's draw — the exact
    outcome `satAdd` and `scaleBps` were written to avoid on these paths. So the
    re-base needs a clamped helper that returns 0 rather than panicking, and the
    divide has to be extracted from `capBonus` rather than duplicated beside it,
@@ -401,7 +401,7 @@ Newest until standing exists.
   must pass the text gate: the 3-segment route was once the one render path that
   bypassed it, and purge did not reach it.
 - Closes for new rows at the terminal predicate the realm already uses
-  (`verdictAt != 0 || closed`, plus provClose) — not `crystallized`, which
+  (`verdictAt != 0 || closed`, plus provClose) — not `rewardsOpened`, which
   `CloseDeadClaim` and provClose never reach.
 
 **Build it in kourt's own bptree idiom rather than importing
@@ -1001,7 +1001,7 @@ the defect it catches — the four standing bps constants still have none.
 - The conviction credit had **no quality gate**, so a claim rated LOW paid
   standing in full at 4.5–22.7× the mill's total burn.
 - The first gate for it was then **wrong in both arms**. It refused `provClose`
-  on the stated grounds that there is "no draw and no verdict" — `crystallize.gno`
+  on the stated grounds that there is "no draw and no verdict" — `openrewards.gno`
   says the opposite in as many words, *"provClose now DRAWS"* — so it withheld a
   credit on a path that pays MID emission. And it admitted `tier == MID`, which
   is the **default an unadjudicated claim receives**, i.e. exactly the mill's
@@ -1898,7 +1898,7 @@ finalize does, so every answered-but-unsettled claim rendered:
 
 > - quality: low (default; the flag lane may re-vote it)
 
-And the tier is a **payout multiplier** — `crystallize` computes
+And the tier is a **payout multiplier** — `open the rewards` computes
 `want := mustMul(cs.tier, midGross)`, with low/mid/high at 0/1/2. So low pays
 **nothing**, and the page was telling the answerer and every staker that this
 claim currently pays nothing, when its outcome absent a flag vote is mid: full

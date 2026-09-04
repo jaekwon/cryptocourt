@@ -98,7 +98,7 @@ zero power over money.
   run unchanged.
 - **Direction of dependency (round 4, F5)**: moderation → money is forbidden
   (I2); **money → moderation is permitted and unavoidable** — Gno has no
-  observer/event hook, so `PostAnswer`/`Crystallize`/`provCloseClaim`/
+  observer/event hook, so `PostAnswer`/`OpenRewards`/`provCloseClaim`/
   `CloseDeadClaim` must *call into* the moderation module to write strip/
   pending/parse state and to read the per-target latch. That is
   constitutional **iff those calls (a) never panic** (a moderation-side
@@ -132,7 +132,7 @@ zero power over money.
 | `stake.gno` | polish-window gate on Stake (Unstake redundant, kept as defense) |
 | `court.gno` | `Params.stakeOpenDelayBlocks` + `mustSane` (I7); `StartCourt` grows the delay param + **name length-cap** + reserved-slug `meta` refusal; `startCourt(admin,slug,name)` extraction for init. **No GNOT creation fee** (owner decision v0.8.2): a fixed GNOT fee can't be sized without a USD oracle, so court-count floods are priced by the **per-byte storage deposit** the Court/coin/governor/curve state already incurs (protocol-set, self-repricing, no oracle) — which also keeps `StartCourt` **realm-callable** (no `OriginSend`, no user-call-only restriction) |
 | `answer.gno` | priority re-anchor (§9); **`PostAnswer` writes (non-panicking): strip entry, seeded/pending move, persisted binding parse; and reads the per-target latch (refuse-if-held)** |
-| `crystallize.gno` | seeded gate on author draw AND `AuthorBonus` (I5); `openBlocks` re-anchor; strip exit |
+| `openrewards.gno` | seeded gate on author draw AND `AuthorBonus` (I5); `openBlocks` re-anchor; strip exit |
 | `quality.gno` | `settleSlash` bounty base = actual recorded burns, re-expressed vs v0.40 `slashSizeFor` (§8) |
 | `dispute.gno` | strip exit in `provCloseClaim` |
 | `claim.gno` | `OpenClaimSeeded` + pending entry; **title-edit entrypoint** (rewrites stored parse + pending enter/exit — **no latch op**, round 4 F4); pending drop in `CloseDeadClaim`; purged-court gate on OpenClaim; claim-lane events |
@@ -428,7 +428,7 @@ purge never editorial.
     are stored-parse rewrite + pending enter/exit; an edit that acquired a
     latch would reopen M-A32).
   - **Latch releases** at verdict-final when the verdict is **non-executable**
-    (NO / route-gated / no-op), and otherwise at Crystallize/provClose/
+    (NO / route-gated / no-op), and otherwise at OpenRewards/provClose/
     CloseDeadClaim (round 4 F4: the `executedAt`-window hold is only needed for
     an executable YES — this cuts a griefer's firm hold from ~10d to ~3d and
     removes the dispute-prolongs-hold perversity). A **restorative** appeal may
@@ -514,7 +514,7 @@ Two indexed strips (per-court + directory) plus a per-court **pending list** —
 just relocates the flood).
 
 - **Membership**: strip entry uniformly `PostAnswer`; span `frozenAt != 0 &&
-  !crystallized && !provClose && !closed`; exits Crystallize/provClose/
+  !rewardsOpened && !provClose && !closed`; exits OpenRewards/provClose/
   CloseDeadClaim. Pending list: unanswered `mod:` appeals + unanswered seeded
   claims enter at open, **move to the strip at `PostAnswer`**, drop at
   `CloseDeadClaim` (its only two transitions). `stripEnteredAt` makes entry
@@ -530,7 +530,7 @@ just relocates the flood).
   precision, round 5: the spine delivers *discovery*, not a self-financing
   slash — actually slashing a near-mint junk blocker is turnout-gated, and
   without turnout the flag resolves inconclusive-mid and half-burns the
-  *defender's* bond while the mill crystallizes in the flag cooldown; that
+  *defender's* bond while the mill open the rewardss in the flag cooldown; that
   economics is pre-v0.5 dispositioned and unchanged. The spine's job is to
   *surface* the target so a funded court can police it.) `stripEnteredAt` is the
   membership/storage key; `SettleDeadline` is the render key (selection vs
@@ -589,13 +589,13 @@ just relocates the flood).
 - **Bits**: strips/pending ignore courtMod+meta bits; the **global** bit redacts
   text but still renders the stored parse for `mod:` rows (open or persisted).
   Tier-hidden courts' rows appear on the directory strip (redacted iff global).
-- **Residency & cranks**: an answered-uncrystallized claim is correctly
+- **Residency & cranks**: an answered-unrewardsOpened claim is correctly
   resident (still flaggable = policeable); no exit timer. Every terminal path
   is permissionlessly reachable (`SettleUndisputed`/`ResolveDispute`/`Finalize`/
-  `provCloseClaim`; Crystallize permissionless after the 1-week grace) but the
+  `provCloseClaim`; OpenRewards permissionless after the 1-week grace) but the
   cranks **pay the caller nothing** — mods/deployer are the implied janitors.
   *Optional courtv2 coordination item (touches the other session's
-  `crystallize.gno`)*: reducing the participant-only Crystallize grace for
+  `openrewards.gno`)*: reducing the participant-only OpenRewards grace for
   verdict-final, flag-quiet claims lets defenders evict blockers faster — the
   one residency-attacking lever, flagged not assumed.
 
@@ -732,7 +732,7 @@ except where noted)
    name-cap + `meta` refusal (no GNOT fee — storage-deposit-priced, realm-
    callable), title-edit entrypoint (no latch), `OpenClaimSeeded`, purged-court
    gate (OpenClaim only), events; fixture sweep. Tests I4, I7.
-3. `answer.gno`+`crystallize.gno`+`quality.gno`+`dispute.gno` — membership-site
+3. `answer.gno`+`openrewards.gno`+`quality.gno`+`dispute.gno` — membership-site
    index writes (non-panicking, idempotent) + PostAnswer latch read + binding
    persist; I5 both gates; `settleSlash` actual-burn base (v0.40); openBlocks +
    priority re-anchors. Tests I5, I9-core.
@@ -1763,7 +1763,7 @@ decision must be made before launch, not after.
     and `CounterFlag`'s one-shot re-vote latch. So the harness reaches this file
     and the survivor count is a property of the suite.
   - Every survivor refuses an ABSENT thing: voting with no vote open, resolving
-    with no flag, countering with no slash, flagging a claim that has crystallized
+    with no flag, countering with no slash, flagging a claim that has rewardsOpened
     or closed without a draw, flagging over a pending slash, and the counter
     window's own deadline. A suite drives a verb where it succeeds, so the arm
     that says *"there is nothing here"* is the one nothing ever reaches.
@@ -1779,7 +1779,7 @@ decision must be made before launch, not after.
     restores it so the identical call opens the counter — the deadline is what is
     being measured, and it is measured against its own success.
   - The closed states are CONSTRUCTED and restored between arms, because the paths
-    that produce them — crystallize, provisional close, a slash-grade flag — are
+    that produce them — open the rewards, provisional close, a slash-grade flag — are
     each exercised in full elsewhere in the same file. Batch 298 -> 306.
   - Doctrine: **AN ANSWER THAT SURVIVES ONLY BECAUSE NOBODY PRICED IT IS NOT A
     REASON.** Two of my three explanations dissolved on measurement; the surviving
@@ -2326,7 +2326,7 @@ decision must be made before launch, not after.
   AFTER IT, and the moderation constitution has no mutation coverage at all.**
   Measuring mutation coverage per file — rather than recalling what had been
   tested — showed the batch weighted almost entirely to the money path:
-  `quality.gno` 15 mutations, `crystallize.gno` 10, `dispute.gno` 8, and
+  `quality.gno` 15 mutations, `openrewards.gno` 10, `dispute.gno` 8, and
   **`moderation.gno` zero across 1063 lines and 51 guards**, plus nothing at all
   on `meta.gno`, `folders.gno`, `strips.gno`, `modrender.gno` or `records.gno`.
   **MUTATION COVERAGE FOLLOWS ATTENTION, NOT RISK.** Ten mutations were written
@@ -2693,7 +2693,7 @@ decision must be made before launch, not after.
     would stack a second meta multiplier on an already-differentiated base and
     double-count. The other half of the premise was right and needs nothing: the
     fee burns only on the dead-claim paths (expiry, conclusive low quality) and
-    refunds on the live ones (settlement, crystallization), so a flooder always
+    refunds on the live ones (settlement, the reward draw), so a flooder always
     pays it and an answered honest claim never does. `depositFeeBps` stays global
     because, riding a differentiated base, it is a pure *what share of the filing
     cost is at risk* dial, and that share has no reason to vary per court. Second
@@ -3450,7 +3450,7 @@ decision must be made before launch, not after.
     permanently reverting `PostAnswer` for it, for the price of a refundable
     bond. Worse, it fired on the ORDINARY path: this doc's own "aggressive verb
     refused on silence" test was silently leaking a latch. Fixed by releasing at
-    every terminal transition (Crystallize / provClose / CloseDeadClaim), with a
+    every terminal transition (OpenRewards / provClose / CloseDeadClaim), with a
     regression test asserting the slot frees.
   - **CRITICAL, 1/3 — a zero-approval candidate could win the election.** The
     two-pass tie-break filtered on `weight >= maxW - floor`, so whenever the

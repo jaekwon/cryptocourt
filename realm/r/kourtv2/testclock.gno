@@ -130,7 +130,7 @@ var (
 	// emission rolls per period, votes close on a block and the twap ring
 	// matures on one, so a chain that could only fast-forward its CALENDAR
 	// still had to mine its way to every accounting state — ~17,280 blocks to
-	// crystallize, 120,960 to resolve a dispute. The owner reversed the earlier
+	// open the rewards, 120,960 to resolve a dispute. The owner reversed the earlier
 	// "accounting clocks must not be faked" ruling for exactly that reason.
 	//
 	// Same shape as the time skew, deliberately: forward-only, capped so the

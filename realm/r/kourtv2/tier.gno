@@ -42,7 +42,7 @@ package kourtv2
 // tierBpsFor is the claim's draw multiplier in bps: tierParBps is 1×.
 //
 // Reads only frozen state, so the answer is fixed the moment the claim is
-// answered and no later caller can move it. That is not a nicety: Crystallize
+// answered and no later caller can move it. That is not a nicety: OpenRewards
 // is permissionless once the participants' week has passed, so a multiplier
 // derived from anything live would let whoever calls it choose the moment, and
 // therefore the number.

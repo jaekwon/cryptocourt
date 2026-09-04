@@ -12,7 +12,7 @@ import (
 //
 // Two functions carry the same shape with different bases:
 //
-//	Crystallize  participant-only until verdictAtTime+finalizeGraceSecs   (blocks as fallback)
+//	OpenRewards  participant-only until verdictAtTime+finalizeGraceSecs   (blocks as fallback)
 //	Finalize     participant-only until escrowUntilAt+finalizeGraceSecs   (blocks as fallback)
 //
 // Both read seconds since the conversion. Their edges still land on the same block
@@ -82,7 +82,7 @@ func TestTheParticipantOnlyWindowsEndOnTheirExactBlock(cur realm, t *testing.T) 
 	Finalize(cross(cur), "gb", edge)
 	uassert.True(t, mustClaim(c, edge).verdictAt != 0)
 
-	// ---- HALF TWO: Crystallize, based on cs.verdictAt ----
+	// ---- HALF TWO: OpenRewards, based on cs.verdictAt ----
 	// Same shape, different base, and the same pairing-first ordering for the same
 	// reason. No flag ever opens on these, so lastFlagEventAt stays 0 and the 24h
 	// priority window is long behind us — the grace edge is what is being tested.
@@ -99,8 +99,8 @@ func TestTheParticipantOnlyWindowsEndOnTheirExactBlock(cur realm, t *testing.T) 
 		t.Fatal("fixture: already past the grace window, nothing is being tested")
 	}
 	testing.SetRealm(testing.NewUserRealm(author)) // the author, a participant
-	Crystallize(cross(cur), "gb", cpair)
-	uassert.True(t, mustClaim(c, cpair).crystallized)
+	OpenRewards(cross(cur), "gb", cpair)
+	uassert.True(t, mustClaim(c, cpair).rewardsOpened)
 
 	cedge := settledClaim(cur, c, "gb", author, staker)
 	ecs2 := mustClaim(c, cedge)
@@ -111,13 +111,13 @@ func TestTheParticipantOnlyWindowsEndOnTheirExactBlock(cur realm, t *testing.T) 
 	uassert.Equal(t, target2-1, heightNow())
 	testing.SetRealm(testing.NewUserRealm(stranger))
 	uassert.AbortsContains(t, cur, "participant-only", func() {
-		Crystallize(cross(cur), "gb", cedge)
+		OpenRewards(cross(cur), "gb", cedge)
 	})
 	testing.SkipHeights(1)
 	uassert.Equal(t, target2, heightNow())
 	testing.SetRealm(testing.NewUserRealm(stranger))
-	Crystallize(cross(cur), "gb", cedge)
-	uassert.True(t, mustClaim(c, cedge).crystallized)
+	OpenRewards(cross(cur), "gb", cedge)
+	uassert.True(t, mustClaim(c, cedge).rewardsOpened)
 }
 
 // A WEEK IS SEVEN DAYS, AND ON A SLOW CHAIN THAT IS NOT 120,960 BLOCKS.
@@ -135,7 +135,7 @@ func TestTheParticipantOnlyWindowsEndOnTheirExactBlock(cur realm, t *testing.T) 
 // end the claim. The second half then zeroes the stamp on an identical claim to
 // prove the height arm still governs a pre-upgrade record — same wall clock, other
 // answer, and the only difference is the missing stamp.
-func TestTheCrystallizeGraceIsAWeekOfWallClockNotOfBlocks(cur realm, t *testing.T) {
+func TestTheOpenRewardsGraceIsAWeekOfWallClockNotOfBlocks(cur realm, t *testing.T) {
 	author := testutils.TestAddress("gw-author")
 	staker := testutils.TestAddress("gw-staker")
 	stranger := testutils.TestAddress("gw-stranger")
@@ -164,8 +164,8 @@ func TestTheCrystallizeGraceIsAWeekOfWallClockNotOfBlocks(cur realm, t *testing.
 	uassert.Equal(t, beforeH, heightNow()) // time moved, height did not
 
 	testing.SetRealm(testing.NewUserRealm(stranger))
-	Crystallize(cross(cur), "gw", id)
-	uassert.True(t, mustClaim(c, id).crystallized)
+	OpenRewards(cross(cur), "gw", id)
+	uassert.True(t, mustClaim(c, id).rewardsOpened)
 
 	// ---- AND A PRE-UPGRADE CLAIM STILL READS HEIGHT, TO ITS EXACT BLOCK ----
 	// Built after the above so its own grace window is ahead of us again.
@@ -189,18 +189,18 @@ func TestTheCrystallizeGraceIsAWeekOfWallClockNotOfBlocks(cur realm, t *testing.
 	// the verdict. It is not consulted, because there is no stamp to consult.
 	testing.SetRealm(testing.NewUserRealm(stranger))
 	uassert.AbortsContains(t, cur, "participant-only", func() {
-		Crystallize(cross(cur), "gw", old)
+		OpenRewards(cross(cur), "gw", old)
 	})
 	testing.SkipHeights(1)
 	uassert.Equal(t, target, heightNow())
 	testing.SetRealm(testing.NewUserRealm(stranger))
-	Crystallize(cross(cur), "gw", old)
-	uassert.True(t, mustClaim(c, old).crystallized)
+	OpenRewards(cross(cur), "gw", old)
+	uassert.True(t, mustClaim(c, old).rewardsOpened)
 }
 
 // THE SAME WEEK, THE SAME DRIFT, ON THE OTHER TERMINAL PATH.
 //
-// Finalize's grace is the twin of Crystallize's — same constant, different base —
+// Finalize's grace is the twin of OpenRewards's — same constant, different base —
 // so it drifted identically and is separated identically. The one difference worth
 // naming: escrowUntilAt is a FUTURE stamp, written as `nowTime()+blocksToSecs(w)`
 // when the escrow opens, where verdictAtTime is stamped at the moment it happens.

@@ -12,7 +12,7 @@ import (
 // unpinned: CloseDeadClaim on an ANSWERED claim, a double close, and OpenClaim's title
 // bounds all failed no test. The answered case is the serious one — a claim with an
 // answer has a bond in escrow and a settle path, and "dying" instead would refund the
-// deposit, mark it closed, and leave Crystallize panicking on `closed` forever. It is
+// deposit, mark it closed, and leave OpenRewards panicking on `closed` forever. It is
 // reachable because deadClaimTimeout and the answerability window are both 12 weeks, so
 // an answer landing near the end leaves a claim that is both answered and past the
 // timeout.
@@ -225,7 +225,7 @@ func ledgerMatchesClaims(t *testing.T, c *Court, when string) {
 }
 
 // The other two disposal paths that must maintain the same ledger: a claim that
-// CRYSTALLIZES (deposit and fee released at the draw) and a claim whose conclusive LOW
+// OPEN THE REWARDSS (deposit and fee released at the draw) and a claim whose conclusive LOW
 // burns them. Their own court, so neither claim's windows are pushed around by the
 // other fixture's clock.
 func TestCourtDepositLedgerAcrossDrawAndBurn(cur realm, t *testing.T) {
@@ -264,16 +264,16 @@ func TestCourtDepositLedgerAcrossDrawAndBurn(cur realm, t *testing.T) {
 	}
 	ledgerMatchesClaims(t, c, "after a spam discard burned a deposit and fee")
 
-	// Then the drawn claim through settle and crystallize.
+	// Then the drawn claim through settle and open the rewards.
 	SettleUndisputed(cross(cur), "cdl2", drawn)
 	testing.SkipHeights(100_000) // cross a period so the reservoir has a budget
 	testing.SetRealm(testing.NewUserRealm(alice))
-	Crystallize(cross(cur), "cdl2", drawn)
+	OpenRewards(cross(cur), "cdl2", drawn)
 	if dcs := mustClaim(c, drawn); dcs.deposit != 0 || dcs.fee != 0 {
-		t.Fatalf("setup: crystallize must release the deposit and fee: %d/%d",
+		t.Fatalf("setup: open the rewards must release the deposit and fee: %d/%d",
 			dcs.deposit, dcs.fee)
 	}
-	ledgerMatchesClaims(t, c, "after a claim crystallized")
+	ledgerMatchesClaims(t, c, "after a claim rewardsOpened")
 
 	if c.deposit != 0 {
 		t.Fatalf("both claims disposed: the ledger must be empty, got %d", c.deposit)

@@ -57,8 +57,8 @@ PROBES = [
     ("FailedRounds", '("{c}",{i})'), ("QuorumFloorOf", '("{c}",{i})', 'DisputeOpen("{c}",{i})'),
     ("Provisional", '("{c}",{i})'), ("ProvClose", '("{c}",{i})'),
     ("Settled", '("{c}",{i})'), ("Verdict", '("{c}",{i})', 'Settled("{c}",{i})'),
-    ("VerdictRoute", '("{c}",{i})', 'Settled("{c}",{i})'), ("Crystallized", '("{c}",{i})'),
-    ("DrawSlices", '("{c}",{i})', 'Crystallized("{c}",{i})'),
+    ("VerdictRoute", '("{c}",{i})', 'Settled("{c}",{i})'), ("RewardsOpened", '("{c}",{i})'),
+    ("DrawSlices", '("{c}",{i})', 'RewardsOpened("{c}",{i})'),
     # QualityTier, FlagState and FlagBondNext went with the quality lane. Removed
     # here too, or this conformance check reports three failures forever against a
     # realm that is correct — and a checker that always fails is a checker nobody

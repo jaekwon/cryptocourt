@@ -144,8 +144,8 @@ func TestClaimingAFranchiseLeavesMetasAccrualClockCurrent(cur realm, t *testing.
 //
 // WHY IT IS REACHABLE, which is the whole reason this is a test and not a note: the
 // release is called at every TERMINAL event, and there are four call sites —
-// CloseDeadClaim, Crystallize, dispute.gno's finalize, and meta.gno's own. Finalize and
-// Crystallize are SEQUENTIAL on the same claim, so an ordinary meta appeal calls its own
+// CloseDeadClaim, OpenRewards, dispute.gno's finalize, and meta.gno's own. Finalize and
+// OpenRewards are SEQUENTIAL on the same claim, so an ordinary meta appeal calls its own
 // release twice. Between those two calls another appeal on the same target may take the
 // freed slot, and the second call then hands that slot away — leaving a live appeal with
 // no latch and the target open to a swarm, which is the one thing latchKey exists to

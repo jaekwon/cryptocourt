@@ -928,7 +928,7 @@ for a, b, kind, _ in REL:
 # UpvoteComment is weighted by standing and refuses an address with none
 # (board.gno). Nobody in this fixture had any, and the reason is not the ladder
 # or the tier — it is that conviction standing is credited inside WithdrawBonus
-# (crystallize.gno), so a staker earns it by coming back to COLLECT, and this
+# (openrewards.gno), so a staker earns it by coming back to COLLECT, and this
 # docket never collected. Measured on a seeded node before it was believed:
 # every one of the sixteen actors read `score:0` from StandingBreakdown, and the
 # credit rates were non-zero, so it was not a rounding story.
@@ -954,10 +954,10 @@ for _c in D:
         if _v > 0:
             _winners.setdefault(_w, (ids[_c["key"]], _win))
 
-# CRYSTALLIZE FIRST, and it is not a formality: WithdrawBonus refuses with "the
-# draw has not crystallized" until it has run. Once per CLAIM, not once per
-# winner — a second call panics with "already crystallized" — and called by a
-# participant, because Crystallize is participant-only for the first week after
+# OPEN THE REWARDS FIRST, and it is not a formality: WithdrawBonus refuses with "the
+# draw has not rewardsOpened" until it has run. Once per CLAIM, not once per
+# winner — a second call panics with "already rewardsOpened" — and called by a
+# participant, because OpenRewards is participant-only for the first week after
 # the verdict and these winners staked on the claim they are collecting from.
 #
 # It advances three of nineteen claims one step further along their lifecycle,
@@ -971,7 +971,7 @@ for _w in UPVOTERS:
         raise ValueError(f"{_w} holds no winning position — the upvotes below cannot work")
     _cid, _side = _winners[_w]
     if _cid not in _cryst:
-        s.call(accounts[_w], "Crystallize", [SLUG, str(_cid)])
+        s.call(accounts[_w], "OpenRewards", [SLUG, str(_cid)])
         _cryst.add(_cid)
     s.call(accounts[_w], "WithdrawBonus", [SLUG, str(_cid), str(_side)])
     # Standing is what the upvote needs, so standing is what is asserted — not

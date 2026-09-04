@@ -29,7 +29,7 @@ import (
 //
 // So a fixture that DRIVES the draw up cannot reach the cap; it would test the
 // emission budget instead, since P8 clamps first. The cap has to be squeezed down
-// onto a natural draw, which is `crystallize_test.gno`'s own idiom for the
+// onto a natural draw, which is `openrewards_test.gno`'s own idiom for the
 // AnswererBonus bound. Every fixture below asserts the natural state FIRST, so none
 // can pass vacuously if the arithmetic later moves — and the bystander asserts the
 // 1.53× MARGIN, not merely `capd > mg`, because at this fixture's scale the bare
@@ -55,7 +55,7 @@ func TestDrawCapIsInertEvenAtTheSizeCeiling(cur realm, t *testing.T) {
 	testing.SkipHeights(settleDelay)
 	SettleUndisputed(cross(cur), "dc1", id)
 	testing.SkipHeights(100_000)
-	Crystallize(cross(cur), "dc1", id)
+	OpenRewards(cross(cur), "dc1", id)
 
 	cs := mustClaim(mustCourt("dc1"), id)
 	// THE CEILING, AND THAT IS THE POINT — the strongest place to claim the cap is
@@ -162,7 +162,7 @@ func TestDrawCapBindsWhenTheBondDidNotCoverTheDraw(cur realm, t *testing.T) {
 
 	testing.SkipHeights(100_000)
 	testing.SetRealm(testing.NewUserRealm(alice))
-	Crystallize(cross(cur), "dc2", id)
+	OpenRewards(cross(cur), "dc2", id)
 
 	// The reserved D is the capped figure, not tier×midGross.
 	got := cs.drawWinners + cs.drawAuthor + cs.drawAnswerer
@@ -232,7 +232,7 @@ func TestDrawCapDoesNotTouchAnOverturnedClaim(cur realm, t *testing.T) {
 	}
 
 	testing.SkipHeights(escrowWindow(c, cs) + 1)
-	// Finalize and Crystallize are both participant-only for their first week
+	// Finalize and OpenRewards are both participant-only for their first week
 	// (A13 — a stranger must not pick the reservoir moment), and the DISPUTER is
 	// not a participant. Alice is: she authored and answered it.
 	testing.SetRealm(testing.NewUserRealm(alice))
@@ -269,7 +269,7 @@ func TestDrawCapDoesNotTouchAnOverturnedClaim(cur realm, t *testing.T) {
 	// reserveJunior clamps this claim's draw to an empty reservoir until accrual
 	// catches up (GAMETHEORY.md §11.8, and §16.4 for exactly this shape: a
 	// provClose after a DECIDED round restores an entitlement worth nothing until
-	// C0 lands). Measured here: crystallizing straight after Finalize paid the
+	// C0 lands). Measured here: opening the rewards straight after Finalize paid the
 	// winners 0 rather than the capped figure, so without this wait the fixture
 	// would have "passed" against the wrong zero. That is a separate open item,
 	// not this cap — the wait isolates the cap from it.
@@ -290,7 +290,7 @@ func TestDrawCapDoesNotTouchAnOverturnedClaim(cur realm, t *testing.T) {
 		t.Fatalf("precondition: the comp drought must clear the WHOLE draw before this "+
 			"can measure the cap; reservoir %d, need %d", c.reservoirR(), uncapped)
 	}
-	Crystallize(cross(cur), "dc4", id)
+	OpenRewards(cross(cur), "dc4", id)
 
 	if uncapped > c.curPeriodBudget {
 		t.Fatalf("re-scale: the period budget bound this claim (want %d, budget %d)",
@@ -325,7 +325,7 @@ func TestDrawCapSubtractsTheCarrotBecauseTheCarrotAlsoMints(cur realm, t *testin
 	testing.SkipHeights(settleDelay)
 	SettleUndisputed(cross(cur), "dc3", id)
 	testing.SkipHeights(100_000)
-	Crystallize(cross(cur), "dc3", id)
+	OpenRewards(cross(cur), "dc3", id)
 
 	cs := mustClaim(mustCourt("dc3"), id)
 	if cs.carrotTotal <= 0 {

@@ -13,12 +13,12 @@ import (
 // somebody presses it. A figure derived independently of the payment path is the
 // defect this realm has now had three times on deadlines — a read that
 // contradicts its own gate — so the assertion here is not "the quote looks
-// sensible" but "the quote equals what Crystallize then paid", compared against
+// sensible" but "the quote equals what OpenRewards then paid", compared against
 // DrawSlices after the fact.
 //
-// Not circular: DrawQuote is computed BEFORE the call, from the pre-crystallize
+// Not circular: DrawQuote is computed BEFORE the call, from the pre-open the rewards
 // state, and DrawSlices reports what the write path actually stored.
-func TestTheDrawQuoteIsWhatCrystallizeThenPays(cur realm, t *testing.T) {
+func TestTheDrawQuoteIsWhatOpenRewardsThenPays(cur realm, t *testing.T) {
 	alice := testutils.TestAddress("dqz-alice")
 	bob := testutils.TestAddress("dqz-bob")
 	c := testCourt(cur, "dqz", alice, 90_000_000_000)
@@ -27,7 +27,7 @@ func TestTheDrawQuoteIsWhatCrystallizeThenPays(cur realm, t *testing.T) {
 
 	qw, qa, qan := DrawQuote("dqz", id)
 	if qw == 0 && qa == 0 && qan == 0 {
-		t.Fatal("fixture: a settled, uncrystallized claim must quote a draw, or " +
+		t.Fatal("fixture: a settled, unrewardsOpened claim must quote a draw, or " +
 			"this asserts nothing")
 	}
 
@@ -39,7 +39,7 @@ func TestTheDrawQuoteIsWhatCrystallizeThenPays(cur realm, t *testing.T) {
 	// zero satisfies.
 	testing.SkipHeights(periodBlocks)
 	testing.SetRealm(testing.NewUserRealm(alice))
-	Crystallize(cross(cur), "dqz", id)
+	OpenRewards(cross(cur), "dqz", id)
 	pw, pa, pan, _ := DrawSlices("dqz", id)
 	if pw+pa+pan == 0 {
 		t.Fatal("fixture: the court must be able to pay, or the comparison below " +
@@ -71,12 +71,12 @@ func TestTheDrawQuoteIsWhatCrystallizeThenPays(cur realm, t *testing.T) {
 		t.Fatalf("the payment invented an answerer slice the quote excluded: %d", pan)
 	}
 
-	// AND IT GOES QUIET once there is nothing left to quote: after crystallize
+	// AND IT GOES QUIET once there is nothing left to quote: after open the rewards
 	// DrawSlices is the authority, and two answers to one question is what this
 	// read exists to avoid.
 	zw, za, zan := DrawQuote("dqz", id)
 	if zw != 0 || za != 0 || zan != 0 {
-		t.Fatalf("a crystallized claim must stop quoting: %d %d %d", zw, za, zan)
+		t.Fatalf("a rewardsOpened claim must stop quoting: %d %d %d", zw, za, zan)
 	}
 	// A claim with no verdict has nothing to quote either.
 	testing.SetRealm(testing.NewUserRealm(alice))
@@ -86,7 +86,7 @@ func TestTheDrawQuoteIsWhatCrystallizeThenPays(cur realm, t *testing.T) {
 	}
 }
 
-func TestCrystallizeMidHappyPathDrainsEscrow(cur realm, t *testing.T) {
+func TestOpenRewardsMidHappyPathDrainsEscrow(cur realm, t *testing.T) {
 	alice := testutils.TestAddress("cz1-alice")
 	bob := testutils.TestAddress("cz1-bob")
 	dave := testutils.TestAddress("cz1-dave")
@@ -103,23 +103,23 @@ func TestCrystallizeMidHappyPathDrainsEscrow(cur realm, t *testing.T) {
 
 	testing.SetRealm(testing.NewUserRealm(dave))
 	uassert.AbortsContains(t, cur, "no final verdict", func() {
-		Crystallize(cross(cur), "cz1", id)
+		OpenRewards(cross(cur), "cz1", id)
 	})
 	testing.SkipHeights(settleDelay)
 	SettleUndisputed(cross(cur), "cz1", id)
 	// Participant week: a stranger waits, a participant lands it.
 	testing.SetRealm(testing.NewUserRealm(dave))
 	uassert.AbortsContains(t, cur, "participant-only", func() {
-		Crystallize(cross(cur), "cz1", id)
+		OpenRewards(cross(cur), "cz1", id)
 	})
 	// Cross the first weekly period boundary so the reservoir has accrued a
 	// budget (it starts EMPTY — the first budget lands at the first roll),
 	// while staying inside the participant week.
 	testing.SkipHeights(100_000)
 	testing.SetRealm(testing.NewUserRealm(alice))
-	Crystallize(cross(cur), "cz1", id)
-	uassert.AbortsContains(t, cur, "already crystallized", func() {
-		Crystallize(cross(cur), "cz1", id)
+	OpenRewards(cross(cur), "cz1", id)
+	uassert.AbortsContains(t, cur, "already rewardsOpened", func() {
+		OpenRewards(cross(cur), "cz1", id)
 	})
 
 	w, a, ans, carrot := DrawSlices("cz1", id)
@@ -170,7 +170,7 @@ func TestCrystallizeMidHappyPathDrainsEscrow(cur realm, t *testing.T) {
 		t.Fatalf("escrow must drain to zero: %d", got)
 	}
 }
-// TestCrystallizeLowTierZeroDrawCarrotStillPays went with the quality lane: a LOW tier no longer zeroes the draw; size rates a small claim 0.25x
+// TestOpenRewardsLowTierZeroDrawCarrotStillPays went with the quality lane: a LOW tier no longer zeroes the draw; size rates a small claim 0.25x
 
 // F9 headroom probe (v0.45 gap 1). The flash-proof cap is
 // bound = tier·(positionRaw/openBlocks)/2, i.e. HALF the position's
@@ -210,7 +210,7 @@ func TestF9CapHeadroomAtTheExtreme(cur realm, t *testing.T) {
 	testing.SkipHeights(priorityWindowBlocks + 1)
 	testing.SkipHeights(periodBlocks)
 	testing.SetRealm(testing.NewUserRealm(alice))
-	Crystallize(cross(cur), "f9c", id)
+	OpenRewards(cross(cur), "f9c", id)
 
 	cs := mustClaim(c, id)
 	p := cs.stakers.Get(posKey(alice, sideYES)).(*stakePos)
@@ -282,7 +282,7 @@ func TestP2CarrotClampBindsForASoleVoter(cur realm, t *testing.T) {
 	testing.SkipHeights(priorityWindowBlocks + 1)
 	testing.SkipHeights(periodBlocks)
 	testing.SetRealm(testing.NewUserRealm(alice))
-	Crystallize(cross(cur), "p2c", id)
+	OpenRewards(cross(cur), "p2c", id)
 
 	cs := mustClaim(c, id)
 	b0 := cs.xBarFrozen * carrotClampXBps / 10000
@@ -327,7 +327,7 @@ func TestP2CarrotClampBindsForASoleVoter(cur realm, t *testing.T) {
 
 // TestDecidedRoundCarrotSurvivesAStaleSubBarTally went with the quality lane: the stale tally it outranked was the quality tally
 
-// TestCrystallizeWaitsOutTheQuietWindow went with the quality lane: the 24h quiet window was anchored on lastFlagEventAt, which only the flag lane ever stamped; crystallize.gno records why the guard went with it
+// TestOpenRewardsWaitsOutTheQuietWindow went with the quality lane: the 24h quiet window was anchored on lastFlagEventAt, which only the flag lane ever stamped; openrewards.gno records why the guard went with it
 
 // capBonus's F9 bound, found SURVIVING: multiplying it by 1000 failed no test, because
 // TestF9CapHeadroomAtTheExtreme establishes the cap is UNREACHABLE by natural flow
@@ -337,7 +337,7 @@ func TestP2CarrotClampBindsForASoleVoter(cur realm, t *testing.T) {
 func TestCapBonusClampsToTheF9Bound(cur realm, t *testing.T) {
 	// The multiplier reads only FROZEN claim state — the claim's own size and
 	// the court's typical claim as of its answer — so a bare claimState is the
-	// whole fixture. That is the property that lets Crystallize be permissionless
+	// whole fixture. That is the property that lets OpenRewards be permissionless
 	// without letting its caller choose the number.
 	const ref = int64(1_000_000)
 	cs := &claimState{openBlocks: 1, tierRef: ref, xBarFrozen: ref}
@@ -385,7 +385,7 @@ func TestCapBonusClampsToTheF9Bound(cur realm, t *testing.T) {
 // The P7 draw split, found SURVIVING by the mutation harness: setting
 // `drawWinners = d` — the whole draw to the winners, with no 80/93 — failed no test.
 // The author slice IS pinned, so only the winners' side was open, and it is the side
-// that matters: crystallize.gno's own comment says the 80/8/5 split is taken OUT of D,
+// that matters: openrewards.gno's own comment says the 80/8/5 split is taken OUT of D,
 // that a winner receives 80/93 = 0.860 x midGross rather than the full midGross, and
 // "Do NOT 'fix' toward §3.5 — it would inflate every draw 16%". That exact edit would
 // have passed.
@@ -411,7 +411,7 @@ func TestP7SplitTakesEightyOfNinetyThreeForWinners(cur realm, t *testing.T) {
 	upholdByVote(cur, "p7s", id, c, flagger, voter)
 	testing.SkipHeights(priorityWindowBlocks + 1)
 	testing.SetRealm(testing.NewUserRealm(alice))
-	Crystallize(cross(cur), "p7s", id)
+	OpenRewards(cross(cur), "p7s", id)
 
 	w, a, ans, _ := DrawSlices("p7s", id)
 	if w <= 0 || a <= 0 || ans <= 0 {
@@ -442,7 +442,7 @@ func TestP7SplitTakesEightyOfNinetyThreeForWinners(cur realm, t *testing.T) {
 // draws it again, and again. Neither is an equivalence — both mint.
 //
 // The function was not untested, which is why this went unnoticed. Two fixtures
-// call it: TestCrystallizeMidHappyPathDrainsEscrow asserts the answerer draws
+// call it: TestOpenRewardsMidHappyPathDrainsEscrow asserts the answerer draws
 // exactly its slice (so the tier bound is never reached), and the M3 overturn
 // fixture asserts zero — but by way of drawAnswerer == 0, not the bound. Both call
 // it AS the answerer, once. Every guard was therefore exercised on the side where
@@ -465,7 +465,7 @@ func TestAnswererBonusGuardsItsSliceAndItsCap(cur realm, t *testing.T) {
 	SettleUndisputed(cross(cur), "ab1", id)
 	testing.SkipHeights(100_000) // the reservoir starts empty; cross a period
 	testing.SetRealm(testing.NewUserRealm(alice))
-	Crystallize(cross(cur), "ab1", id)
+	OpenRewards(cross(cur), "ab1", id)
 
 	// Only the answerer, and the check must be the ANSWERER's identity rather than
 	// mere participation: bob staked, settled and is a live participant here.
@@ -550,7 +550,7 @@ func TestAuthorBonusGuardsItsSliceAndItsF9Cap(cur realm, t *testing.T) {
 	SettleUndisputed(cross(cur), "au1", id)
 	testing.SkipHeights(100_000)
 	testing.SetRealm(testing.NewUserRealm(alice))
-	Crystallize(cross(cur), "au1", id)
+	OpenRewards(cross(cur), "au1", id)
 
 	// Not the author — and bob is a staker who settled this very claim, so what is
 	// refused here is the AUTHOR's identity and not mere standing.
@@ -637,7 +637,7 @@ func TestDecidedCarrotRefusesTheAgainstVerdictVoter(cur realm, t *testing.T) {
 	Finalize(cross(cur), "cvd1", id)
 	testing.SkipHeights(priorityWindowBlocks + 1)
 	testing.SetRealm(testing.NewUserRealm(alice))
-	Crystallize(cross(cur), "cvd1", id)
+	OpenRewards(cross(cur), "cvd1", id)
 	if _, _, _, carrot := DrawSlices("cvd1", id); carrot <= 0 {
 		t.Fatalf("setup: a decided round must leave a carrot to fight over: %d", carrot)
 	}
@@ -725,7 +725,7 @@ func TestDecidedCarrotSplitsOnWeightNotHeadcount(cur realm, t *testing.T) {
 	Finalize(cross(cur), "cspl", id)
 	testing.SkipHeights(priorityWindowBlocks + 1)
 	testing.SetRealm(testing.NewUserRealm(alice))
-	Crystallize(cross(cur), "cspl", id)
+	OpenRewards(cross(cur), "cspl", id)
 
 	// Read the weights this realm actually RECORDED, rather than re-deriving them
 	// from the mints -- the lanes cap at live balance, so a re-derivation is the very

@@ -1,8 +1,8 @@
-"""A claim walked to a crystallized draw — with no blocks mined at all.
+"""A claim walked to a rewardsOpened draw — with no blocks mined at all.
 
 This file is the height override's receipt. It used to be `CI = False` and cost
-roughly two hours, because `Crystallize` is barred until block 17,280
-(crystallize.gno, `priorityWindowBlocks`) and the only way to a block was to
+roughly two hours, because `OpenRewards` is barred until block 17,280
+(openrewards.gno, `priorityWindowBlocks`) and the only way to a block was to
 produce one. It now runs in the ordinary suite, because the chain will happily
 be TOLD the height.
 
@@ -21,7 +21,7 @@ Total: ~19,440 blocks and three days, in about a dozen transactions.
 
 WHAT IT DOES NOT CLAIM. The draw comes out ZERO on every slice, and that is
 correct rather than a defect: `want` is clamped to `c.curPeriodBudget`
-(crystallize.gno), which stays zero until a court's first `rollPeriod` at
+(openrewards.gno), which stays zero until a court's first `rollPeriod` at
 `createdAt + periodBlocks` — 120,960 blocks. Advancing that far is now cheap
 too, but a court with one claim has nothing to emit against, so a non-zero draw
 needs a fuller scenario than this one. Stated here so a zero is read as the
@@ -47,7 +47,7 @@ s.court(alice, "orem", "Orem Truth Court")
 s.buy(alice, "orem", 400_000_000)
 s.buy(bob, "orem", 400_000_000)
 s.claim(alice, "orem", "The county certified 12,412 mail ballots on Nov 6, 2025.")
-# alice stakes and so is a PARTICIPANT, which is what lets her crystallize
+# alice stakes and so is a PARTICIPANT, which is what lets her open the rewards
 # without waiting out finalizeGraceBlocks. bob keeps his coin unstaked so he can
 # post the answer bond — staked coin is committed and cannot back one.
 s.stake(alice, "orem", 1, YES, 400_000_000)
@@ -64,8 +64,8 @@ s.settle(alice, "orem", 1)
 s.expect("Settled", ["orem", 1], "true")
 
 s.note("the quiet window: 17,280 blocks, and this is the part that cost 2 hours")
-s.expect_refuse(alice, "Crystallize", ["orem", 1], "quiet window",
+s.expect_refuse(alice, "OpenRewards", ["orem", 1], "quiet window",
                 note="the gate must REFUSE before the advance, or the test proves nothing")
 s.advance_height(17300, "past priorityWindowBlocks")
-s.call(alice, "Crystallize", ["orem", 1])
-s.expect("Crystallized", ["orem", 1], "true")
+s.call(alice, "OpenRewards", ["orem", 1])
+s.expect("RewardsOpened", ["orem", 1], "true")

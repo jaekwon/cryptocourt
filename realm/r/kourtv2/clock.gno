@@ -44,8 +44,8 @@ import (
 const (
 	settleSecs    = int64(72 * 3600)      // 72h: an undisputed answer settles
 	deadClaimSecs = int64(12 * 7 * 86400) // 12 weeks: an unanswered claim dies
-	// finalizeGraceSecs is the week Crystallize and Finalize stay
-	// participant-only. Read by both now — crystallize.gno from verdictAtTime,
+	// finalizeGraceSecs is the week OpenRewards and Finalize stay
+	// participant-only. Read by both now — openrewards.gno from verdictAtTime,
 	// dispute.gno from escrowUntilAt.
 	finalizeGraceSecs = int64(7 * 86400)
 	// priorityWindowSecs is the qualified-answerer head start (answer.gno). It

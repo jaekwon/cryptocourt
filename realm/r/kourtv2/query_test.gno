@@ -61,19 +61,19 @@ func TestQueryabilityReads(cur realm, t *testing.T) {
 		t.Fatal("settle deadline = answer height + 72h")
 	}
 
-	// PullState: all false before crystallize.
+	// PullState: all false before open the rewards.
 	wp, ap, anp := PullState("qy1", id, alice)
 	if wp || ap || anp {
-		t.Fatal("no pulls before crystallize")
+		t.Fatal("no pulls before open the rewards")
 	}
 
-	// Settle + crystallize (cross a period for a budget), then the winner pull
+	// Settle + open the rewards (cross a period for a budget), then the winner pull
 	// flips winnerPaid; author/answerer flags track their pulls.
 	testing.SkipHeights(settleDelay)
 	SettleUndisputed(cross(cur), "qy1", id)
 	testing.SkipHeights(periodBlocks)
 	testing.SetRealm(testing.NewUserRealm(alice))
-	Crystallize(cross(cur), "qy1", id)
+	OpenRewards(cross(cur), "qy1", id)
 	testing.SetRealm(testing.NewUserRealm(alice))
 	WithdrawBonus(cross(cur), "qy1", id, sideYES)
 	if wp, _, _ := PullState("qy1", id, alice); !wp {

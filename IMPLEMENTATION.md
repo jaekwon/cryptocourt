@@ -62,7 +62,7 @@ them in the owner's tree before writing code**, because a shadow can drift:
 
 **Ship first. It is one clause, suite-green standalone, and inert until Step 4.**
 
-- **File:** `crystallize.gno`.
+- **File:** `openrewards.gno`.
 - **Site:** exactly one — `:83`, `want := mustMul(cs.tier, midGross)`.
 
 ```go
@@ -74,7 +74,7 @@ if capd := cs.answerBond0 - mulDiv128(midGross, splitCarrot, 100); want > capd {
 
 Requires the carrot to be computed **before** `want`.
 
-- **Do NOT touch** `crystallize.gno:265` (`AnswererBonus` cap) or `:276` (`capBonus`, F9). Lowering
+- **Do NOT touch** `openrewards.gno:265` (`AnswererBonus` cap) or `:276` (`capBonus`, F9). Lowering
   either independently strands coin. Lowering `:83` alone can only make them *less* binding —
   verified in the safe direction (`drawWinners / Σ capBonus bounds ≤ 0.254`).
 - **Do NOT add a stored "frozen tier" field.** It would be dead state: `slashSizeAt` has no tier
@@ -138,7 +138,7 @@ S2 alone converts a claim paying 19,584 into one paying 0.
 
 - `provCloseClaim` sets the plain default MID against the standing provisional via the **guarded**
   predicate `if !cs.tierFinal && !cs.slotConsumed`, so an adjudicated low is never clobbered.
-- `crystallize.gno:32` refuses only `cs.closed`.
+- `openrewards.gno:32` refuses only `cs.closed`.
 - **`quality.gno:82` must drop its `provClose` arm**, or every claim that outlasted the ladder gets
   an **undemotable MID** — the failed-quorum branch deliberately never calls `resolveQualityRide`.
 - **State plainly what this does not do:** on a provClose the standing provisional is **always**
@@ -198,10 +198,10 @@ S2 alone converts a claim paying 19,584 into one paying 0.
 - **Re-key the collateralization FLOOR only** — `answer.gno:148`, `cs.sideConv(verdict)` → `max`
   over both sides.
 - **Do NOT re-key the sizer** (`quality.gno:531`). §11.2 said to; **§13.1 withdrew that.** The
-  answered-keyed sizer is *slash collateral* whose risk window runs to crystallize; the max-keyed
+  answered-keyed sizer is *slash collateral* whose risk window runs to open the rewards; the max-keyed
   excess is an *anti-snipe premium* whose window is the 72h dispute, where the whole bond burns
   anyway. Releasing the premium at settle is correct disposition, not a leak. Re-keying it withholds
-  **100% of the bond until crystallize on the modal path** and breaks a fixture asserting the
+  **100% of the bond until open the rewards on the modal path** and breaks a fixture asserting the
   slash's **definition**.
 
 ### 3.2 Why 600 and not 450
@@ -286,11 +286,11 @@ X̄/S ≈ 2.85%).
   full `want` on the accrual line and pulls become partially payable as coverage arrives, exactly as
   `PullSenior` already works. Satisfies both "the claim must eventually mint the prize it should
   have minted" *and* the challenger's 2:1 premium, which the cap could not do together, and it
-  **removes the timing attack** because no crystallize moment is worse than another.
+  **removes the timing attack** because no open the rewards moment is worse than another.
 - **Cost:** `bonusPaid` becomes an amount rather than a flag, and the F9 `capBonus` interaction needs
   re-deriving. **This is the rework that justifies deferring it.**
-- **Cheap interim if needed:** refuse `Crystallize` while `reservoirR() < want` and senior mass is
-  unpaid. `Crystallize` is its own entrypoint and already panics on five preconditions, and
+- **Cheap interim if needed:** refuse `OpenRewards` while `reservoirR() < want` and senior mass is
+  unpaid. `OpenRewards` is its own entrypoint and already panics on five preconditions, and
   principal is not gated on it. Needs a deadline so a griefer cannot block forever, and it withholds
   the author's deposit and fee during the wait.
 - **Do NOT make `reservedTail` decrementable.** The accrual line is **exactly tiled**
@@ -436,7 +436,7 @@ r/offerer    ok 0.61s   r/kourtv1    ok 1.20s   r/kourtv2  ok 7.30s   REAL EXIT:
 - **§1's exit criteria are self-contradictory.** They demand both "inert until Step 3" *and* "a
   fixture showing the cap binds at HIGH and not at MID." **Both cannot hold on today's constants** —
   the cap is inert on every row at both tiers at 5000 bps. The binding fixture must **inject**
-  `cs.answerBond0` (the `crystallize_test.gno:715` idiom), not drive it. Say so, or the implementer
+  `cs.answerBond0` (the `openrewards_test.gno:715` idiom), not drive it. Say so, or the implementer
   chases an unreachable state.
 - **§1's "requires the carrot computed before `want`" is FALSE** of the clause as written — it
   recomputes `mulDiv128(midGross, splitCarrot, 100)` inline from values already live at `:83`. The
@@ -472,7 +472,7 @@ r/offerer    ok 0.61s   r/kourtv1    ok 1.20s   r/kourtv2  ok 7.30s   REAL EXIT:
 5. **`check-citations.py` forbids new `file:line` citations inside `realm/r/kourtv2`** — and this
    plan's entire prose is in that form while §2.1/§2.2 instruct comment rewrites. **An implementer
    transcribing the plan's reasoning into a code comment trips `make check`.**
-6. **Step 1 shifts every citation below `crystallize.gno:83` by 7 lines** (`:113`, `:265`, `:276`,
+6. **Step 1 shifts every citation below `openrewards.gno:83` by 7 lines** (`:113`, `:265`, `:276`,
    `:302`). §11.8 flagged exactly this hazard for C0 and prescribed end-of-file helpers; **the plan
    fails to apply its own rule to Step 1.**
 
@@ -616,7 +616,7 @@ the conservatism as a bug.
 
 **The defect.** `provCloseClaim` refunds the deposit **and** fee with the explicit comment
 *"provClose is not a conclusive low"*, then sets `tier = tierLowX` and `tierFinal = true`, and
-`Crystallize` refuses on top. It treats itself as not-a-low for the deposit and as a low for the
+`OpenRewards` refuses on top. It treats itself as not-a-low for the deposit and as a low for the
 draw. Honest winners get principal at 1× and nothing else, **on a claim where nobody was found
 at fault** — measured, it converts a claim paying 19,584 into one paying 0.
 
@@ -625,7 +625,7 @@ at fault** — measured, it converts a claim paying 19,584 into one paying 0.
 1. `provCloseClaim` sets the plain default MID **through the same guarded predicate the other
    terminal paths use** — `if !cs.tierFinal && !cs.slotConsumed { cs.tier = tierMidX }` — so a
    genuinely adjudicated low is never clobbered.
-2. `Crystallize`'s refusal narrows to `cs.closed` only.
+2. `OpenRewards`'s refusal narrows to `cs.closed` only.
 3. **`OpenFlag`'s `provClose` arm must go too**, or every claim that outlasted the ladder gets an
    **undemotable MID**: the failed-quorum branch deliberately never calls `resolveQualityRide`,
    so the ladder's own rides cannot demote it either.
@@ -895,7 +895,7 @@ state the exposure as **inherited, not created**.
 
 **M**, on a purpose-built tree: a sybil of the answerer runs the ladder back to back, and a
 full-bar **30,000 CC** quality bloc is refused a window at *every* height ("a dispute is open" ×3,
-then "closed without a draw"). provClose then shuts the lane for good and the claim crystallizes at
+then "closed without a draw"). provClose then shuts the lane for good and the claim open the rewardss at
 `tier=1, drawWinners=19,584, slotConsumed=FALSE`.
 
 > **8.4%·X̄ buys total quality-lane immunity plus a full MID draw** — the purchasable-immunity shape
@@ -971,7 +971,7 @@ not report this survivor.
 lines, all of which describe MONEY** (the flag-slot line, the accuracy-pull hint, and
 `claimStatus`'s text) — **two were mutation SURVIVORS until assertions were added**, so §16.7's
 "render drift fixed" was true of the text and false of the guarding. Plus **`refundSlash`'s comment
-is now FALSE**: its "Crystallize panics on provClose so the reserve must be paid straight back or
+is now FALSE**: its "OpenRewards panics on provClose so the reserve must be paid straight back or
 it strands forever" no longer holds. Unlisted by both §8 and §16.7.
 
 **My price was stale by 8.3×.** Three half-burns are **8.4%·X̄**, not ~70% — the `20%·X̄` dispute
@@ -1179,7 +1179,7 @@ collapsing to the same value at each level. Dry periods after Finalize, swept at
 | 2,205 bps | **2** | 23 |
 
 The decision-relevant threshold is `finalizeGraceBlocks` = **exactly one period**: at ≤1 dry period
-the participants wait it out inside their exclusive window; at ≥2 an adversary crystallizes the
+the participants wait it out inside their exclusive window; at ≥2 an adversary open the rewardss the
 moment it goes permissionless and locks the clamp. **That threshold moves from ~3% of court supply
 to ~20%.**
 

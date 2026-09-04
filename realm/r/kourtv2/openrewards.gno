@@ -1,4 +1,4 @@
-// CRYSTALLIZE (PLAN §10.2 Q6-Q8): the one moment a claim's emission becomes
+// OPEN THE REWARDS (PLAN §10.2 Q6-Q8): the one moment a claim's emission becomes
 // concrete. Everything before it is principal (never gated) or reservation;
 // everything after is pull-claims. The draw is WALK-FREE: the denominators are
 // the side-level pool integrals (exact by construction — advancePools), so no
@@ -13,19 +13,19 @@ import (
 	"math/bits"
 )
 
-// Crystallize computes a settled claim's draw D and opens the pull-claims.
+// OpenRewards computes a settled claim's draw D and opens the pull-claims.
 // Gates (Q6): verdict final; every quality question closed and 24h quiet
 // (flags pause THIS, never principal); participant-only for the first week
 // of the verdict (A13 — a stranger must not pick the reservoir moment).
-func Crystallize(cur realm, courtSlug string, claimID uint64) {
+func OpenRewards(cur realm, courtSlug string, claimID uint64) {
 	if !cur.IsCurrent() {
 		panic(errStaleRealm)
 	}
 	who := cur.Previous().Address()
 	c := mustCourt(courtSlug)
 	cs := mustClaim(c, claimID)
-	if cs.crystallized {
-		panic("kourtv2: already crystallized")
+	if cs.rewardsOpened {
+		panic("kourtv2: already rewardsOpened")
 	}
 	if cs.verdictAt == 0 {
 		panic("kourtv2: no final verdict yet")
@@ -37,7 +37,7 @@ func Crystallize(cur realm, courtSlug string, claimID uint64) {
 	}
 	// THE 24h QUIET WINDOW STOOD HERE and went with the quality lane. It held the
 	// draw for a day after the last FLAG event so a resolved flag could not be
-	// crystallized out from under a replacement flag. lastFlagEventAt was written
+	// rewardsOpened out from under a replacement flag. lastFlagEventAt was written
 	// only by the flag lane, so with the lane gone nothing stamps it, the field is
 	// zero on every claim, and the guard would compare against block 0 — a check
 	// that can only fire in the first day of a chain's life. Deleted rather than
@@ -51,12 +51,12 @@ func Crystallize(cur realm, courtSlug string, claimID uint64) {
 	   so a record keeps the deadline it was decided under. */
 	if passed, known := pastDeadline(cs.verdictAtTime, finalizeGraceSecs); ((known && !passed) ||
 		(!known && now < cs.verdictAt+finalizeGraceBlocks)) && !isParticipant(cs, who) {
-		panic("kourtv2: Crystallize is participant-only for its first week")
+		panic("kourtv2: OpenRewards is participant-only for its first week")
 	}
 	touch(c)
 	advancePools(c, cs) // settle the denominators to the freeze pin, exactly
 
-	cs.crystallized = true
+	cs.rewardsOpened = true
 	stripExit(c, cs)              // no longer policeable (§5.3 membership exit)
 	releaseMetaLatchIfMeta(c, cs) // an appeal's review slot is freed at its end
 	// The F9 time-averaged-stake cap divides by the claim's stakeable life. The
@@ -169,8 +169,8 @@ func WithdrawBonus(cur realm, courtSlug string, claimID uint64, side int) int64 
 	c := mustCourt(courtSlug)
 	cs := mustClaim(c, claimID)
 	mustSide(side)
-	if !cs.crystallized {
-		panic("kourtv2: the draw has not crystallized")
+	if !cs.rewardsOpened {
+		panic("kourtv2: the draw has not rewardsOpened")
 	}
 	if side != int(cs.provisional) {
 		panic("kourtv2: only the winning side draws (principal came back either way)")
@@ -227,8 +227,8 @@ func AuthorBonus(cur realm, courtSlug string, claimID uint64) int64 {
 	who := cur.Previous().Address()
 	c := mustCourt(courtSlug)
 	cs := mustClaim(c, claimID)
-	if !cs.crystallized {
-		panic("kourtv2: the draw has not crystallized")
+	if !cs.rewardsOpened {
+		panic("kourtv2: the draw has not rewardsOpened")
 	}
 	if who != cs.author {
 		panic("kourtv2: only the author draws this slice")
@@ -240,7 +240,7 @@ func AuthorBonus(cur realm, courtSlug string, claimID uint64) int64 {
 	cs.authorPaid = true
 	var pay int64
 	// I5, second gate: a seeded claim pays its author nothing here either. The
-	// draw is already zeroed at crystallize, so this is belt-and-braces — but
+	// draw is already zeroed at open the rewards, so this is belt-and-braces — but
 	// the invariant is asserted at the payout site because that is where a
 	// future change would most plausibly break it.
 	if cs.seeded {
@@ -263,8 +263,8 @@ func AnswererBonus(cur realm, courtSlug string, claimID uint64) int64 {
 	who := cur.Previous().Address()
 	c := mustCourt(courtSlug)
 	cs := mustClaim(c, claimID)
-	if !cs.crystallized {
-		panic("kourtv2: the draw has not crystallized")
+	if !cs.rewardsOpened {
+		panic("kourtv2: the draw has not rewardsOpened")
 	}
 	if who != cs.answerer {
 		panic("kourtv2: only the answerer draws this slice")
@@ -298,7 +298,7 @@ func AnswererBonus(cur realm, courtSlug string, claimID uint64) int64 {
 //
 // AND IT CLAMPS WHERE div128 PANICS. div128 aborts on `hi >= den`, which is fine
 // where it has always run — inside the pull functions, where a panic strands one
-// address. The standing credits run inside Crystallize, where the same panic
+// address. The standing credits run inside OpenRewards, where the same panic
 // would strand the whole claim's draw: the exact blast-radius widening satAdd
 // and scaleBps exist to prevent on these paths. Unreachable at real magnitudes;
 // clamped anyway, because "unreachable" is what every one of those guards was
@@ -336,8 +336,8 @@ func PullCarrot(cur realm, courtSlug string, claimID uint64) int64 {
 	who := cur.Previous().Address()
 	c := mustCourt(courtSlug)
 	cs := mustClaim(c, claimID)
-	if !cs.crystallized {
-		panic("kourtv2: the draw has not crystallized")
+	if !cs.rewardsOpened {
+		panic("kourtv2: the draw has not rewardsOpened")
 	}
 	if isParticipant(cs, who) {
 		panic("kourtv2: participants take their own slices, never the carrot")
@@ -422,8 +422,8 @@ func div128(hi, lo uint64, den int64) int64 {
 
 // ------------------------------------------------------------------ reads --
 
-func Crystallized(courtSlug string, claimID uint64) bool {
-	return mustClaim(mustCourt(courtSlug), claimID).crystallized
+func RewardsOpened(courtSlug string, claimID uint64) bool {
+	return mustClaim(mustCourt(courtSlug), claimID).rewardsOpened
 }
 
 // drawWant is the draw a claim ASKS for, before the reservoir is consulted.
@@ -489,7 +489,7 @@ func drawEntitlement(c *Court, cs *claimState, midGross int64) int64 {
 	// not force the two halves into one commit, and this cap is a third reason they
 	// must be.**
 	//
-	// Do NOT lower crystallize.gno's AnswererBonus cap or capBonus to match:
+	// Do NOT lower openrewards.gno's AnswererBonus cap or capBonus to match:
 	// lowering this arm alone can only make those LESS binding, and lowering them
 	// independently strands coin.
 	if int(cs.provisional) == int(cs.answer) {
@@ -543,9 +543,9 @@ func drawSplit(cs *claimState, d int64) (winners, author, answerer int64) {
 	return winners, author, answerer
 }
 
-// DrawQuote is what Crystallize would pay if it ran now: the three slices, in CC.
+// DrawQuote is what OpenRewards would pay if it ran now: the three slices, in CC.
 //
-// (0,0,0) on a claim with no final verdict or one already crystallized — in the
+// (0,0,0) on a claim with no final verdict or one already rewardsOpened — in the
 // second case DrawSlices holds the real figures, and answering here too would
 // only invite a reader to compare two answers to one question.
 //
@@ -564,7 +564,7 @@ func drawSplit(cs *claimState, d int64) (winners, author, answerer int64) {
 func DrawQuote(courtSlug string, claimID uint64) (winners, author, answerer int64) {
 	c := mustCourt(courtSlug)
 	cs := mustClaim(c, claimID)
-	if cs.verdictAt == 0 || cs.crystallized || cs.provisional < 0 {
+	if cs.verdictAt == 0 || cs.rewardsOpened || cs.provisional < 0 {
 		return 0, 0, 0
 	}
 	var midGross int64
@@ -576,7 +576,7 @@ func DrawQuote(courtSlug string, claimID uint64) (winners, author, answerer int6
 	return drawSplit(cs, drawEntitlement(c, cs, midGross))
 }
 
-// DrawSlices reads the crystallized slice budgets (winners, author, answerer)
+// DrawSlices reads the rewardsOpened slice budgets (winners, author, answerer)
 // and the carrot pool remaining — the "what is left to pull" legibility line.
 func DrawSlices(courtSlug string, claimID uint64) (winners, author, answerer, carrotLeft int64) {
 	cs := mustClaim(mustCourt(courtSlug), claimID)
@@ -584,9 +584,9 @@ func DrawSlices(courtSlug string, claimID uint64) (winners, author, answerer, ca
 }
 
 // PullState reports which reward slices `who` has already pulled on a
-// crystallized claim — the winning-side accuracy bonus (their position's
+// rewardsOpened claim — the winning-side accuracy bonus (their position's
 // one-shot flag), the author slice, and the answerer slice — so a UI can grey
-// out spent pulls. All false before crystallize / for non-participants.
+// out spent pulls. All false before open the rewards / for non-participants.
 func PullState(courtSlug string, claimID uint64, who address) (winnerPaid, authorPaid, answererPaid bool) {
 	cs := mustClaim(mustCourt(courtSlug), claimID)
 	if cs.provisional >= 0 {

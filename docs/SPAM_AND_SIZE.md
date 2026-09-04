@@ -80,7 +80,7 @@ the typical claim exceptional is the wrong reference.
 **A weekly shared pot**, allocated across claims superlinearly by size. This is
 the only shape that makes a size-sensitive rate genuinely unbuyable — inflating
 your own claim dilutes you from a fixed pot rather than minting new coin. It was
-rejected as too large: claims currently crystallize independently against a
+rejected as too large: claims currently open the rewards independently against a
 first-come budget, and this needs them settled as a batch per period. If the
 marginal buyability below ever proves worse than modelled, this is where to go.
 
@@ -198,7 +198,7 @@ every answered claim's detail fetch was failing against a live chain. Found by
 pointing `check-live-reads.py` at a real node, which is now the only thing that
 would have caught it.
 
-**`crystallize`'s 24-hour quiet window went too**, because `lastFlagEventAt` was
+**`open the rewards`'s 24-hour quiet window went too**, because `lastFlagEventAt` was
 stamped only by the flag lane. Left in, it would have compared against block 0
 forever — and it WAS reachable on a young chain, which is how two testclock
 fixtures caught it.
@@ -229,5 +229,5 @@ contorted. Tracked, unpinned, and not silently weakened.
 | the ballot's vocabulary | `realm/r/kourtv2/dispute.gno` — `VoteDispute`, one translation point |
 | the thresholds | `dispute.gno` — `spamDiscards`, `spamBurnsDeposit` |
 | the discard | `dispute.gno` — `spamDiscardClaim`, a sibling of `provCloseClaim` |
-| the composition | `crystallize.gno`, guarded by `check-epoch-coherence` |
+| the composition | `openrewards.gno`, guarded by `check-epoch-coherence` |
 | parameter relationships | `court.gno` `mustInvariants` — the floor/answerability alignment |

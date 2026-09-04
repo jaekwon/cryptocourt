@@ -21,7 +21,7 @@ import (
 //	answered  disputeOpen  settled  provClose  provisional  closed
 //	answer  answerBond  settleAt  answerer  answerRecord
 //	round  disputeBondNext  escrowUntil  quorumFloor  voteCloses
-//	verdict  route  crystallized  drawW  drawA  drawAns  drawCarrot
+//	verdict  route  rewardsOpened  drawW  drawA  drawAns  drawCarrot
 //	author  hidden  redacted  purged  seeded  stakeOpenDelay
 //	boardSize  boardOpen
 //
@@ -125,7 +125,7 @@ func ClaimHead(courtSlug string, claimID uint64, window int64) string {
 		t("")
 	}
 
-	cryst := Crystallized(courtSlug, claimID)
+	cryst := RewardsOpened(courtSlug, claimID)
 	f(cryst)
 	if cryst {
 		w, au, an, ca := DrawSlices(courtSlug, claimID)

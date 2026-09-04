@@ -29,8 +29,8 @@ ok("provisional winning side → no stake row", claimables("c",1,{phase:"provisi
 ok("closed → unstake wording", claimables("c",1,{phase:"closed"},P_STAKE,ME,100).now.some(r=>r.label.includes("unstake")));
 ok("open → nothing", claimables("c",1,{phase:"open"},P_STAKE,ME,100).now.length===0);
 
-// crystallized draws via paid flags
-const D4 = {phase:"settled",crystallized:true,verdict:0,answer:1,route:"vote",author:ME,answerer:"g1x",draw:{w:1,a:2,ans:0,carrot:5},pulls:pulls0};
+// rewardsOpened draws via paid flags
+const D4 = {phase:"settled",rewardsOpened:true,verdict:0,answer:1,route:"vote",author:ME,answerer:"g1x",draw:{w:1,a:2,ans:0,carrot:5},pulls:pulls0};
 const c4 = claimables("orem",4,D4,{yes:20,no:0,cy:10,cn:0},ME,100);
 ok("winner draw when side==verdict & !paid", c4.now.some(r=>r.label.includes("accuracy reward")));
 ok("author draw when author & !paid", c4.now.some(r=>r.label.includes("author's slice")));
@@ -116,8 +116,8 @@ ok("F1: detail cache keyed by address", src.includes('slug+"/"+id+"/"+(addr||"")
 ok("F2: Unstake carries the exact amount", (()=>{ const r=claimables("c",1,{phase:"closed"},{yes:5,no:0,cy:0,cn:0},ME,100); return r.now[0].act[1].amount===5; })());
 ok("F3: both sides → two withdraw rows", claimables("c",1,{phase:"settled"},{yes:5,no:3,cy:0,cn:0},ME,100).now.length===2);
 ok("F3: both-sides provisional → losing side row survives", claimables("c",1,{phase:"provisional",provisional:0},{yes:5,no:3,cy:0,cn:0},ME,100).now.some(r=>r.label.includes("NO stake")));
-ok("F6: vote-settled with failed Verdict read → no winner row", !claimables("c",1,{phase:"settled",crystallized:true,verdict:-1,answer:0,route:"vote",author:"g1a",answerer:"g1b",draw:{w:1,a:1,ans:1,carrot:1},pulls:{winnerPaid:false,authorPaid:true,answererPaid:true}},{yes:5,no:0,cy:5,cn:0},ME,100).now.some(r=>r.label.includes("accuracy")));
-ok("F6: undisputed route still falls back to answer", claimables("c",1,{phase:"settled",crystallized:true,verdict:-1,answer:0,route:"undisputed",author:"g1a",answerer:"g1b",draw:{w:1,a:1,ans:1,carrot:0},pulls:{winnerPaid:false,authorPaid:true,answererPaid:true}},{yes:5,no:0,cy:5,cn:0},ME,100).now.some(r=>r.label.includes("accuracy")));
+ok("F6: vote-settled with failed Verdict read → no winner row", !claimables("c",1,{phase:"settled",rewardsOpened:true,verdict:-1,answer:0,route:"vote",author:"g1a",answerer:"g1b",draw:{w:1,a:1,ans:1,carrot:1},pulls:{winnerPaid:false,authorPaid:true,answererPaid:true}},{yes:5,no:0,cy:5,cn:0},ME,100).now.some(r=>r.label.includes("accuracy")));
+ok("F6: undisputed route still falls back to answer", claimables("c",1,{phase:"settled",rewardsOpened:true,verdict:-1,answer:0,route:"undisputed",author:"g1a",answerer:"g1b",draw:{w:1,a:1,ans:1,carrot:0},pulls:{winnerPaid:false,authorPaid:true,answererPaid:true}},{yes:5,no:0,cy:5,cn:0},ME,100).now.some(r=>r.label.includes("accuracy")));
 ok("F7: maybe-line needs a carrot pool", src.includes('d.draw.carrot>0) courtHasVoteSettle=true'));
 ok("F4: needs clears the detail cache", src.includes("const seq=++needsSeq;\n  DETC = new Map();") || /needsSeq;\s*DETC = new Map/.test(src));
 ok("F8: senior scan independent of holdings", src.includes("senior tickets are owed regardless of current holdings"));

@@ -116,7 +116,7 @@ func TestReopenableAgreesWithTheGateItMirrors(cur realm, t *testing.T) {
 // quality lane — OpenFlag, VoteQuality, ResolveFlag — because a conclusive flag
 // consumed the claim's slot and funded a carrot without anyone having to post a
 // dispute bond. With the lane gone, a decided dispute round is the only thing
-// that sets decidedPID, and decidedPID is what crystallize and the carrot read.
+// that sets decidedPID, and decidedPID is what open the rewards and the carrot read.
 //
 // "no" UPHOLDS. ResolveDispute overturns only on yes >= threshold of yes+no, so
 // a lone "no" lands in the default arm and the answer stands. The uphold arm is
@@ -242,7 +242,7 @@ func TestDisputeUpholdPath(cur realm, t *testing.T) {
 	// The history is worth keeping, because this number moved twice. Before v0.47 a
 	// decided round returned the bond whole, which made slash immunity purchasable;
 	// v0.47 made Finalize retain the slash-sized reserve exactly as SettleUndisputed
-	// did, so the remainder followed at crystallize if no conclusive-low flag
+	// did, so the remainder followed at open the rewards if no conclusive-low flag
 	// landed. With the quality lane gone there is no flag, no slash and nothing to
 	// stay collateralized against — so the bond returns whole again, for a
 	// different reason than it did the first time.
@@ -399,7 +399,7 @@ func TestOverturnedVerdictCannotBeFlippedBack(cur realm, t *testing.T) {
 	testing.SkipHeights(priorityWindowBlocks + 1) // 24h quiet
 	testing.SkipHeights(periodBlocks)             // a budget to draw from
 	testing.SetRealm(testing.NewUserRealm(alice))
-	Crystallize(cross(cur), "ovf1", id)
+	OpenRewards(cross(cur), "ovf1", id)
 	if w, _, ans, _ := DrawSlices("ovf1", id); w <= 0 || ans != 0 {
 		t.Fatalf("winners must draw and the overturned answerer must not: w=%d ans=%d", w, ans)
 	}

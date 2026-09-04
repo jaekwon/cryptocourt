@@ -23,7 +23,7 @@ package kourtv2
 //
 // AND IT WAS EXTRACTED WITHOUT BEING ADOPTED. It had two callers — Finalize and
 // SettleUndisputed — while THREE more terminal paths still ran the two lines
-// inline: crystallize (the mid happy path), spamDiscardClaim and provCloseClaim.
+// inline: open the rewards (the mid happy path), spamDiscardClaim and provCloseClaim.
 // So the copy this function exists to remove had gone from two to three
 // somewhere else, which is the failure mode of extracting a helper and leaving
 // the call sites alone: the next change to the disposition reaches two paths of
@@ -45,7 +45,7 @@ func settleAnswerBond(c *Court, cs *claimState) {
 // sideConv is one side's pool conviction accumulator (u128). It is read from
 // accumulators that freeze at the answer (advancePools settles them in
 // PostAnswer; stake and unstake refuse after), so the value is identical at
-// PostAnswer, at settle and at crystallize — which is what lets the bond floor
+// PostAnswer, at settle and at open the rewards — which is what lets the bond floor
 // and the draw share one reading of the same quantity.
 func (cs *claimState) sideConv(side int) (hi, lo uint64) {
 	if side == sideYES {

@@ -25,7 +25,7 @@ import (
 //
 // THE SHAPE IS A PAIR, because the absolute figure depends on the whole fixture. Two
 // stakers, same side, same amount, same blocks; one takes their principal back before
-// crystallize and one leaves it. Their accuracy bonuses must be equal — the withdrawal is
+// open the rewards and one leaves it. Their accuracy bonuses must be equal — the withdrawal is
 // a claim on principal, not a waiver of what the stake already earned.
 func TestWithdrawingPrincipalKeepsTheConvictionItEarned(cur realm, t *testing.T) {
 	alice := testutils.TestAddress("wcv-alice")
@@ -75,7 +75,7 @@ func TestWithdrawingPrincipalKeepsTheConvictionItEarned(cur realm, t *testing.T)
 	}
 
 	testing.SetRealm(testing.NewUserRealm(alice))
-	Crystallize(cross(cur), "wcv", id)
+	OpenRewards(cross(cur), "wcv", id)
 
 	testing.SetRealm(testing.NewUserRealm(bob))
 	bobBonus := WithdrawBonus(cross(cur), "wcv", id, sideYES)

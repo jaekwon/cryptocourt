@@ -235,7 +235,7 @@ after the answer — which was this closure's unavoidable cost.
   exposure and points here.
 - `electorate.gno` records that `VotesOf` was added and removed, so re-adding it is
   understood as re-opening this decision rather than a small change.
-- `crystallize.gno`'s carrot now pays the **recorded** ballot weight, read from
+- `openrewards.gno`'s carrot now pays the **recorded** ballot weight, read from
   **this realm's own** `qVoted` on both branches, instead of re-deriving it from
   `PastVotes`. A no-op today — recorded and re-derived are equal while the tally is
   an uncapped snapshot read — but it removes a live over-payment hole that Closure

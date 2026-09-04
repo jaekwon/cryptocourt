@@ -280,7 +280,7 @@ func TestTheCarrotSurvivesRollReclamation(cur realm, t *testing.T) {
 	// The court has not. The carrot still pays.
 	drainForCarrot(cur, "rntw6", cs)
 	testing.SetRealm(testing.NewUserRealm(author))
-	Crystallize(cross(cur), "rntw6", id)
+	OpenRewards(cross(cur), "rntw6", id)
 	testing.SetRealm(testing.NewUserRealm(voter))
 	paid := PullCarrot(cross(cur), "rntw6", id)
 	uassert.True(t, paid > 0)

@@ -190,9 +190,9 @@ func ensureVoted(cs *claimState) *bptree.BPTree {
 
 // boardOpen reports whether a claim still takes comments.
 //
-// THE TERMINAL PREDICATE THE REALM ALREADY USES, not `crystallized`: a claim can
-// end without ever crystallizing — CloseDeadClaim sets `closed`, and provClose
-// sets `verdictAt` — so gating on crystallization would leave two terminal states
+// THE TERMINAL PREDICATE THE REALM ALREADY USES, not `rewardsOpened`: a claim can
+// end without ever opening the rewards — CloseDeadClaim sets `closed`, and provClose
+// sets `verdictAt` — so gating on the reward draw would leave two terminal states
 // accepting comments forever. votelock.gno gates on this same pair.
 func boardOpen(cs *claimState) bool { return cs.verdictAt == 0 && !cs.closed }
 

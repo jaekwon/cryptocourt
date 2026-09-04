@@ -6,7 +6,7 @@ The most expensive gate in the realm. A dispute vote closes on HEIGHT:
 138,240 blocks — measured at ~2 blocks per transaction and ~75 transactions a
 minute, that is upwards of FIFTEEN HOURS. It is now two transactions.
 
-This is the scenario the whole height override was for. `Crystallize` (see
+This is the scenario the whole height override was for. `OpenRewards` (see
 crystal.py) proved the realm's own gates move; this proves the PURE PACKAGES
 move with them, which is the harder half: `p/governor` decides when a vote is
 still "active" and `p/grc20votes` decides which epoch a vote weighs at, and

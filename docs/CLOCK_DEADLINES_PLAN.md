@@ -130,7 +130,7 @@ already wrong the moment cadence changes after it was written, and no fallback
 can recover the intent because the original `now` is gone. These need the
 timestamp written ALONGSIDE, at the same site, and the gate reading the pair.
 
-The one accounting use hiding among them: `crystallize.gno:59`,
+The one accounting use hiding among them: `openrewards.gno:59`,
 `cs.openBlocks = cs.frozenAt - (cs.openedAt + c.params.stakeOpenDelayBlocks)` —
 a duration fed into the draw, not a deadline. It stays on blocks.
 
@@ -141,7 +141,7 @@ trailing ring; `pendingTTLBlocks` looks like accounting and is a deadline.
 
 | Site | Window | Stamp to use | Status |
 |---|---|---|---|
-| `crystallize.gno:46` | `finalizeGraceBlocks` after verdict | `verdictAtTime` | **converted — bug 2 fixed** |
+| `openrewards.gno:46` | `finalizeGraceBlocks` after verdict | `verdictAtTime` | **converted — bug 2 fixed** |
 | `dispute.gno:652` | `finalizeGraceBlocks` after escrow | `escrowUntilAt` | **converted** |
 | `dispute.gno:101,649` | escrow window | `escrowUntilAt` | half — stamp path exists |
 | `answer.gno:69` | `stakeOpenDelay + answerWindow + priorityWindow`, summed | `openedAtTime` | **converted** — as one duration |
@@ -931,15 +931,15 @@ site BEFORE editing it, rather than fixing the one the checker names first. Its
 replacement also had to keep the `passed, known :=` init, or the mutant fails to
 compile and silently measures nothing.
 
-Crystallize had no such row — an asymmetry between twins that predates this work.
+OpenRewards had no such row — an asymmetry between twins that predates this work.
 Added it in this commit and confirmed it is killed, so both gates now have three
 rows: exact second, exact block, and not enforced at all.
 
 Verified: full kourtv2 suite green; all four Finalize mutants (seconds edge, block
-edge, polarity, guard disabled) compile and are killed, as is the new Crystallize
+edge, polarity, guard disabled) compile and are killed, as is the new OpenRewards
 one; `make anchors collisions staleguards guards` pass.
 
-### `crystallize.gno:46` — the participant-only week (bug 2)
+### `openrewards.gno:46` — the participant-only week (bug 2)
 
 Converted. `finalizeGraceSecs = 7*86400` added to `clock.gno` in the same commit,
 per rule 4. Shape as planned, inverted because this gate asks whether the window

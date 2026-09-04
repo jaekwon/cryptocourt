@@ -60,7 +60,7 @@ claiming heights are real; `ClaimTimeline`'s test-clock marker carries the heigh
 skew beside the time skew.
 
 **F. Prove it.** Unit tests for the latch (stranger refused, backwards refused,
-wrap refused, seal one-way, floor kept), a scenario that reaches crystallize,
+wrap refused, seal one-way, floor kept), a scenario that reaches open the rewards,
 emission and a resolved dispute WITHOUT MINING A SINGLE BLOCK — which is the
 whole point — plus a fresh adversarial audit, since the first version of this
 latch came back with four HIGH findings.
@@ -73,7 +73,7 @@ the ordinary suite rather than excluded from it.
 
 | what | before | after |
 |---|---|---|
-| crystallize (`scn_crystal`) | ~17,280 blocks, ~2h | 0 blocks, 6.7s |
+| open the rewards (`scn_crystal`) | ~17,280 blocks, ~2h | 0 blocks, 6.7s |
 | resolve a dispute (`scn_dispute`) | 138,240 blocks, ~15h | 0 blocks, 8.4s |
 | emission accrues | 120,960+ blocks | 0 blocks, unit-proven |
 

@@ -130,7 +130,7 @@ a dispute, not those who plan one: a buyer can wait out the hour and open the
 dispute himself. What it removes is the crowd that arrives once a dispute is
 visible.
 
-**Crystallized.** The verdict, TRUE or FALSE, is recorded and never revised.
+**RewardsOpened.** The verdict, TRUE or FALSE, is recorded and never revised.
 A claim not yet carried to verdict stays OPEN, its live stakes visible. Accuracy rewards are
 minted from the court's emission and paid to the prevailing bonder (answerer
 or disputer), the stakers on the verdict's side, and the voters of the

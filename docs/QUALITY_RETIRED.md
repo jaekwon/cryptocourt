@@ -61,7 +61,7 @@ and not surprises to find in review:
 Measured while auditing the tree, not predicted:
 
 - **A decided dispute round is now the only route to an adjudicated claim.** It
-  is what sets `decidedPID`, and `decidedPID` is what crystallize and the carrot
+  is what sets `decidedPID`, and `decidedPID` is what open the rewards and the carrot
   read. Several tests in other files used to reach that state through the flag
   lane, because a conclusive flag consumed the claim's slot and funded a carrot
   with no dispute bond posted.
@@ -104,7 +104,7 @@ summary:
 |---|---|
 | M3-HIGH-1 | a slash reserve surviving both terminal paths — no reserve now |
 | M3-HIGH-2 | retention conditional on an adjudication — now unconditionally nothing |
-| M3-MED-1 | a griefer re-flagging to stall `Crystallize` — no flag to re-open |
+| M3-MED-1 | a griefer re-flagging to stall `OpenRewards` — no flag to re-open |
 | M3-LOW-1 | a reopen landing on a pending slash and an open counter — both unreachable |
 
 A future reader can tell a RETIRED finding from one that was never found by

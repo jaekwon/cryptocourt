@@ -63,7 +63,7 @@ const REC = COLS.join("\t");
     provisional:-1, closed:false,
     answer:1, answerBond:777, settleAt:888, answerer:"g1answerer", answerRecord:3,
     round:2, disputeBondNext:999, escrowUntil:1010, quorumFloor:1111, voteCloses:1212,
-    verdict:0, route:"vote", crystallized:true,
+    verdict:0, route:"vote", rewardsOpened:true,
     drawW:10, drawA:20, drawAns:30, drawCarrot:40,
     author:"g1author", hidden:false, redacted:false, purged:false, seeded:true,
     stakeOpenDelay:720, boardSize:7, boardOpen:true,

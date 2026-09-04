@@ -139,7 +139,7 @@ unchanged from V1.
    participant-only for its first week of eligibility, permissionless after
    (v0.11, §3.3). **v0.20 SPLIT SETTLEMENT (round-2 V2-6): principal release
    is NEVER pausable** once the dispute window lapses — flags pause only
-   draw-crystallization. A quality outcome can only move emission, so only
+   draw-the reward draw. A quality outcome can only move emission, so only
    emission may wait; both pools' principal exits regardless of any flag chain. **Losers may withdraw 1× immediately after any DECIDED
    dispute round** (econ vet F7) — their outcome cannot improve, and releasing
    them defuses the multi-round freeze-hostage (up to ~8 weeks of locked
@@ -318,7 +318,7 @@ denominator exists to time or to hold hostage.
   **reopen-relative**: settle is disallowed for **24h after every flag-vote
   close or slot reopen** — otherwise a re-flag must win a 1-block priority
   race against a settle bot at each vote close. A flag **pauses
-  draw-crystallization** until its vote closes — but see §3.1: principal
+  draw-the reward draw** until its vote closes — but see §3.1: principal
   release is NEVER pausable (v0.20 split settlement); a flag can only delay
   emission, which is all a quality outcome can affect (the F6 insight,
   finally applied to its own machinery).
@@ -395,7 +395,7 @@ denominator exists to time or to hold hostage.
   layer is now PAID (bounty + carrot, senior-queued), not volunteered.
 - **Interactions**: a flag during an open dispute is refused (the dispute vote
   already carries quality); a flag cannot be withdrawn (no flag-then-retract
-  timing games); **a flag must close before the draw** — the tier crystallizes
+  timing games); **a flag must close before the draw** — the tier open the rewardss
   before D is computed, and the flag window ends at the settle tx (reservoir
   vet pin: the earlier text never excluded a post-payment flag).
 - **v0.11 — policing must be PAID (reservoir vet F-R2, reversing v0.7's
@@ -583,7 +583,7 @@ denominator exists to time or to hold hostage.
 
 > **v0.39 correction (econ-vet P7):** the prose below sizes `D = Σg·93/80` so a
 > winner receives the full mid-weight gross with author/answerer added on top.
-> The CODE does NOT do this — `crystallize.gno` sets `D = tier·midGross` and
+> The CODE does NOT do this — `openrewards.gno` sets `D = tier·midGross` and
 > takes the 80/8/5 split OUT of that D, so a winner gets `80/93 = 0.860·midGross`.
 > This is INTENTIONAL and ~16% more conservative (lower per-claim emission,
 > ceiling-safer, worsens every mill q\*). Consequence: the honest sole-staker
@@ -1271,7 +1271,7 @@ The legal vet read the evolving plan and its findings covered these; outcomes:
 ## 10. Implementation & verification plan
 
 - **STATUS (v0.37): BUILT.** All 13 modules exist on branch `courtv2`, V1
-  untouched. Three code audits (money-core M1, dispute M2, quality/crystallize
+  untouched. Three code audits (money-core M1, dispute M2, quality/open the rewards
   M3) plus the M2-1 design-follow-up landed and are ingested FIX-FIRST; every
   finding to date is fixed with a named regression. Green across `gno test`
   (staged), `REQUIRE_GNO=1 make check`, `make txtar-test` (courtv2 money-core
@@ -1337,7 +1337,7 @@ The legal vet read the evolving plan and its findings covered these; outcomes:
   passes; shrinking curveCap to 0.44× is the alternative).
 - **P4 state machine**: VERDICT_FINAL (per-staker 1× withdrawals open, both
   sides, unpausable) → QUALITY_FINAL (last flag resolved + reopen-quiet) →
-  CRYSTALLIZE (compute D, enqueue entitlements — this is what flag pauses and
+  OPEN THE REWARDS (compute D, enqueue entitlements — this is what flag pauses and
   the reopen-relative 24h windows gate, never principal).
 - **P5 senior queue**: FIFO bptree of (addr, amount, purpose) + cumulative
   counters (reservedTail, accrual A); entitlement i payable up to
@@ -1388,7 +1388,7 @@ The legal vet read the evolving plan and its findings covered these; outcomes:
   regardless of bucket; the GNOT burn sink is a derived keyless address
   picked at deploy.
 
-## 10.2 Quality + crystallize coding spec (v0.36 — pre-implementation pins)
+## 10.2 Quality + open the rewards coding spec (v0.36 — pre-implementation pins)
 
 Written before quality.gno so the intricate lane rules land as one coherent
 machine. Sources: §3.4 (flag lane), §3.5 (draw), v0.24–v0.31 changelog, pins
@@ -1409,7 +1409,7 @@ flagBond, flagVoteEnd, flagCycles, slotConsumed, lastFlagEventAt, qVoteSeq` +
 a court-local sealed 3-bucket tally keyed (claim, qVoteSeq). b₀ =
 max(flagMinCC, X̄frozen×2%). Bond for cycle k: b₀×2^min(k,3) frozen at 4×b₀
 after 3 inconclusives with a 7-day per-flag cooldown (v0.24). OpenFlag guards:
-answered; no verdict-final crystallize yet; !disputeOpen (a flag during an
+answered; no verdict-final open the rewards yet; !disputeOpen (a flag during an
 open dispute is refused — the dispute ride carries quality); slot not
 consumed; cooldown honored; flag cannot be withdrawn.
 
@@ -1436,14 +1436,14 @@ the vote, burns (or refunds) only at window close/re-vote resolution.
 
 **Q6 — settlement gating (P4, v0.20 split settlement)**: principal
 (WithdrawStake) is NEVER gated by any flag state. A flag pauses only
-CRYSTALLIZE. Crystallize requires: verdictAt ≠ 0; !provClose; no open flag or
+OPEN THE REWARDS. OpenRewards requires: verdictAt ≠ 0; !provClose; no open flag or
 pending counter-flag window; now ≥ lastFlagEventAt + 24h (the reopen-relative
 no-settle rule — every flag-vote close or slot reopen restamps it);
 participant-only for its first week of eligibility (A13 — the zero-draw
 timing attack targets the DRAW, so the gate lives here), permissionless
 after.
 
-**Q7 — the draw (one crystallize per claim, then pull-claims)**:
+**Q7 — the draw (one open the rewards per claim, then pull-claims)**:
 - Second accumulator: stake.gno adds `rawConvHi/Lo` per position and per side
   pool — ∫stake·dt in raw block units, u128 — the F9 flash-proof CAP base
   (time-averaged stake = rawConv/openBlocks). A money-path change: fold into
@@ -1453,19 +1453,19 @@ after.
   = curPeriodBudget) drawn via reserveJunior (clamp, never abort).
 - Split of D: winners 80/93, author 8/93, answerer 5/93 (court.gno split
   invariant); carrot = 7% × midGross, P2-clamped (min(7%·midGross, per-voter
-  b₀/2−1)), senior-queued at crystallize, paid even at tier low; with-verdict
+  b₀/2−1)), senior-queued at open the rewards, paid even at tier low; with-verdict
   dispute voters weight-pro-rata (P14 governs the standalone lane: all
   non-participant quality voters regardless of bucket).
 - Pull-claims (per claimant, at their own tx): winner_i = min( D_w ×
   convCC_i/ΣconvCC_pool , (tier/2) × timeAvgStake_i ) — scale THEN cap
   (P10); author ≤ (tier/2)×own timeAvgStake; answerer ≤ (tier/2)×answerBond0.
   Cap dust stays unminted. Deposit refunds (unless slashed-low), fee refunds
-  (unless dead/conclusive-low) at crystallize — their one disposition point.
+  (unless dead/conclusive-low) at open the rewards — their one disposition point.
 - Tier low: D = 0 (winners/author/answerer draw nothing) but the carrot and
   comps still pay (senior lane) and principal was never touched.
 
-**Q8 — provClose and dead claims** never crystallize: deposits/fees were
-disposed at their own terminal events; a crystallize call on them refuses.
+**Q8 — provClose and dead claims** never open the rewards: deposits/fees were
+disposed at their own terminal events; a open the rewards call on them refuses.
 
 ## 11. Product surface — the V1 wireframe under V2 (v0.14)
 
@@ -1542,11 +1542,11 @@ Every judgment call the loop made autonomously, consolidated for override.
 | 37 | **deposit / fee (econ-vet P7 v0.39)** | **1 CC / 0.1 CC — no change.** Owner-available lever: 1→5 CC drops typical q\* 0.22→0.15, patient 0.45→0.37, honest-claim-safe (refunded on default-mid) | Not applied: it taxes honest thin-claim openers to chase a mill that is economically the intended p=1 reward, and can't close the patient gap without an ~18 CC wall. Pull it if tighter absolute-EV margins are wanted pre-launch |
 | 29 | Answer-bond custody (v0.35) | Bond stays escrowed through UPHELD rounds, returning only at VERDICT_FINAL — reopens stay collateralized; comp arms read the posted magnitude | V1's return-at-each-decision frees honest capital ~1–3wk sooner but leaves reopen rounds with nothing at stake (comp anchor = 0) |
 | 30 | provClose reachability (v0.35; **premise corrected v0.49**) | Kept V1's window geometry. The original rationale — "3 failed rounds fit only inside >2-week escrows (large claims); small claims cap at 2 failed rounds" — is **FALSE on any court past bootstrap**: `escrowWindow` adds `X̄·Price(minted)/5e8` days over a `room` of only (362880−120960)/17280 = **14 days**, so the window pins at the 3-week `escrowMaxBlocks` as soon as `X̄·Price ≥ 7e9` — which a modest claim clears once the curve has any real price. So three failed rounds fit on essentially EVERY claim, not just large ones, and provClose is correspondingly more reachable than this row claimed. The griefing path it dismisses as rare (≈3.5×base ≈ 70 CC of net burn buys three quorum-less rounds → provClose → the whole draw zeroed) is therefore live court-wide | Left as-is pending an owner decision: capping `extraDays` would restore the documented geometry but re-opens the "honest small claims wait 3 weeks" cost the row was written to avoid, and the fix belongs with the dispute-bond pricing rather than the window alone |
-| 32 | Crystallize gating anchors (v0.36) | participant week anchored at verdictAt (flag chains can outlive it — participants had the whole flag period); 24h quiet anchored at lastFlagEventAt | Anchoring the week at "all-quiet" instead is unknowable in advance; anchoring quiet at verdictAt re-opens the settle-race the reopen-relative rule exists to kill |
+| 32 | OpenRewards gating anchors (v0.36) | participant week anchored at verdictAt (flag chains can outlive it — participants had the whole flag period); 24h quiet anchored at lastFlagEventAt | Anchoring the week at "all-quiet" instead is unknowable in advance; anchoring quiet at verdictAt re-opens the settle-race the reopen-relative rule exists to kill |
 | 33 | Cap-dust disposition (v0.36) | Scale-then-cap dust and cap-cut remainders stay juniorReserved and UNMINTED forever — economically a burn, always under the ceiling | Returning dust to R needs per-claim pull tracking (a walk) or a sweep entrypoint; the leak is bounded per claim by D and only reduces emission |
-| 34 | Carrot enqueue ordering (v0.36) | Per-voter senior entitlements enqueue at PullCarrot time (FCFS by pull), not at crystallize — avoids walking the voter set | Earlier pullers sit earlier in the senior queue; amounts are unaffected (never scaled), only payout timing |
-| 35 | Slash-reserve retention (v0.37, audit M3-HIGH; extended to Finalize v0.43) | BOTH terminal paths retain the draw-proportional slash size through the quality slot, returning the rest: SettleUndisputed (undisputed claims) and Finalize (claims that reached finality through FAILED rounds, which keep decidedRounds==0 and so stay slash-eligible). Retention is gated on "a slash can still land": `!slotConsumed` (the load-bearing clause — a consumed slot admits no future flag) plus `pendingSlash==0` as defence-in-depth (implied: the carve follows the latch), and on Finalize also `decidedRounds==0`; SettleUndisputed correctly omits that last clause, being unreachable with a decided round (it panics on `round > 0`). The reserve returns at crystallize if unslashed | Returning the whole bond (the old behavior on both paths) makes the mill-slash unreachable on exactly the claims it targets; on the Finalize path this was the common case, since votingBlocks (7d) exceeds the escrow window so the flag resolves after finality |
-| 36 | Inconclusive re-flag cooldown (v0.37, audit M3-MED) | 7-day cooldown after EVERY inconclusive cycle, not just past the freeze | Immediate reopens let a dust-low chain block crystallize for free; the cost is a 7-day wait for honest re-flags after an absent-electorate inconclusive (bond already returned) |
+| 34 | Carrot enqueue ordering (v0.36) | Per-voter senior entitlements enqueue at PullCarrot time (FCFS by pull), not at open the rewards — avoids walking the voter set | Earlier pullers sit earlier in the senior queue; amounts are unaffected (never scaled), only payout timing |
+| 35 | Slash-reserve retention (v0.37, audit M3-HIGH; extended to Finalize v0.43) | BOTH terminal paths retain the draw-proportional slash size through the quality slot, returning the rest: SettleUndisputed (undisputed claims) and Finalize (claims that reached finality through FAILED rounds, which keep decidedRounds==0 and so stay slash-eligible). Retention is gated on "a slash can still land": `!slotConsumed` (the load-bearing clause — a consumed slot admits no future flag) plus `pendingSlash==0` as defence-in-depth (implied: the carve follows the latch), and on Finalize also `decidedRounds==0`; SettleUndisputed correctly omits that last clause, being unreachable with a decided round (it panics on `round > 0`). The reserve returns at open the rewards if unslashed | Returning the whole bond (the old behavior on both paths) makes the mill-slash unreachable on exactly the claims it targets; on the Finalize path this was the common case, since votingBlocks (7d) exceeds the escrow window so the flag resolves after finality |
+| 36 | Inconclusive re-flag cooldown (v0.37, audit M3-MED) | 7-day cooldown after EVERY inconclusive cycle, not just past the freeze | Immediate reopens let a dust-low chain block open the rewards for free; the cost is a 7-day wait for honest re-flags after an absent-electorate inconclusive (bond already returned) |
 | 31 | Credential weight bar (v0.35.1, audit M2-1) | contested-and-upheld credits only when an upheld round's overturn side carried ≥ ¼ × quorum floor — weightless (self-manufactured) contests mint nothing; near-unanimous upholds also credit nothing | Dropping the bar re-opens credential farming at ~20% of a dispute bond per point; softening to the unfloored demotion bar prices it at idle-mill scale (~25 CC) instead of whale scale |
 
 ## Appendix A — V1 → V2 removal-impact map (the §8.6 sweep)
@@ -1686,16 +1686,16 @@ Newest first.
   First, the residual v1.12 specified rather than built: `resolveQualityRide`'s two authority
   marks. It turned out **cheap**, not heavy — the existing `TestRideRatchetAndSlashPredicate`
   calls `resolveQualityRide` directly with the buckets set, so the new fixture does the same
-  instead of driving a whole dispute round and a crystallize. Registering a residual with its
+  instead of driving a whole dispute round and a open the rewards. Registering a residual with its
   shape named made it a ten-minute job a firing later; the estimate that it needed the heavy
   chain was wrong, and worth noticing — "too heavy to verify now" deserves re-checking against
   the fixtures that already exist.
-  `conclusiveTurnout` earns the fixture. crystallize reads it TWICE and both readings are money:
+  `conclusiveTurnout` earns the fixture. open the rewards reads it TWICE and both readings are money:
   at :126 it is compared against the full bar and **zeroes the entire participation carrot** when
   it falls short (the P2/F2 withholding the source argues at length is the only lever surviving a
   two-wallet split), and at :301 it is the carrot's **per-voter divisor**. Unwritten it is zero,
   which fails both — every ride-resolved claim would withhold the carrot from voters who had in
-  fact cleared the bar. The assertion is written as the comparison crystallize actually makes, so
+  fact cleared the bar. The assertion is written as the comparison open the rewards actually makes, so
   the failure names the consequence rather than the field.
   **Then the honest correction to v1.11's method.** Re-running it shows 10 uncovered functions,
   down from 15 — but `resolveQualityRide` is still ON that list despite gaining sixteen rows last
@@ -1750,10 +1750,10 @@ Newest first.
   `paid <= covered` always holds and `cumAccrual` never decreases.
   The other two are a registered residual worth naming precisely. `resolveQualityRide` writes
   `conclusiveSeq` and `conclusiveTurnout`, and BOTH writes are unheld — the turnout mark because
-  no test drives a conclusive RIDE and then crystallizes, and the seq because it is a 2x anchor
+  no test drives a conclusive RIDE and then open the rewardss, and the seq because it is a 2x anchor
   (the same mark is written on the flag path too). `conclusiveTurnout` is not decoration: it is
-  read at crystallize.gno:126 against `fullBar` and again at :301 as a DRAW DENOMINATOR. Reaching
-  it needs a conclusive ride followed by a crystallize that asserts the accuracy pool's divisor —
+  read at openrewards.gno:126 against `fullBar` and again at :301 as a DRAW DENOMINATOR. Reaching
+  it needs a conclusive ride followed by a open the rewards that asserts the accuracy pool's divisor —
   a heavier fixture than this firing had room to verify, so it is written down with the exact
   shape needed rather than built in a hurry.
   Batch now 743 rows: 742 caught, 0 not caught, one surviving by design.
@@ -2483,13 +2483,13 @@ Newest first.
   what catches them. Render dispatches on segment count, so those four paths are the whole
   public surface.
   The real gap is narrower and was worth finding anyway. That sweep drives one claim through
-  its entire life and reads the pages at the END, after Crystallize — and `renderClaim`
+  its entire life and reads the pages at the END, after OpenRewards — and `renderClaim`
   branches on state, with several branches existing ONLY before that point: the flag-slot
   line, the counter-re-vote line, the escrowed-slash line. Copy on any of them is invisible
   to a sweep taken at the end. Measured rather than argued: injecting "backing" into the
-  flag-slot branch, reachable only while `!crystallized && !slotConsumed && !provClose`, is
+  flag-slot branch, reachable only while `!rewardsOpened && !slotConsumed && !provClose`, is
   caught by the new state-walking fixture and NOT by the existing one.
-  So the addition is a sweep at three states (answered, settled, crystallized) rather than
+  So the addition is a sweep at three states (answered, settled, rewardsOpened) rather than
   one — and the honest framing is that §7.4's page coverage was already complete and its
   state coverage was not.
   Batch now 314 rows, 0 not caught (8m48s).
@@ -2654,7 +2654,7 @@ Newest first.
   `Court.deposit` is described in court.gno as "sum of escrowed deposits+fees, **for the
   conservation checks**". It is written in nine places — one increment at `OpenClaim`, and
   a decrement for the deposit and for the fee at each of the four disposal paths
-  (`CloseDeadClaim`, `provCloseClaim`, crystallize, conclusive-low burn) — and it was READ
+  (`CloseDeadClaim`, `provCloseClaim`, open the rewards, conclusive-low burn) — and it was READ
   NOWHERE. No conservation check consulted it, no accessor exposed it, no test looked at
   it. Every decrement could be deleted with nothing to notice: the claim's own fields
   stayed right, the coin moved correctly, and only a number nobody read went wrong.
@@ -3292,7 +3292,7 @@ Newest first.
   `court.gno`, one row each) turned out to be thin because nothing tested them.
   **`CloseDeadClaim` would kill an ANSWERED claim.** Removing the "it settles, it does
   not die" guard failed no test. An answered claim has a bond in escrow and a settle
-  path; dying instead refunds the deposit, sets `closed`, and leaves `Crystallize`
+  path; dying instead refunds the deposit, sets `closed`, and leaves `OpenRewards`
   panicking on `closed` forever — the bond stranded. Reachable because `deadClaimTimeout`
   and the answerability window are both 12 weeks, so an answer landing late leaves a claim
   that is both answered and past the timeout.
@@ -3379,7 +3379,7 @@ Newest first.
   80/8/5 split. Seven caught — the senior lane's paid-deduction, its `paid` bookkeeping,
   both reservoir subtractions, and the author and answerer slices — and ONE surviving:
   `drawWinners = d`, the whole draw to the winners with no 80/93.
-  That is precisely the edit `crystallize.gno`'s own comment forbids: "D is the WHOLE
+  That is precisely the edit `openrewards.gno`'s own comment forbids: "D is the WHOLE
   claim draw and the 80/8/5 split is taken OUT of it — so a winner receives 80/93 =
   0.860·midGross, NOT the full midGross … Do NOT 'fix' toward §3.5 — it would inflate
   every draw 16%." The author slice was pinned and the winners' was not, so the one
@@ -3493,7 +3493,7 @@ Newest first.
   unenforced, and unlike the ceiling and principal-is-no-loss this one has no mechanism
   behind it at all — only prose discipline, so a test is the ONLY thing that can hold it.
   `TestNoRenderPathLeaksTheForbiddenTerms` drives a full lifecycle first (stake, answer,
-  flag to a conclusive tier, settle, crystallize) so every page has real figures to leak —
+  flag to a conclusive tier, settle, open the rewards) so every page has real figures to leak —
   a page rendering nothing cannot violate §7.4, so an empty-state check would prove
   little — then folds case and scans all four pages for all four terms. "apr" is matched
   as a WHOLE WORD, because it is a substring of ordinary English and a guard that fires on
@@ -3550,7 +3550,7 @@ Newest first.
   often should not have rested on no fixture. Closed by
   `TestSubBarLowReturnsTheFlagBondWhole`, measured on the FLAGGER'S BALANCE, since
   asserting escrow drains cannot tell a return from a burn.
-  **Also fixed:** the 24h quiet window before Crystallize (Q6's reaction period —
+  **Also fixed:** the 24h quiet window before OpenRewards (Q6's reaction period —
   `if false` failed no test, and the fixture pins the boundary one block short as well as
   the middle), and 2A's inconclusive-MID half-burn, the rule that stops suppression chains
   being free.
@@ -3558,7 +3558,7 @@ Newest first.
   flattered.** One matched twice (BAD ANCHOR), one matched zero times, and one I wrote as
   `_ = 0` appended — a no-op that "SURVIVED" while testing nothing, and I nearly recorded
   it as a finding about PostAnswer's collateralization floor. A fourth reported INVALID
-  (did not build) rather than surviving: "Crystallize is not participant-only" was never a
+  (did not build) rather than surviving: "OpenRewards is not participant-only" was never a
   real survivor and a pre-existing test catches it once the mutation compiles. The harness
   distinguishing all four states — caught, survived, bad anchor, did not build — is why it
   should have been used from firing one instead of hand-rolled `sed`.
@@ -3671,14 +3671,14 @@ Newest first.
   **FOUR of my own premises were wrong, and the reviewers agreed unanimously on each.**
   (1) I named the wrong escape door. `votingBlocks` (120 960) > `settleDelay` (51 840), so
   on the natural ordering `SettleUndisputed` runs with `slotConsumed` still false and
-  RETAINS the full reserve; the bond escapes at `crystallize.gno:149-152`, which is
+  RETAINS the full reserve; the bond escapes at `openrewards.gno:149-152`, which is
   UNCONDITIONAL. The retention clause governs WHEN the coin moves, never WHETHER — which
   makes lever (i) (retain-unless-full-bar) economically INERT, worth ~24h of delay, not a
   fix. (2) "The bond doubling and the 7-day cooldown already price a chain" is FALSE:
   `flagCycles++` and `lastFlagAt = now` live only inside the `!conclusive` branch, so a
   sub-bar CONCLUSIVE low arms neither — which is why lever (ii) alone is a free permanent
-  Crystallize blockade (M3-MED-1 re-opened) unless the cycle is armed too, and once armed
-  the 7-day cooldown exceeds the 24h quiet window so the mill crystallizes before the
+  OpenRewards blockade (M3-MED-1 re-opened) unless the cycle is armed too, and once armed
+  the 7-day cooldown exceeds the 24h quiet window so the mill open the rewardss before the
   replacement flag can open. (3) "The answerer forgoes nothing" conditions on DETECTION:
   tier 0 lands with CERTAINTY while the slash is escaped only with probability
   (q_f − p_m), because the tally is SEALED and the crowd votes in the mill's own poll for
@@ -3716,7 +3716,7 @@ Newest first.
   forecloses an address-keyed fix.
   **Root cause, agreed by all three: the poll is FIRST-COME and EXCLUSIVE, so the policed
   party can always own it.** Bounded extra polls are exhausted by the mill winning each
-  cooldown race; unbounded polls are a Crystallize blockade; concurrent polls are the A21
+  cooldown race; unbounded polls are a OpenRewards blockade; concurrent polls are the A21
   faucet; address-keyed priority dies to a sock (v0.55 refuted that form); and pricing the
   consumption caps at `b0` = 2%·X̄ against a 30.8%·X̄ escape while destroying v0.29/T1's
   cheap-when-right property. What remains is putting the triggering WEIGHT at risk, which
@@ -3771,7 +3771,7 @@ Newest first.
   because a decided claim's carrot pays the VERDICT round's voters, who never cast the
   stale sub-bar quality tally); dropping `conclusiveSeq != 0` fails an existing fixture,
   confirming that conjunct keeps a fresh `qualityBars` call off claims that never made one.
-  `TestCrystallizeLowTierZeroDrawCarrotStillPays` was INVERTED rather than deleted — it
+  `TestOpenRewardsLowTierZeroDrawCarrotStillPays` was INVERTED rather than deleted — it
   asserted `carrot > 0` on a dust low under the comment "the carrot is tier-invariant: paid
   even at low", conflating tier-invariance with turnout-invariance, which no doctrine ever
   claimed.
@@ -3969,7 +3969,7 @@ Newest first.
   elector's optimal play on a ride to "commit once, late". **Residual:**
   `lastFlagEventAt` is not restamped on the two `ResolveDispute` dispose paths, unlike
   every other closer — harmless while `slotConsumed` bars a re-flag, but the 24h
-  Crystallize quiet window is inconsistently maintained.
+  OpenRewards quiet window is inconsistently maintained.
 
 - **v0.51 — the TALLY WIPE was the re-roll (HIGH); the quality question is now
   re-asked exactly once and then accumulates.** v0.48 fixed a stranger's dispute
@@ -4040,7 +4040,7 @@ Newest first.
   `settleSlash`/`refundSlash` is UNREACHABLE today (every caller either clears the lane
   first or panics on it), so no mutation of it fails a test and it is defensive only. It
   stays because the failure it guards is unbounded rather than merely wrong:
-  `Crystallize` panics on `counterOpen`, so a lane outliving its reserve would strand
+  `OpenRewards` panics on `counterOpen`, so a lane outliving its reserve would strand
   the claim's entire draw forever. **Residuals registered, not fixed:** the failed-quorum
   branch now settles a reserve on a full-bar ⅔-low ride WITHOUT recording the LOW tier
   (it never calls `resolveQualityRide`), an asymmetry the per-round wipe used to hide;
@@ -4085,7 +4085,7 @@ Newest first.
     Running both on the same tally settles the slash in the very call that levied it, with
     no window and no Q5 challenge. Mutation-demonstrated.
   Also shipped: a conclusive-LOW **ride now burns deposit+fee** like the flag lane
-  (`burnConclusiveLowDust`, shared) — skipping them refunded the junk author at crystallize
+  (`burnConclusiveLowDust`, shared) — skipping them refunded the junk author at open the rewards
   on exactly the claims the crowd demoted; and origination is a single shared
   `originateSlash` used by both lanes, so the two can no longer drift, the same "one sizer,
   two callers" discipline `slashSizeAt` established in v0.46. `tierFinal` stays false while
@@ -4203,7 +4203,7 @@ Newest first.
   - **failed quorum** adjudicated nothing, so the reserve survives and only re-arms.
   Also fixed, newly reachable because a slash can now outlive the failed rounds provClose
   counts: `refundSlash` on a **provClosed** claim had no payout path at all
-  (`provCloseClaim` already returned the bond and `Crystallize` refuses closed claims), so
+  (`provCloseClaim` already returned the bond and `OpenRewards` refuses closed claims), so
   the reserve would have stranded in escrow forever — it now pays the answerer directly.
   Three stale-doctrine panic messages corrected ("a dispute supersedes the slash" is no
   longer true — its quality ride decides it), and the file header's "on an UNDISPUTED
@@ -4271,7 +4271,7 @@ Newest first.
   clamps to zero — M3-HIGH-1's shape on the path a mill now targets), which as a bonus
   makes it *character-identical* to `SettleUndisputed`'s, closing the sibling asymmetry
   that produced v0.42 and v0.43. `TestDisputeUpholdPath` updated: an upheld bond now
-  returns less the reserve, the remainder at crystallize. Mutation-verified three ways
+  returns less the reserve, the remainder at open the rewards. Mutation-verified three ways
   (old gate → slash leg fails; `!credEligible` → slash leg fails; lockstep reverted →
   Finalize leg fails). `make check` + txtar green.
   **NOT yet fixed — the second leg, next commit:** `OpenDispute` calls `unslash`
@@ -4360,23 +4360,23 @@ Newest first.
     the load-bearing clause. `ResolveDispute`'s `if firstResolution` in the
     failed-quorum branch: every fixture already had `provisional == answer`, making the
     assignment a no-op and the guard invisible. `TestOverturnedVerdictCannotBeFlippedBack`
-    drives overturn → refused settle → failed reopen → finalize → crystallize and
+    drives overturn → refused settle → failed reopen → finalize → open the rewards and
     asserts the verdict holds at each step AND that the money follows it. Both mutants
     die.
-  - **`Crystallize` refuses while a slash is in flight.** The gate
+  - **`OpenRewards` refuses while a slash is in flight.** The gate
     `flagOpen || counterOpen || pendingSlash > 0` had NO test at all. Without it,
-    crystallize would zero `answerBond` mid-slash and a later winning counter-flag
+    open the rewards would zero `answerBond` mid-slash and a later winning counter-flag
     (`refundSlash` credits the reserve back) would restore coin to a field nothing pays
-    out again — stranding it in escrow permanently. `TestCrystallizeRefusesWhileSlashPending`
+    out again — stranding it in escrow permanently. `TestOpenRewardsRefusesWhileSlashPending`
     reaches the state where the pending slash is the ONLY remaining blocker (the 24 h
     quiet window closes ~6 days before the counter window), asserts the refusal, then
     closes the window and proves escrow drains to zero.
-  - **The burned deposit cannot resurrect.** `TestCrystallizeLowTierZeroDrawCarrotStillPays`
-    asserted `cs.deposit == 0` after crystallize — trivially true in both worlds, since
-    Crystallize zeroes the field *after* paying. So dropping the burn-site zeroing would
+  - **The burned deposit cannot resurrect.** `TestOpenRewardsLowTierZeroDrawCarrotStillPays`
+    asserted `cs.deposit == 0` after open the rewards — trivially true in both worlds, since
+    OpenRewards zeroes the field *after* paying. So dropping the burn-site zeroing would
     have refunded an already-burned deposit to the author **out of staked principal**,
     invisibly. Now asserts the author's balance and total supply are unchanged across
-    Crystallize, plus escrow drains to zero. The old assertion did not catch the mutant;
+    OpenRewards, plus escrow drains to zero. The old assertion did not catch the mutant;
     the new one does.
   **CORRECTION — the isolation guard measures less than it claims.**
   `scripts/check-isolation.py`'s `REALMS` list stages only 3 `p/` packages
@@ -4401,10 +4401,10 @@ Newest first.
   `SettleUndisputed` was left the *less* precise sibling: it retained a reserve
   unconditionally, including when the flag slot was already consumed or a slash was
   already carved out — states where no further slash can ever land, so the retention was
-  pure lockup of the answerer's coin until crystallize. Now gated `pendingSlash == 0 &&
+  pure lockup of the answerer's coin until open the rewards. Now gated `pendingSlash == 0 &&
   !slotConsumed` (no `decidedRounds` clause: that path panics on `round > 0`). **Not a
   security change** — totals are identical in every branch and the coin always returned
-  at crystallize; this moves timing only, and it removes the sibling asymmetry that
+  at open the rewards; this moves timing only, and it removes the sibling asymmetry that
   produced both v0.42 and v0.43. Adversarial vet: the CODE was proven correct on all six
   questions — the latch is real (`slotConsumed` has two writes, both `= true`, none
   false), a post-settle slash is impossible (both forfeiture routes shut: `slotConsumed`
@@ -4445,12 +4445,12 @@ Newest first.
   `frozenAt`/`rateAccAtFreeze`, so every later `advancePools` delta is exactly 0, and
   Stake/Unstake panic post-freeze). Hence the reserve computed at Finalize and the slash
   computed at ResolveFlag are identical **including under the clamp**, so a retained
-  reserve can never come up short. The vet also proved no strand (every crystallize
+  reserve can never come up short. The vet also proved no strand (every open the rewards
   blocker has a permissionless closer, and the 7-day re-flag cooldown exceeds the 24 h
   quiet window), no double-pay, and that overturn is double-locked out of retention
   (`answerBond = 0` AND `decidedRounds++`). Its one correction is folded in: the
   original gate lacked `!slotConsumed` and so withheld a second reserve after an
-  already-settled slash — money that still returned at crystallize, but needlessly late.
+  already-settled slash — money that still returned at open the rewards, but needlessly late.
   §12 row 35 updated (retention is now a property of BOTH terminal paths).
   `make check` + txtar-test green. (The residual it left — `SettleUndisputed` being the
   *less* precise sibling — is closed in v0.44 below.)
@@ -4463,7 +4463,7 @@ Newest first.
   dispute round (which keeps verdictAt=0/decidedRounds=0), is flagged slash-grade
   conclusive-LOW (which leaves slotConsumed=true but tierFinal=false for the
   counter-flag window), then `Finalize` runs in that window and clobbers the tier
-  LOW→MID → the junk claim draws full mid-tier emission at Crystallize, breaking the
+  LOW→MID → the junk claim draws full mid-tier emission at OpenRewards, breaking the
   D=0 invariant the tier-low mechanism exists to guarantee. FIX: mirror the sibling
   guard exactly (`if !cs.tierFinal && !cs.slotConsumed`). Proven load-bearing —
   regression `TestConclusiveLowSurvivesLateFinalize` fails on the exact tier-clobber
@@ -4497,7 +4497,7 @@ Newest first.
     `mulDiv128(num, 10000, den)` with a `num < 0` guard; `num ≤ den` here so the
     result stays ≤ 10000. Regression `TestPctNoOverflowAtWhaleConviction` crafts a
     ~7e18 numerator and asserts a sane percentage.
-  - **NOTE-2 — `carrotTotal` (crystallize).** `midGross*splitCarrot/100` where
+  - **NOTE-2 — `carrotTotal` (open the rewards).** `midGross*splitCarrot/100` where
     `midGross` is conviction → `mulDiv128`; a wrap here would otherwise surface as
     a `PullCarrot` panic only at ~millennia scale.
   - **NOTE-6 — `mulDiv128` (stake) honors its contract.** The `hi < den` guard
@@ -4550,7 +4550,7 @@ Newest first.
   typical → 0.45 at the 12-wk edge) — is **structural and pre-existing** (≈0.44
   at the old ceiling); its real fix is a draw-proportional slash (§12 row 28b,
   V3 frontier, needs its own vet), out of P7's named lever. Two doc/code nits
-  the vet surfaced, both fixed: crystallize's 80/93 winner split is intentional
+  the vet surfaced, both fixed: open the rewards's 80/93 winner split is intentional
   (~16% more conservative than §3.5's gross-up prose — a protective comment now
   says so, §3.5 corrected) and the true honest break-even is p ≈ 0.68 not 0.59
   (ECONOMICS.md corrected). No money-path logic changed. **All economic
@@ -4583,20 +4583,20 @@ Newest first.
     `PullSenior` re-paid it and `emittedTotal` passed `cumAccrual`, breaking
     the 20%/yr ceiling. Fix: `enqueueSenior` start = `reservedTail +
     juniorReserved`, so seniors and juniors tile the accrual number line
-    disjointly (pre-crystallize juniorReserved==0 → unchanged; milestone-1/2
-    tests untouched). Latent until crystallize created the junior lane.
+    disjointly (pre-open the rewards juniorReserved==0 → unchanged; milestone-1/2
+    tests untouched). Latent until open the rewards created the junior lane.
   - **HIGH — the 4.5%·X̄ slash was escapable via SettleUndisputed.** Settle
     returned the whole answer bond at 72h; `votingBlocks` (1wk) > `settleDelay`
     (72h) meant a flag could never resolve first, so the slash clamped to
     `min(4.5%·X̄, 0) = 0`. Fix: settle now RETAINS a slash-sized reserve in the
     bond (returning the rest), collateralized through the quality slot exactly
     as the dispute path keeps the bond through escrow; the reserve burns on a
-    conclusive-low slash or returns to the answerer at crystallize.
-  - **MED — free indefinite Crystallize grief** via a dust-low flag chain
+    conclusive-low slash or returns to the answerer at open the rewards.
+  - **MED — free indefinite OpenRewards grief** via a dust-low flag chain
     (T1 full-return, back-to-back reopens, participants excluded from
     self-defense). Fix: the 7-day re-flag cooldown now applies after EVERY
     inconclusive cycle (not only past the freeze); since 7d > the 24h
-    Crystallize quiet window, each inconclusive leaves a ~6-day settle window
+    OpenRewards quiet window, each inconclusive leaves a ~6-day settle window
     the griefer cannot fill. Honest re-flag after an absent-electorate
     inconclusive waits 7d (bond was returned) — accepted, §12.
   - **LOW — reopen dispute vs open counter re-vote.** `OpenDispute` didn't
@@ -4621,14 +4621,14 @@ Newest first.
   counter-flag window: CounterFlag = the answerer's one forced re-vote —
   slash falls only at fullBar-reached + ⅔-low missed; ResolveSlashWindow;
   settleSlash bounty top-up; the `unslash` hook — a DECIDED dispute round
-  refunds the reserve into the bond BEFORE disposition); crystallize.gno
+  refunds the reserve into the bond BEFORE disposition); openrewards.gno
   (Q6-Q8: quiet-24h + participant-week gates, walk-free draw D = min(tier ×
   midGross, G_MAX, R), 80/8/5 slices, scale-then-cap pull-claims under
   (tier/2) caps, tier-invariant senior carrot with the per-voter b₀/2−1
   clamp, N1 deposit/fee disposition). Three build-time finds, fixed in place:
   (1) **an open flag could blockade the 72h dispute window** — a dispute now
   VOIDS an open flag (bond whole, slot unconsumed; the ride carries quality);
-  (2) **position-fed pool integrals undercounted at crystallize** (early
+  (2) **position-fed pool integrals undercounted at open the rewards** (early
   pullers would overdraw D) — pools now advance analytically from side
   totals (advancePools), exact at every mutation boundary; (3) **settle/
   finalize stamped default-mid over final conclusive-low tiers** — guarded.

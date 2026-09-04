@@ -156,9 +156,9 @@ func TestTheBoardClosesAtEveryTerminalStateAndOnAPurgedCourt(cur realm, t *testi
 	c, id := boardFixture(cur, "cm5", alice)
 	uassert.True(t, BoardOpen("cm5", id))
 
-	// A DEAD CLAIM is terminal without ever crystallizing — which is why the gate
+	// A DEAD CLAIM is terminal without ever opening the rewards — which is why the gate
 	// reads the verdict/closed pair the rest of the realm uses and not
-	// `crystallized`.
+	// `rewardsOpened`.
 	cs := mustClaim(c, id)
 	cs.closed = true
 	uassert.False(t, BoardOpen("cm5", id))

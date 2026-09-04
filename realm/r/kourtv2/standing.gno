@@ -112,7 +112,7 @@ const (
 	// STAKE. Linear is the unique splitting-neutral rule (PLAN §3.5 F8): any
 	// clamp or per-claim cap is concave, and a concave credit pays a split
 	// position more than a whole one — the defect the carrot's P2 per-voter
-	// clamp note in crystallize.gno records.
+	// clamp note in openrewards.gno records.
 	//
 	// It reads time-averaged stake and not convCC, which is what it read first.
 	// convCC is a FLOW — stake x rate x time — and the other three rows are
@@ -509,7 +509,7 @@ func creditStanding(c *Court, who address, amount int64, cat int) {
 // satAdd SATURATES where every pool total in this realm uses the checked
 // mustAdd, and the difference is the whole reason this function exists.
 //
-// mustAdd panics, and a panic here would land inside WithdrawBonus, Crystallize,
+// mustAdd panics, and a panic here would land inside WithdrawBonus, OpenRewards,
 // Finalize or settleSlash — the four money paths this file's credits actually
 // hang off, each of them a lifecycle transition. MODERATION.md's rule
 // for calls in that direction is absolute: a moderation-side invariant must
@@ -650,7 +650,7 @@ func creditDisputeResolved(c *Court, cs *claimState) {
 // this paragraph is a record rather than a deletion.
 //
 // provClose needs no arm of its own, and the arm it once had was wrong.
-// crystallize says it plainly — "provClose now DRAWS. Only a dead claim has no
+// open the rewards says it plainly — "provClose now DRAWS. Only a dead claim has no
 // draw" — so an earlier comment here, that provClose has "no draw and no
 // verdict", was false in every clause and withheld a credit on a path that pays
 // MID emission. It resolves without being named: a provClose is rated like any

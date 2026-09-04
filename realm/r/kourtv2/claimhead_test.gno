@@ -67,7 +67,7 @@ func TestClaimHeadAgreesWithEveryReaderItReplaces(cur realm, t *testing.T) {
 		strconv.FormatInt(EscrowUntil("ch", id), 10),
 		"0", "0", // quorum and vote-close: no dispute is open on this fixture
 		"-1", "", // verdict and route: not settled
-		boolDigit(Crystallized("ch", id)), "0", "0", "0", "0",
+		boolDigit(RewardsOpened("ch", id)), "0", "0", "0", "0",
 		ClaimAuthor("ch", id).String(),
 		boolDigit(HiddenFromListing("ch", id)), boolDigit(TextRedacted("ch", id)),
 		boolDigit(ClaimPurged("ch", id)), boolDigit(ClaimSeeded("ch", id)),
