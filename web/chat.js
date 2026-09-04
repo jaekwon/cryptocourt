@@ -44,6 +44,16 @@
 // capability quietly removed rather than a message shown.
 const CHATLIMITS = {body: 400, moniker: 24, bytes: 4096};
 
+// CHATDEFAULTNAME is who you are when you have not said. It is the server's
+// DefaultMoniker and paneldrift_test.go pins the two together: a panel promising one
+// default while the server stores another is exactly that test's subject.
+//
+// It is the name field's PLACEHOLDER rather than its value, so nothing is typed into
+// the field on a reader's behalf and their first keystroke is not a deletion — a grey
+// "anon" in an empty field says what you will be called if you leave it, which is the
+// same fact with less furniture. The blank field is what the server defaults.
+const CHATDEFAULTNAME = "anon";
+
 // CHATMONIKERUNITS is the `maxlength` attribute's crude keystroke stop, in UTF-16
 // units, and it is deliberately LOOSER than the real check below. The moniker's
 // limit counts LETTERS, not code points, because in Hebrew, Arabic, Thai and
@@ -168,7 +178,11 @@ function chatStatusLine(you, nowSec, appealTo) {
 function chatValidate(moniker, body) {
   const m = String(moniker == null ? "" : moniker).trim();
   const b = String(body == null ? "" : body).trim();
-  if (!m) return "pick a name first";
+  // NO REFUSAL FOR A BLANK NAME. It used to be "pick a name first", which demanded a
+  // decision before a reader could say anything — on a panel whose own warning is that
+  // names here prove nothing. Blank is a valid answer now and the server reads it as
+  // CHATDEFAULTNAME; the caller substitutes it before posting so the message carries a
+  // name rather than relying on the default twice.
   if (chatLetters(m) > CHATLIMITS.moniker) {
     return "that name is too long (" + CHATLIMITS.moniker + " letters)";
   }
@@ -252,7 +266,8 @@ function chatPanelHtml(slug, moniker, note, heading) {
     + '<ol class="chatlog" aria-live="polite"></ol>'
     + '<div class="chatstate"></div>'
     + '<form class="chatform" autocomplete="off">'
-    +   '<input class="chatmoniker" maxlength="' + CHATMONIKERUNITS + '" placeholder="name"'
+    +   '<input class="chatmoniker" maxlength="' + CHATMONIKERUNITS
+    +     '" placeholder="' + chatEsc(CHATDEFAULTNAME) + '"'
     +     ' aria-label="your name" value="' + chatEsc(moniker) + '">'
     +   '<input class="chatinput" maxlength="' + CHATLIMITS.body + '" placeholder="say something"'
     +     ' aria-label="message">'
@@ -679,12 +694,17 @@ function mountChat(el, opts) {
 
   formEl.addEventListener("submit", async ev => {
     ev.preventDefault();
-    const m = nameEl.value, b = bodyEl.value;
+    // A BLANK FIELD IS A CHOICE, and it is made here rather than left to the server so
+    // the reader's own message reads back with the name that was posted. Nothing is
+    // REMEMBERED for a blank field: storing "anon" would prefill it for ever and turn a
+    // default into a decision the reader never made.
+    const typed = nameEl.value.trim();
+    const m = typed || CHATDEFAULTNAME, b = bodyEl.value;
     const bad = chatValidate(m, b);
     if (bad) { note(bad); return; }
     sendEl.disabled = true;
-    try { window.localStorage.setItem("kourt.chat.moniker", m.trim()); } catch (e) {}
-    const r = await chatPost(base, chain, court, m.trim(), b.trim());
+    if (typed) { try { window.localStorage.setItem("kourt.chat.moniker", typed); } catch (e) {} }
+    const r = await chatPost(base, chain, court, m, b.trim());
     if (!live()) return;
     sendEl.disabled = false;
     if (r.ok) {

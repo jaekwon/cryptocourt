@@ -39,7 +39,13 @@ global.window = {localStorage: {
   setItem: (k, v) => { STORE[k] = String(v); },
 }};
 
-eval(fs.readFileSync(SRC, "utf8"));
+const PANELSRC = fs.readFileSync(SRC, "utf8");
+eval(PANELSRC);
+// READ OUT OF THE SOURCE, NOT RETYPED. A direct eval keeps its own `const`s to itself
+// — the functions above are visible here, CHATDEFAULTNAME is not — and a literal "anon"
+// written here would agree with the panel on the day it was typed and never again.
+// paneldrift_test.go pins the same declaration against the server's DefaultMoniker.
+const DEFAULTNAME = (PANELSRC.match(/const CHATDEFAULTNAME = "([^"]*)"/) || [])[1];
 
 let fail = 0;
 const ok = (n, c) => { if (!c) { fail++; console.log("FAIL:", n); } else console.log("ok:", n); };
@@ -208,7 +214,13 @@ const XSS = '<img src=x onerror=alert(1)>';
 
 // ---------------------------------------------------------------- input limits
 {
-  ok("no name is refused", chatValidate("", "hi") === "pick a name first");
+  // A BLANK NAME IS NOT A REFUSAL ANY MORE — it means CHATDEFAULTNAME, which the
+  // composer substitutes and the server also defaults. The validator mirrors the
+  // server's rules, so it must not refuse what the server accepts.
+  ok("no name is accepted — it means anon", chatValidate("", "hi") === "");
+  ok("...the panel declares that default", DEFAULTNAME === "anon");
+  ok("...and it is a name the validator itself accepts",
+     chatValidate(DEFAULTNAME, "hi") === "");
   ok("no body is refused", chatValidate("al", "") === "type something");
   ok("whitespace only is refused", chatValidate("al", "   ") === "type something");
   ok("an ordinary message passes", chatValidate("al", "hello there") === "");
@@ -378,6 +390,46 @@ function mkDoc() {
        sent && sent.headers["Content-Type"] === "application/json");
     ok("a successful post clears the box", el.k[".chatinput"].value === "");
     ok("the moniker is remembered", STORE["kourt.chat.moniker"] === "alice");
+    stop();
+  }
+
+  // A BLANK NAME POSTS AS THE DEFAULT, AND IS NOT REMEMBERED AS ONE.
+  //
+  // Both halves matter and they pull in opposite directions. The message must carry a
+  // name — the server would default it anyway, but then the sender's own transcript
+  // would be the one place the name came from somewhere else — while the STORE must
+  // stay empty, because writing "anon" into it prefills the field for ever and turns a
+  // default into a choice the reader never made. The placeholder is the only place the
+  // word belongs on screen.
+  {
+    FETCHES = [];
+    let sent = null;
+    FETCH = async (url, init) => {
+      if (init && init.method === "POST") { sent = init; return {ok: true, json: async () => ({id: 6})}; }
+      return {ok: true, json: async () => ({messages: [], you: {state: "ok"}, next: 0})};
+    };
+    delete STORE["kourt.chat.moniker"];
+    const el = mkRoot();
+    const stop = mountChat(el, {cfg: {mode: "live", chat: "http://x"}, court: "orem"});
+    await tickMicro(); await tickMicro();
+    ok("an unnamed reader is shown the default rather than given it",
+       el.k[".chatmoniker"].value === "" &&
+       /placeholder="anon"/.test(el.innerHTML));
+    el.k[".chatinput"].value = "hello with no name";
+    el.k[".chatform"].fire("submit");
+    await tickMicro(); await tickMicro();
+    ok("a blank name posts as the default",
+       sent && JSON.parse(sent.body).moniker === DEFAULTNAME);
+    // A space bar is not a name either, and the field cannot tell the reader that.
+    sent = null;
+    el.k[".chatmoniker"].value = "   ";
+    el.k[".chatinput"].value = "spaces are not a name";
+    el.k[".chatform"].fire("submit");
+    await tickMicro(); await tickMicro();
+    ok("...and so does a whitespace one",
+       sent && JSON.parse(sent.body).moniker === DEFAULTNAME);
+    ok("the default is not remembered as a choice",
+       STORE["kourt.chat.moniker"] === undefined);
     stop();
   }
 

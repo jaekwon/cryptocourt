@@ -67,6 +67,22 @@ func TestThePanelsLimitsMatchTheServers(t *testing.T) {
 		}
 	}
 
+	// THE DEFAULT NAME IS ONE WORD IN TWO FILES, and the panel SHOWS it while the server
+	// STORES it — so a drift here is a panel promising "anon" over a store full of
+	// something else, with nothing failing in between. Same reason the limits are pinned.
+	if d := regexp.MustCompile(`const CHATDEFAULTNAME = "([^"]*)"`).FindSubmatch(src); d == nil {
+		t.Error(`web/chat.js must declare CHATDEFAULTNAME = "…" in one place`)
+	} else if string(d[1]) != DefaultMoniker {
+		t.Errorf("default name: web/chat.js says %q, internal/chat stores %q — "+
+			"the panel and the server must agree, and the server is the authority",
+			d[1], DefaultMoniker)
+	}
+	// And the placeholder is that constant rather than a word typed twice: it is the only
+	// place a reader is told what leaving the field blank will call them.
+	if !regexp.MustCompile(`placeholder="' \+ chatEsc\(CHATDEFAULTNAME\)`).Match(src) {
+		t.Error("the name field's placeholder must come from CHATDEFAULTNAME")
+	}
+
 	// The maxlength attributes are generated FROM that declaration, not written out again.
 	// Checked because they are the half that stops a keystroke, and because a future edit
 	// hardcoding them would leave this test passing while the composer disagreed.

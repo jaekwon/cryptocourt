@@ -174,7 +174,11 @@ func TestRejectsBadInput(t *testing.T) {
 	srv, _, _ := newServer(t)
 	cases := []struct{ name, moniker, body string }{
 		{"empty body", "alice", ""},
-		{"empty moniker", "", "hello there"},
+		// An EMPTY moniker is no longer here: it is answered with DefaultMoniker, and
+		// TestABlankNameIsAnon below is where that lives. A name typed out of characters a
+		// reader cannot see is still refused, and it is the one case that still reaches
+		// ErrEmpty on the moniker.
+		{"invisible moniker", "​​", "hello there"},
 		{"body too long", "alice", strings.Repeat("ab", MaxBodyRunes)},
 		{"moniker too long", strings.Repeat("ab", MaxMonikerRunes), "hello there"},
 	}
@@ -184,6 +188,50 @@ func TestRejectsBadInput(t *testing.T) {
 				t.Fatalf("want 400, got %d %s", rec.Code, rec.Body)
 			}
 		})
+	}
+}
+
+// A BLANK NAME IS ANSWERED, NOT REFUSED. It used to 400 with "pick a name first",
+// which asked a reader to make a decision before they could say anything — on a panel
+// whose own warning is that a name here proves nothing.
+//
+// The assertion is on what is STORED and read back, not on the 200: the default is only
+// worth anything if the message carries it, and a handler that accepted the post and
+// wrote an empty moniker would pass a status check while the transcript showed a blank
+// where a name goes.
+//
+// Whitespace counts as blank for this — a space bar is not a name — and the default is
+// sanitized like any other, which the letter count proves rather than assumes.
+func TestABlankNameIsAnon(t *testing.T) {
+	srv, _, clock := newServer(t)
+	for i, blank := range []string{"", "   ", "\t\n"} {
+		if rec := do(t, srv, postReq(t, "/api/chat/dev/orem", blank, "hello court")); rec.Code != 200 {
+			t.Fatalf("blank %d: want 200, got %d %s", i, rec.Code, rec.Body)
+		}
+		*clock = clock.Add(MinInterval)
+	}
+	rec := do(t, srv, httptest.NewRequest(http.MethodGet, "/api/chat/dev/orem", nil))
+	if rec.Code != 200 {
+		t.Fatalf("get: %d", rec.Code)
+	}
+	var reply getReply
+	if err := json.Unmarshal(rec.Body.Bytes(), &reply); err != nil {
+		t.Fatal(err)
+	}
+	if len(reply.Messages) != 3 {
+		t.Fatalf("want the three posts, got %d", len(reply.Messages))
+	}
+	for _, m := range reply.Messages {
+		if m.Moniker != DefaultMoniker {
+			t.Errorf("a blank name must be stored as %q, got %q", DefaultMoniker, m.Moniker)
+		}
+	}
+	// The default passes the same sanitizer every chosen name does, and it must survive
+	// it unchanged — a default the moniker rules would refuse or rewrite is a default
+	// that only works until somebody tightens them.
+	if got, err := SanitizeMoniker(DefaultMoniker); err != nil || got != DefaultMoniker {
+		t.Errorf("SanitizeMoniker(%q) = %q, %v — the default must be a legal name",
+			DefaultMoniker, got, err)
 	}
 }
 

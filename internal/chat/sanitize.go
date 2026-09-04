@@ -38,6 +38,21 @@ import (
 
 // Limits, in RUNES rather than bytes. A byte limit is a length limit for English
 // and a censor for everything else: "мошенничество" is 26 bytes.
+// DefaultMoniker is who you are when you have not said who you are. A blank name
+// used to be a 400 — "pick a name first" — which asked a reader for a decision
+// before they could say anything, on a panel whose own warning is that names here
+// are unverified and prove nothing. So the blank has an answer instead of a
+// refusal, and everyone who never chose shares it.
+//
+// SUBSTITUTED BEFORE SanitizeMoniker, not inside it: text that a reader DID type
+// and that sanitizes away to nothing is still refused, because that is a name they
+// chose and cannot have. Only an empty field becomes this.
+//
+// web/chat.js declares the same word as CHATDEFAULTNAME and paneldrift_test pins
+// the two together — a panel showing one default while the server stores another
+// is the drift that test exists for.
+const DefaultMoniker = "anon"
+
 const (
 	MaxBodyRunes    = 400
 	MaxMonikerRunes = 24

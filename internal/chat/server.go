@@ -467,7 +467,11 @@ func refusalText(f refusalField, err error) string {
 	switch {
 	case errors.Is(err, ErrEmpty):
 		if f == fieldMoniker {
-			return "pick a name first"
+			// NOT "pick a name first" any more. A blank field is answered with
+			// DefaultMoniker before the sanitizer sees it, so reaching here means text WAS
+			// typed and nothing a reader could see survived it — zero-width spaces, say.
+			// The old sentence would tell somebody who typed a name to type a name.
+			return "that name has nothing in it a reader can see"
 		}
 		return "type something"
 	case errors.Is(err, ErrTooLong):
@@ -538,7 +542,14 @@ func (s *Server) post(w http.ResponseWriter, r *http.Request, chain, court strin
 		writeErr(w, http.StatusBadRequest, "unexpected content after the JSON object")
 		return
 	}
-	moniker, err := SanitizeMoniker(in.Moniker)
+	// An unanswered name field is answered here — see DefaultMoniker. Before
+	// sanitizing, so the default goes through the same check every chosen name does
+	// and cannot become the one moniker in the store that was never validated.
+	named := in.Moniker
+	if strings.TrimSpace(named) == "" {
+		named = DefaultMoniker
+	}
+	moniker, err := SanitizeMoniker(named)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, refusalText(fieldMoniker, err))
 		return
