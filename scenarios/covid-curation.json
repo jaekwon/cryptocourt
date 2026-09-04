@@ -8,13 +8,13 @@
   {
    "name": "Origins",
    "claims": [
-    13,
+    12,
     9,
     1,
     2,
     3,
-    11,
-    15
+    10,
+    13
    ],
    "folders": []
   },
@@ -26,16 +26,16 @@
      "name": "Gain-of-function funding",
      "claims": [
       4,
-      10,
-      16
+      17,
+      19
      ],
      "folders": []
     },
     {
      "name": "Proximal Origin",
      "claims": [
-      14,
-      12,
+      18,
+      11,
       7
      ],
      "folders": []
@@ -43,9 +43,9 @@
     {
      "name": "The iPhone texts",
      "claims": [
-      17,
-      18,
-      19
+      14,
+      15,
+      16
      ],
      "folders": []
     }
@@ -69,14 +69,14 @@
    "stance": "contradicts"
   },
   {
-   "from": 15,
-   "to": 11,
+   "from": 13,
+   "to": 10,
    "type": "bears",
    "stance": "contradicts"
   },
   {
-   "from": 19,
-   "to": 18,
+   "from": 16,
+   "to": 15,
    "type": "bears",
    "stance": "contradicts"
   },
@@ -94,55 +94,55 @@
   },
   {
    "from": 9,
-   "to": 13,
+   "to": 12,
    "type": "bears",
    "stance": "supports"
   },
   {
    "from": 4,
-   "to": 10,
+   "to": 17,
    "type": "bears",
    "stance": "supports"
   },
   {
    "from": 4,
-   "to": 13,
+   "to": 12,
    "type": "bears",
    "stance": "supports"
   },
   {
-   "from": 12,
-   "to": 14,
+   "from": 11,
+   "to": 18,
    "type": "bears",
    "stance": "supports"
   },
   {
    "from": 7,
-   "to": 14,
-   "type": "bears",
-   "stance": "supports"
-  },
-  {
-   "from": 17,
    "to": 18,
    "type": "bears",
    "stance": "supports"
   },
   {
-   "from": 12,
-   "to": 16,
+   "from": 14,
+   "to": 15,
    "type": "bears",
    "stance": "supports"
   },
   {
-   "from": 15,
-   "to": 14,
+   "from": 11,
+   "to": 19,
+   "type": "bears",
+   "stance": "supports"
+  },
+  {
+   "from": 13,
+   "to": 18,
    "type": "bears",
    "stance": "supports"
   },
   {
    "from": 8,
-   "to": 18,
+   "to": 15,
    "type": "bears",
    "stance": "contradicts"
   },
@@ -159,7 +159,7 @@
    "stance": "supports"
   },
   {
-   "from": 13,
+   "from": 12,
    "to": 1,
    "type": "bears",
    "stance": "supports"
