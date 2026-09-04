@@ -43,6 +43,16 @@ ok("it is a real button", /^<button type="button" class="sq"/.test(out), out);
 ok("...and carries no title attribute", !/title=/.test(out), out);
 ok("...so it is in the tab order by construction", !/tabindex/.test(out), out);
 
+// ---- the target and the mark are two different sizes ----------------------
+/* A 15px control is 15px to hit with a thumb, and SC 2.5.8 asks for 24. A 24px
+   RING beside 11px of heading text would read as a button rather than a
+   footnote, so the two sizes are separated: the button is the target and carries
+   no paint, an inner span is the mark. Asserted because the obvious "tidy-up" is
+   to notice the button draws nothing and fold the span back into it, which
+   silently returns the target to 15. */
+ok("the glyph is its own element, so the button can be bigger than it",
+   /<span class="sqd" aria-hidden="true">\?<\/span>/.test(out), out);
+
 // ---- said once, to each audience ------------------------------------------
 ok("the sentence is the button's own accessible name",
    out.includes('aria-label="A docket is the list of cases before a court."'), out);
@@ -84,6 +94,13 @@ ok("...with no id to thread, so a template without an id scheme can use it",
 const CSS_AT = src.indexOf("\n.sq{");
 const css = src.slice(CSS_AT, CSS_AT + 1700);
 ok("the stylesheet slice found the .sq rule itself", CSS_AT > 0 && /^\n\.sq\{position:static/.test(css));
+ok("the button is the 24px target", /\.sq\{[^}]*width:24px; height:24px/.test(css), css.slice(0, 300));
+ok("...and carries no border of its own", /\.sq\{[^}]*border:0/.test(css), css.slice(0, 300));
+ok("...while the mark inside it stays 15px with the ring",
+   /\.sq \.sqd\{[^}]*width:15px; height:15px;[^}]*border:1px solid/.test(css), css.slice(0, 700));
+/* The bigger box must not grow the heading, whose height the live audit compares
+   against its neighbours. 24px of control in a 13px line needs the pull. */
+ok("...and the heading pull covers the bigger box", /\.sec-h \.sq\{margin-block:-6px\}/.test(src));
 ok("the panel is hidden at rest by visibility, not by opacity alone",
    /\.sqp\{[^}]*visibility:hidden/.test(css), css.slice(0, 200));
 /* :focus, NOT :focus-visible — a tap focuses without matching focus-visible, so

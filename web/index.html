@@ -504,7 +504,10 @@ section{margin-top:34px}
    above. Gated on the width where the row has room, so the trick applies only
    where it is true. */
 @media (min-width:1200px){ .sec-h .schips{margin-block:-4px} }
-.sec-h .sq{margin-block:-2px}
+/* -6, not -2: the hit area is 24px now and a heading line is 13, so the pull has
+   to cover the difference or the bigger target grows the very heading whose
+   height is measured against its neighbours. */
+.sec-h .sq{margin-block:-6px}
 /* AND THE GROUP MAY WRAP. .schips is an inline-flex with no wrap, so four chips
    in a heading could not break — they pushed the heading, and the heading pushed
    the column, and at 390px the whole page scrolled sideways: 493px of content in
@@ -537,15 +540,25 @@ section{margin-top:34px}
    measuring the deployed page rather than by reading this rule, which looks
    correct until you ask what it is positioned against.
    .sec-h spans the column, so a panel bounded by it is bounded by the page. */
-.sq{position:static; flex:none; align-self:center; width:15px; height:15px; padding:0;
+/* TWO SIZES, ONE CONTROL. The target is 24px because a thumb needs 24 (SC
+   2.5.8); the ring is 15px because that is what belongs beside 11px of heading
+   text, and a 24px circle there would read as a button rather than a footnote.
+   The button carries no paint at all — it is a hit area — and .sqd is the mark
+   inside it. margin-block keeps the bigger box from growing the heading, which
+   is measured against its neighbours and has to stay 19px. */
+.sq{position:static; flex:none; align-self:center; width:24px; height:24px; padding:0;
+  display:inline-flex; align-items:center; justify-content:center;
   font:600 11px/1 var(--sans); letter-spacing:0; color:var(--muted); cursor:help;
-  background:none; border:1px solid var(--line-2); border-radius:50%}
+  background:none; border:0; margin-block:-5px}
+.sq .sqd{display:flex; align-items:center; justify-content:center; width:15px; height:15px;
+  border:1px solid var(--line-2); border-radius:50%; pointer-events:none}
 /* :focus, NOT :focus-visible. focus-visible is the right choice for a ring you
    do not want on a mouse click — and the wrong one here, because a TAP focuses
    without matching it, so on a touch screen the panel would never open and the
    `?` would be a button that does nothing. Measured: programmatic focus does not
    match focus-visible in Chrome either, which is what caught this. */
-.sq:hover,.sq:focus{color:var(--accent-2); border-color:var(--accent)}
+.sq:hover,.sq:focus{color:var(--accent-2)}
+.sq:hover .sqd,.sq:focus .sqd{border-color:var(--accent)}
 .sec-h{position:relative}
 .sqp{position:absolute; left:0; top:calc(100% + 7px); z-index:5;
   width:max-content; max-width:min(320px,100%); text-align:left;
@@ -6792,7 +6805,16 @@ function tierPill(t){ return t===2?`<span class="pill open">★ Featured</span>`
    aria-describedby needs an id to thread through a template that has no id
    scheme, and title= is the thing this exists to stop being. */
 function secHelp(text){
-  return `<button type="button" class="sq" aria-label="${esc(text)}">?<span class="sqp" aria-hidden="true">${esc(text)}</span></button>`;
+  /* THE RING IS AN INNER SPAN so the BUTTON can be bigger than the ring. A
+     15px control is a 15px thing to hit with a thumb; SC 2.5.8 asks for 24. The
+     circle is what the reader should see and 24px of it in a heading would
+     shout, so the two sizes are separated: .sq is the target, .sqd is the mark.
+     aria-hidden on the glyph — the button's accessible name is the sentence, and
+     a screen reader announcing "question mark" over it would replace an answer
+     with punctuation. */
+  return `<button type="button" class="sq" aria-label="${esc(text)}">`
+    + `<span class="sqd" aria-hidden="true">?</span>`
+    + `<span class="sqp" aria-hidden="true">${esc(text)}</span></button>`;
 }
 const ICN_FOLDER = `<svg class="icn" viewBox="0 0 14 12" aria-hidden="true"><path d="M1 1.5h4.2l1.4 1.8H13a.6.6 0 0 1 .6.6v6.6a.9.9 0 0 1-.9.9H1.3a.9.9 0 0 1-.9-.9V2.1a.6.6 0 0 1 .6-.6z" fill="currentColor"/></svg>`;
 /* "Open the rewards" is the one button on this page that is not about signing a
