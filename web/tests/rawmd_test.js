@@ -89,6 +89,35 @@ ok("a link inside bold is both", mdInline("**[a](/r/kourt/kourtv2:x)**") === '<s
 ok("an underscore inside a word is not emphasis",
    mdInline("snake_case_name and g1abc_def") === "snake_case_name and g1abc_def", mdInline("snake_case_name and g1abc_def"));
 
+// ---- backslash escapes, which every realm string carries ------------------
+/* THE ONE THAT SHIPPED. Every string the realm interpolates has been through
+   sanitize.InlineText, which backslash-escapes markdown punctuation — so the
+   covid court's name arrives as `COVID\-19 Origins \& Response Court`. goldmark
+   consumes those escapes; the first version of this renderer did not, and
+   kourt.xyz/#/raw/covid/mod rendered the heading with the backslashes visible.
+   The source view was right the whole time, which is how it got past a suite
+   that had not been given a fixture carrying one. CM §2.4. */
+ok("an escaped hyphen loses its backslash", mdInline("COVID\\-19") === "COVID-19", mdInline("COVID\\-19"));
+ok("...and an escaped ampersand is still escaped as HTML",
+   mdInline("Origins \\& Response") === "Origins &amp; Response", mdInline("Origins \\& Response"));
+ok("...and an escaped asterisk is not emphasis",
+   mdInline("\\*not bold\\*") === "*not bold*", mdInline("\\*not bold\\*"));
+ok("...and an escaped bracket does not open a link",
+   mdInline("\\[not a link\\](/r/kourt/kourtv2:x)") === "[not a link](/r/kourt/kourtv2:x)",
+   mdInline("\\[not a link\\](/r/kourt/kourtv2:x)"));
+/* THE ESCAPE ALSO DISARMS THE LINE. sanitize escapes a leading `-` precisely so
+   user text cannot open a list; consuming the pair here is what preserves that. */
+ok("an escaped hyphen at the head of a line is text, not a bullet",
+   mdLite("\\- not a bullet") === "<p>- not a bullet</p>", mdLite("\\- not a bullet"));
+ok("an escaped hash at the head of a line is text, not a heading",
+   mdLite("\\# not a heading") === "<p># not a heading</p>", mdLite("\\# not a heading"));
+/* A BACKSLASH BEFORE A NON-PUNCTUATION CHARACTER IS A BACKSLASH — same rule,
+   other direction, and the one an over-eager fix would break. */
+ok("a backslash before a letter survives", mdInline("C:\\path\\to") === "C:\\path\\to", mdInline("C:\\path\\to"));
+/* NOT INSIDE A CODE SPAN. CM §6.1: backslash escapes do not apply in code, and
+   the realm prints call names there. */
+ok("a backslash inside code stays literal", mdInline("`a\\-b`") === "<code>a\\-b</code>", mdInline("`a\\-b`"));
+
 // ---- links: where they may go --------------------------------------------
 /* THE REALM'S OWN PATHS COME BACK HERE. A walk through the chain's pages should
    keep showing the chain's pages, not jump to the friendly route halfway. */
@@ -181,7 +210,7 @@ ok("nothing renders as nothing", mdLite("") === "" && mdLite(null) === "" && mdL
    author remembers the realm doing. */
 {
   const modlog = [
-    "# Moderation log — Review Court",
+    "# Moderation log — COVID\\-19 Origins \\& Response Court",
     "",
     "Every moderation act on this court's CLAIMS and COMMENTS is recorded here: who acted,",
     "what they did, and when. Moderation controls what is listed; it never moves a coin or",
@@ -204,6 +233,12 @@ ok("nothing renders as nothing", mdLite("") === "" && mdLite(null) === "" && mdL
   ok("...the 1-of-1 line is prose, not an ordered list", !/<ol|<li/.test(got), got);
   ok("...and no markdown punctuation is left as text",
      !/\]\(|##|\*\*/.test(got.replace(/<[^>]*>/g, "")), got);
+  /* THE HEADING IS THE REPORTED LINE. It read "COVID\-19 Origins \& Response
+     Court" on the deployed page. */
+  ok("...and the court's name lost its sanitize backslashes",
+     got.includes("<h2>Moderation log — COVID-19 Origins &amp; Response Court</h2>"), got);
+  ok("...with no backslash anywhere in the set text",
+     !got.replace(/<[^>]*>/g, "").includes("\\"), got);
 }
 
 // ---- the route: source is what you land on -------------------------------

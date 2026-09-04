@@ -133,16 +133,28 @@ function mdInline(t){
      `_em_` must not fire INSIDE a word: an address or an identifier with an
      underscore in it is not emphasis. Expressed as a leading non-word character
      that is captured and re-emitted rather than as a lookbehind, which Safari
-     did not have until 16.4. */
-  const re = /(!?)\\[([^\\]\\n]*)\\]\\(([^()\\s]*)\\)|\\*\\*([^\\n]+?)\\*\\*|`([^`\\n]+)`|(^|[^A-Za-z0-9_])_([^_\\n]+)_(?![A-Za-z0-9_])/g;
+     did not have until 16.4.
+
+     THE BACKSLASH ESCAPE COMES FIRST, and it is not optional here. Every string
+     the realm interpolates has been through sanitize.InlineText, which
+     backslash-escapes markdown punctuation — so a court called "COVID-19 Origins
+     & Response Court" reaches this function as `COVID\\-19 Origins \\& Response`.
+     goldmark consumes those, this did not, and the deployed page read
+     "COVID\\-19 Origins \\& Response Court" with the backslashes showing. Matching
+     the escape first also does the other half of the job: the character it
+     protects is consumed with it, so a `\\-` at the head of a line is text rather
+     than a bullet, exactly as sanitize intended. CM §2.4 — a backslash before
+     ASCII punctuation is an escape, before anything else it is a backslash. */
+  const re = /\\\\([!-\\/:-@\\[-`{-~])|(!?)\\[([^\\]\\n]*)\\]\\(([^()\\s]*)\\)|\\*\\*([^\\n]+?)\\*\\*|`([^`\\n]+)`|(^|[^A-Za-z0-9_])_([^_\\n]+)_(?![A-Za-z0-9_])/g;
   let out = "", at = 0, m;
   while((m = re.exec(t)) !== null){
     out += esc(t.slice(at, m.index));
     at = re.lastIndex;
-    if(m[3] !== undefined) out += mdLink(m[1] === "!", m[2], m[3]);
-    else if(m[4] !== undefined) out += `<strong>${mdInline(m[4])}</strong>`;
-    else if(m[5] !== undefined) out += `<code>${esc(m[5])}</code>`;
-    else out += esc(m[6]) + `<em>${mdInline(m[7])}</em>`;
+    if(m[1] !== undefined) out += esc(m[1]);
+    else if(m[4] !== undefined) out += mdLink(m[2] === "!", m[3], m[4]);
+    else if(m[5] !== undefined) out += `<strong>${mdInline(m[5])}</strong>`;
+    else if(m[6] !== undefined) out += `<code>${esc(m[6])}</code>`;
+    else out += esc(m[7]) + `<em>${mdInline(m[8])}</em>`;
   }
   return out + esc(t.slice(at));
 }
