@@ -27,7 +27,7 @@ code += slice('function statusPill(','function docketRow(');
 // builders that make one.
 code += fn('verdictSentence');
 code += fn('sideOval');
-code += fn('rowSide');
+code += fn('rowVerdict');
 code += slice('function phaseClass(','function statusPill(');
 code += slice('/* The specimen tour','function introStrip(');
 eval(code);

@@ -4086,9 +4086,16 @@ function claimSeries(d){
    pill and the clock already are, and where it costs the title none of the width
    it just got back. No new read: the record is the one the docket drew from. */
 function docketSignal(ser, inst){
-  if(ser) return `${sparkSvg(ser)}<b>${ser[2].toFixed(1)}%</b><small>YES now</small>`;
+  /* "staked YES", NOT "YES now". Beside a row whose title already carries the
+     answer's oval, "YES now" reads as a second opinion on the verdict — and it
+     is not one: it is the share of STAKE sitting on YES. Reported on #19, where
+     the row said YES? on one line and "YES now" on the next about different
+     things.
+     "no trend", not "no trend yet": the yet promises one is coming, and on a
+     claim that never moves again none is. */
+  if(ser) return `${sparkSvg(ser)}<b>${ser[2].toFixed(1)}%</b><small>staked YES</small>`;
   if(Number.isFinite(inst))
-    return `<b>${inst.toFixed(1)}%</b><small>YES now · no trend yet</small>`;
+    return `<b>${inst.toFixed(1)}%</b><small>staked YES · no trend</small>`;
   return `<small class="muted">not staked yet</small>`;
 }
 function esc(s){ return String(s).replace(/[&<>"'`]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;","`":"&#96;"}[c])); }
@@ -7294,8 +7301,8 @@ function assocRow(slug, rid, chip, lookup){
      The oval is a side, and a disputed claim has one: the answer on the table.
      What the pill was carrying that the oval does not is the phase, and the
      question mark is that. */
-  const contested = !!(pc && pc.short === "in dispute" && (pc.side === "YES" || pc.side === "NO"));
-  const side = (pc && (pc.short === "settled" || contested))? pc.side : "";
+  const rv = d? rowVerdict(d.statusText) : {side:"", contested:false};
+  const contested = rv.contested, side = rv.side;
   return `<a class="crow assocrow" href="#/c/${esc(slug)}/${rid}">
     <span class="id">#${rid}</span>
     <span><span class="t"${d? "" : ` data-needtitle="${rid}"`}>${d? verdictSentence(d.title, side, contested) : ""}</span></span>
@@ -9550,7 +9557,8 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
          That is what makes the two figures identical instead of merely equal —
          one cell, one fill, one rendering. */
       const polrow = (r, metaLine) => { const c = byId[r.id];
-        const sd = c? rowSide(c.statusText) : "";
+        const rv = c? rowVerdict(c.statusText) : {side:"", contested:false};
+        const sd = rv.side;
         // One cell either way: it carries the figure when the record already has
         // one and waits for the fill when it does not, so the key is written in
         // a single place rather than once per branch.
@@ -9558,7 +9566,7 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
           c && (c.series || Number.isFinite(c.inst))? docketSignal(c.series, c.inst) : ""}</span>`;
         return `<a class="crow claimrow" href="#/c/${esc(slug)}/${r.id}">
         <span class="id">#${r.id}</span>
-        <span><span class="t">${c? verdictSentence(r.title, sd) : safeInline(r.title)}</span>${metaLine}${c && !sd? `<span class="m rowpill">${statusPill(c.statusText)}</span>` : ""}</span>
+        <span><span class="t">${c? verdictSentence(r.title, sd, rv.contested) : safeInline(r.title)}</span>${metaLine}${c && !sd? `<span class="m rowpill">${statusPill(c.statusText)}</span>` : ""}</span>
         ${px}</a>`; };
       const srow = r => polrow(r, r.deadline!=null? `<span class="m" style="display:block">settles at block ${fmtN(r.deadline)}</span>` : "");
       const prow = r => polrow(r, r.seeded? `<span class="m" style="display:block">seeded by a moderator</span>` : "");
@@ -10537,8 +10545,8 @@ function docketRow(slug,c,meta){
      rows, the directory's court cards and the chain-list rows, and each of them
      fills all the columns it declares. Only the claim row has a column it stopped
      using, so only the claim row changes shape. */
-  const dSide = (()=>{ const pc = phaseClass(c.statusText);
-    return pc.short === "settled"? pc.side : ""; })();
+  const dv = rowVerdict(c.statusText);
+  const dSide = dv.side;
   // A claim with no series is not always a claim awaiting a live fill: in demo
   // mode the row is final, and it used to render an empty cell for good.
   /* KEYED BY CLAIM, NOT BY ROW. This was an id, which can only name one element,
@@ -10553,7 +10561,7 @@ function docketRow(slug,c,meta){
   const sortKey = c.series ? c.series[2] : (Number.isFinite(c.inst) ? c.inst : null);
   return `<a class="crow claimrow${c.offp?" offp":""}" data-id="${c.id}"${sortKey!=null?` data-yes="${sortKey}"`:""} data-q="${esc("#"+c.id+" "+c.title)}" href="#/c/${esc(slug)}/${c.id}">
     <span class="id">#${c.id}</span>
-    <span><span class="t">${verdictSentence(c.title, dSide)}</span>${meta?`<span class="m" style="display:block">${safeInline(meta.label)}</span>`:""}<span class="m" style="display:block" id="clk-${esc(slug)}-${c.id}">${(()=>{ const t=clockLine(isLive()? null:NOW, phaseClass(c.statusText).short, c.settleAt, c.escrowUntil); return t? esc(t):""; })()}</span>${dSide? "" : `<span class="m rowpill">${statusPill(c.statusText)}</span>`}</span>
+    <span><span class="t">${verdictSentence(c.title, dSide, dv.contested)}</span>${meta?`<span class="m" style="display:block">${safeInline(meta.label)}</span>`:""}<span class="m" style="display:block" id="clk-${esc(slug)}-${c.id}">${(()=>{ const t=clockLine(isLive()? null:NOW, phaseClass(c.statusText).short, c.settleAt, c.escrowUntil); return t? esc(t):""; })()}</span>${dSide? "" : `<span class="m rowpill">${statusPill(c.statusText)}</span>`}</span>
     ${px}</a>`;
 }
 
@@ -12280,9 +12288,20 @@ function sideOval(side, contested){
    of the status text, so there is one answer.
    A settled claim whose status names no side keeps its pill: the sentence has
    nothing to say for it. */
-function rowSide(statusText){
+function rowVerdict(statusText){
   const pc = phaseClass(statusText);
-  return pc.short === "settled" ? pc.side : "";
+  const side = (pc.side === "YES" || pc.side === "NO") ? pc.side : "";
+  /* CONTESTED IS A SIDE TOO. A disputed claim has an answer on the table and the
+     claim page, the map card and the related rows all put it on the sentence
+     with a question mark after it. The docket did not — it kept a "YES?" pill on
+     the meta line — so the same claim wore the oval everywhere except the list
+     a reader meets it in. Reported on #19.
+     Answered here rather than at each row: three builders asked this question
+     and two of them got a different answer. */
+  const contested = pc.short === "in dispute" && !!side;
+  if(pc.short === "settled" && side) return {side, contested: false};
+  if(contested) return {side, contested: true};
+  return {side: "", contested: false};
 }
 function claimTitleHtml(d){
   const t = safeInline(d && d.title);
@@ -12691,8 +12710,8 @@ function aboutTour(){
         const d = DEMO.claims["orem/"+i];
         return `<a class="crow" href="#/c/orem/${i}">
       <span class="id">#${i}</span>
-      <span><span class="t">${verdictSentence(d.title, rowSide(statusText(d)))}</span><span class="m" style="display:block">${esc(cap)}</span></span>
-      ${rowSide(statusText(d))? "" : statusPill(statusText(d))}</a>`;
+      <span><span class="t">${verdictSentence(d.title, rowVerdict(statusText(d)).side, rowVerdict(statusText(d)).contested)}</span><span class="m" style="display:block">${esc(cap)}</span></span>
+      ${rowVerdict(statusText(d)).side? "" : statusPill(statusText(d))}</a>`;
       }).join("")}</div>
       <h2>Moderation specimens</h2>
       <p>The hidden sample court also holds moderation specimens — listing acts, never verdicts. (A purged tombstone exists on live courts only.)</p>
@@ -12704,8 +12723,8 @@ function aboutTour(){
         const d = DEMO.claims["annex/"+i];
         return `<a class="crow" href="#/c/annex/${i}">
       <span class="id">#${i}</span>
-      <span><span class="t">${verdictSentence(d.title, rowSide(statusText(d)))}</span><span class="m" style="display:block">${esc(cap)}</span></span>
-      ${rowSide(statusText(d))? "" : statusPill(statusText(d))}</a>`;
+      <span><span class="t">${verdictSentence(d.title, rowVerdict(statusText(d)).side, rowVerdict(statusText(d)).contested)}</span><span class="m" style="display:block">${esc(cap)}</span></span>
+      ${rowVerdict(statusText(d)).side? "" : statusPill(statusText(d))}</a>`;
       }).join("")}</div>`;
 }
 function introStrip(){
@@ -13051,7 +13070,7 @@ async function meHoldings(addr,courts){
                   if(d.phase==="provisional" && d.escrowUntil && nowH!=null && d.escrowUntil>nowH) personal += ` · reopenable until ≈block ${fmtN(d.escrowUntil)} — in ${wall(nowH,d.escrowUntil)}`;
                 }
                 return `<tr><td><a href="#/c/${esc(slug)}/${cl.id}" style="color:var(--accent-2);text-decoration:none">${safeInline(cl.title)}</a>${personal?`<span class="m" style="display:block">${esc(personal)}</span>`:""}</td>
-                <td>${!d? "" : rowSide(d.statusText)? sideOval(rowSide(d.statusText)) : statusPill(d.statusText)}</td>
+                <td>${!d? "" : rowVerdict(d.statusText).side? sideOval(rowVerdict(d.statusText).side, rowVerdict(d.statusText).contested) : statusPill(d.statusText)}</td>
                 <td class="num">${cc(p.yes,slug)}</td><td class="num">${cc(p.no,slug)}</td><td class="num">${cc((p.cy||0)+(p.cn||0),slug)}</td></tr>`;
               }).join("")
             + `</tbody></table></div>`

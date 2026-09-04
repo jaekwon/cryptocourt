@@ -38,7 +38,7 @@ code += fn('verdictSentence');
 // rowSide whether there is one — both are new and neither is inside the region
 // any existing anchor already cut.
 code += fn('sideOval');
-code += fn('rowSide');
+code += fn('rowVerdict');
 code += slice('function assocRow(', '/* ======================= local curation');
 code += 'var BLOCK_SECS=' + src.match(/const BLOCK_SECS\s*=\s*(\d+)/)[1] + ';\n';
 code += slice('const MON=', 'function resolutionLadder(').replace(/^const MON=/m,'var MON=');
@@ -649,10 +649,15 @@ ok("every statusPill call is gated on there being no side to show", (()=>{
     const line = src.slice(src.lastIndexOf("\n", m.index) + 1, src.indexOf("\n", m.index));
     return line.trim();
   }).filter(l => !l.startsWith("function statusPill"));
+  // LINE-BASED ON PURPOSE, and the source keeps its guard on the same line for
+  // it: a multi-line ternary would put the test and the call on different lines
+  // and read as ungated. That happened once, to the holdings cell, and the cell
+  // went back to one line rather than the check being widened into something
+  // that could match an unrelated guard nearby.
   // Every remaining call sits behind a "no side" test, or is the /needs ballot
   // row, which is handed a literal phase and has no claim record to read a side
   // from at all.
-  const guarded = l => /!sd\?|!side\?|dSide\?|side \? ""|rowSide\(/.test(l)
+  const guarded = l => /!sd\?|!side\?|dSide\?|side \? ""|rowVerdict\(/.test(l)
                     || l.includes('statusPill("disputed")');
   const bad = calls.filter(l => !guarded(l));
   if(bad.length) console.log("   unguarded:", bad);
@@ -670,18 +675,30 @@ ok("...and a row with no readable side keeps its pill", (()=>{
   const r = assocRow("orem", 4, "x", () => bare);
   return !r.includes("vtag") && r.includes("pill");
 })());
-/* rowSide ANSWERS FOR SETTLED ONLY, and that is load-bearing now that a disputed
-   status names its side too: "disputed YES" has a readable side, and a row that
-   took the oval from it would drop its pill and show a bare YES — the verdict's
-   mark on a claim that has no verdict, with the question mark gone. */
-ok("rowSide answers for a settled claim and nothing else", (()=>{
-  return rowSide("settled YES — every stake withdraws 1×") === "YES"
-      && rowSide("settled NO — every stake withdraws 1×") === "NO"
-      && rowSide("disputed YES — a sealed vote is deciding") === ""
-      && rowSide("provisional verdict YES — reopenable") === ""
-      && rowSide("open — stake YES or NO") === "";
+/* ONE ANSWER TO "WHAT DOES THIS ROW WEAR", asked by four builders. It used to be
+   settled-only, so a disputed claim kept a "YES?" pill on the docket while the
+   same claim wore the oval on its own page, on the map card and in the related
+   rows — reported on #19. A dispute HAS a side, the answer on the table; what it
+   does not have is a verdict, and the question mark is that.
+   Contested is returned beside the side rather than inferred again downstream:
+   a caller that took the side and forgot the flag would print the verdict's mark
+   on a claim that has no verdict. */
+ok("a settled row wears the side, unquestioned", (()=>{
+  const y = rowVerdict("settled YES — every stake withdraws 1×");
+  const n = rowVerdict("settled NO — every stake withdraws 1×");
+  return y.side === "YES" && y.contested === false
+      && n.side === "NO"  && n.contested === false;
 })());
-ok("...so a disputed row keeps its questioned pill rather than a bare oval", (()=>{
+ok("a disputed row wears the side, questioned", (()=>{
+  const d = rowVerdict("disputed YES — a sealed vote is deciding");
+  return d.side === "YES" && d.contested === true;
+})());
+ok("...and nothing else wears one", (()=>{
+  const p = rowVerdict("provisional verdict YES — reopenable");
+  const o = rowVerdict("open — stake YES or NO");
+  return p.side === "" && !p.contested && o.side === "" && !o.contested;
+})());
+ok("...so a disputed row shows the oval with its mark, not a pill", (()=>{
   const r = assocRow("orem", 4, "x",
     () => ({title:"t", statusText:"disputed YES — a sealed vote is deciding"}));
   // It wears the oval THROUGH the contested path, which carries the mark with it.

@@ -28,6 +28,11 @@ eval(slice('function esc(', '\n'));
 eval(slice('const sideName =', '\n').replace('const sideName =', 'var sideName ='));
 eval(slice('function phaseClass(', 'function statusPill('));
 eval(slice('function statusPill(', 'function docketRow('));
+// docketSignal is the caption both the docket and the court's policing rows
+// draw. sparkSvg is stubbed: the series branch is about the WORDS here, and the
+// drawing has its own harness.
+eval("function sparkSvg(){ return '<svg/>'; }");
+eval(fn('docketSignal'));
 eval(slice('async function nameTheSide(', '/* A deeper docket window'));
 // The claim page's own title, which carries the verdict. safeInline is esc, so
 // the real function goes in rather than a stub.
@@ -430,6 +435,37 @@ const run = async (rows, v, mode) => {
     return phaseClass("open — stake YES or NO; unstake freely until an answer posts").side === ""
         && !statusPill("open — stake YES or NO; unstake freely").includes("?");
   })());
+
+
+  /* WHAT THE FIGURE IS, said beside it. The caption read "YES now" next to a
+     title that already carries the answer's oval, so the row said YES? on one
+     line and "YES now" on the next about two different things — one the verdict
+     under dispute, the other the share of STAKE. Reported on #19.
+     And "no trend", not "no trend yet": the yet promises one is coming, and on a
+     claim that never moves again none is. */
+  ok("the percentage says it is stake, not a verdict", (()=>{
+    const t = docketSignal(null, 53.14);
+    return t.includes("53.1%") && t.includes("staked YES") && !t.includes("YES now");
+  })());
+  ok("...and does not promise a trend that may never come", (()=>{
+    return docketSignal(null, 53.14).includes("no trend")
+        && !docketSignal(null, 53.14).includes("no trend yet");
+  })());
+  ok("...with the same words once there IS a trend", (()=>{
+    const t = docketSignal([10, 20, 53.14], 53.14);
+    return t.includes("staked YES") && !t.includes("YES now") && !t.includes("no trend");
+  })());
+  ok("...and nothing at all before anyone stakes", (()=>{
+    return docketSignal(null, null).includes("not staked yet");
+  })());
+  /* THE DOCKET WEARS THE CONTESTED OVAL TOO. Every other surface put a disputed
+     claim's answer on its sentence with a mark after it; the docket kept a pill.
+     Source-asserted: no harness loads docketRow — they all slice up TO it — so
+     this pins that the flag reaches the builder rather than the pixels. */
+  ok("the docket row passes the contested flag to the sentence",
+     src.includes("${verdictSentence(c.title, dSide, dv.contested)}"));
+  ok("...taking both halves from one answer, not re-deriving one",
+     src.includes("const dv = rowVerdict(c.statusText);"));
 
   console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");
   process.exit(fail?1:0);
