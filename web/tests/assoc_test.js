@@ -167,15 +167,43 @@ CFG.mode='demo';
    unchanged and still pinned — #4's answer was NO and its verdict YES, and YES
    is what the oval says — and the pill's ABSENCE is asserted beside it, since
    dropping the pill is the change and a row carrying both would be the bug.
-   #3 is in dispute and keeps its PILL — the oval is for a decided claim, and a
-   dispute is the opposite of decided. What its pill says changed: the docket
-   asked for the side under dispute, so it reads "YES?" rather than the phase
-   alone. That it is still a pill, and still the dispute colour, is the part this
-   assertion is about. */
-ok("#9 rows: #4 wears the verdict's oval, #3 keeps its dispute pill",
+   #3 is in dispute and wears the SAME OVAL, questioned. It carried the phase
+   pill — "YES?" in the dispute colour, off in the right-hand cluster — while the
+   same claim's own page put the oval on its title. Reported as: it shows a
+   golden box, it should be the outlined oval, and closer to the title.
+   The relation pill stays on both: that is the edge, not the phase, and nothing
+   else on the row says it. */
+ok("#9 rows: #4 wears the verdict's oval, #3 wears it questioned",
    /vtag y">YES</.test(h9) && !h9.includes(">settled YES<")
-   && h9.includes('<span class="pill escrow">YES?</span>')
-   && !/vtag[^>]*>YES<\/span>\s*<\/a>[^]*#\/c\/orem\/3/.test(h9));
+   && h9.includes('<span class="vq"')
+   /* The DISPUTE pill specifically, not the escrow class: a provisional row in
+      this same section wears escrow too and rightly keeps its phase pill — it
+      has no oval to carry the fact. Banning the class outright failed here and
+      would have been the wrong pin anyway. */
+   && !/<span class="pill escrow">(YES|NO)\?</.test(h9));
+ok("...and the contested mark follows the oval, not the row's chip cluster", (()=>{
+  const lk = id => { const d = DEMO.claims["orem/"+id]; return d? {title:d.title, statusText:statusText(d)} : null; };
+  const r = assocRow("orem", 3, "contradicts this", lk);
+  const oval = r.indexOf('sidetag vtag'), q = r.indexOf('class="vq"'), rt = r.indexOf('class="rt"');
+  return oval >= 0 && q > oval && q < rt;
+})());
+/* THE MARK'S COLOUR TRAVELS WITH THE OVAL. .vtag.y is deliberately unscoped —
+   "COLOUR IS NOT SCOPED, sizing is" — because the same answer must look the same
+   in the heading and in a row. The question mark now appears in both too, so its
+   colour and weight have to leave .page-h with it; left scoped, a contested row
+   renders the mark in the row's ink and the two surfaces disagree.
+   Asserted on the stylesheet because it is a scoping fact, which no rendered
+   string can show: the markup is identical either way. */
+ok("the contested mark is coloured outside the heading's scope",
+   /^\.vq\{[^}]*color:var\(--muted\)/m.test(src)
+   && !/^\.page-h \.vq\{[^}]*color:/m.test(src));
+
+/* NOT STRUCK, even on a NO: the strike says "no longer accurate", which is a
+   verdict, and a dispute has not reached one. */
+ok("...and a contested NO is not struck through", (()=>{
+  const r = assocRow("orem", 3, "x", () => ({title:"t", statusText:"disputed NO — a sealed vote is deciding"}));
+  return r.includes('vtag n">NO<') && r.includes('class="vq"') && !r.includes("<s>");
+})());
 
 // ---- resolution ladder ----
 const d2 = Object.assign({id:2}, DEMO.claims["orem/2"], {answered:true});

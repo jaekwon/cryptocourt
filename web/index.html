@@ -1013,8 +1013,11 @@ html.embed .main{grid-column:1; grid-row:1; max-width:none; padding:0;
 /* The contested mark. Sized and coloured with the oval it follows rather than
    with the heading, so the two read as one subscript; muted because the oval is
    the statement and this only qualifies it. */
-.page-h .vq{font-size:clamp(12px,1.1vw,15px); vertical-align:.22em; margin-left:.1em;
-  font-weight:600; color:var(--muted)}
+.page-h .vq{font-size:clamp(12px,1.1vw,15px); vertical-align:.22em}
+/* COLOUR AND WEIGHT ARE NOT SCOPED, for the reason .vtag.y is not: the mark now
+   follows the oval on the related rows as well as in the heading, and the same
+   qualification must read the same in both. Only the heading's clamp stays. */
+.vq{margin-left:.1em; font-weight:600; color:var(--muted)}
 /* THE STRIKE IS THE COURT'S, so it is drawn in the losing side's hue rather than
    in ink — a grey rule through a title reads as "deleted", and nothing here was
    deleted. Thickness in em so it tracks the clamped heading instead of going
@@ -7189,10 +7192,18 @@ function assocRow(slug, rid, chip, lookup){
      readable side has somewhere to put the fact; open, disputed and provisional
      rows keep the pill, exactly as the map's card does. */
   const pc = d? phaseClass(d.statusText) : null;
-  const side = (pc && pc.short === "settled")? pc.side : "";
+  /* AND A DISPUTED ROW WEARS IT TOO, questioned. It carried the phase pill —
+     "YES?" in the dispute colour, off in the right-hand cluster — while the same
+     claim's own page put the oval on its title. Reported as: it shows a golden
+     box, it should be the outlined oval, and closer to the title.
+     The oval is a side, and a disputed claim has one: the answer on the table.
+     What the pill was carrying that the oval does not is the phase, and the
+     question mark is that. */
+  const contested = !!(pc && pc.short === "in dispute" && (pc.side === "YES" || pc.side === "NO"));
+  const side = (pc && (pc.short === "settled" || contested))? pc.side : "";
   return `<a class="crow assocrow" href="#/c/${esc(slug)}/${rid}">
     <span class="id">#${rid}</span>
-    <span><span class="t"${d? "" : ` data-needtitle="${rid}"`}>${d? verdictSentence(d.title, side) : ""}</span></span>
+    <span><span class="t"${d? "" : ` data-needtitle="${rid}"`}>${d? verdictSentence(d.title, side, contested) : ""}</span></span>
     <span class="rt"><span class="pill ${/contradict/.test(chip)?"contra":"void"}">${esc(chip)}</span>
     ${d && !side? statusPill(d.statusText) : ""}</span></a>`;
 }
@@ -12075,14 +12086,24 @@ function focusStakeSide(side){
    stays with the caller; all this does is dress the sentence.
    AN UNKNOWN SIDE RETURNS THE BARE SENTENCE rather than an empty oval — a ring
    with nothing in it would assert a decision nobody can read. */
-function verdictSentence(title, side){
+function verdictSentence(title, side, contested){
   const t = safeInline(title);
   if(side !== "YES" && side !== "NO") return t;
+  /* CONTESTED IS THE SAME SENTENCE, QUESTIONED. The claim heading built this
+     shape by hand — oval, then a question mark — while every other surface asked
+     verdictSentence for its sentence, so the two could drift and the related
+     rows never got it at all: a disputed row wore a phase pill off in the
+     right-hand cluster instead of the oval its own claim page shows.
+     NOT STRUCK, even on a NO. The strike says "no longer accurate", which is a
+     verdict, and a dispute has not reached one. */
   // <s>, not a class on the caller's element: the element means "no longer
   // accurate", which is the claim about the sentence — and it keeps the oval
   // outside the strike, since the verdict is not itself struck.
-  return (side === "NO" ? `<s>${t}</s>` : t)
-    + ` <span class="sidetag vtag ${side === "NO" ? "n" : "y"}">${side}</span>`;
+  return ((side === "NO" && !contested) ? `<s>${t}</s>` : t)
+    + ` <span class="sidetag vtag ${side === "NO" ? "n" : "y"}">${side}</span>`
+    + (contested
+        ? `<span class="vq" title="under dispute — this answer is being contested">?</span>`
+        : "");
 }
 function claimTitleHtml(d){
   const t = safeInline(d && d.title);
@@ -12096,9 +12117,7 @@ function claimTitleHtml(d){
   if(d && d.phase === "disputed"){
     const a = d.answer;
     if(a !== 0 && a !== 1) return `<h1 class="page-h">${t}</h1>`;
-    return `<h1 class="page-h">${t}`
-      + ` <span class="sidetag vtag ${a === 1 ? "n" : "y"}">${sideName(a)}</span>`
-      + `<span class="vq" title="under dispute — this answer is being contested">?</span></h1>`;
+    return `<h1 class="page-h">${verdictSentence(d && d.title, sideName(a), true)}</h1>`;
   }
   if(!d || d.phase !== "settled") return `<h1 class="page-h">${t}</h1>`;
   const v = (d.verdict != null ? d.verdict : d.answer);
