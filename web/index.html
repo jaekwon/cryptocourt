@@ -6914,29 +6914,35 @@ function buyRowsHtml(q, price, slug, after){
       : `<div class="line"><span class="l">You get</span><span class="r">0 <small>too small to mint — the court refuses it and your GNOT never leaves</small></span></div>`;
   }
   const pct = q.share*100;
-  /* ONE LINE IN FRONT, THE REST BEHIND "details". Four rows and two paragraphs of
-     fine print sat above the Buy button; what a reader needs before pressing is
-     what the units cost and how much voice they buy, and those are the two
-     figures kept. Returned-to-you, the price after, and both caveats are one
-     click away rather than gone — a dialog, not a hover: hover text cannot be
-     read on a touch screen or reached by a keyboard, and the second paragraph is
-     the disclosure that says this is GNOT spent rather than moved.
+  /* NOTHING IN FRONT, EVERYTHING BEHIND "see details". This kept one line out where
+     the reader could see it — "You pay 5.1193 µGNOT/unit · 0.4% voice" — on the
+     argument that the price per unit and the voice bought are what somebody needs
+     before pressing. In the rail that line is 250px wide and the value wrapped to
+     four: a figure, its unit, a separator and a word, stacked, under a button that
+     already says what you get for what you burn. Both figures were ALSO in the
+     dialog, verbatim, so the panel stated them twice and stacked one of them.
+     So the front row is gone and the summary is where its own detail already was:
+     average price, dust returned, the price after, the voice share and both caveats,
+     one click away in a dialog. A dialog and not a hover — hover text cannot be read
+     on a touch screen or reached by a keyboard, and one of those paragraphs is the
+     disclosure that this is GNOT spent rather than moved.
      THE DIALOG SHIPS INSIDE #buyrows2, which is what the amount field rewrites on
-     every keystroke — so the figures behind the link update with the ones in
-     front of it. Rendered where it is declared and shown in the top layer, which
-     is what <dialog> is for. */
-  /* THE LINK LEFT THIS LINE FOR THE BUTTON ROW. It sat at the end of the value,
-     after "µGNOT/unit · 0.4% voice", and at 390px that value wraps across four
-     lines — so "details →" landed on a line of its own, 120px below the Buy
-     button it belongs beside. Reported as: it should be next to the button, or
-     short enough to fit.
+     every keystroke — so the figures behind the link are the ones the field is
+     quoting, and not a snapshot from whatever was typed first. Rendered where it is
+     declared and shown in the top layer, which is what <dialog> is for. That
+     container has no frame of its own any more: with the line gone it holds only a
+     dialog, and an empty bordered box with registration marks on it reads as a box
+     around nothing. */
+  /* THE LINK LIVES ON THE BUTTON ROW, and did before the line it used to end was
+     removed: it sat after "µGNOT/unit · 0.4% voice", where at 390px the wrapping
+     value dropped it onto a line of its own 120px below the Buy button it belongs
+     beside. Reported then as: it should be next to the button, or short enough to fit.
      Next to the button, because .actions is a wrapping flex row with room in it,
      and because the link is an action rather than part of the figure. The DIALOG
      stays here: it is rebuilt with these numbers on every keystroke, which is
      what keeps the figures behind the link the same as the ones in front of it.
      The button finds it by id, so the two need not be siblings. */
-  if(after) return `<div class="line"><span class="l">You pay</span><span class="r tnum">${q.avg.toFixed(4)} <small>µGNOT/unit</small> · ${pctText(pct, 100)} <small>voice</small></span></div>`
-    + `<dialog class="helper" id="help-buy" aria-labelledby="help-buy-h">
+  if(after) return `<dialog class="helper" id="help-buy" aria-labelledby="help-buy-h">
         <div class="hd"><h3 id="help-buy-h">What this buy costs</h3><button type="button" class="pill void" data-close>Close</button></div>
         <div class="bd">
           <div class="line"><span class="l">Average price you pay</span><span class="r tnum">${q.avg.toFixed(4)} <small>µGNOT/unit</small></span></div>
@@ -7014,7 +7020,11 @@ function buyActionsHtml(slug, q){
      control here a thumb has to find beside a much larger button. */
   return btn(ok? {html:"Buy "+cc(Number(q.units),slug)} : "Buy the coin",
              "Buy", {slug}, "primary", "", send, gate, false, "", ICN_PLUS)
-    + (ok? `<button type="button" class="helplink" data-help="help-buy">details →</button>` : "");
+    // "see details", not "details →". The arrow is this page's mark for LEAVING —
+    // every tlink and hjump on it goes somewhere — and this opens a dialog over the
+    // panel you are standing on. With the summary line gone it is also the only way
+    // to the figures, so it reads as an instruction rather than a footnote.
+    + (ok? `<button type="button" class="helplink" data-help="help-buy">see details</button>` : "");
 }
 /* ---------------- the court record (adverse disclosure) ----------------
    Outcomes only the chain can assert, published because they are the only
@@ -9445,7 +9455,12 @@ function joinPanel(slug, s){
         </div>
         <label class="ack small"><input type="checkbox" id="buyack"${ackAttr}> I understand ${sym} cannot be sold back to the court.</label>
         <div class="actions" style="margin-top:10px" id="buyactions">${buyActionsHtml(slug,q)}</div>
-        <div class="ticket buyrcpt" style="margin-top:10px" id="buyrows2" aria-live="polite">${buyRowsHtml(q, s.price, slug, true)}</div>
+        <!-- The dialog's home, and nothing else now the "You pay" line is gone: no
+             ticket frame (an empty bordered box with registration marks reads as a box
+             around nothing), no margin to reserve for it, and no aria-live, which
+             announced a line that no longer exists. The id stays because the amount
+             field rewrites this container on every keystroke. -->
+        <div id="buyrows2">${buyRowsHtml(q, s.price, slug, true)}</div>
         `;   /* the quoting note moved into #help-buy with the rows it qualifies */
   }
   /* THE CONTROL FIRST, THE CAVEATS AFTER. This opened with a paragraph on
@@ -9811,11 +9826,23 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
   const stripN = (stripQ&&stripQ.rows)? stripQ.rows.length : 0;
   const pendN  = (pendQ&&pendQ.rows)? pendQ.rows.length : 0;
   const showKey = ({open:1,settled:1,review:1,pending:1})[QP.show]? QP.show : "all";
-  const showChips = (done.length || stripN || pendN)
+  /* THE CHIP SAYS WHAT ITS HEADING SAYS, both the word and the figure.
+     THE WORD: the chip read "settled" over a section headed "Recently settled",
+     and the second word is not decoration — this section is the settled claims
+     in THIS PAGE'S WINDOW, not every settled claim the court has. A chip that
+     drops it promises a completeness the list does not have. Reported as a
+     header mismatch.
+     THE FIGURE: the chips counted `open.length` and `done.length`, which include
+     rows that are off this page; the headings count openWin and doneWin, which
+     do not. On a court that fits in one window those are the same number, which
+     is why covid showed 16 and 16 — on a paginated one the chip would have
+     promised more rows than its own heading, and picking it would have shown
+     fewer than it said. The window counts are the honest pair. */
+  const showChips = (doneWin || stripN || pendN)
     ? `<div class="gbar"><span class="chiplab">show</span><span class="gchips" role="group" aria-label="which list">`
-      + gChip("all","all", open.length+done.length, showKey==="all")
-      + gChip("open","open", open.length, showKey==="open")
-      + (done.length? gChip("settled","settled", done.length, showKey==="settled") : "")
+      + gChip("all","all", openWin+doneWin, showKey==="all")
+      + gChip("open","open", openWin, showKey==="open")
+      + (doneWin? gChip("settled","recently settled", doneWin, showKey==="settled") : "")
       + (stripN? gChip("review","needs review", stripN, showKey==="review") : "")
       + (pendN? gChip("pending","awaiting an answer", pendN, showKey==="pending") : "")
       + `</span><span id="gnote" class="small muted"></span></div>`
