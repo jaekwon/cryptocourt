@@ -155,6 +155,37 @@ const crypto = require('crypto');
      leo.top >= 0 && leo.top < geo.throne.bottom + 60 && leo.bottom > geo.throne.bottom,
      `figure y ${leo.top.toFixed(0)}..${leo.bottom.toFixed(0)}, throne ${geo.throne.top}..${geo.throne.bottom}`);
 
+  /* THE FIGURE'S STARS CARRY THEIR OWN SPECTRAL CLASS. Every star in the plate
+     was drawn pure white, which is the least photographic thing a star field can
+     do: a real exposure separates Regulus's blue-white from Algieba's orange.
+     The ten named stars are coloured by class now, and this reads the plate
+     itself rather than the page, because the plate is a base64 data URI and a
+     screenshot at rail scale cannot resolve a 3px disc's hue.
+     WHICH CIRCLE IS WHICH WAS PROVEN, not assumed: inverting the plate's own
+     projection puts every one of the ten within 0.05 deg of its catalogue
+     position. The assertion below is that the colours survive — a plate rebuilt
+     from a generator that forgot them would go back to white and nothing else
+     here would notice. */
+  {
+    const m = /--skyplate:url\("data:image\/svg\+xml;base64,([A-Za-z0-9+/=]+)"\)/
+      .exec(require("fs").readFileSync(require("path").join(__dirname, "..", "..", "index.html"), "utf8"));
+    const plate = m ? Buffer.from(m[1], "base64").toString("utf8") : "";
+    const want = {"458,647": "#aabfff",   // Regulus, B7
+                  "411,513": "#ffd2a1",   // Algieba, K1
+                  "45,602":  "#cad7ff",   // Denebola, A3
+                  "551,446": "#fff4ea"};  // Ras Elased, G1
+    const missing = Object.entries(want).filter(([xy, hex]) => {
+      const [x, y] = xy.split(",");
+      const re = new RegExp(`<circle cx="${x}" cy="${y}" r="[^"]*" fill="${hex}"`);
+      return !re.test(plate);
+    }).map(([xy]) => xy);
+    ok("the figure's stars keep their spectral colours", missing.length === 0, missing.join(" "));
+    // And the rest of the field stays white: colouring 277 anonymous stars would
+    // be inventing data, since only the named ten have a class on record here.
+    ok("...and the anonymous field is still white",
+       /<g fill="#fff" opacity="0\.3">/.test(plate));
+  }
+
   ok("no page errors with the sky behind the rail", errs.length === 0, errs.slice(0, 2).join(" | "));
 
   await browser.close();
