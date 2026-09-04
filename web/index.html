@@ -3712,6 +3712,28 @@ function ccFigure(n){ const u=n||0, v=u/1e6;
   return {fig:(v>=1000? fmtN(v): v.toFixed(v<10?2:1)), micro:false}; }
 function cc(n, slug){ const {fig,micro}=ccFigure(n);
   return fig+" "+(micro?"µ":"")+ccSymHtml(slug); }
+/* THE AMOUNT ALONE, IN CC, for a surface that has already said which court.
+   cc() names the coin because most of its callers need it to: the account
+   popover and the wallet list balances across courts, and "0.74" there is a
+   number with no denomination. A claim page is not that surface — the court is
+   in the crumbs, the heading and the URL — so every figure on it repeated
+   KOURT:COVID beside a number the reader already knew the units of.
+   AND NO µ PREFIX. ccFigure drops to micro below 0.01 CC, which turns a small
+   reward into "596 µ" — a different unit from the one every other figure on the
+   page is in, for no reason except that the number is small. This keeps ONE unit
+   and spends decimals instead: enough of them that a non-zero amount is never
+   shown as 0.00, which is the only thing the micro prefix was protecting
+   against. Two decimals where two will do, four or six where they will not. */
+function ccPlain(n){
+  const v = (n||0)/1e6;
+  if(Math.abs(v) >= 1000) return fmtN(v)+" CC";
+  if(!v) return "0.00 CC";
+  for(const dp of [2,4,6]){
+    const t = v.toFixed(dp);
+    if(parseFloat(t) !== 0) return t+" CC";
+  }
+  return v.toFixed(6)+" CC";
+}
 /* ONE UNIT FOR A ROW OF FIGURES. Four amounts each carrying "µKourt:COVID"
    spent four times the width to say the same thing once, and the repetition
    crowded out the numbers, which are the point. The unit goes after all of
@@ -6255,7 +6277,37 @@ function folderCount(f){
 function resolveFolderPath(curF, fpath){
   if(!curF || !curF.folders || !curF.folders.length) return null;
   if(curF.source === "chain"){
-    // one exact integer: "01" and "1.2" are not aliases of "1"
+    /* A DOTTED PATH IS A STALE ADDRESS, AND IT IS ANSWERED WITH A REDIRECT
+       rather than with a folder. The map used to build chain subfolder links
+       positionally — f/2.1 for a folder whose fid is 4 — and while it emits fids
+       now, those URLs are in browser histories and in whatever anybody pasted
+       them into. A link somebody already holds should reach the folder.
+       THE OLD SHAPE IS MIXED, which is the only thing that makes it resolvable:
+       mapTree built a child's path as the PARENT'S path plus an index, and a
+       chain parent's path is its fid — so "2.1" is not two indices from the root,
+       it is fid 2's child number 1. Walked from the root positionally it would
+       land on a different folder entirely (root index 2 is fid 6 here), so it is
+       walked the way it was written: first segment a fid, the rest indices.
+       IT HANDS BACK THE CANONICAL fid, and that is the point of a redirect over
+       an alias: position is exactly what is unstable — retiring one folder shifts
+       every later sibling — so the reader must land on the stable address and be
+       able to see which folder they actually got.
+       "01" is still refused. A malformed integer addresses nothing and there is
+       no older link shape it could have come from. */
+    if(/^\d+(\.\d+)+$/.test(fpath)){
+      const parts = fpath.split(".");
+      const root = resolveFolderPath(curF, parts[0]);
+      if(!root) return null;
+      let f = root.folder;
+      for(const part of parts.slice(1)){
+        f = ((f && f.folders) || [])[parseInt(part, 10)];
+        if(!f) return null;
+      }
+      if(f.fid == null) return null;
+      const hit = resolveFolderPath(curF, String(f.fid));
+      return hit? Object.assign({}, hit, {canonical: String(f.fid)}) : null;
+    }
+    // one exact integer: "01" is not an alias of "1"
     if(!/^\d+$/.test(fpath) || String(parseInt(fpath,10)) !== fpath) return null;
     const fid = parseInt(fpath,10);
     const path = [];
@@ -9880,6 +9932,14 @@ on(/^\/c\/([a-z0-9-]+)\/f\/([0-9.]+)$/, async (slug,fpath)=>{
     return;
   }
   const hit = resolveFolderPath(curF, fpath);
+  /* AND A STALE ADDRESS IS REWRITTEN TO THE STABLE ONE. replace(), not assign():
+     the URL the reader arrived on is not a place to go back to, and leaving it in
+     history would bounce them between the two on every Back. The router listens
+     on hashchange, so this re-enters with the canonical path. */
+  if(hit && hit.canonical && hit.canonical !== fpath){
+    location.replace("#/c/" + slug + "/f/" + hit.canonical);
+    return;
+  }
   if(!hit){
     main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:courtCrumb(slug),href:"#/c/"+slug}])
       + notFound(curF.source==="chain"? "No such folder on this court." : "No such folder.");
@@ -11454,8 +11514,13 @@ function stakeTicket(slug,id,d){
              The first version of the participant guard was written that way and
              silently guarded nothing. */
           : (d.quote && (d.quote.w + d.quote.a + d.quote.ans) > 0
-              ? `<div class="line"><span class="l">Reward to open</span><span class="r">`
-                + cc(d.quote.w + d.quote.a + d.quote.ans, slug) + ccSym(slug)
+              /* THE SYMBOL WAS PRINTED TWICE HERE. cc() ends in ccSymHtml, and
+                 this line appended ccSym() after it, so the row rendered
+                 "596 µKourt:COVID KOURT:COVID" — the chip, and then the plain
+                 spelling of the same symbol. ccPlain says it once, in CC, with
+                 decimals rather than a micro prefix. */
+              ? `<div class="line"><span class="l">Reward to open</span><span class="r tnum">`
+                + ccPlain(d.quote.w + d.quote.a + d.quote.ans)
                 + `</span></div>`
                 /* THE CLAIM'S FIGURE, NOT THE READER'S. Whoever presses this pays
                    the gas and opens the draw for everyone; the slices then go to
