@@ -42,9 +42,27 @@ ok("disputed with no close read yet = the bare sealed line",
    clockLine(null,"in dispute",null,null)==="a sealed vote is deciding"
    && clockLine(123,"in dispute",99,99)==="a sealed vote is deciding");
 ok("...with a close and a height, it counts down",
-   /^the vote closes in .+ — ≈block /.test(clockLine(100,"in dispute",null,null,2000)));
+   // wall() spells the duration in words — "about 2 hours 38 min" — so the tail is
+   // matched as prose rather than as one token, which is what this first got wrong.
+   /^the vote closes in about \S.*$/.test(clockLine(100,"in dispute",null,null,2000)));
 ok("...past the close, it says the verdict is available",
    clockLine(3000,"in dispute",null,null,2000)==="the vote has closed — the verdict is one call away");
+/* A BLOCK NUMBER IS NOT AN ANSWER TO "WHEN". These lines carried both — "in 2.6d
+   — ≈block 244,800" — and the height is the machinery under the answer rather
+   than the answer. It stays in exactly one place: where there is no chain height
+   to measure against, so no duration can be computed and the block is the only
+   true thing left. */
+ok("a duration never carries a block number beside it", (()=>{
+  const withHeight = [clockLine(100,"in dispute",null,null,2000),
+                      clockLine(100,"proposed",200,null),
+                      clockLine(100,"provisional",null,150)];
+  return withHeight.every(t => !/block/.test(t));
+})());
+ok("...and the block survives where there is no height to measure from", (()=>{
+  return /≈block/.test(clockLine(null,"in dispute",null,null,2000))
+      && /≈block/.test(clockLine(null,"proposed",200,null))
+      && /≈block/.test(clockLine(null,"provisional",null,150));
+})());
 ok("...and with no height to measure against, it states the block alone",
    clockLine(null,"in dispute",null,null,2000)==="the vote closes at ≈block 2,000");
 ok("...and never reports a tally, which is sealed while it runs", (()=>{
@@ -65,10 +83,10 @@ ok("the docket reads the close for a disputed row",
    && src.includes('pcShort==="in dispute"? h:null'));
 ok("...and no surface still claims the chain publishes no close height",
    !src.includes("no close height is published"));
-ok("proposed ahead", clockLine(100,"proposed",200,null).startsWith("settles undisputed at ≈block 200 — in ") && clockLine(100,"proposed",200,null).endsWith(" unless disputed"));
+ok("proposed ahead", /^settles undisputed in about .+ unless disputed$/.test(clockLine(100,"proposed",200,null)));
 ok("proposed past", clockLine(300,"proposed",200,null)==="the settle window has passed — anyone may settle it now");
 ok("proposed, no height read", clockLine(null,"proposed",200,null)==="settles undisputed at ≈block 200");
-ok("provisional ahead", clockLine(100,"provisional",null,150).startsWith("reopenable until ≈block 150 — in "));
+ok("provisional ahead", /^reopenable for about .+$/.test(clockLine(100,"provisional",null,150)));
 ok("provisional past", clockLine(200,"provisional",null,150)==="the reopen window has closed — finalizable");
 ok("open/settled rows get no clock", clockLine(100,"open",null,null)==="" && clockLine(100,"settled",null,null)==="");
 

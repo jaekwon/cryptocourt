@@ -1073,6 +1073,17 @@ html.embed .main{grid-column:1; grid-row:1; max-width:none; padding:0;
    one — the ballot and the frozen-stake ticket — and .stakewrap is a two-column
    grid, so they share this cell rather than becoming a second row. */
 .sidecol{display:flex; flex-direction:column; gap:16px; align-self:start; min-width:0}
+/* STACKED FRAMES NEED A SEAM. The court page's rail puts three panels in a column
+   and .panel carries no margin of its own, so they butt: the border between two
+   frames is one shared 1px line, and the gold registration marks below carry the
+   join-panel's bottom-right corner and the record-panel's top-left onto the same
+   two pixels. Two frames read as one box with a rule through it — which is exactly
+   what the marks exist to deny.
+   16px is .sidecol's gap, not a new number: that is the claim page's answer to this
+   same question one route over. The adjacent-sibling form spaces every pair in the
+   column, because a seam under the first panel and none under the second would read
+   as a mistake rather than a group. */
+.courtside > .panel + .panel{margin-top:16px}
 .panel::before, .ticket::before, .panel::after, .ticket::after{
   content:""; position:absolute; width:10px; height:10px; pointer-events:none;
   border:1px solid var(--mark); opacity:.55}
@@ -4019,17 +4030,22 @@ function modBanner(mPurged, mRedacted, mHidden, slug){
    not sum a vote that is still running. So the row says WHEN, not who is
    winning. */
 function clockLine(nowH, phaseShort, settleAt, escrowUntil, voteCloses){
+  /* NO BLOCK NUMBER BESIDE A DURATION. "in 2.6d — ≈block 244,800" spends its
+     second half on a figure nobody plans around: the reader wants to know when,
+     and the height is the machinery underneath that answer. It stays only where
+     there is no duration to give — no chain height to measure against — because
+     then it is the only thing true, and a bare "closes soon" would be worse. */
   if(phaseShort==="in dispute")
     return voteCloses && nowH!=null
-      ? (voteCloses>nowH? `the vote closes in ${wall(nowH,voteCloses)} — ≈block ${fmtN(voteCloses)}`
+      ? (voteCloses>nowH? `the vote closes in ${wall(nowH,voteCloses)}`
                         : "the vote has closed — the verdict is one call away")
       : (voteCloses? `the vote closes at ≈block ${fmtN(voteCloses)}` : "a sealed vote is deciding");
   if(phaseShort==="proposed" && settleAt)
-    return nowH!=null? (settleAt>nowH? `settles undisputed at ≈block ${fmtN(settleAt)} — in ${wall(nowH,settleAt)} unless disputed`
+    return nowH!=null? (settleAt>nowH? `settles undisputed in ${wall(nowH,settleAt)} unless disputed`
                                      : "the settle window has passed — anyone may settle it now")
                      : `settles undisputed at ≈block ${fmtN(settleAt)}`;
   if(phaseShort==="provisional" && escrowUntil)
-    return nowH!=null? (escrowUntil>nowH? `reopenable until ≈block ${fmtN(escrowUntil)} — in ${wall(nowH,escrowUntil)}`
+    return nowH!=null? (escrowUntil>nowH? `reopenable for ${wall(nowH,escrowUntil)}`
                                         : "the reopen window has closed — finalizable")
                      : `reopenable until ≈block ${fmtN(escrowUntil)}`;
   return "";
@@ -9600,7 +9616,7 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
     })()
     + `<div id="qempty" class="empty qhide"><div class="g">◌</div><p>No loaded title matches.</p><p class="small muted">clear to browse, or go to a claim by id</p></div>`
     + (pagerBot? `<div style="margin-top:10px">${pagerBot}</div>`:"")
-    + `</div><aside>`
+    + `</div><aside class="courtside">`
     + joinPanel(slug, s)
     + courtRecordPanel(slug, s)
     + `<div class="panel"><h4>Senior queue</h4>
