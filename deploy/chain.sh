@@ -89,8 +89,53 @@ echo "==> packing the stdlibs ($(du -sh "$GNOROOT/gnovm/stdlibs" | cut -f1))"
 tar -C "$GNOROOT" -czf "$WORK/stdlibs.tgz" gnovm/stdlibs
 
 echo "==> phase 1: server-side secrets"
-"${SCP[@]}" "$WORK/gnoland" "$WORK/gnokey" "$WORK/gnogenesis" "$WORK/gnofaucet" \
-    "$WORK/gnoweb" "$WORK/stdlibs.tgz" "$HOST:/tmp/"
+# ONLY THE BINARIES THE HOST DOES NOT ALREADY HAVE.
+#
+# These five are ~230MB and were shipped in full on every run, including a run
+# that changed nothing but a scenario. Measured on this link at ~340 KB/s: most
+# of a twenty-minute reseed spent re-sending bytes the host already had. They
+# change only when the gno checkout does; a realm or scenario edit moves the
+# genesis and the stdlibs, which are small and still shipped every time — that
+# keeps this out of the unpack path, where a "skipped" tarball would be a
+# missing file rather than a saved minute.
+#
+# Hash, not mtime or size: rebuilding identical source changes both and matches
+# neither, which would ship everything every run and quietly defeat this.
+# Anything the host does not name — missing, different, or unreadable — is sent.
+_bins="gnoland gnokey gnogenesis gnofaucet gnoweb"
+_want=""
+for b in $_bins; do
+    _want="$_want $b:$(shasum -a 256 "$WORK/$b" | cut -d' ' -f1)"
+done
+_have=$("${SSH[@]}" "$HOST" "APPDIR='$APPDIR' WANT='$_want' bash -s" <<'REMOTE' || true
+for pair in $WANT; do
+    n="${pair%%:*}"; h="${pair#*:}"
+    f="$APPDIR/bin/$n"
+    [ -f "$f" ] || continue
+    [ "$(shasum -a 256 "$f" | cut -d' ' -f1)" = "$h" ] && echo "$n"
+done
+REMOTE
+)
+_send=""
+for pair in $_want; do
+    n="${pair%%:*}"
+    case " $_have " in *" $n "*) ;; *) _send="$_send $WORK/$n" ;; esac
+done
+_kept=$(for pair in $_want; do n="${pair%%:*}"; case " $_have " in *" $n "*) printf ' %s' "$n";; esac; done)
+[ -n "$_kept" ] && echo "    already on the host, unchanged:$_kept"
+# The install step below moves every binary out of /tmp, so the ones not sent are
+# put there from the host's own copy — a local cp, not a transfer.
+if [ -n "$_kept" ]; then
+    "${SSH[@]}" "$HOST" "APPDIR='$APPDIR' KEPT='$_kept' bash -s" <<'REMOTE' || true
+for b in $KEPT; do cp "$APPDIR/bin/$b" "/tmp/$b"; done
+REMOTE
+fi
+if [ -n "$_send" ]; then
+    echo "    sending:$(for f in $_send; do printf ' %s' "$(basename "$f")"; done)"
+    # shellcheck disable=SC2086
+    "${SCP[@]}" $_send "$HOST:/tmp/"
+fi
+"${SCP[@]}" "$WORK/stdlibs.tgz" "$HOST:/tmp/"
 PUBLIC=$("${SSH[@]}" "$HOST" APPDIR="$APPDIR" STATEDIR="$STATEDIR" CHAINDIR="$CHAINDIR" \
   RESET="$RESET" 'bash -seu' <<'REMOTE'
 mkdir -p "$APPDIR/bin" "$CHAINDIR/data/secrets" "$STATEDIR/secret"
