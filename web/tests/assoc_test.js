@@ -354,5 +354,34 @@ ok("contradiction family wears .contra", (()=>{
 ok("--contra token defined for both themes", (src.match(/--contra:/g)||[]).length===4);
 ok("the map's contradicts edge speaks the same colour", src.includes(".medge.bears.no{stroke:var(--contra)"));
 ok("narrow screens stack the chip under the title", src.includes(".docket a.crow.assocrow .rt{grid-column:2"));
+
+/* A CHAIN-SOURCED ROW ARRIVES WITH ITS SENTENCE, and for a while it did not.
+   The titles lookup was gated on "local curation has relations", which was the
+   only thing that could produce a row when it was written. Once the chain began
+   storing associations that gate stopped covering the common case: on a court
+   read live with no curation loaded, every row rendered with an empty title and
+   was then repaired one at a time by fillAssocTitles, two reads per row. Between
+   the render and the repair the section is a heading, a caption and a couple of
+   rows with the sentence missing — reported as the section being "empty".
+   Pinned on both sides: what a row looks like with a lookup and without one, and
+   that the gate the route applies asks whether there are ROWS, not whose they
+   are. */
+ok("with a lookup, a row carries its title and needs no repair", (()=>{
+  const r = assocRow("covid", 18, "supported by this",
+    () => ({title:"The Proximal Origin paper was drafted at the prompting of the director of NIAID.",
+            statusText:"open"}));
+  return r.includes("The Proximal Origin paper was drafted") && !r.includes("data-needtitle");
+})());
+ok("...and without one it is marked for repair rather than guessed at", (()=>{
+  const r = assocRow("covid", 18, "supported by this", null);
+  return r.includes('data-needtitle="18"') && !/<span class="t"[^>]*>[^<]/.test(r);
+})());
+ok("the route builds that lookup for chain rows too, not only curated ones",
+   src.includes("const needTitles = (cu && cu.relations.length) || (Array.isArray(chainAssocs) && chainAssocs.length)"));
+ok("...and the lookup is built after the chain read it depends on",
+   src.indexOf("const chainAssocs = await chainAssociations") < src.indexOf("const needTitles ="));
+ok("...with the repair pass kept for ids the docket read cannot answer",
+   src.includes("fillAssocTitles(slug);"));
+
 console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");
 process.exit(fail?1:0);
