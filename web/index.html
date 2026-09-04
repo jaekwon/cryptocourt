@@ -3730,16 +3730,17 @@ function cc(n, slug){ const {fig,micro}=ccFigure(n);
    where saying the denomination in full is worth the width. Dropping to CC there
    would have been trading a stated contract for tidiness on a surface whose job
    is to be explicit. */
-function ccPlain(n){
+function ccFig(n){
   const v = (n||0)/1e6;
-  if(Math.abs(v) >= 1000) return fmtN(v)+" CC";
-  if(!v) return "0.00 CC";
+  if(Math.abs(v) >= 1000) return fmtN(v);
+  if(!v) return "0.00";
   for(const dp of [2,4,6]){
     const t = v.toFixed(dp);
-    if(parseFloat(t) !== 0) return t+" CC";
+    if(parseFloat(t) !== 0) return t;
   }
-  return v.toFixed(6)+" CC";
+  return v.toFixed(6);
 }
+function ccPlain(n){ return ccFig(n)+" CC"; }
 /* ONE UNIT FOR A ROW OF FIGURES. Four amounts each carrying "µKourt:COVID"
    spent four times the width to say the same thing once, and the repetition
    crowded out the numbers, which are the point. The unit goes after all of
@@ -3749,14 +3750,16 @@ function ccPlain(n){
    shared trailing unit is only true when every figure is on the same side of
    that line. When they are not, each carries its own and the row is busy — but
    busy and right beats tidy and wrong. */
-function ccRow(parts, slug){
-  const fs = parts.map(([label, n]) => [label, ccFigure(n)]);
-  const allMicro  = fs.every(([, f]) => f.micro);
-  const noneMicro = fs.every(([, f]) => !f.micro);
-  if(!allMicro && !noneMicro)
-    return parts.map(([l, n]) => `${l} ${cc(n, slug)}`).join(" · ");
-  return fs.map(([l, f]) => `${l} ${f.fig}`).join(" · ")
-       + " " + (allMicro ? "µ" : "") + ccSymHtml(slug);
+/* ONE UNIT FOR A ROW OF FIGURES, and now it is always one. The old shape had a
+   MIXED-SCALE fallback — if some figures were micro and some were not, each
+   carried its own "µKOURT:COVID" and the row was busy — and the reward pools hit
+   it every time on a young court: accuracy, author and answerer at 0.00 beside a
+   voter pool of 55 base units. That printed the court's symbol FOUR times and a
+   µ, on a claim page that has already named its court three ways.
+   ccFig has no micro mode, so there are no mixed scales left to fall back to:
+   every figure is in CC and the unit is said once, after all of them. */
+function ccRow(parts){
+  return parts.map(([l, n]) => `${l} ${ccFig(n)}`).join(" · ") + " CC";
 }
 /* The same figure as plain text, for what genuinely cannot take markup: an
    aria-label, a button face that btn() escapes, or a caller that slices the
@@ -5018,7 +5021,21 @@ async function adenaSign(func, args, el){
          longer than the cache holds anything anyway and the cost of being sure
          is one Map.clear(). */
       chainCacheClear();
-      setTimeout(()=>{ clearInterval(tick); chainCacheClear(); render(); }, 7000);
+      /* THE RE-RENDER KEEPS THE READER WHERE THEY WERE. render() rebuilds the
+         whole route into #main, so the page's height collapses for an instant
+         and the browser clamps the scroll — press "Open the rewards" halfway
+         down a claim and the update throws you back to the title. Reported as
+         "the whole page refreshed".
+         NOT A BOX-ONLY SWAP, and that is worth stating rather than implying:
+         re-rendering only the ticket means running the claim route's fill*
+         sequence over it as well — the pull buttons are pruned by
+         fillTicketPulls, the sides and balances by others — so the honest
+         version of that is extracting the route's post-render pass, not
+         reaching into innerHTML here. This restores the position instead, which
+         is the part a reader actually notices. render() awaits its route, so by
+         the time it resolves the content is back and the offset is valid. */
+      setTimeout(async ()=>{ clearInterval(tick); chainCacheClear();
+        const y = window.scrollY; await render(); window.scrollTo(0, y); }, 7000);
     }
     else if(res.code===4000){ note("Rejected in the wallet."); }
     else if(res.code===3001){ note("Adena's active account is not "+shortAddr(CFG.addr)+" — switch accounts in Adena or reconnect."); }
@@ -6989,13 +7006,23 @@ function assocRow(slug, rid, chip, lookup){
     <span class="rt"><span class="pill ${/contradict/.test(chip)?"contra":"void"}">${esc(chip)}</span>
     ${d? statusPill(d.statusText) : ""}</span></a>`;
 }
-function associationSection(slug, id, lookup, chainRows){
+function associationSection(slug, id, lookup, chainRows, folders){
   const cur = curationFor(slug);
   const chain = Array.isArray(chainRows)? chainRows : [];
-  if((!cur || !cur.relations.length) && !chain.length) return "";
+  /* THE FOLDER IS THE MOST LITERAL ANSWER THIS HEADING HAS, and it was the one
+     thing the section did not carry. A claim on a chain court said nothing at
+     all about its folder — the "filed under" chip beside the title is built from
+     curation, so a court read live from the chain has none — while the section
+     asking where the claim sits listed only the claims around it.
+     A THIRD AXIS, kept separate on purpose. COURTS_STRUCTURE.md §5 names two
+     edges that must not be merged, containment between claims and the argument
+     graph, and a folder is neither: it is moderator filing with zero economic
+     weight, which is why it gets its own row rather than joining "Part of". */
+  const fold = Array.isArray(folders)? folders.filter(f=>f && f.name) : [];
+  if((!cur || !cur.relations.length) && !chain.length && !fold.length) return "";
   const rels = cur? cur.relations : [];
   const mine = rels.filter(r=>r.from===id || r.to===id);
-  if(!mine.length && !chain.length) return "";
+  if(!mine.length && !chain.length && !fold.length) return "";
   const dOf = i => lookup? lookup(i) : null;
   const parent = mine.find(r=>r.type==="part" && r.from===id);
   const children = mine.filter(r=>r.type==="part" && r.to===id).map(r=>r.from);
@@ -7033,7 +7060,11 @@ function associationSection(slug, id, lookup, chainRows){
     ? (mine.some(r=>r.type!=="bears")
         ? "relations read from the chain; containment and supersedes are curation"
         : "relations read from the chain")
-    : (cur && cur.source==="local"? CUR_LABEL : "sample curation — the chain stores no relations");
+    /* A FOLDER IS ALSO READ FROM THE CHAIN, so a claim that has one and no
+       relations must not be captioned "the chain stores no relations" — true of
+       relations, and flatly wrong about the row underneath it. */
+    : (fold.length? "filed by this court's moderators"
+      : cur && cur.source==="local"? CUR_LABEL : "sample curation — the chain stores no relations");
   /* NOTHING TO SHOW MEANS NOTHING RENDERED. With no parent, no parts and no
      related claims — which is most claims — this printed a heading, a caption
      asserting that relations HAD been read from the chain, and a paragraph
@@ -7041,8 +7072,22 @@ function associationSection(slug, id, lookup, chainRows){
      would have been. Three pieces of furniture around an absence, and the
      caption was the worst of them: it read as a claim that something was found.
      The absence of relations is unremarkable and needs no announcement. */
-  if(!parent && !children.length && !rel.length) return "";
+  if(!parent && !children.length && !rel.length && !fold.length) return "";
   let g = `<section style="margin-top:22px"><div class="sec-h">Where this claim sits <span class="count">${esc(srcNote)}</span></div>`;
+  /* FIRST, because it is the coarsest thing true of the claim: which shelf a
+     moderator put it on. The rows below it are about other claims; this one is
+     about the court's own arrangement, and a reader scanning for "where am I"
+     wants the shelf before the neighbours.
+     One row per folder — a claim may be cross-filed, AddToFolder checks
+     membership within one folder only — and each links to the folder page. */
+  if(fold.length){
+    g += `<div class="sec-h" style="margin-top:6px">Filed in</div><div class="docket">`
+      + fold.map(f=>`<a class="crow assocrow" href="#/c/${esc(slug)}/f/${esc(String(f.fid))}">`
+          + `<span class="id">${ICN_FOLDER}</span>`
+          + `<span><span class="t">${safeInline(f.name)}</span></span>`
+          + `<span class="rt"><span class="pill void">filed here</span></span></a>`).join("")
+      + `</div>`;
+  }
   // The parent is CONTAINMENT, the same axis as "Rests on" and pointing the
   // other way, so it belongs beside it rather than under "Related" — that group
   // is the association graph, and filing a containment edge in it is exactly the
@@ -12089,7 +12134,7 @@ function resolutionSection(slug,id,d,nowH,tl){
 function rewardsSection(slug,id,d){
   if(!d.rewardsOpened || !d.draw) return "";
   return `<section><div class="sec-h">Rewards</div>
-    <div class="panel"><div class="qrows"><div class="line"><span class="l">Reward pools</span><span class="r">${ccRow([["accuracy",d.draw.w],["author",d.draw.a],["answerer",d.draw.ans],["voters",d.draw.carrot]], slug)}</span></div></div></div></section>`;
+    <div class="panel"><div class="qrows"><div class="line"><span class="l">Reward pools</span><span class="r">${ccRow([["accuracy",d.draw.w],["author",d.draw.a],["answerer",d.draw.ans],["voters",d.draw.carrot]])}</span></div></div></div></section>`;
 }
 
 /* The four things every participant must understand — nothing hidden here changes

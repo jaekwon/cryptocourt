@@ -72,6 +72,25 @@ ok("no call site appends the symbol to a formatter that already carries it",
 ok("the reward row uses the plain formatter",
    /Reward to open[\s\S]{0,400}ccPlain\(d\.quote\.w \+ d\.quote\.a \+ d\.quote\.ans\)/.test(src));
 
+// ---- a row of figures shares one unit ------------------------------------
+/* THE REWARD POOLS. ccRow had a mixed-scale fallback: when some figures were
+   micro and some were not, each carried its own "µKOURT:COVID". A young court
+   hits that every time — three pools at 0.00 beside a voter pool of 55 base
+   units — so the row printed the court's symbol FOUR times and a µ. ccFig has no
+   micro mode, so there is no mixed scale left to fall back to.
+   Asserted on the shape that reported it, and on a mature row beside it, so a
+   reintroduced fallback fails on one of the two. */
+eval(require('fs').readFileSync(require('path').join(__dirname,'..','index.html'),'utf8')
+  .match(/function ccRow\([\s\S]*?\n\}/)[0]);
+ok("a young court's pools read as one unit, in CC",
+   ccRow([["accuracy",0],["author",0],["answerer",0],["voters",55]])
+     === "accuracy 0.00 · author 0.00 · answerer 0.00 · voters 0.0001 CC");
+ok("...and a mature row does too",
+   ccRow([["accuracy",1_644_800],["author",164_480],["answerer",0],["voters",12_320]])
+     === "accuracy 1.64 · author 0.16 · answerer 0.00 · voters 0.01 CC");
+ok("...with no micro prefix and no court symbol anywhere in it",
+   !/µ|KOURT|ccsym/i.test(ccRow([["a",0],["b",55]])));
+
 // ---- which surfaces say the symbol, and which do not ---------------------
 /* THE SWEEP, AND ITS ONE EXCEPTION. A claim page names its court in the crumbs,
    the heading and the URL, so the stake bar and the chip row under the chart read
