@@ -10879,7 +10879,23 @@ function mergeStakeSeries(hp,dp,nowHeight){
    one to date the past would feed the page's own guess back in as evidence. */
 function heightDater(tl){
   if(!tl || !tl.now) return null;
-  const A = ["opened","answered","verdict","now"]
+  /* EVERY ROW IS AN ANCHOR, because every row the realm publishes is already a
+     real (stamp, height) pair that it wrote down itself. A hand-picked subset
+     has to be edited each time the realm learns to publish another row, and
+     that edit is exactly what nobody did: `dispute` and `voteclose` were
+     missing here, so past `now` their heights were dated at the nominal five
+     seconds — the flat cadence this function exists to stop assuming. On a
+     seeded chain that walks 720 blocks a day, a close 120,960 blocks out is
+     168 days by that assumption and six by its own stamp, which is how a vote
+     closing this week came to sit at the far right of the chart with the whole
+     dispute crushed against the left edge.
+     `settle` and `reopen` were missing for the same reason and would have been
+     reported next: an undisputed claim's settle deadline is drawn from a
+     height too.
+     testclock is NOT an event and must never anchor anything — its two fields
+     are the test clock's peak SKEWS, and one of them is ~6 years, which at
+     `now`'s own height would date the present to 1976. */
+  const A = Object.keys(tl).filter(k=>k!=="testclock")
     .map(k=>tl[k])
     .filter(e=>e && e.t>0 && isFinite(e.h))
     .sort((a,b)=>a.h-b.h)
@@ -10985,18 +11001,33 @@ function signalChart(slug,id,d,nowH,ser,tl){
   const hs = now-WEEK;
   const knee = !!real && (hs-x0>WEEK);
   const Xs = +(PL+0.35*(PR-PL)).toFixed(1);
+  /* THE AXIS IS TIME, NOT HEIGHT, and on this chain those are different shapes.
+     Laid out by height, three events a day apart sat 1.2% of the width apart
+     while the vote's close — six days away by the clock — took the rest: the
+     seeded chain walks 720 blocks a day but votingBlocks is 120,960, so the
+     close is 168 block-days out and six calendar ones. A reader compares the
+     gaps on this axis against the dates printed beneath it, so the gaps have to
+     be the dates.
+     Heights still come IN, because the series and every marker are height-keyed;
+     they are mapped through the dater, which knows what the chain actually did
+     between two heights rather than assuming five seconds. Falls back to raw
+     height when there is no timeline to ask — the old behaviour, for a realm
+     that publishes none. */
+  const zdt = heightDater(tl);
+  const T = h => { const t = zdt? zdt(h) : h; return isFinite(t)? t : h; };
+  const t0=T(d0), t1=T(d1), ts=T(hs);
+  const lerp=(v,a,b,pa,pb)=> b>a? +(pa+(v-a)/(b-a)*(pb-pa)).toFixed(1) : +pa.toFixed(1);
   const X = knee
-    ? h=>{ h=Math.max(d0,Math.min(d1,h));
-        return h<=hs? +(PL+(h-d0)/(hs-d0)*(Xs-PL)).toFixed(1)
-                    : +(Xs+(h-hs)/(d1-hs)*(PR-Xs)).toFixed(1); }
-    : h=>+(PL+(h-d0)/(d1-d0)*(PR-PL)).toFixed(1);
+    ? h=>{ const t=Math.max(t0,Math.min(t1,T(h)));
+        return t<=ts? lerp(t,t0,ts,PL,Xs) : lerp(t,ts,t1,Xs,PR); }
+    : h=>{ const t=Math.max(t0,Math.min(t1,T(h)));
+        return lerp(t,t0,t1,PL,PR); };
   /* HOW FAR OFF, BY THE CHAIN'S CLOCK. This multiplied a height difference by
      BLOCK_SECS — the same flat-cadence assumption heightDater used to make, and
      wrong in the same direction: the strip read "≈3.8d ago" over a first record
      the ladder dated five years back. The dater already knows what the chain
      did between two heights, so ask it, and keep the nominal interval only for
      a realm that publishes no timeline to ask. */
-  const zdt = heightDater(tl);
   const days=h=> zdt
     ? Math.round(Math.abs(zdt(now)-zdt(h))/86400*10)/10
     : Math.round(Math.abs(now-h)*BLOCK_SECS/86400*10)/10;

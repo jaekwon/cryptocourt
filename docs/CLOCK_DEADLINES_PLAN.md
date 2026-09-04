@@ -968,3 +968,42 @@ polarity mutant is killed; `make anchors collisions staleguards guards` pass.
 `make height-shim` fails on `check-curation-reachable` (Set/ClearCourtImage not
 named by any web file) — confirmed pre-existing by re-running it on the
 unmodified tree, unrelated to the clock.
+
+### `web/index.html` — the chart's x-axis (reported: "all bunched up")
+
+The realm's deadlines are wall-clock now, but the chart still laid them out by
+BLOCK HEIGHT, so the conversion was invisible exactly where a reader looks at it.
+On covid/19 the answer, the dispute and now — one day apart, then two — sat
+inside **1.2% of the plot width** while "vote closes" took the rest. Both numbers
+are the same chain: it walks 720 blocks a day, and `votingBlocks` is 120,960, so
+that close is 168 block-days out and **six calendar days**. By time those three
+events span 37% of the width.
+
+Two changes, both in `web/index.html`:
+
+1. **`heightDater` anchors on every row the realm publishes**, rather than a
+   hand-picked four. The curated list was the defect: it has to be edited each
+   time the realm learns to publish another row, and that edit is what nobody
+   did — `dispute` and `voteclose` were missing, so every height past `now` was
+   dated at the nominal 5s. `settle` and `reopen` were missing for the same
+   reason and would have been reported next, since an undisputed claim draws its
+   settle deadline from a height too. `testclock` is excluded by name: its two
+   fields are the clock's peak SKEWS, not a moment.
+2. **`signalChart`'s `X` maps heights through the dater and scales in time.**
+   Heights still come in — the series and every marker are height-keyed — but the
+   axis they land on is seconds. The −7d knee is preserved, expressed in time.
+   Falls back to raw height when there is no timeline to ask.
+
+Verified: `web/tests/axis_test.js` (new, 18 assertions) pins the geometry against
+covid/19's own `ClaimTimeline` string read off the live chain. `make web-test`
+46 harnesses, `make web-visual` 10 checks.
+
+**Two things this cost, both worth recording.** The first draft of the test
+INVENTED plausible heights instead of reading them, and asserted the flat-cadence
+error was "weeks" when on the real row it is two days — the assertion failed and
+the numbers, not the code, were wrong. And the `testclock` exclusion survived its
+first mutant: on covid/19 the height skew happens to equal `now`'s height, so the
+row is deduped away and removing the exclusion changes nothing *there*. It only
+bites on a chain whose test clock was armed after real blocks were mined. **A
+guard whose input coincides with its neighbour is untested until you build the
+case where they differ.**
