@@ -1294,11 +1294,35 @@ html.embed .main{grid-column:1; grid-row:1; max-width:none; padding:0;
   align-items:baseline; padding:9px 0; border-top:1px dashed var(--line); font-size:14px}
 .ticket .line:first-of-type,.qrows .line:first-of-type{border-top:none}
 .ticket .line>*:first-child,.qrows .line>*:first-child{font-weight:600; color:var(--ink)}
-.ticket .line .r,.qrows .line .r{font-weight:400; color:var(--ink-2); text-align:left; font-variant-numeric:tabular-nums}
+/* THE VALUE CELL CANNOT BE SQUEEZED BELOW WHAT IT HOLDS. The column is
+   minmax(0,1fr), which may shrink to nothing — and the thing in it is often the
+   court's mark, which is white-space:nowrap by design so "Kourt COVID" never
+   breaks mid-symbol. At 900px the ticket sits in a narrow column, 1fr resolved
+   to FIFTEEN pixels, and an 87px mark simply hung out of the page: the claim
+   page scrolled sideways, 917px of document in a 900px viewport. WCAG 1.4.10,
+   found by measuring the deployed site.
+   min-content is the floor — the widest thing that cannot break — so the label
+   column, which CAN wrap, gives way first. The media query below still stacks
+   the pair outright on a phone; this covers the range where the viewport is
+   wide and the container is not, which a viewport media query cannot see. */
+.ticket .line .r,.qrows .line .r{font-weight:400; color:var(--ink-2); text-align:left;
+  font-variant-numeric:tabular-nums; min-width:min-content}
 .ticket .line .r b{color:var(--ink)}
 .ticket .line.spent>*:first-child{color:var(--muted); font-weight:400}
 .ticket .line.spent .r{color:var(--muted)}
 @media (max-width:640px){ .ticket .line,.qrows .line{grid-template-columns:minmax(0,1fr); row-gap:2px} }
+/* AND THE SAME STACK WHEN THE CONTAINER IS NARROW, WHICH THE MEDIA QUERY ABOVE
+   CANNOT SEE. At 900px the viewport is wide and this ticket is 253px: .cols
+   collapses at 820 but .stakewrap does not, so the panel keeps a second column
+   and the ticket inside it gets a fifth of the screen. The label track is
+   minmax(0,20ch) and grid grows a non-flexible track to its limit BEFORE giving
+   anything to the flexible one beside it — so the label took 191 of 215px, the
+   value was left with nothing, and the court's mark, which is nowrap by design,
+   hung 17px off the page. WCAG 1.4.10 on the claim page.
+   A container query asks the question the layout actually has: not how wide is
+   the window, but how wide is the box this row is in. */
+.ticket,.qrows{container-type:inline-size}
+@container (max-width:330px){ .ticket .line,.qrows .line{grid-template-columns:minmax(0,1fr); row-gap:2px} }
 /* the clock ladder: what happened on the left, when on the right — the dates
    align in their own column because the grid lives on the container, not the
    row, and the column sits just past the labels rather than at the far edge */
