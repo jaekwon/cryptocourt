@@ -26,7 +26,11 @@ code += slice('function statusPill(','function docketRow(');
 // docketRow renders the verdict as a sentence now, so the harness needs the
 // builders that make one.
 code += fn('verdictSentence');
+/* sideOval's `?` is secHelp now — the same control the section headings use —
+   so the real one is loaded rather than stubbed: a stub would let these
+   assertions keep passing over a control that had stopped being a button. */
 code += fn('sideOval');
+code += fn('secHelp');
 code += fn('rowVerdict');
 code += slice('function phaseClass(','function statusPill(');
 code += slice('/* The specimen tour','function introStrip(');

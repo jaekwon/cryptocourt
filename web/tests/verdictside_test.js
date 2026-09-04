@@ -40,6 +40,10 @@ eval(slice('function safeInline(', '\n'));
 // The slice starts at verdictSentence, not claimTitleHtml: the heading calls it
 // for the settled branch, so a slice that began one function later would eval a
 // title builder whose verdict arm throws.
+/* sideOval's `?` is secHelp now — the same control the section headings use —
+   so the real one is loaded rather than stubbed: a stub would let these
+   assertions keep passing over a control that had stopped being a button. */
+eval(fn('secHelp'));
 eval(slice('function verdictSentence(', '\nfunction verdictBanner('));
 eval(fn('verdictBanner'));   // fn takes the closing brace with it
 
@@ -292,7 +296,12 @@ const run = async (rows, v, mode) => {
     const dy = claimTitleHtml({phase:"disputed", title:T, answer:0});
     ok("a disputed claim is badged with the answered side", dn.includes('vtag n">NO<'));
     ok("...taken from the ANSWER, not a provisional verdict", dy.includes('vtag y">YES<'));
-    ok("...marked as contested", dn.includes('class="vq"') && dn.includes(">?<"));
+/* The contested mark is a real button now, not a span with a title, so it is
+   recognised by the class that IS the control. Pinned as .sq rather than as ">?<"
+   because the glyph moved into its own element when the target grew to 24px —
+   an assertion keyed to the punctuation would have missed that. */
+    ok("...marked as contested, by a control and not a hover",
+       dn.includes('class="sq"') && dn.includes("Under dispute") && !dn.includes('class="vq"'));
     ok("...and still never struck, either way",
        !dn.includes("<s>") && !dy.includes("<s>"));
     ok("...and an unreadable side still prints no mark",

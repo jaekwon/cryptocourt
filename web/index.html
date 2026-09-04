@@ -1114,11 +1114,14 @@ html.embed .main{grid-column:1; grid-row:1; max-width:none; padding:0;
 /* The contested mark. Sized and coloured with the oval it follows rather than
    with the heading, so the two read as one subscript; muted because the oval is
    the statement and this only qualifies it. */
-.page-h .vq{font-size:clamp(12px,1.1vw,15px); vertical-align:.22em}
+/* The oval's `?` rides a TITLE, not a heading row, so it needs its own sizing:
+   .sec-h pulls its control back into a 13px line, and there is no line to pull
+   against here. align-self:baseline keeps it sitting on the sentence. */
+.page-h .sq,.crow .sq,.mapsel-t .sq{margin-block:0; align-self:baseline; vertical-align:middle}
 /* COLOUR AND WEIGHT ARE NOT SCOPED, for the reason .vtag.y is not: the mark now
    follows the oval on the related rows as well as in the heading, and the same
    qualification must read the same in both. Only the heading's clamp stays. */
-.vq{margin-left:.1em; font-weight:600; color:var(--muted)}
+
 /* THE STRIKE IS THE COURT'S, so it is drawn in the losing side's hue rather than
    in ink — a grey rule through a title reads as "deleted", and nothing here was
    deleted. Thickness in em so it tracks the clamped heading instead of going
@@ -12728,9 +12731,16 @@ function verdictSentence(title, side, contested){
 function sideOval(side, contested){
   if(side !== "YES" && side !== "NO") return "";
   return `<span class="sidetag vtag ${side === "NO" ? "n" : "y"}">${side}</span>`
-    + (contested
-        ? `<span class="vq" title="under dispute — this answer is being contested">?</span>`
-        : "");
+    /* THE SAME `?` AS EVERY OTHER `?`. This one was a span carrying a title, so
+       its sentence showed on hover and nowhere else: no keyboard reached it and
+       no touch screen showed it, on the mark that says a settled answer is being
+       contested — which is exactly the fact a reader most needs explained. The
+       comment on .sq has said so since that control was built; audit-live
+       measured it, six times on one court page.
+       secHelp is that control: a real button, the sentence as its accessible
+       name, a panel on hover OR focus OR tap. Reusing it rather than teaching a
+       second `?` the same lesson is the point. */
+    + (contested ? secHelp("Under dispute — this answer is being contested. The court is voting on whether to overturn it.") : "");
 }
 /* WHAT A ROW SHOWS INSTEAD OF A PHASE PILL. Four surfaces answered this question
    separately — the docket, the map card, the related rows and the claim page —

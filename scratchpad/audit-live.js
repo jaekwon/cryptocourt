@@ -226,6 +226,73 @@ const audit = () => {
       }
   }));
 
+  // ---- third wave: reachable, named, unique -------------------------------
+
+  // 17. a duplicate id is a getElementById that returns the wrong element
+  const ids = new Map();
+  document.querySelectorAll("[id]").forEach(el => ids.set(el.id, (ids.get(el.id) || 0) + 1));
+  [...ids.entries()].filter(([, n]) => n > 1)
+    .forEach(([id, n]) => out.push({kind: "duplicate-id", detail: `#${id} x${n}`}));
+
+  // 18. an affordance that only a mouse can reach. title= shows on hover and
+  //     nowhere else — no keyboard reaches it, no touch screen shows it — so an
+  //     element whose ONLY explanation is a title is explained to some readers
+  //     and not others. Skipped where the element is also a link or button with
+  //     its own visible text, where the title is a supplement rather than the
+  //     whole story.
+  main.querySelectorAll("[title]").forEach(el => {
+    if (!vis(el)) return;
+    const own = (el.textContent || "").replace(/\s+/g, " ").trim();
+    const interactive = el.matches("a[href],button,input,select,[role=button]");
+    if (interactive && own.length > 1) return;
+    if (own.length > 12) return;
+    out.push({kind: "title-only-affordance", detail: (el.getAttribute("title") || "").slice(0, 40),
+              el: (el.className || el.tagName).toString().slice(0, 30), text: own.slice(0, 12)});
+  });
+
+  // 19. SC 2.5.3: a control's accessible name must contain its visible label, or
+  //     "click the button that says X" fails for anyone driving by voice
+  main.querySelectorAll("a[href],button,[role=button]").forEach(el => {
+    if (!vis(el)) return;
+    const seen = (el.textContent || "").replace(/\s+/g, " ").trim().toLowerCase()
+      .replace(/[→↗?×·]/g, "").trim();
+    const name = (el.getAttribute("aria-label") || "").replace(/\s+/g, " ").trim().toLowerCase();
+    if (!name || seen.length < 3) return;
+    if (!name.includes(seen))
+      out.push({kind: "label-not-in-name", detail: `says "${seen.slice(0, 22)}" named "${name.slice(0, 26)}"`});
+  });
+
+  // 20. an input nobody named
+  main.querySelectorAll("input,select,textarea").forEach(el => {
+    if (!vis(el) || el.type === "hidden") return;
+    const lab = el.getAttribute("aria-label") || el.getAttribute("aria-labelledby") ||
+      (el.id && document.querySelector(`label[for="${CSS.escape(el.id)}"]`)) ||
+      el.closest("label") || el.getAttribute("placeholder");
+    if (!lab) out.push({kind: "input-unnamed", el: (el.className || el.id || el.type).toString().slice(0, 30)});
+  });
+
+  // 21. a focus stop you cannot see — SC 2.4.7. Compared against the element's
+  //     own resting style, so a control that changes ANYTHING on focus passes.
+  //     tabindex="-1" is a PROGRAMMATIC focus target, not a keyboard stop — the
+  //     route puts focus on the page heading after a navigation so a screen
+  //     reader lands on the new page. Nobody tabs to it, so it needs no
+  //     indicator, and reporting it buries the stops that do.
+  const stops = [...main.querySelectorAll("a[href],button,input,select,[tabindex]")]
+    .filter(el => vis(el) && el.getAttribute("tabindex") !== "-1").slice(0, 40);
+  stops.forEach(el => {
+    const before = getComputedStyle(el);
+    const rest = [before.outlineStyle, before.outlineWidth, before.boxShadow,
+                  before.backgroundColor, before.borderColor, before.color, before.textDecorationColor].join("|");
+    el.focus({preventScroll: true});
+    const after = getComputedStyle(el);
+    const foc = [after.outlineStyle, after.outlineWidth, after.boxShadow,
+                 after.backgroundColor, after.borderColor, after.color, after.textDecorationColor].join("|");
+    if (rest === foc)
+      out.push({kind: "focus-invisible", el: (el.className || el.tagName).toString().slice(0, 30),
+                text: (el.textContent || "").trim().slice(0, 22)});
+    el.blur();
+  });
+
   return out;
 };
 

@@ -37,7 +37,11 @@ code += fn('verdictSentence');
 // verdictSentence delegates the oval to sideOval now, and the row builders ask
 // rowSide whether there is one — both are new and neither is inside the region
 // any existing anchor already cut.
+/* sideOval's `?` is secHelp now — the same control the section headings use —
+   so the real one is loaded rather than stubbed: a stub would let these
+   assertions keep passing over a control that had stopped being a button. */
 code += fn('sideOval');
+code += fn('secHelp');
 code += fn('rowVerdict');
 code += slice('function assocRow(', '/* ======================= local curation');
 code += 'var BLOCK_SECS=' + src.match(/const BLOCK_SECS\s*=\s*(\d+)/)[1] + ';\n';
@@ -184,7 +188,7 @@ CFG.mode='demo';
    else on the row says it. */
 ok("#9 rows: #4 wears the verdict's oval, #3 wears it questioned",
    /vtag y">YES</.test(h9) && !h9.includes(">settled YES<")
-   && h9.includes('<span class="vq"')
+   && h9.includes('class="sq"')
    /* The DISPUTE pill specifically, not the escrow class: a provisional row in
       this same section wears escrow too and rightly keeps its phase pill — it
       has no oval to carry the fact. Banning the class outright failed here and
@@ -193,7 +197,7 @@ ok("#9 rows: #4 wears the verdict's oval, #3 wears it questioned",
 ok("...and the contested mark follows the oval, not the row's chip cluster", (()=>{
   const lk = id => { const d = DEMO.claims["orem/"+id]; return d? {title:d.title, statusText:statusText(d)} : null; };
   const r = assocRow("orem", 3, "contradicts this", lk);
-  const oval = r.indexOf('sidetag vtag'), q = r.indexOf('class="vq"'), rt = r.indexOf('class="rt"');
+  const oval = r.indexOf('sidetag vtag'), q = r.indexOf('class="sq"'), rt = r.indexOf('class="rt"');
   return oval >= 0 && q > oval && q < rt;
 })());
 /* THE MARK'S COLOUR TRAVELS WITH THE OVAL. .vtag.y is deliberately unscoped —
@@ -203,15 +207,20 @@ ok("...and the contested mark follows the oval, not the row's chip cluster", (()
    renders the mark in the row's ink and the two surfaces disagree.
    Asserted on the stylesheet because it is a scoping fact, which no rendered
    string can show: the markup is identical either way. */
-ok("the contested mark is coloured outside the heading's scope",
-   /^\.vq\{[^}]*color:var\(--muted\)/m.test(src)
-   && !/^\.page-h \.vq\{[^}]*color:/m.test(src));
+/* THE SAME FACT, ABOUT THE CONTROL THAT REPLACED IT. .vq was a span whose colour
+   had to be declared outside .page-h or a contested mark in a docket row came out
+   unstyled; .sq is the shared control and is coloured at the top level for the
+   same reason. The old rule is gone — asserted, because a dead selector is how a
+   stylesheet grows. */
+ok("the contested mark is coloured outside any one surface's scope",
+   /^\.sq\{[^}]*color:var\(--muted\)/m.test(src)
+   && !/^\.vq\{/m.test(src) && !src.includes('class="vq"'));
 
 /* NOT STRUCK, even on a NO: the strike says "no longer accurate", which is a
    verdict, and a dispute has not reached one. */
 ok("...and a contested NO is not struck through", (()=>{
   const r = assocRow("orem", 3, "x", () => ({title:"t", statusText:"disputed NO — a sealed vote is deciding"}));
-  return r.includes('vtag n">NO<') && r.includes('class="vq"') && !r.includes("<s>");
+  return r.includes('vtag n">NO<') && r.includes('class="sq"') && !r.includes("<s>");
 })());
 
 // ---- resolution ladder ----
@@ -723,7 +732,7 @@ ok("...so a disputed row shows the oval with its mark, not a pill", (()=>{
   const r = assocRow("orem", 4, "x",
     () => ({title:"t", statusText:"disputed YES — a sealed vote is deciding"}));
   // It wears the oval THROUGH the contested path, which carries the mark with it.
-  return r.includes('class="vq"') && r.includes('vtag y">YES<');
+  return r.includes('class="sq"') && r.includes('vtag y">YES<');
 })());
 /* sideOval is what makes the table cell possible — a column cannot go blank on
    settled rows the way a row-end can — so it must build the same oval the
