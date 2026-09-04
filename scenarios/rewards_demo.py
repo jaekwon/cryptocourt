@@ -33,7 +33,7 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "scripts"))
 from scenario import Scenario, YES  # noqa: E402
 
-s = SCENARIO = Scenario("crystal", __doc__.split("\n\n")[0])
+s = SCENARIO = Scenario("rewards_demo", __doc__.split("\n\n")[0])
 
 alice = s.account("alice", 900_000_000)
 bob = s.account("bob", 900_000_000)
