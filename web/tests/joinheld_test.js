@@ -83,6 +83,11 @@ ok("...as a figure in the same shape as the rows under it",
   const panel = slice('function joinPanel(slug, s){', '\nfunction recomputeBuy(');
   ok("the slot ships hidden, so it never renders empty",
      /id="joinheld" hidden/.test(panel));
+  // AND `hidden` HAS TO WIN. It is a UA rule of one attribute's weight, so the
+  // row's own display — .kv.oneline, two classes — outranked it and put "You
+  // have" on the deployed panel with nothing after it. Every hidden-ness check
+  // in this file reads the PROPERTY and passed straight through that.
+  ok("...and its stylesheet lets it stay hidden", /\.kv\[hidden\]\{display:none\}/.test(src));
   ok("...above the buy ticket, not below it",
      panel.indexOf('id="joinheld"') < panel.indexOf('${body}'));
   // Called from the court page's chain-backed fills, and only when live: demo has

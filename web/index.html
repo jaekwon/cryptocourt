@@ -511,6 +511,14 @@ a.card:hover{border-color:var(--line-2)}
    centred on each other sit on no line at all. */
 .kv.oneline{display:flex; align-items:baseline; justify-content:space-between; gap:12px}
 .kv.oneline .v{margin-top:0; text-align:right}
+/* AND IT MUST STILL BE ABLE TO HIDE. `hidden` works by a UA rule of one
+   attribute's weight, so the moment a .kv was given a display of its own — two
+   classes — the attribute lost and every hidden row came back. That shipped for
+   ten minutes and it looked like this: "You have" on the deployed panel with
+   nothing after it, which is the row-reading-"—" that joinPanel deliberately
+   refuses to draw. Any display: on a class that an element also hides with needs
+   this line beside it. */
+.kv[hidden]{display:none}
 
 .stat{background:transparent; border:none; border-radius:0; padding:12px 14px; box-shadow:none}
 .stat .k{font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em}
