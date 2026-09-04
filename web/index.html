@@ -709,7 +709,7 @@ a.card:hover{border-color:var(--line-2)}
 .btn.mini .icn{width:12px; height:11px}
 .courtrow .icn{color:var(--escrow)}
 .cols{display:grid; grid-template-columns:minmax(0,1fr) 288px; gap:22px; margin-top:20px; align-items:start}
-.panel h4{font:600 11px/1 var(--sans); letter-spacing:.14em; text-transform:uppercase; color:var(--muted); margin:0 0 10px}
+.panel h4,.panel h2{font:600 11px/1 var(--sans); letter-spacing:.14em; text-transform:uppercase; color:var(--muted); margin:0 0 10px}
 /* A FOLDER IS MARKED BY ITS TYPE, NOT BY A WASH. It carried --accent-wash to
    separate folders from claims, which was fine when every row sat on a filled
    docket; with the fills gone it became the loudest block on the court page —
@@ -6576,8 +6576,8 @@ on(/^\/$/, async ()=>{
     + statsStrip
     + `<div id="qscope">`
     + qBarHtml("court name or orem/7", qCaption({mode:"idle", demo:!isLive(), kind:"court names", loaded:(page===1?featured.length:0)+listed.length, total:listedTotal+(page===1?featured.length:0)}))
-    + (page===1 && featured.length?`<section data-qsec><div class="sec-h">Featured <span class="count">${featured.length}</span></div><div class="docket">${featured.map(card).join("")}</div></section>`:"")
-    + `<section data-qsec><div class="sec-h">Courts <span class="count">${fmtN(listedTotal)}</span></div>`
+    + (page===1 && featured.length?`<section data-qsec><h2 class="sec-h">Featured <span class="count">${featured.length}</span></h2><div class="docket">${featured.map(card).join("")}</div></section>`:"")
+    + `<section data-qsec><h2 class="sec-h">Courts <span class="count">${fmtN(listedTotal)}</span></h2>`
     + dirPager
     + (listed.length?`<div class="docket"${page===1?' data-sortable data-sortkind="dir"':""}>${listed.map(card).join("")}</div>`:`<div class="empty"><div class="g">◌</div><p>No courts yet. Be the first to start one.</p></div>`)
     + `</section>`
@@ -7177,7 +7177,7 @@ function courtRecordPanel(slug, s){
   const v = x => live? `…` : String(x);
   const r=(k,val,sub,id)=>`<div class="kv"><div class="k">${k}</div><div class="v tnum"><span id="${id}">${val}</span>${sub!=null?` <small>${sub}</small>`:""}</div></div>`;
   const burn = live? `…` : fmtN((s.burned||0)/1e6)+" GNOT";
-  return `<div class="panel"><h4>Court record</h4>
+  return `<div class="panel"><h2>Court record</h2>
         <p class="small muted" style="margin:0 0 10px" id="cr-scope">${scope}</p>
         ${r("settled undisputed", v(cen&&cen.undis), null, "cr-undis")}
         ${r("settled by vote", v(cen&&cen.vote), `<span id="cr-ov">${(!live && cen.ov)? `${cen.ov} overturned the answer`:""}</span>`, "cr-vote")}
@@ -7725,8 +7725,8 @@ function associationSection(slug, id, lookup, chainRows, folders){
   const head = (label, count) => {
     const mt = emitted? 14 : 0;
     emitted = true;
-    return `<div class="sec-h" style="margin-top:${mt}px">${label}`
-      + (count? ` <span class="count">${count}</span>` : "") + `</div>`;
+    return `<h2 class="sec-h" style="margin-top:${mt}px">${label}`
+      + (count? ` <span class="count">${count}</span>` : "") + `</h2>`;
   };
   /* NOTHING TO SHOW MEANS NOTHING RENDERED. With no parent, no parts and no
      related claims — which is most claims — this printed a heading, a caption
@@ -9595,7 +9595,7 @@ function joinPanel(slug, s){
      Filled after the paint, because it needs the chain and the panel must not
      wait on it. Hidden until it has an answer: a row reading "—" where a balance
      should be is worse than no row. */
-  return `<div class="panel" id="join" tabindex="-1"><h4>Join this court</h4>
+  return `<div class="panel" id="join" tabindex="-1"><h2>Join this court</h2>
         <div class="kv oneline" id="joinheld" hidden><div class="k">You have</div><div class="v tnum" id="joinheldv"></div></div>
         ${body}
        </div>`;   /* the worst-case paragraph moved into #help-buy too */
@@ -9903,7 +9903,7 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
   // that could tell you WHICH DRAWER a word lives in was the surface that vanished
   // when you asked.
   const foldersSec = (pageOf()===1 && cur && cur.folders.length)
-    ? `<section data-qsec><div class="sec-h">Folders <span class="count">${cur.folders.length}${srcLabel}</span></div>
+    ? `<section data-qsec><h2 class="sec-h">Folders <span class="count">${cur.folders.length}${srcLabel}</span></h2>
        <div class="docket">${cur.folders.map((f,i)=>folderRowHtml(slug,f,f.path!=null? String(f.path):String(i))).join("")}</div></section>` : "";
   const rows = list => list.map(cl=>docketRow(slug,cl,fmeta[cl.id])).join("");
   /* THE COUNT IS OF WHAT THE BOX SEARCHES, which is now rows and not just titles.
@@ -9962,7 +9962,7 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
       + (pendN? gChip("pending","awaiting an answer", pendN, showKey==="pending") : "")
       + `</span><span id="gnote" class="small muted"></span></div>`
     : "";
-  const searchHead = `<div class="sec-h shead">Search <span class="count">${esc(searchCount)}</span>${dkChips? `<span class="chiplab">sort</span>${dkChips}`:""}</div>`;
+  const searchHead = `<h2 class="sec-h shead">Search <span class="count">${esc(searchCount)}</span>${dkChips? `<span class="chiplab">sort</span>${dkChips}`:""}</h2>`;
   /* "" AT REST. searchHead, immediately above the box, already says what is in
      the list; this line said it again in the matcher's words. It fills in as
      soon as a query runs. */
@@ -9979,12 +9979,12 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
     + qBarHtml("title, folder or #id", idleCap)
     + showChips
     + (pager||"")
-    + `<section data-qsec data-group="open"${foldersSec?' style="margin-top:22px"':""}><div class="sec-h">Open ${secHelp("Claims this court has not settled yet — the ones you can still stake on. Settled claims move down to Recently settled.")}<span class="count">${openWin}</span></div>`
+    + `<section data-qsec data-group="open"${foldersSec?' style="margin-top:22px"':""}><h2 class="sec-h">Open ${secHelp("Claims this court has not settled yet — the ones you can still stake on. Settled claims move down to Recently settled.")}<span class="count">${openWin}</span></h2>`
     + (open.length? `<div class="docket" data-sortable data-sortkind="dk">${rows(open)}</div><div class="actions" style="margin-top:10px">${btn("Open a claim","OpenClaimP",{courtSlug:slug,title:"Your claim of fact",body:"What would settle it — the evidence in view, and what this is NOT asking"},"","a body is optional")}</div><div id="courtcompose"></div>`
         : pageOf()>1? `<p class="small muted">Nothing on this page.</p>`
         : `<div class="empty"><div class="g">◌</div><p>No open claims.</p><p>${btn("Open the first claim","OpenClaimP",{courtSlug:slug,title:"Your claim of fact",body:"What would settle it — the evidence in view, and what this is NOT asking"},"","a body is optional")}</p></div>`)
     + `</section>`
-    + (done.length? `<section data-qsec data-group="settled" style="margin-top:22px"><div class="sec-h">Recently settled <span class="count">${doneWin}</span></div><div class="docket" data-sortable data-sortkind="dk">${rows(done)}</div></section>` : "")
+    + (done.length? `<section data-qsec data-group="settled" style="margin-top:22px"><h2 class="sec-h">Recently settled <span class="count">${doneWin}</span></h2><div class="docket" data-sortable data-sortkind="dk">${rows(done)}</div></section>` : "")
     + (()=>{ // the chain's own policing lists — page 1, chain order, never sorted or filtered
       if(pageOf()>1) return "";
       const byId = {}; (allRows||claims).forEach(c2=>{ byId[c2.id]=c2; });
@@ -10023,13 +10023,13 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
       const prow = r => polrow(r, r.seeded? `<span class="m" style="display:block">seeded by a moderator</span>` : "");
       let g = "";
       if(stripQ && stripQ.rows && stripQ.rows.length){
-        g += `<section data-qfold data-group="review" style="margin-top:22px"><div class="sec-h">Needs review <span class="count">${stripQ.more? `first ${stripQ.rows.length} of ${fmtN(stripQ.rows.length+stripQ.more)}` : stripQ.rows.length} · the chain's own list</span></div>
+        g += `<section data-qfold data-group="review" style="margin-top:22px"><h2 class="sec-h">Needs review <span class="count">${stripQ.more? `first ${stripQ.rows.length} of ${fmtN(stripQ.rows.length+stripQ.more)}` : stripQ.rows.length} · the chain's own list</span></h2>
         <p class="small muted" style="margin:0 0 8px">answered and not yet settled — nearest deadline first. This list ignores moderation: a claim hidden from the docket above still appears here while it can still be flagged.</p>
         <div class="docket">${stripQ.rows.map(srow).join("")}</div>
         ${stripQ.more? `<p class="small muted" style="margin:6px 0 0">…and ${fmtN(stripQ.more)} more — the chain's page shows the nearest 50; <a href="#/raw/${esc(slug)}" style="color:var(--accent-2)">the full queue is on the chain's own page →</a></p>`:""}</section>`;
       }
       if(pendQ && pendQ.rows && pendQ.rows.length){
-        g += `<section data-qfold data-group="pending" style="margin-top:22px"><div class="sec-h">Awaiting an answer <span class="count">${pendQ.more? `first ${pendQ.rows.length} of ${fmtN(pendQ.rows.length+pendQ.more)}` : pendQ.rows.length} · the chain's own list</span></div>
+        g += `<section data-qfold data-group="pending" style="margin-top:22px"><h2 class="sec-h">Awaiting an answer <span class="count">${pendQ.more? `first ${pendQ.rows.length} of ${fmtN(pendQ.rows.length+pendQ.more)}` : pendQ.rows.length} · the chain's own list</span></h2>
         <p class="small muted" style="margin:0 0 8px">Seeded and appeal claims that no one has answered yet — oldest first.</p>
         <div class="docket">${pendQ.rows.map(prow).join("")}</div>
         ${pendQ.more? `<p class="small muted" style="margin:6px 0 0">…and ${fmtN(pendQ.more)} more — <a href="#/raw/${esc(slug)}" style="color:var(--accent-2)">the full list is on the chain's own page →</a></p>`:""}</section>`;
@@ -10041,7 +10041,7 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
     + `</div><aside class="courtside">`
     + joinPanel(slug, s)
     + courtRecordPanel(slug, s)
-    + `<div class="panel"><h4>Senior queue</h4>
+    + `<div class="panel"><h2>Senior queue</h2>
         <p class="small" style="margin:0 0 10px">Earned payouts (make-goods, bounties, voter rewards) are not sent to you — you claim them, using your ticket number.</p>
         <div class="actions">${btn("Pull senior payout","PullSenior",{courtSlug:slug,seq:1},"","seq = your queue ticket")}</div>
        </div>`
@@ -10064,11 +10064,11 @@ on(/^\/c\/([a-z0-9-]+)\/curate$/, async (slug)=>{
        <div class="tagrow"><span class="tfacts"><span class="pill void">local tool — writes nothing to any chain</span></span>
          <span class="tacts"><a class="tlink" href="#/c/${esc(slug)}">docket<span aria-hidden="true">→</span></a><a class="tlink" href="#/c/${esc(slug)}/map">${ICN_CONSTEL}map<span aria-hidden="true">→</span></a><a class="tlink" href="#/raw/${esc(slug)}/mod">moderation log<span aria-hidden="true">→</span></a></span></div>
        <p class="small mono" style="margin:10px 0 14px">${esc(srcLine)}</p>`
-    + `<section><div class="sec-h">Moderator actions <span class="count">no bonds — gas only</span></div>
+    + `<section><h2 class="sec-h">Moderator actions <span class="count">no bonds — gas only</span></h2>
        <p class="small" style="margin:0 0 10px">These write to the chain. Any active moderator can create folders and file claims into them for gas alone — no deposit, no bond. Hiding or unhiding a claim takes several moderators agreeing.</p>
        <p class="small" style="margin:0 0 10px">This page does not check who you are. If you are not a moderator of this court, the court refuses the transaction when you sign it.</p>
        <p class="small" style="margin:0 0 10px">Folders nest, reorder, retire, and carry a one-line description. Links between claims are on the chain too — including a re-filing, which the court verifies rather than taking your word for: the older claim must really have gone unanswered, and the newer one must come after it.</p>
-       <div class="panel"><h4>Folders</h4><div class="actions">
+       <div class="panel"><h2>Folders</h2><div class="actions">
          ${btn("Create folder","CreateFolder",{courtSlug:slug,name:"Folder name",desc:"One line on what belongs here"})}
          ${btn("Create subfolder","CreateFolderIn",{courtSlug:slug,parentID:1,name:"Folder name",desc:"One line on what belongs here"},"","under a heading, four deep")}
          ${btn("Rename folder","RenameFolder",{courtSlug:slug,folderID:1,name:"New name",desc:"New one-liner"})}
@@ -10077,10 +10077,10 @@ on(/^\/c\/([a-z0-9-]+)\/curate$/, async (slug)=>{
          ${btn("Restore folder","RestoreFolder",{courtSlug:slug,folderID:1})}
          ${btn("Add claim to folder","AddToFolder",{courtSlug:slug,folderID:1,claimID:1})}
          ${btn("Remove claim from folder","RemoveFromFolder",{courtSlug:slug,folderID:1,claimID:1})}</div></div>
-       <div class="panel" style="margin-top:14px"><h4>Order</h4><div class="actions">
+       <div class="panel" style="margin-top:14px"><h2>Order</h2><div class="actions">
          ${btn("Order folders","OrderFolders",{courtSlug:slug,parentID:0,ids:"3,1,2"},"","every sibling under that heading, once each")}
          ${btn("Move a claim within a folder","MoveItemInFolder",{courtSlug:slug,folderID:1,claimID:1,to:0},"","0 is first")}</div></div>
-       <div class="panel" style="margin-top:14px"><h4>Relations</h4><div class="actions">
+       <div class="panel" style="margin-top:14px"><h2>Relations</h2><div class="actions">
          ${btn("Argue one claim bears on another","AddAssociation",{courtSlug:slug,from:1,to:2,stance:"supports"},"","anyone — free for the claim's author or a moderator, a refundable bond for everybody else")}
          ${btn("Approve an association","ApproveAssociation",{courtSlug:slug,from:1,to:2},"","a moderator — returns the bond, the edge stays")}
          ${btn("Disapprove an association","DisapproveAssociation",{courtSlug:slug,from:1,to:2},"","a moderator — burns the bond and drops the edge")}
@@ -10091,27 +10091,27 @@ on(/^\/c\/([a-z0-9-]+)\/curate$/, async (slug)=>{
          ${btn("Withdraw an association","RemoveAssociation",{courtSlug:slug,from:1,to:2},"","its author, or a moderator")}
          ${btn("Record a re-filing","SupersedeClaim",{courtSlug:slug,from:2,to:1},"","the newer claim's author, or a moderator — the older one must have died unanswered")}
          ${btn("Withdraw a re-filing","RemoveSupersede",{courtSlug:slug,from:2},"","its author, or a moderator")}</div></div>
-       <div class="panel" style="margin-top:14px"><h4>Docket</h4><div class="actions">
+       <div class="panel" style="margin-top:14px"><h2>Docket</h2><div class="actions">
          ${btn("Open a seeded claim","OpenClaimSeeded",{courtSlug:slug,title:"Your claim of fact"},"","deposit and fee waived")}
          ${btn("Hide from listing","HideItem",{courtSlug:slug,claimID:1,reason:"Why this is hidden"},"","several moderators must agree")}
          ${btn("Unhide","UnhideItem",{courtSlug:slug,claimID:1,reason:"Why this returns"},"","several moderators must agree")}</div></div>
-       <div class="panel" style="margin-top:14px"><h4>Court</h4><div class="actions">
+       <div class="panel" style="margin-top:14px"><h2>Court</h2><div class="actions">
          ${btn("Appoint moderators","AppointMods",{courtSlug:slug,m:1,mods:"g1address1,g1address2"},"","creator only, free")}
          ${btn("Describe this court","SetCourtDesc",{courtSlug:slug,desc:"One line on what this court is for"},"","one line, no newlines")}</div></div>
       </section>`
-    + `<section style="margin-top:22px"><div class="sec-h">Local curation <span class="count">anyone — this browser only</span></div>
+    + `<section style="margin-top:22px"><h2 class="sec-h">Local curation <span class="count">anyone — this browser only</span></h2>
        <p class="small" style="margin:0 0 10px">What the chain cannot hold — claim-to-claim containment and supersedes — lives in a file you keep. Descriptions, nested folders and associations are ON CHAIN now; this file still carries them for demo courts and for anything the moderators have not filed. Nothing here writes to any chain: export it, edit it, share the file, import someone else's. </p>
-       <div class="panel"><h4>Export</h4>
+       <div class="panel"><h2>Export</h2>
          <p class="small muted" style="margin:0 0 8px">${cur? (cur.source==="local"? "exports your local curation" : "exports the demo sample") : "exports an empty skeleton to start from"}</p>
          <div class="actions"><button class="btn" id="cur-dl"><span class="g">↓</span> Download JSON</button>
            <button class="btn" id="cur-copy">Copy JSON</button></div></div>
-       <div class="panel" style="margin-top:14px"><h4>Import</h4>
+       <div class="panel" style="margin-top:14px"><h2>Import</h2>
          <p class="small muted" style="margin:0 0 8px">Paste or upload a curation file, validate, review what changes, then apply — to this browser only.</p>
          <textarea id="cur-in" class="mono" rows="7" spellcheck="false" style="width:100%; background:var(--inset); color:var(--ink); border:1px solid var(--line-2); border-radius:2px; padding:8px; font-size:12px" placeholder='{"kourtCuration":1,"court":"${esc(slug)}",…}'></textarea>
          <div class="actions" style="margin-top:8px"><input type="file" id="cur-file" accept=".json,application/json" class="small">
            <button class="btn" id="cur-validate">Validate</button></div>
          <div id="cur-report"></div></div>
-       <div class="panel" style="margin-top:14px"><h4>Clear</h4>
+       <div class="panel" style="margin-top:14px"><h2>Clear</h2>
          <p class="small muted" style="margin:0 0 8px">${CFG.mode==="demo"? "Clearing local curation restores the built-in sample." : "Clearing removes your local curation; live courts then show the flat docket."}</p>
          <div class="actions"><button class="btn" id="cur-clear">Clear local curation</button></div></div>
       </section>`;
@@ -10205,8 +10205,8 @@ on(/^\/c\/([a-z0-9-]+)\/holders$/, async (slug)=>{
         <p class="sub">${safeInline(name)}</p></div></div>`
     + `<p class="page-sub">${esc(HOLDERS_NOTE)}</p>`
     + (h.rows.length
-        ? `<section><div class="sec-h">Largest first <span class="count">${
-             h.total!=null? `${fmtN(h.rows.length)} of ${fmtN(h.total)} holders` : `${fmtN(h.rows.length)} shown`}</span></div>`
+        ? `<section><h2 class="sec-h">Largest first <span class="count">${
+             h.total!=null? `${fmtN(h.rows.length)} of ${fmtN(h.total)} holders` : `${fmtN(h.rows.length)} shown`}</span></h2>`
           + `<div class="scroll-x"><table class="data"><thead><tr><th>#</th><th>holder</th><th>held</th><th>share</th></tr></thead>`
           + `<tbody>${rows}</tbody></table></div></section>`
         : `<div class="empty"><div class="g">◌</div><p>Nobody holds this court's coin yet.</p>
@@ -10916,8 +10916,8 @@ on(/^\/c\/([a-z0-9-]+)\/f\/([0-9.]+)$/, async (slug,fpath)=>{
     + (f.img? `<img class="folderface" src="${esc(f.img)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : "")
     + (fdesc? `<p class="sub">${esc(fdesc)}</p>` : "")
     + `<p class="page-sub">A folder is moderator curation with zero economic weight — the claims below are ordinary claims of this court. ${curF.source==="chain"? "Read live from the chain." : curF.source==="local"? CUR_LABEL+"." : "Read from the sample data."}${omitted? ` ${omitted} hidden or unreadable row${omitted===1?" is":"s are"} omitted.`:""}</p>`
-    + (subs? `<section><div class="sec-h">Subfolders</div><div class="docket">${subs}</div></section>` : "")
-    + `<section${subs?' style="margin-top:22px"':""}><div class="sec-h">Claims <span class="count">${(f.claims||[]).length}</span></div>`
+    + (subs? `<section><h2 class="sec-h">Subfolders</h2><div class="docket">${subs}</div></section>` : "")
+    + `<section${subs?' style="margin-top:22px"':""}><h2 class="sec-h">Claims <span class="count">${(f.claims||[]).length}</span></h2>`
     + fpager
     + (fwin.length? `<div class="docket">${fwin.map(cl=>docketRow(slug,cl)).join("")}</div>`
         : `<div class="empty"><div class="g">◌</div><p>No claims filed directly in this folder.</p></div>`)
@@ -11222,8 +11222,8 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
        compares is realm-space. */
     + (() => {
         const sideCol = claimSideCol(slug,id,d,seriesH);
-        return `<section><div class="sec-h">The signal${d.phase==="open"? ` <span class="count">staking live</span>`
-            : d.phase==="closed"? ` <span class="count">claim died unanswered</span>` : ""}</div>
+        return `<section><h2 class="sec-h">The signal${d.phase==="open"? ` <span class="count">staking live</span>`
+            : d.phase==="closed"? ` <span class="count">claim died unanswered</span>` : ""}</h2>
         <div class="stakewrap${sideCol?"":" solo"}">
           <div class="panel">${signalChart(slug,id,d,seriesH,ser,tline)}${stakeBar(d,slug)}${chartChips(d,slug)}${timelineFold(d, (tline&&tline.now&&tline.now.h!=null)?tline.now.h:seriesH, tline, !!sideCol, slug)}</div>
           ${sideCol? `<div class="sidecol">${sideCol}</div>` : ""}
@@ -11549,9 +11549,9 @@ function removedLink(slug, id, k){
 }
 
 function claimCommentsHtml(slug, id, n, open, rows, kids, roles, withheld, nowH){
-  const head = `<div class="sec-h">Comments <span class="count">`
+  const head = `<h2 class="sec-h">Comments <span class="count">`
     + esc(n > 0 ? boardStateLine(n, open) : (open ? "open" : "closed")) + `</span>`
-    + removedLink(slug, id, withheld) + `</div>`;
+    + removedLink(slug, id, withheld) + `</h2>`;
   if(!(n > 0)){
     return `<section id="claimcomments">${head}<div class="cmt-empty"><p>${open
       ? "No comments yet. The first one is worth writing."
@@ -13121,7 +13121,7 @@ function resolutionSection(slug,id,d,nowH,tl){
         ${btn("Close dead claim","CloseDeadClaim",{courtSlug:slug,claimID:id},"","if its timeout passed")}</div></div></div>`;
   }
   if(!inner) return "";
-  return `<section id="resolution" tabindex="-1"><div class="sec-h">${head}</div>${inner}</section>`;
+  return `<section id="resolution" tabindex="-1"><h2 class="sec-h">${head}</h2>${inner}</section>`;
 }
 
 /* THE REWARD POOLS, and nothing else. This was qualitySection: a tier line, a
@@ -13134,7 +13134,7 @@ function resolutionSection(slug,id,d,nowH,tl){
    Render, so the page does not restate it. */
 function rewardsSection(slug,id,d){
   if(!d.rewardsOpened || !d.draw) return "";
-  return `<section><div class="sec-h">Rewards</div>
+  return `<section><h2 class="sec-h">Rewards</h2>
     <div class="panel"><div class="qrows"><div class="line"><span class="l">Reward pools</span><span class="r">${ccRow([["accuracy",d.draw.w],["author",d.draw.a],["answerer",d.draw.ans],["voters",d.draw.carrot]], slug)}</span></div></div></div></section>`;
 }
 
@@ -13502,14 +13502,14 @@ async function meHoldings(addr,courts){
       if(courtHasVoteSettle) maybeCourts.push([slug, cname]);
       seniorCount += sen.rows.length;
       if(sen.rows.length || (isLive() && sen.total>sen.scanned)){
-        seniorBlocks.push(`<section style="margin-top:14px"><div class="sec-h">Senior queue — ${safeInline(cname)} <span class="count">${isLive()? `checked newest ${sen.scanned} of ${fmtN(sen.total)} tickets`:`${sen.rows.length} of ${sen.total} tickets are yours`}</span></div>`
+        seniorBlocks.push(`<section style="margin-top:14px"><h2 class="sec-h">Senior queue — ${safeInline(cname)} <span class="count">${isLive()? `checked newest ${sen.scanned} of ${fmtN(sen.total)} tickets`:`${sen.rows.length} of ${sen.total} tickets are yours`}</span></h2>`
           + (sen.rows.length? `<div class="ticket">${sen.rows.map(e=>
               `<div class="line"><span class="l tnum">ticket #${e.seq}</span><span class="r tnum">${cc(e.payable,slug)} payable now <small>of ${cc(e.amount-e.paid,slug)} still owed to you — paid as budget accrues, the court's pace, not a promise</small></span></div>`).join("")}
               <div class="actions" style="margin-top:8px">${sen.rows.map(e=>btn("Pull senior ticket #"+e.seq,"PullSenior",{courtSlug:slug,seq:e.seq},"","owed, not earned")).join("")}</div></div>`
             : `<p class="small muted">none of the checked tickets are yours</p>`)
           + `</section>`);
       }
-      blocks.push(`<section style="margin-top:14px"><div class="sec-h">${safeInline(cname)} <span class="count">${cc(bal,slug)} balance${rows.length?` · ${cc(rows.reduce((t,{p})=>t+(p.yes||0)+(p.no||0),0),slug)} in positions`:""}${arec>0?` · answer record ${fmtN(arec)} — contested-and-upheld`:""}</span></div>`
+      blocks.push(`<section style="margin-top:14px"><h2 class="sec-h">${safeInline(cname)} <span class="count">${cc(bal,slug)} balance${rows.length?` · ${cc(rows.reduce((t,{p})=>t+(p.yes||0)+(p.no||0),0),slug)} in positions`:""}${arec>0?` · answer record ${fmtN(arec)} — contested-and-upheld`:""}</span></h2>`
         + commitmentsTicket(com, slug)
         + (rows.length? `<div class="scroll-x"><table class="data"><thead><tr><th>Claim</th><th>state</th><th>YES stake</th><th>NO stake</th><th>conviction</th></tr></thead><tbody>`
             + rows.map(({cl,p,d})=>{
@@ -13538,17 +13538,17 @@ async function meHoldings(addr,courts){
     const prev = prevRaw? JSON.parse(prevRaw) : (CFG.mode==="demo"? {h:NOW-3_000, claims:{"orem/3":"answered"}} : null);
     const changes = prev? diffSeen(prev, snapshot) : [];
     if(changes.length){
-      ladder = `<section style="margin-top:14px"><div class="sec-h">Since you were last here <span class="count">this browser's memory${CFG.mode==="demo"?" (sample)":""}</span></div>
+      ladder = `<section style="margin-top:14px"><h2 class="sec-h">Since you were last here <span class="count">this browser's memory${CFG.mode==="demo"?" (sample)":""}</span></h2>
         <div class="ticket">${changes.map(ch=>{ const [sl,id]=ch.key.split("/");
           return `<div class="line"><span class="l tnum"><a href="#/c/${esc(sl)}/${esc(id)}">#${esc(id)} · ${esc(sl)}</a></span><span class="r">${esc(ch.to)} since your last visit — was ${esc(ch.from)}</span></div>`; }).join("")}
         <p class="small muted" style="margin:8px 0 0">this browser's memory of your last look${prev&&prev.h!=null&&nowH!=null?` — height ${fmtN(prev.h)} → ${fmtN(nowH)}`:""}. Clear storage and it forgets. Phases only — sealed votes never move here.</p></div></section>`;
     }
     if(mefail===0) store.set(seenKey(addr), JSON.stringify(snapshot)); // never memorize a partial view
   }catch(_){}
-  const pullSec = pullsNow.length? `<section style="margin-top:14px"><div class="sec-h">You can pull these now <span class="count">${pullsNow.length}</span></div>
+  const pullSec = pullsNow.length? `<section style="margin-top:14px"><h2 class="sec-h">You can pull these now <span class="count">${pullsNow.length}</span></h2>
       <div class="ticket">${pullsNow.map(r=>`<div class="line"><span class="l tnum"><a href="#/c/${esc(r.slug)}/${r.id}?at=timeline">#${r.id} · ${esc(r.slug)}</a></span><span class="r">${esc(r.label)}</span></div>`).join("")}
       <div class="actions" style="margin-top:8px">${pullsNow.filter(r=>r.act).map(r=>btn(r.act[0]==="WithdrawStake"?"Withdraw #"+r.id: r.act[0]==="Finalize"?"Finalize #"+r.id: r.act[0]+" #"+r.id, r.act[0], r.act[1])).join("")}</div></div></section>` : "";
-  const maybeSec = maybeCourts.length? `<section style="margin-top:14px"><div class="sec-h">Maybe — the court decides <span class="count">${maybeCourts.length} court${maybeCourts.length>1?"s":""}</span></div>
+  const maybeSec = maybeCourts.length? `<section style="margin-top:14px"><h2 class="sec-h">Maybe — the court decides <span class="count">${maybeCourts.length} court${maybeCourts.length>1?"s":""}</span></h2>
       <p class="small muted">${maybeCourts.map(([sl,nm])=>`Voted in a dispute in ${safeInline(nm)}? Voters in the deciding round may have a reward waiting — the court will tell you when you pull it from the claim's own page.`).join(" ")}</p></section>` : "";
   /* WHAT YOU HOLD, FIRST, because it is the thing a holder opens this page to see
      and it was not in the summary at all. Reported as "i have 19.5 Kourt:covid.
@@ -13685,10 +13685,10 @@ async function needsList(addr,courts){
         <span class="m" style="display:block">${safeInline(r.name)} · you staked this claim — the rest of the court votes</span></span>
       <span class="rt"><span class="pill void">excluded</span></span></div>`;
   const ballotsSec = (ballots.length||bexcluded.length)
-    ? `<div class="sec-h" style="margin-top:14px">Open ballots — courts you hold <span class="count">${ballots.length} · checked ${ballotCourts} court${ballotCourts===1?"":"s"} you hold coin in</span></div>
+    ? `<h2 class="sec-h" style="margin-top:14px">Open ballots — courts you hold <span class="count">${ballots.length} · checked ${ballotCourts} court${ballotCourts===1?"":"s"} you hold coin in</span></h2>
        <p class="small muted" style="margin:0 0 8px">Sealed votes running in courts whose coin you hold — one question per ballot: overturn the answer? Sealed means un-summed, not secret — this page will not add ballots up mid-vote, and anyone who wants the running count can read it off the chain. Weight is the balance at the hourly snapshot before the round opened — buying now adds nothing; the claim's author, answerer, and stakers are excluded — the court refuses them when they sign.${stripUnchecked? ` …and ${fmtN(stripUnchecked)} more rows awaiting review were not checked — the chain's page shows the nearest 50.`:""}</p>
        ${ballots.length? `<div class="docket">${ballots.map(brow).join("")}</div>`:""}
-       ${bexcluded.length? `<div class="sec-h" style="margin-top:10px">You are excluded from these <span class="count">${bexcluded.length}</span></div><div class="docket">${bexcluded.map(exrow).join("")}</div>`:""}`
+       ${bexcluded.length? `<h2 class="sec-h" style="margin-top:10px">You are excluded from these <span class="count">${bexcluded.length}</span></h2><div class="docket">${bexcluded.map(exrow).join("")}</div>`:""}`
     : "";
   if(!items.length && !ballots.length && !bexcluded.length){ box.innerHTML=`<div class="empty"><div class="g">${failed?"⚠":"✓"}</div><p>${failed? "Could not read everything — no conclusions." : "Nothing needs you right now — no live answers on claims you've staked, and no open ballots in the courts you hold."}</p>${warn}</div>`+nscanNote; return; }
   if(!items.length){ box.innerHTML = `<p class="small mono" style="margin:0 0 8px">no live answers on claims you've staked</p>` + warn + nscanNote + ballotsSec; return; }
@@ -13723,9 +13723,9 @@ async function needsList(addr,courts){
   };
   box.innerHTML = `<p class="small mono" style="margin:0 0 8px">${items.length} answer${items.length===1?" stands":"s stand"} on claims you staked — ${against.length} against your side · ${withYou.length} with you</p>`
     + urgentBox + warn + nscanNote
-    + (against.length? `<div class="sec-h" style="margin-top:14px">Against your side <span class="count">${against.length}</span></div><div class="docket">${against.map(row).join("")}</div>`:"")
+    + (against.length? `<h2 class="sec-h" style="margin-top:14px">Against your side <span class="count">${against.length}</span></h2><div class="docket">${against.map(row).join("")}</div>`:"")
     + ballotsSec
-    + (withYou.length? `<div class="sec-h" style="margin-top:14px">With your side <span class="count">${withYou.length}</span></div><div class="docket">${withYou.map(row).join("")}</div>`:"");
+    + (withYou.length? `<h2 class="sec-h" style="margin-top:14px">With your side <span class="count">${withYou.length}</span></h2><div class="docket">${withYou.map(row).join("")}</div>`:"");
 }
 
 /* --- the chain render: the same page as the realm alone serves it. --- */

@@ -95,7 +95,7 @@ ok("annex exists, tier 0, five claims", DEMO.courts.annex && DEMO.courts.annex.t
 // D6-3: the chain's policing lists
 ok("annex/5 hidden AND answered (strip specimen)", DEMO.claims["annex/5"].hidden===true && DEMO.claims["annex/5"].phase==="answered");
 ok("live parser reads all three sections", src.includes('"Needs review/.test(line)? "strip"') || src.includes('Needs review/.test(line)? "strip"'));
-ok("strip rows outside data-sortable, folded in search", src.includes('<section data-qfold data-group="review" style="margin-top:22px"><div class="sec-h">Needs review'));
+ok("strip rows outside data-sortable, folded in search", src.includes('<section data-qfold data-group="review" style="margin-top:22px"><h2 class="sec-h">Needs review'));
 ok("strip caption keeps the chain sentence", src.includes("a claim hidden from the docket above still appears here while it can still be flagged."));
 ok("pending caption verbatim", src.includes("Seeded and appeal claims that no one has answered yet"));
 ok("overflow never labeled as the total", src.includes("the chain's page shows the nearest 50"));

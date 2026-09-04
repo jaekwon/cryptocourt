@@ -52,8 +52,12 @@ eval(code);
    which stopped matching the moment a heading could carry a count beside its
    label. The label is what matters; whether a note rides with it is the other
    assertions' business. */
-const headAt = (h, label) => h.indexOf(`>${label}</div>`) >= 0
-  ? h.indexOf(`>${label}</div>`) : h.indexOf(`>${label} <span class="count">`);
+/* AND THE CLOSING TAG IS NO LONGER A DIV. These headings became real <h2>s so a
+   screen reader's outline contains the page's own sections; a helper that
+   recognised them by "</div>" recognised nothing the moment they did. Matched on
+   the label and what may follow it, not on the element that closes. */
+const headAt = (h, label) => h.indexOf(`>${label}</h2>`) >= 0
+  ? h.indexOf(`>${label}</h2>`) : h.indexOf(`>${label} <span class="count">`);
 const hasHead = (h, label) => headAt(h, label) >= 0;
 
 let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else console.log("ok:",n); };
@@ -573,7 +577,7 @@ ok("no heading sits above the groups with nothing under it", (()=>{
                                [{fid:4, name:"Proximal Origin"}]);
   // The section opens straight onto a group heading.
   return !h.includes("Where this claim sits")
-      && /^<section[^>]*><div class="sec-h"[^>]*>Filed in /.test(h);
+      && /^<section[^>]*><h2 class="sec-h"[^>]*>Filed in /.test(h);
 })());
 ok("...and a claim with only relations is captioned only for them", (()=>{
   const h = associationSection("covid", 18, null, [[11,"supports"]], []);

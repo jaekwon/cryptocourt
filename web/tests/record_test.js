@@ -44,7 +44,10 @@ ok("ledger live 3 (provisional + the D6-4 disputed exemplar), 1 failed round", c
 // panel render (demo)
 const s = {claims:11, burned:7020070389605, minted:118491100000, price:118};
 const html = courtRecordPanel("orem", s);
-ok("panel: h4 Court record", html.includes("<h4>Court record</h4>"));
+/* A PANEL TITLE IS A LEVEL-2 HEADING, not an h4. It was drawn with .sec-h's
+   exact font spec and sat in the outline three levels below the page title, so a
+   reader navigating by heading heard the sidebar and none of the page. */
+ok("panel: the Court record title is a real heading", html.includes("<h2>Court record</h2>"));
 ok("panel: scope of 11", html.includes("of this court's 11 claims"));
 ok("panel: burned 7,020,070 GNOT", html.includes("7,020,070 GNOT"));
 ok("panel: keyless sub", html.includes("destroyed at a keyless address, not held; nothing redeems it"));

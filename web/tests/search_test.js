@@ -109,8 +109,8 @@ ok("C2: court qbar precedes its section", src.indexOf(QBAR_COURT) < src.indexOf(
 // rather than qfold or the whole filing system is display:none'd while a query runs.
 ok("folder rows are searchable", /class="crow folderrow" data-q="\$\{esc\(f\.name/.test(src));
 ok("...and the folders section is filtered, not folded away",
-   src.includes('<section data-qsec><div class="sec-h">Folders') &&
-   !src.includes('<section data-qfold><div class="sec-h">Folders'));
+   src.includes('<section data-qsec><h2 class="sec-h">Folders') &&
+   !src.includes('<section data-qfold><h2 class="sec-h">Folders'));
 // The description is part of it: a curator's sentence about what belongs in a folder is
 // what a reader half-remembers, and it is not on the row.
 ok("...including the description a reader cannot see", /data-q="\$\{esc\(f\.name \+ " " \+ \(f\.desc\|\|""\)\)\}/.test(src));

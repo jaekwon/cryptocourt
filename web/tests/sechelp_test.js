@@ -136,7 +136,7 @@ ok("...and the fade is dropped for reduced motion",
    by defining a word the reader can no longer see. What it must still do is say
    what the section holds and where the rest of the claims went. */
 ok("Open is the heading that carries it",
-   /<div class="sec-h">Open \$\{secHelp\("Claims this court has not settled yet/.test(src));
+   /<h2 class="sec-h">Open \$\{secHelp\("Claims this court has not settled yet/.test(src));
 ok("...and it defines no word the heading stopped using",
    !/secHelp\("A docket is/.test(src));
 ok("...and the sentence says what the section holds AND where the rest went",
@@ -144,7 +144,7 @@ ok("...and the sentence says what the section holds AND where the rest went",
 /* The pair it names has to exist, or the sentence sends a reader somewhere the
    page does not have. */
 ok("...and Recently settled is really the section below it",
-   src.includes('<div class="sec-h">Recently settled'));
+   src.includes('<h2 class="sec-h">Recently settled'));
 
 console.log(fail ? "\n" + fail + " FAILURES" : "\nALL PASS");
 process.exit(fail ? 1 : 0);

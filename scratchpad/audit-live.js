@@ -117,6 +117,115 @@ const audit = () => {
       out.push({kind: "target-too-small", detail: `${Math.round(r.width)}x${Math.round(r.height)}`,
                 text: (el.textContent || "").trim().slice(0, 24)});
   });
+  // ---- second wave: things that are wrong without being misplaced ----------
+
+  // 10. contrast (WCAG 1.4.3). The effective background is the nearest ancestor
+  //     that paints one; text over an image or a gradient is skipped rather than
+  //     guessed at.
+  const lum = c => { const [r, g, b] = c.map(v => { v /= 255;
+      return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+  const rgb = str => { const m = String(str).match(/rgba?\(([^)]+)\)/);
+    if (!m) return null; const p2 = m[1].split(",").map(parseFloat);
+    return p2.length > 3 && p2[3] < 0.95 ? null : [p2[0], p2[1], p2[2]]; };
+  const bgOf = el => { for (let n = el; n && n !== document.documentElement; n = n.parentElement) {
+      const s2 = getComputedStyle(n);
+      if (s2.backgroundImage && s2.backgroundImage !== "none") return null;
+      const c = rgb(s2.backgroundColor); if (c) return c; }
+    return rgb(getComputedStyle(document.body).backgroundColor); };
+  const seenC = new Set();
+  main.querySelectorAll("*").forEach(el => {
+    if (!vis(el) || el.children.length) return;
+    const t = (el.textContent || "").trim(); if (t.length < 2) return;
+    const s2 = getComputedStyle(el);
+    const fg = rgb(s2.color), bg = bgOf(el); if (!fg || !bg) return;
+    const L1 = lum(fg), L2 = lum(bg);
+    const ratio = (Math.max(L1, L2) + 0.05) / (Math.min(L1, L2) + 0.05);
+    const px = parseFloat(s2.fontSize), bold = parseInt(s2.fontWeight, 10) >= 700;
+    const large = px >= 24 || (px >= 18.66 && bold);
+    const need = large ? 3 : 4.5;
+    if (ratio < need) {
+      const key = s2.color + "|" + ratio.toFixed(2);
+      if (seenC.has(key)) return; seenC.add(key);
+      out.push({kind: "contrast-low", detail: `${ratio.toFixed(2)}:1 needs ${need} (${px}px)`,
+                el: (el.className || el.tagName).toString().slice(0, 30), text: t.slice(0, 34)});
+    }
+  });
+
+  // 11. a control with no name is a control a screen reader cannot offer
+  main.querySelectorAll("button,a[href],[role=button]").forEach(el => {
+    if (!vis(el)) return;
+    const name = (el.getAttribute("aria-label") || el.getAttribute("title") ||
+                  el.textContent || "").replace(/\s+/g, " ").trim();
+    if (!name) out.push({kind: "control-unnamed", el: (el.className || el.tagName).toString().slice(0, 40)});
+  });
+
+  // 12. two controls whose boxes overlap — one of them cannot be clicked
+  const ctl = [...main.querySelectorAll("button,a[href],input,select")].filter(vis)
+    .map(el => ({el, r: el.getBoundingClientRect()}))
+    .filter(x => x.r.width > 2 && x.r.height > 2);
+  for (let i = 0; i < ctl.length; i++) for (let j = i + 1; j < ctl.length; j++) {
+    const a = ctl[i], b2 = ctl[j];
+    if (a.el.contains(b2.el) || b2.el.contains(a.el)) continue;
+    const ov = Math.max(0, Math.min(a.r.right, b2.r.right) - Math.max(a.r.left, b2.r.left)) *
+               Math.max(0, Math.min(a.r.bottom, b2.r.bottom) - Math.max(a.r.top, b2.r.top));
+    if (ov > 16) out.push({kind: "controls-overlap", detail: `${Math.round(ov)}px²`,
+      text: (a.el.textContent || "").trim().slice(0, 18) + " / " + (b2.el.textContent || "").trim().slice(0, 18)});
+  }
+
+  // 13. a heading level skipped — the outline a screen reader walks has a hole
+  const lv = [...main.querySelectorAll("h1,h2,h3,h4,h5,h6")].filter(vis)
+    .map(h => +h.tagName[1]);
+  for (let i = 1; i < lv.length; i++)
+    if (lv[i] - lv[i - 1] > 1)
+      out.push({kind: "heading-skip", detail: `h${lv[i - 1]} then h${lv[i]}`});
+
+  // 14. a toggle group with nothing pressed says the state is off when it is not
+  main.querySelectorAll("[role=group]").forEach(g => {
+    const btns = [...g.querySelectorAll("[aria-pressed]")].filter(vis);
+    if (!btns.length) return;
+    const on = btns.filter(b3 => b3.getAttribute("aria-pressed") === "true").length;
+    if (on !== 1) out.push({kind: "toggle-group-state", detail: `${on} of ${btns.length} pressed`,
+      text: (g.getAttribute("aria-label") || "").slice(0, 24)});
+  });
+
+  // 15. a link that opens a new tab without severing the opener
+  main.querySelectorAll('a[target="_blank"]').forEach(a => {
+    if (!/noopener|noreferrer/.test(a.getAttribute("rel") || ""))
+      out.push({kind: "blank-without-noopener", detail: (a.getAttribute("href") || "").slice(0, 44)});
+  });
+
+  // 16. the same sentence twice on one screen — the redundancy that keeps
+  //     getting reported by eye, found by counting instead
+  //     ADJACENT repeats only. Twenty claims that settle on the same day carry
+  //     the same deadline sentence twenty times, correctly — that is the data
+  //     saying the same thing about different rows, not the page saying it
+  //     twice. What is a defect is one statement made twice where a reader sees
+  //     both at once, which is what "within 140px of each other" tests for.
+  const said = new Map();
+  main.querySelectorAll("p,li,span.m,.sub,.page-sub,.small").forEach(el => {
+    if (!vis(el)) return;
+    const t = (el.textContent || "").replace(/\s+/g, " ").trim();
+    if (t.length < 25) return;
+    // Keyed by the BLOCK the sentence sits in. Two docket rows a hundred pixels
+    // apart carrying the same deadline are two claims that settle the same day —
+    // the data repeating, correctly. A defect is one block saying a thing twice.
+    const block = el.closest(".crow,.ticket,.panel,.line,section,.gbar") || main;
+    if (!said.has(block)) said.set(block, new Map());
+    const m2 = said.get(block);
+    (m2.get(t) || m2.set(t, []).get(t)).push(el.getBoundingClientRect().top);
+  });
+  [...said.values()].forEach(m2 => [...m2.entries()].forEach(([t, tops]) => {
+    if (tops.length < 2) return;
+    tops.sort((a, b2) => a - b2);
+    for (let i = 1; i < tops.length; i++)
+      if (tops[i] - tops[i - 1] < 140) {
+        out.push({kind: "sentence-repeated", detail: `${Math.round(tops[i] - tops[i - 1])}px apart`,
+                  text: t.slice(0, 46)});
+        return;
+      }
+  }));
+
   return out;
 };
 
