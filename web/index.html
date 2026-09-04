@@ -4008,16 +4008,22 @@ function modBanner(mPurged, mRedacted, mHidden, slug){
     <a class="small" href="#/raw/${esc(slug)}/mod" style="color:var(--accent-2)">who and why — the moderation log →</a></div></div>`;
   return "";
 }
-/* The docket's impersonal clock: only frozen rows have one, and a disputed row
-   still does not get one — but NOT because the chain has nothing to give. It
-   publishes the close now (DisputeVoteCloses); reading it here would be one
-   extra query PER ROW on a page that draws fifty, so the countdown stays on the
-   claim page and the row says only what it knows. The line used to say "no
-   close height is published", which stopped being true the moment that read
-   shipped. */
-function clockLine(nowH, phaseShort, settleAt, escrowUntil){
+/* The docket's impersonal clock. A disputed row gets one now, and the argument
+   against it has expired: it said reading DisputeVoteCloses would be an extra
+   query PER ROW on a page that draws fifty — but the fill already pays exactly
+   that for `proposed` and `provisional`, and it pays it only for the rows in
+   those phases. Disputed was the last one sending the reader to the claim page
+   for a number the row could hold.
+   THE TALLY STAYS SEALED, and that is the realm's design rather than an omission
+   here: the ballots are on chain and anyone may add them up, but this page does
+   not sum a vote that is still running. So the row says WHEN, not who is
+   winning. */
+function clockLine(nowH, phaseShort, settleAt, escrowUntil, voteCloses){
   if(phaseShort==="in dispute")
-    return "a sealed vote is deciding — its countdown is on the claim page";
+    return voteCloses && nowH!=null
+      ? (voteCloses>nowH? `the vote closes in ${wall(nowH,voteCloses)} — ≈block ${fmtN(voteCloses)}`
+                        : "the vote has closed — the verdict is one call away")
+      : (voteCloses? `the vote closes at ≈block ${fmtN(voteCloses)}` : "a sealed vote is deciding");
   if(phaseShort==="proposed" && settleAt)
     return nowH!=null? (settleAt>nowH? `settles undisputed at ≈block ${fmtN(settleAt)} — in ${wall(nowH,settleAt)} unless disputed`
                                      : "the settle window has passed — anyone may settle it now")
@@ -6456,11 +6462,14 @@ on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
       try{
         if(renderSeq!==seq0) return;
         const pcShort = phaseClass(cl.statusText).short;
-        if(pcShort==="proposed" || pcShort==="provisional"){
-          const q = pcShort==="proposed"? `SettleDeadline(${s2},${cl.id})` : `EscrowUntil(${s2},${cl.id})`;
+        if(pcShort==="proposed" || pcShort==="provisional" || pcShort==="in dispute"){
+          const q = pcShort==="proposed"? `SettleDeadline(${s2},${cl.id})`
+                  : pcShort==="provisional"? `EscrowUntil(${s2},${cl.id})`
+                  : `DisputeVoteCloses(${s2},${cl.id})`;
           one(q).then(h=>{
             if(renderSeq!==seq0) return;
-            const txt = clockLine(nowHq, pcShort, pcShort==="proposed"? h:null, pcShort==="provisional"? h:null);
+            const txt = clockLine(nowHq, pcShort, pcShort==="proposed"? h:null,
+                                  pcShort==="provisional"? h:null, pcShort==="in dispute"? h:null);
             const ce = document.getElementById(`clk-${slug}-${cl.id}`);
             if(ce && txt) ce.textContent = txt;
           }).catch(()=>{});
@@ -9485,15 +9494,19 @@ function courtStatsHtml(slug, s){
        lines above it, in the same cell. */
     statTile("coin supply", cc(s.supply,slug),
       /* A LINE EACH, not a middot chain. The two clauses answer different
-         questions about the same figure — how much of this supply nobody paid
-         for, and how much is already promised out of the next of it — and read
-         as one run-on when joined: "0.61 earned as rewards · 75.57 in the
-         reward reservoir". Block spans rather than <br>: .stat .sub is an
-         ordinary block, so each clause gets a real line box and its own
-         baseline instead of a forced break inside one. One clause renders one
-         line, exactly as before. */
-      [ s.emitted>0? `${ccFig(s.emitted)} earned as rewards` : "",
-        material(s.reservoir)? `${ccFig(s.reservoir)} in the reward reservoir` : "",
+         questions about the same figure — how much is set aside to be earned
+         out of the next of it, and how much has already been earned — and read
+         as one run-on when joined: "75.57 in the reward reservoir · 0.61 earned
+         as rewards". Block spans rather than <br>: .stat .sub is an ordinary
+         block, so each clause gets a real line box and its own baseline instead
+         of a forced break inside one. One clause renders one line, exactly as
+         before.
+         THE RESERVOIR COMES FIRST, asked for by the owner. It also reads
+         forward: the pool that is waiting, then the part of it that has been
+         paid out. The reverse put the smaller, later figure above the larger one
+         it comes out of. */
+      [ material(s.reservoir)? `${ccFig(s.reservoir)} in the reward reservoir` : "",
+        s.emitted>0? `${ccFig(s.emitted)} earned as rewards` : "",
       ].filter(Boolean).map(t=>`<span style="display:block">${t}</span>`).join("")),
     // THE THIRD COLUMN, and the only graph on the strip. Price and supply are
     // figures; this is the one worth a shape, because it is the one that cannot
@@ -13226,7 +13239,7 @@ async function needsList(addr,courts){
   const brow = r => `<div class="crow" style="cursor:default">
       <span class="id">#${r.id}</span>
       <span><a class="t" href="#/c/${esc(r.slug)}/${r.id}?at=timeline" style="color:inherit">${safeInline(r.title)}</a>
-        <span class="m" style="display:block">${safeInline(r.name)} · the ballot — overturn the answer? · a sealed vote is deciding — its countdown is on the claim page</span></span>
+        <span class="m" style="display:block">${safeInline(r.name)} · the ballot — overturn the answer?${r.closes? ` · ${clockLine(r.nowH, "in dispute", null, null, r.closes)}` : ""}</span></span>
       <span class="rt">${statusPill("disputed")}</span></div>`;
   const exrow = r => `<div class="crow" style="cursor:default">
       <span class="id">#${r.id}</span>
@@ -13245,7 +13258,12 @@ async function needsList(addr,courts){
   const clock = d => {
     if(d.phase==="answered" && d.settleAt) return {h:d.settleAt, txt: nowH!=null? (d.settleAt>nowH? `you may dispute until ≈block ${fmtN(d.settleAt)} — in ${wall(nowH,d.settleAt)}` : "the settle window has passed — anyone may settle it now") : `you may dispute until ≈block ${fmtN(d.settleAt)}`};
     if(d.phase==="provisional" && d.escrowUntil) return {h:d.escrowUntil, txt: nowH!=null? (d.escrowUntil>nowH? `reopenable until ≈block ${fmtN(d.escrowUntil)} — in ${wall(nowH,d.escrowUntil)}` : "the reopen window has closed — finalizable") : `reopenable until ≈block ${fmtN(d.escrowUntil)}`};
-    if(d.phase==="disputed") return {h:Infinity, txt:"a sealed vote is deciding — its countdown is on the claim page"};
+    /* THE CLOSE IS ALREADY IN HAND. claimDetail reads it into voteEndsAt for any
+       claim with a dispute running, so this row was sending the reader to the
+       claim page for a number it was holding — and sorting itself last with an
+       Infinity key while it did, below rows whose deadlines are further away. */
+    if(d.phase==="disputed") return {h: d.voteEndsAt || Infinity,
+      txt: clockLine(nowH, "in dispute", null, null, d.voteEndsAt || null)};
     return {h:Infinity, txt:""};
   };
   items.forEach(it=>{ it.clk = clock(it.d); });
