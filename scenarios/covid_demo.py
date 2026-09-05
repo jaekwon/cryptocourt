@@ -1392,7 +1392,13 @@ s.expect("IsSetClaim", [SLUG, PENDING_CID], r"true", final=True)
 # is the same source the seed files them from. A literal here would have to be
 # re-derived by hand every time the tree changes, and the failure mode is this
 # one: a check that looks precise and is actually pinning an accident.
+# THE FOURTH FIELD IS bornOf, which moved into the row so a client stops paying
+# one SetBornOf per folder on every draw. Derived here from SET_CID for the same
+# reason the rest of this line is derived: a literal would encode whichever
+# claim happened to birth which set on the day it was written. A set a moderator
+# simply made carries 0, which is what .get's default says.
 _tree = ",".join(f"{FOLDER_ID[_p]}:{FOLDER_ID[_p[:-1]] if len(_p) > 1 else 0}:-"
+                 f":{SET_CID.get(_p, 0)}"
                  for _p in sorted(SET_PATHS, key=lambda q: FOLDER_ID[q]))
 s.expect("FolderTree", [SLUG], _tree.replace("|", "[|]"), final=True)
 s.expect("FolderCount", [SLUG], r"6", final=True)

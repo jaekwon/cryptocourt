@@ -930,8 +930,19 @@ func FolderTree(courtSlug string) string {
 		if flags == "" {
 			flags = "-"
 		}
+		// bornOf, the claim that carried this set into existence, or 0 for one a
+		// moderator simply made. A FOURTH FIELD for the same reason the "i" flag
+		// is a flag: it is a per-folder bit, and the tree row is what exists to
+		// carry per-folder bits. Read separately it was one SetBornOf per folder
+		// on every draw — a hundred at the cap — for a number that is almost
+		// always the same size as the two beside it.
+		//
+		// A CLIENT THAT KNOWS ONLY THREE FIELDS IS UNHARMED. The overlay parses
+		// on ":" and takes what it recognises; the shape here only ever grows to
+		// the right, exactly as it did when "i" joined the flags.
 		b.WriteString(strconv.FormatUint(f.id, 10) + ":" +
-			strconv.FormatUint(f.parent, 10) + ":" + flags)
+			strconv.FormatUint(f.parent, 10) + ":" + flags + ":" +
+			strconv.FormatUint(f.bornOf, 10))
 		n++
 	}
 	return b.String()

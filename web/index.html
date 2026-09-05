@@ -8893,11 +8893,19 @@ async function chainFolders(slug){
   if(typeof treeRaw === "string" && treeRaw){
     for(const row of treeRaw.split(",")){
       const bits = row.split(":");
-      if(bits.length !== 3) continue;
+      /* THREE FIELDS OR FOUR. The fourth is bornOf, which used to be a read of
+         its own — one SetBornOf per folder on every draw. A realm deployed
+         before it moved into the row answers three, and this still parses that:
+         the shape only ever grows to the right, so `>= 3` is the check and the
+         extra field is read when it is there. Rejecting a longer row would make
+         a NEWER realm look like a broken one. */
+      if(bits.length < 3) continue;
       const id = parseInt(bits[0],10), parent = parseInt(bits[1],10);
       if(!Number.isInteger(id) || !Number.isInteger(parent)) continue;
+      const born = bits.length > 3 ? parseInt(bits[3],10) : null;
       shape.set(id, {parent, retired: bits[2].includes("r"), purged: bits[2].includes("p"),
-                     hasImage: bits[2].includes("i")});
+                     hasImage: bits[2].includes("i"),
+                     born: Number.isInteger(born) ? born : null});
     }
   }
   // ROW ORDER IS THE CURATOR'S ORDER. FolderTree emits siblings in the order
@@ -8931,19 +8939,22 @@ async function chainFolders(slug){
       // "i" flag exists so this is not a third round trip per folder — a hundred
       // at the cap for a field most folders never set. The read failing takes
       // the picture and not the folder: the name and the claims are the page.
-      /* WHICH CLAIM AFFIRMED IT, in the same batch. Unlike the picture this is
-         not flag-guarded: the tree row carries no bit for it, and a governed set
-         has one by definition, so the guard would save a read on declared sets
-         only. It costs a request per FOLDER — bounded by the cap and small in
-         practice — not per claim, and it rides the existing Promise.all, so it
-         adds no round trip to the folder's own fetch.
+      /* WHICH CLAIM AFFIRMED IT — off the TREE ROW now, not a read of its own.
+         It cost one SetBornOf per folder on every draw, a hundred at the cap,
+         for a per-folder bit; the row is what carries per-folder bits, and the
+         "i" flag beside it had already made that argument. The folder read is
+         back to 2 + 2F.
+         THE READ SURVIVES AS A FALLBACK, for a realm deployed before the field
+         joined the row. `born === null` means the tree did not say — not that
+         the answer is zero — so only then is the round trip spent.
          0 MEANS DECLARED. A moderator's CreateFolder leaves bornOf zero, and a
          set nobody voted for must not claim to have been affirmed. */
+      const treeBorn = sh0 && sh0.born != null ? sh0.born : null;
       const [name, itemsRaw, imgRaw, bornRaw] = await Promise.all([
         one(`FolderName(${s2},${fid})`),
         tup(`FolderItems(${s2},${fid})`).then(t=>t[0]),
         sh0 && sh0.hasImage ? one(`FolderImage(${s2},${fid})`).then(unesc).catch(()=>null) : null,
-        one(`SetBornOf(${s2},${fid})`).catch(()=>null)]);
+        treeBorn != null ? treeBorn : one(`SetBornOf(${s2},${fid})`).catch(()=>null)]);
       const ids = uint64List(itemsRaw);
       const sh = shape.get(fid);
       // ARCHIVE-ONLY, like a claim node's thumbnail and for the same reason

@@ -15,7 +15,11 @@ func row(id, parent uint64, flags string) string {
 	if flags == "" {
 		flags = "-"
 	}
-	return strconv.FormatUint(id, 10) + ":" + strconv.FormatUint(parent, 10) + ":" + flags
+	// ":0" is bornOf — the claim that carried the set into existence, or 0 for
+	// one a moderator simply made. Every folder in this file is the second kind,
+	// so it is appended here rather than threaded through every caller. The
+	// affirmed case is asserted where AffirmSet is, in governedset_test.
+	return strconv.FormatUint(id, 10) + ":" + strconv.FormatUint(parent, 10) + ":" + flags + ":0"
 }
 
 // orderFixture: a court whose creator moderates it, with n root folders.

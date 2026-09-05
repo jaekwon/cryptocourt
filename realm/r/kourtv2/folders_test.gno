@@ -448,11 +448,11 @@ func TestFolderTree(cur realm, t *testing.T) {
 	gone := CreateFolder(cross(cur), "ftree", "Mistake", "")
 
 	// parents are reported, so a client can build the tree without asking again
-	uassert.Equal(t, "1:0:-,2:1:-,3:0:-", FolderTree("ftree"))
+	uassert.Equal(t, "1:0:-:0,2:1:-:0,3:0:-:0", FolderTree("ftree"))
 
 	testing.SetRealm(testing.NewUserRealm(alice))
 	RetireFolder(cross(cur), "ftree", gone)
-	uassert.Equal(t, "1:0:-,2:1:-,3:0:r", FolderTree("ftree"))
+	uassert.Equal(t, "1:0:-:0,2:1:-:0,3:0:r:0", FolderTree("ftree"))
 
 	// A PURGED ROW IS FLAGGED, so a client knows to expect a tombstone from
 	// FolderName rather than a name — the shape is not secret, the text is.
@@ -461,7 +461,7 @@ func TestFolderTree(cur realm, t *testing.T) {
 	SetPurgeThreshold(cross(cur), 1)
 	testing.SetRealm(testing.NewUserRealm(dadmin))
 	PurgeFolder(cross(cur), "ftree", kid, "CSAM")
-	uassert.Equal(t, "1:0:-,2:1:p,3:0:r", FolderTree("ftree"))
+	uassert.Equal(t, "1:0:-:0,2:1:p:0,3:0:r:0", FolderTree("ftree"))
 }
 
 

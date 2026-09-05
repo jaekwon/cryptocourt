@@ -1,6 +1,7 @@
 package kourtv2
 
 import (
+	"strconv"
 	"testing"
 
 	testutils "gno.land/p/nt/testutils/v0"
@@ -117,6 +118,14 @@ func TestASettledMarkedClaimBecomesASet(cur realm, t *testing.T) {
 	// The binding, both ways.
 	uassert.Equal(t, fid, ClaimSet("gs1", id))
 	uassert.Equal(t, id, SetBornOf("gs1", fid))
+
+	// AND IT IS IN THE TREE ROW, which is where a client actually reads it.
+	// SetBornOf answering correctly is not the same claim: the row is what a map
+	// draw parses, and it carried nothing until the field moved there — one
+	// SetBornOf per folder, a hundred at the cap, for a per-folder bit. Asserted
+	// on an AFFIRMED set because every other FolderTree test in this repo makes
+	// its folders by hand, so all of them pin the zero and none pins this.
+	uassert.Equal(t, "1:0:-:"+strconv.FormatUint(id, 10), FolderTree("gs1"))
 
 	// EXACTLY ONCE. Without this anyone re-calls it until the court hits its
 	// folder cap.

@@ -201,20 +201,26 @@ def main():
             bad += 1
     # THE FOLDERTREE WIRE FORMAT, both sides of it.
     #
-    # FolderTree answers one string for the whole court, "id:parent:flags" per
-    # folder, comma-joined — and the overlay parses it with
+    # FolderTree answers one string for the whole court, "id:parent:flags:bornOf"
+    # per folder, comma-joined, and the overlay parses it a row at a time.
     #
-    #     if(bits.length !== 3) continue;
+    # THIS USED TO DEMAND AN EXACT COUNT — `if(bits.length !== 3) continue;` —
+    # and the note here said why: a FOURTH field added realm-side makes every row
+    # fail that test, the shape map comes out empty, and the map draws a court
+    # with no folders. No error, no console warning, which is the worst shape a
+    # failure can take because nothing suggests where to look.
     #
-    # so a FOURTH field added realm-side makes every row fail that test, the shape
-    # map comes out empty, and the map draws a court with no folders in it. No
-    # error, no console warning: the page just looks like an empty court, which is
-    # the worst shape a failure can take because nothing suggests where to look.
-    # Verified against kourt.xyz, which answers "1:0:-,2:0:-,3:2:-,4:2:-,5:2:-,6:0:-".
+    # A fourth field was then added — bornOf, moved off its own per-folder read —
+    # so the overlay takes a MINIMUM now and reads what it recognises. That is
+    # the forward-compatible form, and it changes what has to be checked:
     #
-    # Counted on both sides rather than pattern-matched on one: the realm builds
-    # the row with two ":" writes, the overlay demands three parts, and 3 == 2 + 1
-    # is the whole agreement.
+    #   the overlay must still SKIP a short row  (a lower bound exists at all)
+    #   the realm must never write FEWER fields than that bound
+    #   the overlay must READ the last field the realm writes — otherwise the
+    #     realm grows a field and nothing consumes it, which is the silent
+    #     direction this format now permits and the exact-count check did not.
+    #
+    # Counted on both sides rather than pattern-matched on one.
     fpath = "realm/r/kourtv2/folders.gno"
     try:
         fol = open(fpath, encoding="utf-8").read()
@@ -237,20 +243,33 @@ def main():
             # realm and the overlay disagreeing when they agree. The parser that
             # matters is the one right after the read.
             at = web.find("FolderTree(${s2})")
-            want = re.search(r"if\(bits\.length !== (\d+)\) continue;",
-                             web[at:] if at >= 0 else "")
+            tail = web[at:] if at >= 0 else ""
+            want = re.search(r"if\(bits\.length < (\d+)\) continue;", tail)
             if not want:
                 print("check-web-constants: the overlay no longer checks "
                       "bits.length on the FolderTree rows — a malformed row would "
                       "be parsed instead of skipped.", file=sys.stderr)
                 bad += 1
-            elif seps + 1 != int(want.group(1)):
-                print(f"check-web-constants: FolderTree writes {seps + 1} "
-                      f"colon-separated field(s) per row and the overlay requires "
-                      f"{want.group(1)}. Every row would fail bits.length, the "
-                      f"shape map would come out empty, and the map would draw a "
-                      f"court with no folders and no error.", file=sys.stderr)
-                bad += 1
+            else:
+                floor, fields = int(want.group(1)), seps + 1
+                if fields < floor:
+                    print(f"check-web-constants: FolderTree writes {fields} "
+                          f"colon-separated field(s) per row and the overlay skips "
+                          f"anything under {floor}. EVERY row would be skipped, the "
+                          f"shape map would come out empty, and the map would draw "
+                          f"a court with no folders and no error.", file=sys.stderr)
+                    bad += 1
+                # ...and the last field the realm writes is actually read. With a
+                # minimum instead of an exact count, a field added realm-side no
+                # longer breaks the parse — it is silently ignored instead, which
+                # is cheaper to miss and just as wrong.
+                elif f"bits[{fields - 1}]" not in tail[:4000]:
+                    print(f"check-web-constants: FolderTree writes {fields} field(s) "
+                          f"per row and the overlay never reads bits[{fields - 1}]. "
+                          f"The realm pays to send a field nothing consumes, and the "
+                          f"minimum-length parse means nothing fails to say so.",
+                          file=sys.stderr)
+                    bad += 1
 
     # THE ROUNDING, WHICH IS THE ONE PIECE OF ARITHMETIC BOTH SIDES COMPUTE.
     #
