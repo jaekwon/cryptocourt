@@ -193,7 +193,25 @@ const (
 	// bond anywhere changes price. A floor still named for a penalty that no
 	// longer exists is how the next reader concludes it is dead and deletes it.
 	bondFloorFlatBps = int64(450)   // 4.5%·X̄, the base arm
-	bondFloorConvBps = int64(16000) // 1.6× the side's would-be mid draw, so the bond tracks the take
+	// 1.07× the side's would-be mid draw, so the bond tracks the take. IT SITS ON
+	// ITS OWN FLOOR: the check below refuses anything under (par + carrot)·100 =
+	// 10700, because the draw cap is answerBond0 MINUS the carrot, so a bond of
+	// exactly 1.00× would leave 0.93·mg to cover a 1.00·mg MID payout and cut the
+	// published rate. There is no room beneath this without moving the payout or
+	// the carrot with it.
+	//
+	// WHAT IT COSTS, stated because it is a real cost and not a free saving. The
+	// bond is what bounds destroyed/posted for a sniper — dust on one side,
+	// declared, then 72h of silence — and that ratio is (tier + carrot)/(this/1e4).
+	// It was 1.07/1.6 = 0.669 at MID and 2.07/1.6 = 1.294 at HIGH; it is now
+	// 1.00 at MID and 2.07/1.07 = 1.93 at HIGH. In detection terms, a bad answer
+	// has to be disputed and overturned about two times in three for the attack to
+	// lose money at HIGH, where 1.6× asked for about four in seven.
+	//
+	// The design already accepted leverage above 1 at HIGH — the comment in
+	// openrewards.gno measured 1.2937 and said sniping an exceptional claim pays —
+	// so this widens a gap that was open rather than opening one.
+	bondFloorConvBps = int64(10700)
 	depositFeeBps    = int64(1000)  // 10% of the deposit, conditionally refunded
 
 	// Answer priority (records.gno): difficulty-weighted net record ≥ 3 earns a

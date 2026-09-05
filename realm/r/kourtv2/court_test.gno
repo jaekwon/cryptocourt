@@ -236,8 +236,14 @@ func TestParamsMustSaneRefusesEachMalformedField(cur realm, t *testing.T) {
 // Sixteen constants were mutated and TEN survived: the P7 carrot split, both comp arms,
 // the flag bond floor and its frozen multiple, both slash arms, the deposit fee, the
 // settle delay, the priority window, and the reservoir's cap in periods. Every one is a
-// number somebody calibrated — bondFloorConvBps carries "k=1.6 lands the 12-wk mill q* on the
+// number somebody calibrated — bondFloorConvBps carried "k=1.6 lands the 12-wk mill q* on the
 // ~0.22 target (three-designer convergence)" — and none of them was pinned.
+//
+// THAT NOTE IS NOW HISTORY AND THE PIN IS THE POINT. k moved to 1.07, which is the
+// lowest the draw cap admits, and no live check ever computed the 12-week mill q*
+// — it was a design target carried in prose. So the calibration it recorded is no
+// longer in force, and this literal is what makes the new value a decision rather
+// than a drift.
 //
 // They survived for one reason, and it is the reason this fixture uses LITERALS on the
 // right-hand side. Every existing fixture computes its expectation FROM the constant:
@@ -274,7 +280,7 @@ func TestEconomicConstantsAreTheCalibratedValues(t *testing.T) {
 		{"carrotClampXBps", carrotClampXBps, 200, "the carrot clamp base is 2% of X-bar — was the flag bond"},
 		{"carrotClampMinCC", carrotClampMinCC, 1_000_000, "with a floor of 1 CC, so the per-voter clamp never collapses on a small court"},
 		{"bondFloorFlatBps", bondFloorFlatBps, 450, "the answer bond's conviction floor is 4.5% of X-bar"},
-		{"bondFloorConvBps", bondFloorConvBps, 16000, "and its conviction arm is 1.6x a side's mid draw (k=1.6, v0.40)"},
+		{"bondFloorConvBps", bondFloorConvBps, 10700, "and its conviction arm is 1.07x a side's mid draw — the floor the draw cap allows, since the cap is the bond MINUS the 7% carrot"},
 		{"depositFeeBps", depositFeeBps, 1000, "the claim fee is 10% of the deposit"},
 		{"quorumSupplyBps", quorumSupplyBps, 500, "the full bar's supply floor is 5%"},
 		{"settleDelay", settleDelay, 51_840, "72h before an undisputed answer settles"},

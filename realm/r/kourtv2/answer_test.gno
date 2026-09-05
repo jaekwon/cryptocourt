@@ -420,13 +420,19 @@ func TestAnswerBondFloorIsKeyedToBothSides(cur realm, t *testing.T) {
 	// pool staked after the clock moves carries none of it.
 	testing.SetRealm(testing.NewUserRealm(bob))
 	Stake(cross(cur), "bk", id, sideNO, 4_000_000_000)
-	// AGE IT. The floor only outgrows the 6% base once 1.6x the pool's conviction
-	// exceeds it, i.e. once mg/X̄ > 3.75% — and conviction is capital x TIME, so at
-	// this court's cold rate of 63.75 bps/week that takes ~6 weeks. Eight weeks
-	// leaves margin. Measured without the wait: oppFloor 180_090_000 against a base
-	// of 240_120_000, and the precondition below correctly refused to pretend the
-	// keying was observable.
-	testing.SkipHeights(epochBlocks * 24 * 7 * 8)
+	// AGE IT. The floor only outgrows the 6% base once k x the pool's conviction
+	// exceeds it, i.e. once mg/X̄ > answerBondBps/k — and conviction is capital x
+	// TIME, so the wait is set by k. At k=1.6 the crossover was 3.75% and this
+	// court's cold rate of 63.75 bps/week reached it in ~6 weeks; at k=1.07 it is
+	// 5.6% and takes ~8.8, so eight weeks stopped being margin and became a
+	// failure. ELEVEN, not fourteen: the claim dies unanswered at twelve, so
+	// lowering k narrowed the window this fixture can sit in from [6,12] weeks to
+	// [8.8,12]. Fourteen was tried and panicked on the dead-claim timeout, which
+	// is the tighter constraint announcing itself.
+	// Measured without any wait: oppFloor 180_090_000 against a base of
+	// 240_120_000, and the precondition below correctly refused to pretend the
+	// keying was observable — which is exactly how the k change announced itself.
+	testing.SkipHeights(epochBlocks * 24 * 7 * 11)
 	matureOI(cur, "bk", id, alice, 1_000_000)
 	testing.SetRealm(testing.NewUserRealm(alice))
 	PostAnswer(cross(cur), "bk", id, sideYES)
