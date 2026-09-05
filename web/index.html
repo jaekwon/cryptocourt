@@ -10005,7 +10005,7 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
       + gChip("all","all", openWin+doneWin, showKey==="all")
       + gChip("open","open", openWin, showKey==="open")
       + (doneWin? gChip("settled","recently settled", doneWin, showKey==="settled") : "")
-      + (stripN? gChip("review","needs review", stripN, showKey==="review") : "")
+      + (stripN? gChip("review","still flaggable", stripN, showKey==="review") : "")
       + (pendN? gChip("pending","awaiting an answer", pendN, showKey==="pending") : "")
       + `</span><span id="gnote" class="small muted"></span></div>`
     : "";
