@@ -386,22 +386,28 @@ code,.mono{font-family:var(--mono)}
    FOLLOWS THE BORDER RADIUS — .nav a is 3px — so the bar bent at both ends and
    read as a parenthesis beside the label. Reported as "there's a ( next to
    COVID".
-   border-radius:0 straightens the source. The two shadows after it are the
-   beam: a wide blur pulled back by a larger negative spread, so nothing is drawn
-   at the edge itself and the light only spills to the RIGHT, falling off across
-   the row the way a searchlight does. Two stops rather than one because a single
-   blur ends in a visible lip; the second is wider, fainter, and carries the tail
-   out past where the first has finished.
-   EVERY LAYER IS --edge, and that is what keeps this honest in daylight: the
-   token resolves transparent in the light theme, which is how one value switches
-   the whole glow system off. A hardcoded rgba here would have left a pale blue
-   wash on a white sidebar. It also means the beam is exactly as bright as the
-   source, which is the only relationship between them that is not arbitrary. */
-.nav a.on{background:transparent; color:var(--accent-2); font-weight:600;
+   border-radius:0 straightens the source, and a gradient carries the light off
+   it — the spill falls to the RIGHT and fades out by 70% of the row, the way a
+   beam does.
+   A GRADIENT, NOT MORE INSET SHADOWS. That was the first attempt: two wide blurs
+   pulled back by large negative spreads. --edge is rgba(...,.9), so spilling it
+   at any width lit a bright slab over the first third of the row, and two
+   overlapping blurs banded where they met. A gradient is smooth by construction
+   and its alpha is stated rather than inherited from a token that was chosen to
+   be a crisp 2px rule.
+   STILL --edge, THROUGH color-mix, and that is what keeps it honest in daylight:
+   the token resolves TRANSPARENT in the light theme, mixing to transparent at
+   every stop, which is how one value switches the whole glow system off. A
+   hardcoded rgba would have left a pale blue wash on a white sidebar. Where
+   color-mix is unsupported the declaration simply drops and the 2px source
+   remains, which is the marker this replaces. */
+.nav a.on{color:var(--accent-2); font-weight:600;
   border-radius:0;
-  box-shadow:inset 2px 0 0 var(--edge),
-             inset 24px 0 20px -20px var(--edge),
-             inset 64px 0 44px -48px var(--edge)}
+  background:linear-gradient(90deg,
+    color-mix(in srgb, var(--edge) 15%, transparent) 0,
+    color-mix(in srgb, var(--edge) 5%, transparent) 32%,
+    transparent 70%);
+  box-shadow:inset 2px 0 0 var(--edge)}
 .nav .sec{padding:14px 12px 5px; font-size:11px; text-transform:uppercase; letter-spacing:.09em; color:var(--muted)}
 /* THE TRAIL UNDER DIRECTORY (navTrail). Indented to 40px, which is not a round
    number picked by eye: the parent row is 12px of padding plus an 18px glyph
