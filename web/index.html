@@ -1972,6 +1972,11 @@ tr.youare .mono{font-weight:600}
 .mapsel-x:hover{color:var(--ink)}
 .mapsel-t{margin:0 0 8px; font-size:13px; line-height:1.45}
 .mapsel-d{margin:0 0 8px; font-size:12px; line-height:1.5; color:var(--ink-2)}
+/* THE ONE INLINE LINK ON THIS CARD, and `a{color:inherit}` would have drawn it
+   as the muted sentence around it. Same treatment as .page-sub a, for the same
+   reason: everything else that leaves this card is a .btn and reads as one. */
+.mapsel-b{color:var(--accent)}
+.mapsel-b:hover{text-decoration:underline; text-underline-offset:2px}
 /* The claim page's own body renderer, at the panel's scale. 15.5px serif in a
    column this narrow runs about six words to the line, which reads as a stack of
    fragments rather than as prose; the panel already scrolls, so length is fine. */
@@ -9680,8 +9685,12 @@ function mapTree(data, mode){
     // description. It is the CHAIN's folder id, not the drawing's index — the
     // index is what the SVG uses in data-fid — and it is undefined for a
     // curation folder, which has no description to ask for.
+    // `born` rides along for the CARD, not for the drawing — nothing about a set's
+    // shape or size depends on which claim made it. It is the same bit the court
+    // page's folder row prints as "affirmed by #N" and the set page now prints as
+    // a sentence; this was the third surface and the only silent one.
     const node = {kind:"folder", name:f.name, pseudo:!!f.pseudo, path, kids:[], fid:f.fid,
-      img:f.img,
+      img:f.img, born:f.born,
       count, size:mapFolderSize(f.name, count, mode)};
     for(const id of (f.claims||[])){
       if(!data.claims[id] || bornIds.has(id)) continue;
@@ -10008,7 +10017,7 @@ function mapLayout(data, mode){
        and the layout agree without a second lookup table. */
     if(n.kind==="court"){ box._key="court"; court={...box, name:n.name}; }
     else if(n.kind==="folder"){ box._key="f"+folders.length; folders.push(Object.assign(box, {kind:"folder", name:n.name,
-      count:n.count, pseudo:n.pseudo, path:n.path, fid:n.fid, img:n.img,
+      count:n.count, pseudo:n.pseudo, path:n.path, fid:n.fid, img:n.img, born:n.born,
       claims:n.kids.filter(k=>k.kind==="claim").map(k=>k.id),
       also:n.also||[],
       subs:n.kids.filter(k=>k.kind==="folder").length})); }
@@ -10201,6 +10210,16 @@ function mapFolderCard(f, data, slug){
     + `<p class="small muted">${f.count} claim${f.count===1?"":"s"} in all`
     + (f.subs? `, in ${f.subs} subset${f.subs===1?"":"s"}` : "")
     + (ids.length? `; ${ids.length} filed here directly` : "") + `</p>`
+    /* WHO MADE IT, on the one surface where sets are compared side by side —
+       which is exactly where "this one the court voted for, that one a moderator
+       declared" is worth knowing. The court page's row said it and the set page
+       says it; this card said nothing.
+       A LINK OUT, NOT A data-go. Every other claim on this card is a `data-go`
+       button that selects the claim on the map without leaving it — and the born
+       claim has NO NODE to select: bornClaimIds drops it precisely because the
+       set is standing in for it. A data-go here would be a control that does
+       nothing, which is worse than the sentence being one click longer. */
+    + (f.born? `<p class="small muted">Voted into existence by the court — <a class="mapsel-b" href="#/c/${esc(slug)}/${esc(String(f.born))}">claim #${esc(String(f.born))}</a>.</p>` : "")
     + (rows? `<ul class="mapsel-l">${rows}</ul>` : "")
     + (ids.length>shown.length? `<p class="small muted">…and ${ids.length-shown.length} more</p>` : "")
     + (!f.pseudo && f.path!=null && data.linkFolders

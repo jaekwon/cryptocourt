@@ -598,6 +598,31 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
   ok("...branching on born, not on where the set was read from",
      /\$\{f\.born\s*\n?\s*\?/.test(src) || /\$\{f\.born$/m.test(src));
 
+  /* AND THE MAP CARD, WHICH WAS THE THIRD SURFACE AND THE SILENT ONE. The court
+     page's folder row prints "affirmed by #N" and the set page prints a sentence;
+     selecting a set on the map said only its name and its counts — on the one
+     surface where sets are compared side by side, which is exactly where "voted
+     for" versus "declared" is worth knowing. */
+  ok("the map's set card says who made the set",
+     /Voted into existence by the court/.test(src));
+  /* THE BIT HAS TO SURVIVE TWO HOPS to get there: folderNode builds the tree node
+     and the layout copies it into the box the card is handed. Dropping it at
+     either hop leaves f.born undefined and the line silently absent — which looks
+     exactly like a moderator's folder. */
+  ok("...carrying born through the tree node",
+     /img:f\.img, born:f\.born,/.test(src));
+  ok("...and through the layout box",
+     /path:n\.path, fid:n\.fid, img:n\.img, born:n\.born,/.test(src));
+  /* A LINK, NOT A data-go. Every other claim on that card is a data-go button
+     that selects it on the map without leaving — and the born claim has NO NODE
+     to select, because bornClaimIds drops it so the set can stand in for it. A
+     data-go would be a control that does nothing. */
+  ok("...as a link out, since the born claim has no node to select",
+     /class="mapsel-b" href="#\/c\/\$\{esc\(slug\)\}\/\$\{esc\(String\(f\.born\)\)\}"/.test(src)
+     && !/data-go="\$\{f\.born\}"/.test(src));
+  ok("...drawn as a link, not as the muted sentence around it",
+     /\.mapsel-b\{color:var\(--accent\)\}/.test(src));
+
   console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");
   process.exit(fail?1:0);
 })();
