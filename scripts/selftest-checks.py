@@ -194,6 +194,9 @@ WEBPAGE = "web/index.html"
 WEBCONST = "scripts/check-web-constants.py"
 MEDIAHOSTS = "scripts/check-media-hosts.py"
 MEDIAGNO = "realm/r/kourtv2/media.gno"
+BLOCKTIME = "scripts/check-block-time.py"
+CLOCKGNO = "realm/r/kourtv2/clock.gno"
+GOVGNO = "realm/p/governor/governor.gno"
 NGINXCONF = "deploy/nginx.conf"
 SEEDEMIT = "scripts/check-seed-emitters.py"
 SCENARIO = "scripts/scenario.py"
@@ -1601,6 +1604,29 @@ control("the realm stops rounding the curve up", "realm/p/curve/curve.gno",
         "lo2, carry := bits.Add64(lo, m-1, 0)",
         "lo2, carry := bits.Add64(lo, 0, 0)",
         "stopped doing", argv=["python3", WEBCONST])
+
+print("\ncheck-block-time")
+# TWO FAILURE MODES, and they are not the same shape, so both are armed.
+#
+# The first is the block time drifting between the three languages that each
+# hold a copy — the overlay, p/governor (which stamps closesTime from it) and
+# the scenario generator. Nothing imports it across those boundaries; a check is
+# the only thing that can.
+#
+# The second is nastier and is the one that motivated the file: a deadline is
+# written down in BLOCKS and in SECONDS, and the realm reads whichever half a
+# record carries — openrewards.gno, "Seconds first, blocks only for a claim
+# whose verdict predates the stamp". So changing one half does not fail, it
+# gives an old record and a new one different windows, forever, correctly per
+# the code. The seconds half is the one with no mirror in check-web-constants
+# (FINALIZE_GRACE pins the BLOCKS half only), so that is the direction planted.
+control("a block is a different length in p/governor", GOVGNO,
+        "const secsPerBlock = int64(5)", "const secsPerBlock = int64(6)",
+        "disagrees with itself", argv=["python3", BLOCKTIME])
+control("a deadline's seconds half moves without its blocks half", CLOCKGNO,
+        "finalizeGraceSecs = int64(7 * 86400)",
+        "finalizeGraceSecs = int64(3 * 86400)",
+        "two different deadlines", argv=["python3", BLOCKTIME])
 
 print("\ncheck-media-hosts")
 # The hosts a claim's evidence may live on are written down three times — the

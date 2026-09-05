@@ -89,6 +89,12 @@ guards:
 	@# static (no puppeteer, no page load), which is the whole reason it exists
 	@# separately from web-visual, and `guards` is already in `check`.
 	python3 scripts/check-browser-checks-registered.py
+	@# One block is five seconds, said in three languages that cannot import it
+	@# from each other, and two kourtv2 deadlines written once in blocks and once
+	@# in seconds. The realm reads whichever half a record carries, so a drift
+	@# does not fail — it quietly gives an old record and a new one different
+	@# windows. Static, no toolchain, so it belongs here.
+	python3 scripts/check-block-time.py
 
 # The other half of that check. `guards` asks whether each guard is REGISTERED in
 # selftest-checks.py; this asks whether each control arm's PLANT still applies. A
