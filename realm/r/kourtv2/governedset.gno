@@ -246,7 +246,31 @@ func AffirmSet(cur realm, courtSlug string, claimID uint64) uint64 {
 
 	fid := newFolderCore(cm, name, "", parent)
 	cm.mustFolder(fid).bornOf = claimID
-	emitModAct(c.id, claimID, "folder-create", cs.author)
+	/* ITS OWN ACT CODE, BECAUSE THE ADDRESS BESIDE IT MEANS SOMETHING ELSE HERE.
+	 *
+	 * `by` IS THE AUTHOR, NOT THE SENDER, and that is deliberate: carrying is
+	 * permissionless and mechanical — once the verdict lands, anybody presses it and
+	 * it was going to happen — so who happened to press it is noise, while the
+	 * address that framed the heading and put it to the court is the one worth
+	 * recording. Every OTHER emitModAct call in this realm passes the sender, which
+	 * is what makes the pair ambiguous rather than the address wrong.
+	 *
+	 * SO THE CODE HAD TO STOP BEING `folder-create`. Sharing it with CreateFolder
+	 * meant a consumer of the event stream could not tell a moderator exercising
+	 * discretion from a court decision being executed — and would count this row as
+	 * moderation activity by an address that took no moderator action at all. One
+	 * string separates them, and now `by` is unambiguous in both: on folder-create
+	 * it is who decided, on set-affirm it is who asked.
+	 *
+	 * NOT OBSERVABLE BY THIS SUITE, and that is structural rather than an omission.
+	 * Only a filetest's `Events:` directive can see emitted events, filetests run
+	 * from OUTSIDE the package, and reaching a settled claim from outside needs court
+	 * coin — which needs Buy, which refuses a filetest outright because `main(cur
+	 * realm)` runs in an ephemeral realm and Buy demands IsUserCall. z_events_filetest
+	 * holds the folder verbs precisely because those need no coin. The gap is named
+	 * here rather than left for someone to discover by changing this string and
+	 * seeing the suite stay green. */
+	emitModAct(c.id, claimID, "set-affirm", cs.author)
 	chain.Emit("SetAffirmed",
 		"court", c.id,
 		"claim", strconv.FormatUint(claimID, 10),

@@ -1619,10 +1619,22 @@ message, against a court that has a real folder.
 > and when.
 
 It is not. **Eleven acts emit a `ModAct` event and write no log row at all:**
-`folder-create` (×2 call sites), `folder-move`, `folder-add`, `folder-remove`,
+`folder-create` (×3 call sites: two in `folders.gno`, one in `meta.gno` where the
+meta court executes `mod:newset`), `folder-move`, `folder-add`, `folder-remove`,
 `folder-rename`, `folder-retire`, `folder-restore`, `folder-order`,
 `folder-sort`, and `court-desc`. Neither `folders.gno` nor `court.gno` calls
-`appendLog` anywhere. Observed rather than inferred: the demo court had three
+`appendLog` anywhere.
+
+**`set-affirm` is a twelfth, and the only one whose `by` is not the sender.**
+`AffirmSet` carries a settled `𓂀` claim into a set, and carrying is
+permissionless — once the verdict lands anybody presses it — so the address
+recorded is the claim's AUTHOR, who framed the heading and put it to the court,
+rather than whoever happened to execute it. It emitted `folder-create` until that
+made the pair unreadable: a consumer of the stream could not tell a moderator
+exercising discretion from a court decision being executed, and would have counted
+this row as moderation activity by an address that took no moderator action. With
+its own code, `by` is unambiguous in both — on `folder-create` it is who decided,
+on `set-affirm` it is who asked. Observed rather than inferred: the demo court had three
 folders created and five claims filed into them, and its log said "No moderation
 acts yet."
 
