@@ -292,6 +292,39 @@ const ROUTES = ["#/c/orem", "#/c/orem/f/0", "#/c/orem/f/1", "#/c/orem/11", "#/c/
   ok("...and is still told apart by having no verdict on it",
      chips.plain > 0 && chips.settled > 0, JSON.stringify(chips));
 
+  /* A SET THE COURT VOTED FOR SAYS SO. A governed set is born of a claim the
+     court affirmed and the realm keeps the binding (folder.bornOf, read back by
+     SetBornOf), but nothing drew it — so a set voted into existence looked
+     exactly like one a moderator declared, which is the whole difference a
+     governed set is for.
+     ON annex, which is the sample's only court with one: the offline data had no
+     claim-born set at all until now, so this could not have been tested. */
+  await page.goto(PAGE + "#/c/annex", {waitUntil: 'networkidle0'});
+  await new Promise(z => setTimeout(z, 1300));
+  const born = await page.evaluate(() => {
+    const rows = [...document.querySelectorAll(".folderrow")];
+    // the claim link by SHAPE — #/c/<slug>/<id> — rather than by class: the row's
+    // other links point at set pages, #/c/<slug>/f/<path>
+    const claimHref = r => (Array.from(r.querySelectorAll("a"))
+      .map(a => a.getAttribute("href") || "")
+      .find(h => /^#\/c\/[a-z0-9-]+\/\d+$/.test(h)) || null);
+    const read = r => ({name: (r.querySelector(".t") || {}).textContent.replace(/\s+/g, " ").trim(),
+                        href: claimHref(r)});
+    const all = rows.map(read);
+    return {n: all.length,
+            withBorn: all.filter(x => /affirmed by #\d+/.test(x.name)).length,
+            linked: all.filter(x => /affirmed by/.test(x.name) && x.href).length,
+            // and a set nobody voted for does NOT claim to have been affirmed
+            plain: all.filter(x => !/affirmed by/.test(x.name)).length,
+            sample: all.map(x => x.name.slice(0, 52))};
+  });
+  ok("a set born of a claim says which one affirmed it", born.withBorn > 0, JSON.stringify(born));
+  ok("...and the claim is one click away", born.linked === born.withBorn, JSON.stringify(born));
+  /* THE OTHER HALF, or the line means nothing: a declared set must not wear it.
+     Every set saying "affirmed by" would be the same failure as none of them
+     saying it. */
+  ok("...while a set nobody voted for claims nothing", born.plain > 0, JSON.stringify(born));
+
   console.log(fail ? "\n" + fail + " FAILURES" : "\nALL PASS");
   await browser.close();
   process.exit(fail ? 1 : 0);

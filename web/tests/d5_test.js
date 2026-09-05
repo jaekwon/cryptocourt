@@ -91,7 +91,18 @@ ok("provisional past", clockLine(200,"provisional",null,150)==="the reopen windo
 ok("open/settled rows get no clock", clockLine(100,"open",null,null)==="" && clockLine(100,"settled",null,null)==="");
 
 // annex exemplar
-ok("annex exists, tier 0, five claims", DEMO.courts.annex && DEMO.courts.annex.tier===0 && DEMO.courts.annex.claims.length===5);
+ok("annex exists, tier 0, six claims", DEMO.courts.annex && DEMO.courts.annex.tier===0 && DEMO.courts.annex.claims.length===6);
+/* THE SIXTH IS THE SET-BORN SPECIMEN, and it is here for the same reason the
+   hidden and redacted ones are: the sample has to hold one of everything a
+   surface can draw. A governed set is born of a claim the court affirmed —
+   title is the mark, a space, the name — and until this claim existed no
+   offline test could reach that path at all, because bornOf lives on chain and
+   demo has none. */
+ok("annex/6 is the claim that made a set", (()=>{
+  const c = DEMO.claims["annex/6"];
+  return c && c.title.startsWith("\u{13080} ") && c.phase === "settled" && c.answer === 0
+      && DEMO_OVERLAY.courts.annex.folders.some(f => f.born === 6);
+})());
 // D6-3: the chain's policing lists
 ok("annex/5 hidden AND answered (strip specimen)", DEMO.claims["annex/5"].hidden===true && DEMO.claims["annex/5"].phase==="answered");
 /* THE PARSER MUST TRACK THE REALM'S HEADING. The strip section is recognised by

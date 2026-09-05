@@ -3268,7 +3268,9 @@ const DEMO_OVERLAY = {
        that path has no case in the sample at all, and the docket-only court
        cannot make one. */
     annex:{desc:"Hidden from the directory by moderation — the sample's proof that direct links still open a court.", folders:[
-        {name:"Reading room", claims:[1,5]},
+        // born: the claim the court affirmed to create this set — folder.bornOf
+        // on chain, and the field SetBornOf reads back.
+        {name:"Reading room", claims:[1,5], born:6},
         {name:"Deeds",        claims:[2]},
       ]},
     ledger:{desc:"Documentary and technical claims about Denver — filings, measurements, dated records. If a document can settle it, we hear it."},
@@ -3324,7 +3326,7 @@ const DEMO_CHAIN = {
     annex:{ name:"The Annex", tier:0,
       burned:17_999_760_001,
       price:6, supply:6_000_000_000, emitted:40_000, reservoir:9_000, seniorOwed:0,
-      claims:[1,2,3,4,5] },
+      claims:[1,2,3,4,5,6] },
     ledger:{ name:"The Ledger of Denver", tier:1,
       burned:2_760_140_980_980,
       price:74, supply:74_300_000_000, emitted:1_400_000, reservoir:410_000, seniorOwed:0,
@@ -3350,6 +3352,23 @@ const DEMO_CHAIN = {
       yesStake:200_000, noStake:90_000, convYes:30_000, convNo:8_000, trailYes:70,
       answer:0, answerer:"g1annexanswerer0000000000000000000000000", answerBond:40_000,
       settleAt:NOW+4_000, author:"g1annexfiler000000000000000000000000000", phase:"answered", hidden:true },
+    /* THE CLAIM THAT MADE A SET, and the sample had none. A governed set is born
+       of a claim the court affirmed — the title is the mark, a space, the name —
+       so a reader can ask who agreed to this drawer and when. Every set here was
+       simply declared, which meant the provenance the realm records could not be
+       drawn or tested offline: `bornOf` lives on the chain and demo has none.
+       ANNEX, because it is already the sample's moderation exhibit and the court
+       the folder-filter checks run against. Settled YES, because an affirmation
+       that did not carry would not have made the set. */
+    "annex/6":{ title:"\u{13080} Reading room",
+      yesStake:260_000, noStake:70_000, convYes:41_000, convNo:6_000, trailYes:79,
+      answer:0, answerer:"g1annexanswerer0000000000000000000000000", answerBond:40_000,
+      // rewardsOpened, so it leaves the chain's flaggable list. A claim stays
+      // flaggable until its rewards are opened, and an affirmation that has
+      // already made its set is done being policed — leaving it open would put a
+      // second row in a list another harness measures, for no gain to this one.
+      route:"vote", rewardsOpened:true,
+      author:"g1annexfiler000000000000000000000000000", phase:"settled" },
     // open — staking live, no answer yet
     "orem/1":{ timeline:"opened:1786036800:4596480;now:1787054400:4800000", title:"The county certified 12,412 mail ballots on Nov 6, 2025.",
       yesStake:41_000_000, noStake:12_000_000, convYes:439774, convNo:128714, trailYes:74,
@@ -7499,7 +7518,16 @@ function folderRowHtml(slug,f,path,toggle){
           return `<a class="foldopen subname" href="#/c/${esc(slug)}/f/${esc(kp)}">${safeInline(sf.name)}</a>${deeper}`;
         }).join(", ")}`
       : ` · ${subs} subsets`;
-  const meta = `<span class="t">${safeInline(f.name)} <span class="m">${n} claim${n===1?"":"s"}${subTail}</span></span>`;
+  /* WHO AGREED TO THIS SET. A governed set is born of a claim the court affirmed,
+     and the realm keeps the binding on the folder — `bornOf`, read back by
+     SetBornOf. Nothing drew it, so a set the court voted into existence looked
+     exactly like one a moderator declared, and the difference is the whole point
+     of a governed set.
+     A LINK, because the claim is the evidence: it carries the stakes, the bond,
+     the verdict and the date. .foldopen is the class the row's own click handler
+     steps over, so following it does not tick the set instead. */
+  const bornTail = f.born ? ` · <a class="foldopen" href="#/c/${esc(slug)}/${f.born}">affirmed by #${f.born}</a>` : "";
+  const meta = `<span class="t">${safeInline(f.name)} <span class="m">${n} claim${n===1?"":"s"}${subTail}${bornTail}</span></span>`;
   if(!toggle) return `<a class="crow folderrow" data-q="${esc(f.name + " " + (f.desc||""))}"
     href="#/c/${esc(slug)}/f/${path}">
     <span class="id">${ICN_EYE_OPEN}</span>
@@ -8604,6 +8632,11 @@ function curFilterFolders(folders, validSet){
     // covers and the folder PAGE lost them — the two surfaces read the same
     // tree through different filters.
     img:f.img,
+    // AND SO DOES born, for the reason directly above: this rebuild is a
+    // claim-id FILTER, and which claim the court affirmed to make the set is
+    // not a claim in it. Dropped here, a set born of a claim looked declared —
+    // the second field to be lost by a rebuild that names what it keeps.
+    born:f.born,
     claims:(f.claims||[]).filter(id=>validSet.has(id)),
     folders:curFilterFolders(f.folders, validSet)}));
 }
