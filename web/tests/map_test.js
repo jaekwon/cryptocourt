@@ -1247,6 +1247,35 @@ ok("controls present", ["mt-titles","mt-ids","mz-in","mz-out","mz-fit","mz-slide
        identically and the map says a reopenable verdict is final. */
     ok("...and wears a broken ring, because a new dispute can reopen it",
        /<rect class="mvtag s re"[^>]*data-owner="c3"/.test(mark(line.provisional,{inst:90}).svg));
+    /* AND THE CARD SAYS IT IN WORDS. A reader who clicks a badge they do not
+       recognise is exactly the reader who needs a sentence, and the card is where
+       there is room for one — it used to print statusPill instead, which restated
+       the mark as a chip in the dispute's gold and explained nothing.
+       THE SENTENCE IS PINNED PER STATE, not merely asserted to exist: "explains
+       itself" is the whole point, and a card that said the same thing for every
+       badge would pass a check for a non-empty string. */
+    const words = (st, extra) => mapMarkWords(phaseClass(st), extra||{});
+    ok("the card explains a dispute",
+       words(line.disputed,{inst:90}) === "Answered YES, and disputed — a sealed vote is deciding.");
+    ok("...a clock still running",
+       words(line.answered,{inst:90}) === "Answered YES. Nobody has disputed it yet, and the window is still open.");
+    ok("...a vote that ended it",
+       words(line.settledVote,{route:"vote"}) === "A vote settled this YES, and it is final.");
+    ok("...a provisional verdict, and what can undo it",
+       words(line.provisional,{inst:90}) === "A vote decided YES, provisionally — a new dispute can reopen it.");
+    ok("...a round count, once there has been more than one",
+       /dispute round 2\./.test(words(line.disputed,{inst:90, rounds:1})));
+    ok("...and the surprise, with the number behind it",
+       /went against the stake, which sat 80% the other way\.$/.test(words(line.answered,{inst:20})));
+    /* WHAT IT MUST NOT SAY. On a live court `route` never arrives — it is one read
+       per claim — so a settled claim cannot know whether anybody ever disputed it.
+       The sentence says it is final and stops, rather than inventing the quiet
+       history that reads so much better. */
+    ok("...but never guesses a history it was not told",
+       words(line.settledUndisputed,{}) === "Settled YES, and it is final."
+       && !/nobody/i.test(words(line.settledUndisputed,{})));
+    ok("...and says so plainly when it WAS told",
+       /nobody disputing the answer/.test(words(line.settledUndisputed,{route:"undisputed"})));
     ok("...while a vote that ended it draws a solid one",
        /<rect class="mvtag s"[^>]*data-owner="c3"/.test(mark(line.settledVote,{route:"vote"}).svg)
        && !/mvtag s re/.test(mark(line.settledVote,{route:"vote"}).svg));

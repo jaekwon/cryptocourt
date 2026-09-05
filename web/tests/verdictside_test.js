@@ -152,8 +152,15 @@ const run = async (rows, v, mode) => {
   //     the other's substitute: a conditional written the right way round can
   //     still print the wrong markup, and correct markup can be reached from a
   //     condition that reads the phase instead of the side.
-  ok("the card's pill is conditional on the verdict side",
-     /\+ \(side \? "" : statusPill\(c\.statusText\)\)/.test(selCard));
+  /* THE CONDITION GREW A SECOND ARM. A pill is dropped for a settled side, as it
+     always was, and now also for any claim the map badges — those explain
+     themselves in a sentence on the card instead of repeating the mark as a chip
+     in the dispute's gold. Both arms are pinned, because dropping the pill for
+     everything would pass a check that only looked for the badge arm. */
+  ok("the card's pill is conditional on the verdict side and the badge",
+     /\+ \(side \|\| marked \? "" : statusPill\(c\.statusText\)\)/.test(selCard));
+  ok("...and a badged claim gets words in its place",
+     /mapMarkWords\(pc, c\)/.test(selCard) && /const marked = mapBadged\(pc\);/.test(selCard));
   ok("...and the side it reads is a SETTLED side, not any phase's",
      /const side = pc\.short === "settled" \? pc\.side : "";/.test(selCard));
   ok("...and its title goes through the shared sentence builder",

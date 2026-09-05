@@ -706,7 +706,11 @@ ok("every statusPill call is gated on there being no side to show", (()=>{
   // Every remaining call sits behind a "no side" test, or is the /needs ballot
   // row, which is handed a literal phase and has no claim record to read a side
   // from at all.
-  const guarded = l => /!sd\?|!side\?|dSide\?|side \? ""|rowVerdict\(/.test(l)
+  // `side || marked ? ""` is the map card's: it drops the pill for a settled side
+  // AND for every claim its node badges, which now explains itself in a sentence
+  // instead — see mapMarkWords. Still a "no side to show" guard; the set of sides
+  // it knows about grew.
+  const guarded = l => /!sd\?|!side\?|dSide\?|side \? ""|side \|\| marked \? ""|rowVerdict\(/.test(l)
                     || l.includes('statusPill("disputed")');
   const bad = calls.filter(l => !guarded(l));
   if(bad.length) console.log("   unguarded:", bad);
