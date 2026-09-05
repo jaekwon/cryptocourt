@@ -121,7 +121,15 @@ ok("strip rows outside data-sortable, folded in search", src.includes('<section 
 ok("strip caption says when a claim leaves the list",
    src.includes("when its rewards are opened, not when it settles"));
 ok("...and still says it ignores moderation",
-   src.includes("a claim hidden from the docket above still appears here"));
+   src.includes("a claim hidden from the docket appears here while it can still be flagged"));
+/* AND THAT IT DOES NOT REPEAT THE DOCKET. The two lists overlap by nature — a
+   settled claim stays flaggable until its rewards are opened — so this one
+   showed four of orem's claims a second time under a second heading, which
+   narrowing to a folder of three turned into six rows. It lists what the docket
+   does not show now, and the caption is where a reader learns that, so the rule
+   and the sentence are pinned together. */
+ok("...and that it does not repeat the docket",
+   src.includes("Claims the docket above already lists are not repeated here"));
 ok("pending caption verbatim", src.includes("Seeded and appeal claims that no one has answered yet"));
 ok("overflow never labeled as the total", src.includes("the chain's page shows the nearest 50"));
 ok("demoRender emits the strip sections", src.includes("## Still flaggable") && src.includes("## Awaiting an answer"));

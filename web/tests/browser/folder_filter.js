@@ -38,16 +38,10 @@ const PAGE = 'file://' + path.join(__dirname, '..', '..', 'index.html');
     const c = k => { const e = document.querySelector(`[data-count="${k}"]`); return e ? +e.textContent.trim() : null; };
     const chip = k => { const e = document.querySelector(`.gchips [data-show="${k}"] .n`); return e ? +e.textContent.trim() : null; };
     const head = document.querySelector("[data-qcount]");
-    const chain = (() => { const sec = document.querySelector('[data-group="review"]'); if(!sec) return null;
-      const rows = [...sec.querySelectorAll(".crow.claimrow")];
-      return {vis: rows.filter(r => !r.classList.contains("fhide")).length, total: rows.length,
-              head: (sec.querySelector("[data-chaincount]") || {}).textContent,
-              gone: sec.classList.contains("qhide"),
-              chip: (document.querySelector('.gchips [data-show="review"] .n') || {}).textContent,
-              chipGone: !!document.querySelector('.gchips [data-show="review"].ghide')}; })();
+
     const rows = [...document.querySelectorAll(".foldsel")];
     return {rows: shown.length, open: c("open"), settled: c("settled"),
-            chipOpen: chip("open"), chipAll: chip("all"), chain,
+            chipOpen: chip("open"), chipAll: chip("all"),
             head: head ? head.textContent.trim() : null,
             folders: rows.length,
             ticked: rows.filter(r => r.getAttribute("aria-checked") === "true").length,
@@ -57,6 +51,16 @@ const PAGE = 'file://' + path.join(__dirname, '..', '..', 'index.html');
 
   const a = await snap();
   ok("the Folders rows are the control", a.folders >= 2, JSON.stringify(a));
+  /* NO CLAIM IS ON THIS PAGE TWICE. "Still flaggable" is the chain's own list
+     and overlaps the docket by nature — a settled claim stays flaggable until
+     its rewards are opened — so it repeated four of orem's claims under a
+     second heading. Narrowed to a folder of three that read as six. Reported. */
+  const twice = await page.evaluate(() => {
+    const ids = [...document.querySelectorAll("#qscope .crow.claimrow")]
+      .map(r => (r.getAttribute("href") || "").split("/").pop());
+    return [...new Set(ids.filter((v, i) => ids.indexOf(v) !== i))];
+  });
+  ok("...and no claim is listed twice on the page", twice.length === 0, JSON.stringify(twice));
   /* THE SECOND ROW OF CHIPS UNDER THE SEARCH IS GONE. It duplicated the Folders
      section and flattened subfolders into entries of their own. */
   ok("...and there is no separate chip row", a.chipRow === false);
@@ -121,42 +125,6 @@ const PAGE = 'file://' + path.join(__dirname, '..', '..', 'index.html');
      drawers inside it, and a chain subfolder's path is its own fid rather than
      "parent.child", so there is no prefix to test — the row carries its whole
      subtree. */
-  /* THE CHAIN'S OWN LISTS NARROW TOO. Reported: ticking a folder of three
-     claims left "Still flaggable" below it listing far more than three. Those
-     rows carry no data-q — that is deliberate, it keeps a claim that is also on
-     the docket from being counted twice — and the filter had been reading the
-     same attribute, so it never saw them. */
-  const chainNarrow = await page.evaluate(async () => {
-    const rows = [...document.querySelectorAll(".foldsel")];
-    const sec = document.querySelector('[data-group="review"]');
-    const all = [...sec.querySelectorAll(".crow.claimrow")];
-    const out = {total: all.length, seen: []};
-    const saved = new Set(FOLD_ON);   // this probe drives the selection; put it back
-    for(const r of rows){
-      FOLD_ON = new Set(); applyFolders(); r.click();
-      await new Promise(z => setTimeout(z, 150));
-      out.seen.push({vis: all.filter(x => !x.classList.contains("fhide")).length,
-                     gone: sec.classList.contains("qhide"),
-                     chip: (document.querySelector('.gchips [data-show="review"] .n')||{}).textContent,
-                     chipGone: !!document.querySelector('.gchips [data-show="review"].ghide'),
-                     head: (sec.querySelector("[data-chaincount]")||{}).textContent});
-    }
-    FOLD_ON = saved; applyFolders(); await new Promise(z => setTimeout(z, 150));
-    return out;
-  });
-  ok("the chain's flaggable list narrows to the folder",
-     chainNarrow.seen.some(v => v.vis > 0 && v.vis < chainNarrow.total), JSON.stringify(chainNarrow));
-  ok("...its heading says how many of the chain's list that is",
-     chainNarrow.seen.every(v => /^\d+ of /.test(v.head || "")), JSON.stringify(chainNarrow.seen.map(v=>v.head)));
-  ok("...its chip counts the same rows",
-     chainNarrow.seen.every(v => +v.chip === v.vis), JSON.stringify(chainNarrow.seen));
-  /* AND AN EMPTY ONE GOES, rather than sitting there as a heading over nothing
-     with a chip that blanks the page when picked. */
-  ok("...and when the folder holds none of them the list goes away",
-     chainNarrow.seen.some(v => v.vis === 0 && v.gone), JSON.stringify(chainNarrow.seen));
-  ok("...taking its chip with it",
-     chainNarrow.seen.every(v => (v.vis === 0) === v.chipGone), JSON.stringify(chainNarrow.seen));
-
   const subtree = await page.evaluate(async () => {
     // THE ROW IS FOUND BY WHAT IT SAYS, not by what the attribute already
     // contains. Looking for a row that has several keys made this assertion
@@ -231,6 +199,64 @@ const PAGE = 'file://' + path.join(__dirname, '..', '..', 'index.html');
   ok("...it navigates there instead",
      linkClick && /^#\/c\/[a-z0-9-]+\/f\//.test(linkClick.hash), JSON.stringify(linkClick));
 
+
+  /* THE CHAIN'S LIST, ON THE COURT THAT HAS SOMETHING TO PUT IN IT. Every row
+     of orem's was a claim from the docket above, so that list is gone from the
+     page. annex keeps one — a claim hidden by moderation, absent from the
+     docket and still policeable, which is the whole reason the section exists.
+     Dedupe had to leave that standing, or the fix would have deleted the only
+     rows that were ever worth showing. */
+  await page.goto(PAGE + '#/c/annex', {waitUntil: 'networkidle0'});
+  await new Promise(r => setTimeout(r, 800));
+  const annex = await page.evaluate(async () => {
+    const idsOf = e => [...e].map(r => (r.getAttribute("href") || "").split("/").pop());
+    const all = idsOf(document.querySelectorAll("#qscope .crow.claimrow"));
+    const sec = document.querySelector('[data-group="review"]');
+    if(!sec) return {noSection: true, all};
+    const out = {dups: [...new Set(all.filter((v, i) => all.indexOf(v) !== i))],
+                 restHead: (sec.querySelector("[data-chaincount]") || {}).textContent,
+                 rev: idsOf(sec.querySelectorAll(".crow.claimrow")),
+                 onDocket: idsOf(document.querySelectorAll('section[data-qsec] .crow.claimrow:not(.offp)'))};
+    /* THE FOLDER REACHES THE CHAIN'S LIST, both ways. annex/5 is filed in
+       Reading room and is the list's only row, so that folder must keep it and
+       any other folder must take it away. These rows carry no data-q — the
+       filter reads the folder off them, not off the search's attribute. */
+    const pick = async name => {
+      const r = [...document.querySelectorAll(".foldsel")].find(x => x.textContent.includes(name));
+      FOLD_ON = new Set(); applyFolders(); r.click();
+      await new Promise(z => setTimeout(z, 150));
+      return {rows: idsOf(sec.querySelectorAll(".crow.claimrow:not(.fhide)")),
+              gone: sec.classList.contains("qhide"),
+              head: (sec.querySelector("[data-chaincount]") || {}).textContent,
+              chipGone: !!document.querySelector('.gchips [data-show="review"].ghide')};
+    };
+    out.inFolder = await pick("Reading room");
+    out.otherFolder = await pick("Deeds");
+    FOLD_ON = new Set(); applyFolders();
+    return out;
+  });
+  ok("the chain's list keeps what the docket does not show",
+     !annex.noSection && annex.rev.length > 0 && annex.rev.every(id => !annex.onDocket.includes(id)),
+     JSON.stringify(annex));
+  ok("...with nothing listed twice there either", !annex.noSection && annex.dups.length === 0,
+     JSON.stringify(annex.dups));
+  ok("...and the folder it is filed in keeps it",
+     annex.inFolder && annex.inFolder.rows.length > 0 && !annex.inFolder.gone,
+     JSON.stringify(annex.inFolder));
+  ok("...while any other folder takes it away",
+     annex.otherFolder && annex.otherFolder.rows.length === 0 && annex.otherFolder.gone,
+     JSON.stringify(annex.otherFolder));
+  /* THE HEADING COUNTS WHAT IS UNDER IT, in both states. At rest it is the bare
+     figure; under a folder it names the chain's queue as the denominator, so
+     "1 of 1" is the list saying it is showing you all of it. A heading that
+     stays on its rest figure while the rows below it change is the bug this
+     whole thread started from. */
+  ok("...and the heading follows the rows into the folder",
+     annex.inFolder.head !== annex.restHead && /^\d+ of \d+$/.test(annex.inFolder.head || ""),
+     `rest ${JSON.stringify(annex.restHead)} -> ${JSON.stringify(annex.inFolder.head)}`);
+  ok("...which takes the emptied chip with it",
+     annex.otherFolder && annex.otherFolder.chipGone === true && !annex.inFolder.chipGone,
+     JSON.stringify([annex.inFolder, annex.otherFolder]));
 
   ok("no page errors from the filter", errs.length === 0, errs.slice(0, 2).join(" | "));
   console.log(fail ? "\n" + fail + " FAILURES" : "\nALL PASS");

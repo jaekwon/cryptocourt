@@ -385,6 +385,23 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
      src.includes("const fk = foldOf[r.id];")
      && /data-fold="\$\{esc\(fk && fk\.length\? fk\.join\(" "\) : "~none"\)\}"/.test(src));
 
+  /* TWO RULES THE OFFLINE SAMPLE CANNOT PUT ON SCREEN, pinned here rather than
+     left to a browser case that never runs.
+     OFF-PAGE IS NOT SHOWN. The chain's lists drop a claim the docket above
+     already lists, and an off-page row is rendered-and-hidden, not shown — so
+     it must not count. Were it counted, turning to page 2 of a docket would
+     quietly delete claims from the flaggable list, which is the one list that
+     is supposed to reach past the page. No sample court paginates.
+     THE DENOMINATOR IS THE CHAIN'S QUEUE. "2 of 50" is the list saying how much
+     of the chain's queue it is showing; a bare "2" says nothing about the 48.
+     It only differs from the plain figure when some rows were dropped or the
+     queue runs past this page, and no sample court does either. */
+  ok("off-page rows do not count as shown by the docket",
+     src.includes("const onPage = new Set(rowsAll.filter(cl=>!cl.offp).map(cl=>cl.id));"));
+  ok("the chain heading's denominator is the whole queue",
+     src.includes("const rest = shown===total? String(shown) : `${fmtN(shown)} of ${fmtN(total)}`;")
+     && /chainHead\(stripRows\.length, stripQ\.rows\.length\+\(stripQ\.more\|\|0\)\)/.test(src));
+
   console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");
   process.exit(fail?1:0);
 })();

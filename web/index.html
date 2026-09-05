@@ -3172,7 +3172,18 @@ const DEMO_OVERLAY = {
         {name:"Infrastructure",   claims:[3,7,11], img:"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAUgAAABYCAIAAAAY1/lLAAACgklEQVR42u3TZ1KTUQCF4bsYKQoqCSU9oamQBELzH1VALLtzM25HZhwcBmkJKfe7eWaeFZw5b3hVngOyaOlw8yHBOpC1nptPEjZkQ+Gw+XzChqSSvgm7MgdEqIeeb4edA+JROGq+XJio5IAY9CXpm7CrOWCE+tizsCHNpP+FnQeGqXDUGrQwUcsDQzCEnoUNQ0z6uDVkYbKWBwaheNwalTBZnwf6aIQ9CxvSTFrYkFrPwoYX93zSilaYbMwDXSmetCMXphoLwHPE37OwIc2kb8JeXgDulbmehQ0J9nw77EXgr+JpOw1hamURxlzptJ2YML2yCOMpvZ6FzZgnvZW2ML26BGMi+Z6FjZ6FDRlN+mxrPAkbPacY9uu1AqRBz8JG0sIGPWcs7PUCZE7pbJtHCJssKX/Z5jmuwy5C5ITaddhvPhQhWhIVNnpG2Og55bA/lmDkpChsEur5vMMgCBs9pxj2zKcSDI3khhZ2GQZNacJG0gibKFXOO4xQmNkoQ79ULjrEIMxulOHltBRb2BXoWeVihwiF2c0KdEs5wkbSCBs904ewm1V4SOVyhywKb5tV+J82hI2eiS3sVhWuVS93SMZ12DXGWfVyl/QIW88ImwSS/rpL8sK7do1x4OvjFnadhLm4sJE0yYS9VSclPo2w9YywiTPpqz24I7zfbpBFvouw01G72oMnCVvSJBl2p0HMfJTewl4mTt6JsBPq+dsevFCY6ywTA1+kn2H//nUBJEbYIGxA2ICwAWEDD4Wd21ulv+rf92G0hK1nhM39SR9AVEJuf5XeeA8xh71GV+o/DiByIb+/xjO5C9kJ+2CNx3kJwtYzRBH2One4BcJOR+PnZ0jDH8F7olvAx/v1AAAAAElFTkSuQmCC"},
         {name:"Filings & audits", claims:[6,8,9], img:"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAUgAAABYCAIAAAAY1/lLAAACVElEQVR42u3Ta05TYRSG0W8+yKWlN6C304KUQmkBfyoiCohOwRk4SYciiQkhKtFCac/ZXckawd7vk94294FgkhNAxLBbAyAYYYOwgUKE/a41AIJJOyulX9wC4oTdXCn9yV0gYNgih+BhixyKF3Zrpfw0bgcBw37ovHUA5EdqvSrP1nn7AFis9OP7NyAYYYOwAWEDwgaEDTwWdme1knPv20NgKqm7WikQD4OAYYscgof90EV7CNxL2WolmIvOEJZcytaqgXkwwq6KHIKE3VurLiGPR9gih+KFXePeh84hBCBskRMx7P56jX8yFIQtchC2yGHmYe+u15kJY0LYwV12D2GBhC1yIoa9t1Fnbi67RzAHwhY5McNusHCGyIzDfr3RIFeMEmEH97F7BE8gbIUTMez90hbFYrUIW+QIG5EjbPIbeTZimaVBaYvYPmUjlk0alLdZHhYvbEROYcM+KG+DEoSNyBE2Imf+YQ/LO/A/rrIRRZGGmzswravsmDwTNiKPGPbh5g7MylXvmDy4C7sJL0FdwkbkCJsiu+4d89LSUaUJi6JAYSNypgi7BXmjzOeGPaq0IM+ue2OmJWxELmzIjZvemMek42oLCk3Gfw27DWHc9MfcETYijxj2uNqG8IQNIo8QdgeW1uf+JKQ0rnWAO6HCntQ6wG+EDSIXNoh8DmGf1LrAEwgbgrvtT3IlndS7wAzd7k4WLp3Wu8ALETaEj/xkbu7CzoA5e/Gwz+oZsEDChuC+7J7MRDprZEAOPSvsN40ekHPCBpELGyJGLmwI4uve6b2fkkvezpzQ2ckAAAAASUVORK5CYII="},
       ]},
-    annex:{desc:"Hidden from the directory by moderation — the sample's proof that direct links still open a court."},
+    /* THE FOLDERS ARE PART OF THE SPECIMEN. This court is where the sample keeps
+       its moderation cases, and annex/5 — hidden and answered — is the only
+       claim in the sample that the docket does not show but the chain's
+       flaggable list does. Filing it gives the folder filter something to reach
+       that is not on the docket: tick "Reading room" and the claim stays in the
+       list below, tick "Deeds" and the list goes. Without these two folders
+       that path has no case in the sample at all, and the docket-only court
+       cannot make one. */
+    annex:{desc:"Hidden from the directory by moderation — the sample's proof that direct links still open a court.", folders:[
+        {name:"Reading room", claims:[1,5]},
+        {name:"Deeds",        claims:[2]},
+      ]},
     ledger:{desc:"Documentary and technical claims about Denver — filings, measurements, dated records. If a document can settle it, we hear it."},
   },
   relations:{ orem:[
@@ -6610,7 +6621,7 @@ function applyQ(qRaw){
     sec.classList.toggle("qhide", FOLD_ON.size>0 && !vis);
     const n = sec.querySelector("[data-chaincount]");
     if(n) n.textContent = FOLD_ON.size>0
-      ? `${vis} of ${n.hasAttribute("data-more")? `the chain's first ${n.getAttribute("data-listed")}` : n.getAttribute("data-listed")}`
+      ? `${vis} of ${n.getAttribute("data-total")}`
       : n.getAttribute("data-rest");
     /* "…and 38 more" counts the chain's queue, which the folder says nothing
        about. True at rest, misleading under a filter. */
@@ -10439,8 +10450,30 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
      A count on a chip that has none is left off rather than printed as 0. */
   const gN = n => n? ` <span class="n">${fmtN(n)}</span>` : "";
   const gChip = (k, label, n, on) => `<button class="pill void" data-show="${k}" aria-pressed="${on?"true":"false"}">${label}${gN(n)}</button>`;
-  const stripN = (stripQ&&stripQ.rows)? stripQ.rows.length : 0;
-  const pendN  = (pendQ&&pendQ.rows)? pendQ.rows.length : 0;
+  /* A CLAIM ON THIS PAGE IS NOT LISTED AGAIN BELOW IT. These are the chain's
+     own lists and they overlap the docket by nature — a settled claim stays
+     flaggable until its rewards are opened, so it sits in Recently settled and
+     in Still flaggable at once. On a full docket that reads as two long lists;
+     narrowed to a folder of three claims it reads as six claims. Reported.
+     WHAT THE LIST IS FOR IS THE ONES THE DOCKET DOES NOT SHOW: it ignores
+     moderation, so a claim hidden from the docket appears here, and it reaches
+     past this page. Those are the rows it keeps. Where the docket already shows
+     the claim, the docket row is the one to read.
+     OFF-PAGE ROWS ARE NOT SHOWN ROWS. They are rendered and hidden, so they
+     count as absent here — otherwise page 2 of a docket would silently take
+     claims out of this list. */
+  const onPage = new Set(rowsAll.filter(cl=>!cl.offp).map(cl=>cl.id));
+  const stripRows = ((stripQ&&stripQ.rows)||[]).filter(r=>!onPage.has(r.id));
+  const pendRows  = ((pendQ&&pendQ.rows)||[]).filter(r=>!onPage.has(r.id));
+  const stripN = stripRows.length;
+  const pendN  = pendRows.length;
+  /* THE DENOMINATOR IS THE CHAIN'S WHOLE QUEUE, in every state this heading has:
+     at rest, deduped, and under a folder. One number to compare against, rather
+     than "first 12 of 50" at rest and "2 of 12" under a filter. */
+  const chainHead = (shown, total) => {
+    const rest = shown===total? String(shown) : `${fmtN(shown)} of ${fmtN(total)}`;
+    return `<span class="count"><span data-chaincount data-total="${esc(fmtN(total))}" data-rest="${esc(rest)}">${esc(rest)}</span> · the chain's own list</span>`;
+  };
   const showKey = ({open:1,settled:1,review:1,pending:1})[QP.show]? QP.show : "all";
   /* THE CHIP SAYS WHAT ITS HEADING SAYS, both the word and the figure.
      THE WORD: the chip read "settled" over a section headed "Recently settled",
@@ -10528,16 +10561,16 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
             isLive()? "" : esc(clockLine(NOW, "proposed", r.deadline, null))}</span>`);
       const prow = r => polrow(r, r.seeded? `<span class="m" style="display:block">seeded by a moderator</span>` : "");
       let g = "";
-      if(stripQ && stripQ.rows && stripQ.rows.length){
-        g += `<section data-qfold data-group="review" style="margin-top:22px"><h2 class="sec-h">Still flaggable <span class="count"><span data-chaincount data-listed="${stripQ.rows.length}"${stripQ.more? " data-more":""} data-rest="${esc(String(stripQ.more? `first ${stripQ.rows.length} of ${fmtN(stripQ.rows.length+stripQ.more)}` : stripQ.rows.length))}">${stripQ.more? `first ${stripQ.rows.length} of ${fmtN(stripQ.rows.length+stripQ.more)}` : stripQ.rows.length}</span> · the chain's own list</span></h2>
-        <p class="small muted" style="margin:0 0 8px">answered claims that can still be flagged as spam — nearest deadline first. A claim leaves this list when its rewards are opened, not when it settles, so a settled claim stays here while it can still be flagged. This list ignores moderation: a claim hidden from the docket above still appears here while it can still be flagged.</p>
-        <div class="docket">${stripQ.rows.map(srow).join("")}</div>
+      if(stripRows.length){
+        g += `<section data-qfold data-group="review" style="margin-top:22px"><h2 class="sec-h">Still flaggable ${chainHead(stripRows.length, stripQ.rows.length+(stripQ.more||0))}</h2>
+        <p class="small muted" style="margin:0 0 8px">answered claims that can still be flagged as spam — nearest deadline first. A claim leaves this list when its rewards are opened, not when it settles, so a settled claim stays here while it can still be flagged. Claims the docket above already lists are not repeated here — this is what it does not show you, which is why it ignores moderation: a claim hidden from the docket appears here while it can still be flagged.</p>
+        <div class="docket">${stripRows.map(srow).join("")}</div>
         ${stripQ.more? `<p class="small muted" data-chainmore style="margin:6px 0 0">…and ${fmtN(stripQ.more)} more — the chain's page shows the nearest 50; <a href="#/raw/${esc(slug)}" style="color:var(--accent-2)">the full queue is on the chain's own page →</a></p>`:""}</section>`;
       }
-      if(pendQ && pendQ.rows && pendQ.rows.length){
-        g += `<section data-qfold data-group="pending" style="margin-top:22px"><h2 class="sec-h">Awaiting an answer <span class="count"><span data-chaincount data-listed="${pendQ.rows.length}"${pendQ.more? " data-more":""} data-rest="${esc(String(pendQ.more? `first ${pendQ.rows.length} of ${fmtN(pendQ.rows.length+pendQ.more)}` : pendQ.rows.length))}">${pendQ.more? `first ${pendQ.rows.length} of ${fmtN(pendQ.rows.length+pendQ.more)}` : pendQ.rows.length}</span> · the chain's own list</span></h2>
-        <p class="small muted" style="margin:0 0 8px">Seeded and appeal claims that no one has answered yet — oldest first.</p>
-        <div class="docket">${pendQ.rows.map(prow).join("")}</div>
+      if(pendRows.length){
+        g += `<section data-qfold data-group="pending" style="margin-top:22px"><h2 class="sec-h">Awaiting an answer ${chainHead(pendRows.length, pendQ.rows.length+(pendQ.more||0))}</h2>
+        <p class="small muted" style="margin:0 0 8px">Seeded and appeal claims that no one has answered yet — oldest first. Claims the docket above already lists are not repeated here.</p>
+        <div class="docket">${pendRows.map(prow).join("")}</div>
         ${pendQ.more? `<p class="small muted" data-chainmore style="margin:6px 0 0">…and ${fmtN(pendQ.more)} more — <a href="#/raw/${esc(slug)}" style="color:var(--accent-2)">the full list is on the chain's own page →</a></p>`:""}</section>`;
       }
       return g;
