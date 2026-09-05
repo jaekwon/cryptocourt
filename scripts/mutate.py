@@ -134,6 +134,36 @@ PKGS = {
     # staging them added two suites to every mutation for nothing. (v0.57 claimed the
     # realm-test set's seven were all needed; that was wrong — kourtv2's imports are
     # curve, governor, grc20votes and twap, plus checkpoint transitively.)
+    #
+    # THE EXCLUSION IS A COST DECISION, NOT A VERDICT ON THOSE SUITES, and the
+    # difference matters: a package outside this map is unmeasured, and unmeasured
+    # reads the same as untested to anyone who looks. So cshares was measured once by
+    # hand rather than left to the assumption.
+    #
+    # SIXTEEN MUTATIONS ACROSS ITS CONSERVATION CORE — MintSet, RedeemSet, Resolve,
+    # RedeemWinning, CloseAt, RedeemClosed and TransferFrom — every one KILLED by
+    # cshares' own suite. They were not added to the corpus, because adding them
+    # would contradict the paragraph above for a package nothing deployed imports;
+    # they are recorded here so the exclusion is informed rather than assumed.
+    #
+    # The mutations were the ones that would matter if they lived: minting without
+    # locking collateral, redeeming a set without burning the shares, an overdraw off
+    # by one, a close price above par, the NO side paid the YES price, a paid position
+    # left standing to be paid again, and an unapproved spender moving another
+    # account's shares.
+    #
+    # tickbook, the other package in that sentence, got the same treatment: SIX
+    # mutations over Place, Take and Price — a tick off the grid resting, a bid
+    # resting at or above the best ask so the book crosses, a zero quantity
+    # resting, a taker crossing past its own limit, a bad side coerced instead of
+    # refused, and an off-grid tick priced. Every one KILLED.
+    #
+    # Twenty-two mutations across the two, no survivors. That is a statement about
+    # two suites and NOT about the packages being sound: these are the mutations a
+    # reader thought to write, and the corpus exists precisely because that is a
+    # weaker guarantee than a corpus run. If either package is ever imported by
+    # something deployed, it belongs in this map with rows of its own, and the
+    # measurement above is where to start rather than where to stop.
     "twap": (os.path.join(REPO, "realm/p/twap"),
              "examples/gno.land/p/kourt/twap/v0"),
     "curve": (os.path.join(REPO, "realm/p/curve"),
