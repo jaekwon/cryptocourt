@@ -571,6 +571,33 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
      && /if\(!isLive\(\)\)\{ show\(\); return; \}/.test(src)
      && /\}catch\(_\)\{ show\(\);/.test(src));
 
+  /* AND THE SET PAGE NO LONGER CALLS A GOVERNED SET "MODERATOR CURATION".
+     That sentence shipped unconditionally, and on kourt.xyz every one of covid's
+     six sets is born of a claim — FolderTree answers bornOf 1..6 — so it was
+     false on every set page the site had. The court page's folder row already
+     carried "affirmed by #N"; the page a reader actually lands on did not. */
+  ok("a born set says the court voted it into existence",
+     /The court voted this set into existence/.test(src)
+     && /claim #\$\{esc\(String\(f\.born\)\)\}<\/a>/.test(src));
+  ok("...and a declared one keeps the curation sentence",
+     /A set is moderator curation with zero economic weight/.test(src));
+  /* THE BRANCH IS ON `born`, which chainFolders stamps only from the tree row's
+     bornOf and leaves undefined at 0 — so a moderator's folder and a curation
+     folder both take the original sentence. A branch on anything else (fid,
+     source) would relabel declared folders as voted ones. */
+  /* AND THE LINK LOOKS LIKE A LINK. `a{color:inherit}` is the base rule, so the
+     anchor needed a style of its own or "claim #1" would have read as plain text.
+     It first carried class="hjump", which is scoped `.page-h .hjump` and reaches
+     nothing inside a subtitle — a class that implies a treatment it cannot apply
+     is worse than no class. */
+  ok("...and the subtitle's link is drawn as one",
+     /\.page-sub a\{color:var\(--accent\)\}/.test(src)
+     && /\.page-sub a:hover\{text-decoration:underline/.test(src));
+  ok("...without borrowing a class scoped to the heading",
+     !/<a class="hjump" href="#\/c\/\$\{esc\(slug\)\}\/\$\{esc\(String\(f\.born\)\)\}"/.test(src));
+  ok("...branching on born, not on where the set was read from",
+     /\$\{f\.born\s*\n?\s*\?/.test(src) || /\$\{f\.born$/m.test(src));
+
   console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");
   process.exit(fail?1:0);
 })();

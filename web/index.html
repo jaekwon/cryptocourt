@@ -507,6 +507,19 @@ code,.mono{font-family:var(--mono)}
 #timeline:focus,#timeline:focus-visible{outline:none; box-shadow:none}
 .page-h{font-family:var(--serif); font-size:clamp(26px,3.4vw,36px); font-weight:600; letter-spacing:-.015em; line-height:1.08; text-wrap:balance; overflow-wrap:anywhere}
 .page-sub{color:var(--ink-2); margin-top:8px; max-width:66ch}
+/* A LINK INSIDE A SUBTITLE, WHICH THIS FILE HAD NO WAY TO DRAW. The base rule is
+   `a{color:inherit}`, right for a row that is itself a link and wrong for one
+   word inside a paragraph — the set page's "claim #1" would have read as plain
+   text and gone nowhere a reader could see. The two candidates already here are
+   both scoped to something else: `.tlink` is `.tagrow .tlink`, a chip; `.hjump`
+   is `.page-h .hjump`, so it styles nothing at all down here while implying the
+   heading treatment.
+   ACCENT PLUS A HOVER UNDERLINE, which is exactly what `.page-h .hjump:hover`
+   does ten lines above — so the two links on this page agree rather than each
+   inventing a look. Scoped to .page-sub, and mine is the only anchor in any of
+   the six the file has. */
+.page-sub a{color:var(--accent)}
+.page-sub a:hover{text-decoration:underline; text-underline-offset:2px}
 .lead-row{display:flex; justify-content:space-between; align-items:flex-start; gap:20px; flex-wrap:wrap}
 
 section{margin-top:34px}
@@ -12252,7 +12265,26 @@ on(/^\/c\/([a-z0-9-]+)\/f\/([0-9.]+)$/, async (slug,fpath)=>{
        that the page does not already say in words. */
     + (f.img? `<img class="folderface" src="${esc(f.img)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : "")
     + (fdesc? `<p class="sub">${esc(fdesc)}</p>` : "")
-    + `<p class="page-sub">A set is moderator curation with zero economic weight — the claims below are ordinary claims of this court. ${curF.source==="chain"? "Read live from the chain." : curF.source==="local"? CUR_LABEL+"." : "Read from the sample data."}${omitted? ` ${omitted} hidden or unreadable row${omitted===1?" is":"s are"} omitted.`:""}</p>`
+    /* WHO MADE THIS SET, AND THE SENTENCE THAT USED TO GET IT WRONG ON EVERY ONE.
+       This page opened with "A set is moderator curation with zero economic
+       weight" unconditionally. Half of that is still true of every set — it holds
+       no stake, the claims below are ordinary claims — but "moderator curation" is
+       flatly false of a governed set, which exists because the court VOTED for it,
+       and that difference is the entire feature. Measured on kourt.xyz: all six of
+       covid's sets are born of a claim (FolderTree answers bornOf 1..6), so the
+       page was wrong on every set the site has.
+       THE COURT PAGE ALREADY SAID IT and this page did not — "affirmed by #1"
+       rides the folder ROW, so the provenance was one click away from the place a
+       reader lands when they follow the set. The row summarises; the page is where
+       a reader stops.
+       THE CLAIM IS THE EVIDENCE, so it is a link: it carries the stakes, the bond,
+       the verdict and the date, which is more than any sentence here could.
+       `born` is undefined for a moderator's folder and for curation — chainFolders
+       stamps it only from the tree row's bornOf, and 0 means declared — so the
+       original sentence stays exactly where it was always right. */
+    + `<p class="page-sub">${f.born
+        ? `The court voted this set into existence — <a href="#/c/${esc(slug)}/${esc(String(f.born))}">claim #${esc(String(f.born))}</a> settled YES, and carrying it was a second act anyone could take. It holds no stake of its own; the claims below are ordinary claims of this court.`
+        : "A set is moderator curation with zero economic weight — the claims below are ordinary claims of this court."} ${curF.source==="chain"? "Read live from the chain." : curF.source==="local"? CUR_LABEL+"." : "Read from the sample data."}${omitted? ` ${omitted} hidden or unreadable row${omitted===1?" is":"s are"} omitted.`:""}</p>`
     + (subs? `<section><h2 class="sec-h">Subsets</h2><div class="docket">${subs}</div></section>` : "")
     /* WHAT THIS COUNT COUNTS, when the two possible answers differ. The court
        page's folder row shows folderCount — the whole subtree — so Fauci reads
