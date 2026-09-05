@@ -11726,7 +11726,15 @@ on(/^\/c\/([a-z0-9-]+)\/f\/([0-9.]+)$/, async (slug,fpath)=>{
        affords — and on a folder with a picture and a description it ended up
        three elements down. Inline after the seal it reads as part of the title:
        "Fauci · COVID · on the map". */
-    + `<h1 class="page-h">${ICN_EYE_OPEN} ${safeInline(f.name)} <span class="seal">${esc(slug)}</span> `
+    /* THE EYE IS WRAPPED, and every other surface that draws it wraps it too —
+       .setmark in a title, .id in a row, .foldbox in the selector. The reset at
+       the top of this file is `img,svg{display:block}`, so an <svg> dropped into
+       a line of text is a BLOCK: the eye took a line of its own and pushed the
+       set's name onto a second one. Reported on a live set page.
+       .setmark RATHER THAN A NEW CLASS: it is the same mark saying the same
+       thing, and it already carries the inline-flex, the accent and the optical
+       nudge that put an eye on a baseline. */
+    + `<h1 class="page-h"><span class="setmark" role="img" aria-label="set">${ICN_EYE_OPEN}</span>${safeInline(f.name)} <span class="seal">${esc(slug)}</span> `
       /* AND IT GOES SOMEWHERE, WHICH THE ARROW IS HOW THIS PAGE SAYS. Every other
          link that leaves for another view ends in one — "Open claim page →",
          "the moderation log →", "back to the docket →" — so the one that did not
