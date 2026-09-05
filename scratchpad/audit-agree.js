@@ -128,6 +128,67 @@ const cmp = (what, a, b, note) => {
         "the court page's folder row vs the folder page's own Claims heading");
   }
 
+  // ---- the overlay vs THE CHAIN'S OWN WORDS -------------------------------
+  // The strongest comparison available: /raw is the realm's own render, the
+  // markdown a gnoweb visitor sees. Anywhere the friendly page and that page
+  // disagree, the overlay is the one that is wrong — it is a reading of the
+  // chain, and the chain is right by construction.
+  console.log("\ncourt page  vs  the chain's own render");
+  await go("#/raw/" + COURT);
+  const raw = await page.evaluate(() => {
+    const src = (document.getElementById("rawsrc") || {}).textContent || "";
+    return {claims: (src.match(/^-\s.*?—\s*(\d[\d,]*)\s*claims?/im) || [])[1] || null,
+            heading: (src.match(/^#\s+(.+)$/m) || [])[1] || null,
+            price: (src.match(/price:\s*([\d,]+)\s*ugnot/i) || [])[1] || null,
+            supply: (src.match(/in circulation:\s*([\d,]+)/i) || [])[1] || null,
+            reservoir: (src.match(/reward reservoir:\s*([\d,]+)/i) || [])[1] || null};
+  });
+  // sanitize.InlineText backslash-escapes markdown punctuation, so the chain's
+  // heading reads "COVID\-19 Origins \& Response Court" — the same name, spelled
+  // for a markdown renderer. Compare the letters.
+  const unesc = t => norm(t).replace(/\\(.)/g, "$1");
+  cmp("the court's name, against the chain's heading", unesc(court.h1), unesc(raw.heading));
+  // The chain counts in base units and the page in CC — 1e6 to one — so the
+  // figures differ by construction and comparing them raw reported the page for
+  // doing its job. Compared after the conversion the page performs.
+  if (raw.supply) {
+    const chainCC = Math.round(Number(raw.supply.replace(/,/g, "")) / 1e6);
+    cmp("coin supply, against the chain (base units → CC)",
+        Number((court.supply || "0").replace(/,/g, "")), chainCC);
+  }
+
+  for (const r of rows.slice(0, 2)) {
+    console.log(`\nclaim #${r.id}  vs  the chain's own render of it`);
+    await go(`#/raw/${COURT}/${r.id}`);
+    const rc = await page.evaluate(() => {
+      const src = (document.getElementById("rawsrc") || {}).textContent || "";
+      return {title: (src.match(/^#\s+(.+)$/m) || [])[1] || null,
+              says: /disputed|dispute/i.test(src) ? "disputed"
+                  : /provisional/i.test(src) ? "provisional"
+                  : /settled/i.test(src) ? "settled" : "open"};
+    });
+    // the chain escapes markdown punctuation; compare the letters, not the slashes
+    const strip = t => norm(t).replace(/\\(.)/g, "$1");
+    cmp(`#${r.id} title, against the chain`, strip(r.title.replace(/\s*(YES|NO)\s*\??[\s\S]*$/, "")), strip(rc.title));
+    cmp(`#${r.id} is contested, against the chain`, r.contested, rc.says === "disputed");
+  }
+
+  // ---- the map's card vs the claim's own page -----------------------------
+  console.log("\nthe map's card  vs  the claim page");
+  const first = rows[0];
+  await go(`#/c/${COURT}/map?focus=${first.id}`, 5200);
+  const card = await page.evaluate(() => {
+    const t = document.querySelector(".mapsel-t");
+    return {title: t ? t.textContent.replace(/\s+/g, " ").trim() : null,
+            side: (t && t.querySelector(".vtag") || {}).textContent || null};
+  });
+  if (!card.title) console.log("  (the map did not open a card for it — skipped)");
+  else {
+    cmp(`#${first.id} title on the map`, norm(first.title.replace(/\s*(YES|NO)\s*\??[\s\S]*$/, "")),
+        norm(card.title.replace(/\s*(YES|NO)\s*\??[\s\S]*$/, "")));
+    cmp(`#${first.id} side on the map`, norm(first.side), norm(card.side));
+  }
+
   console.log(bad ? `\naudit-agree: ${bad} disagreement(s)` : "\naudit-agree: every surface tells the same story.");
   await browser.close();
   process.exit(0);

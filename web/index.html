@@ -10807,6 +10807,15 @@ function mountMap(slug, data, focusId, focusPath){
       z=Math.min(MAPK.zMax, Math.max(1, MAPK.readPx*fit.w/(MAPK.fs.title*((el&&el.clientWidth)||960))));
       apply();
       const a=box.querySelector(`.mnode-a[data-id="${focusId}"]`); if(a) a.focus({preventScroll:true});
+      /* AND IT IS SELECTED, not merely centred. ?ffocus=<path> six lines above
+         calls select() for its folder; ?focus=<id> zoomed to its claim, gave it
+         DOM focus, and left the card reading "Click a claim to see what it
+         asserts" — with the claim you had just clicked from sitting in the
+         middle of the screen. A claim page's "map →" link is that parameter, so
+         the promise the link makes was kept everywhere except the panel a
+         reader looks at to find out what they arrived at.
+         After the zoom, because select() re-centres and this must not fight it. */
+      select({kind:"claim", id:focusId});
     } }
   else { frameCore(); apply(); }
 }
