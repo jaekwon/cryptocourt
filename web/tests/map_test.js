@@ -406,16 +406,16 @@ ok("A-I pass on live 50-claim ring (both modes)", livepass);
                       2:{title:"Another"}}, linkFolders:true};
   const fc = mapFolderCard({name:"Fauci", count:9, subs:3, claims:[1,2], path:"2"}, fd, "covid");
   ok("the folder card names the folder", fc.includes("Fauci"));
-  ok("it counts the whole subtree and the subfolders", fc.includes("9 claims in all")
-     && fc.includes("3 subfolders") && fc.includes("2 filed here directly"));
+  ok("it counts the whole subtree and the subsets", fc.includes("9 claims in all")
+     && fc.includes("3 subsets") && fc.includes("2 filed here directly"));
   ok("it lists the claims filed directly in it", fc.includes('data-go="1"') && fc.includes('data-go="2"'));
   ok("and offers the folder page rather than taking it",
-     fc.includes('href="#/c/covid/f/2"') && fc.includes("Open folder page"));
+     fc.includes('href="#/c/covid/f/2"') && fc.includes("Open set page"));
   // The loose bucket is the map's own, not a folder the court filed — a link
   // there would 404 on a path that does not exist.
   const pf = mapFolderCard({name:"docket — newest 50", count:50, subs:0, claims:[1], pseudo:true, path:null}, fd, "covid");
   ok("a pseudo folder offers no page and says why",
-     !pf.includes("Open folder page") && pf.includes("the map's own bucket"));
+     !pf.includes("Open set page") && pf.includes("the map's own bucket"));
   // Fifty claims is a docket page, not a card.
   const many = mapFolderCard({name:"big", count:40, subs:0, claims:[...Array(40).keys()].map(i=>i+1), path:"1"},
                              {claims:Object.fromEntries([...Array(40).keys()].map(i=>[i+1,{title:"t"}])), linkFolders:true}, "covid");

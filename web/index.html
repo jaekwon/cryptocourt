@@ -6555,7 +6555,7 @@ function qCaption(state){
      names is both wrong about the count and wrong about the noun. "rows" is the word
      that covers both without pretending they are the same thing — the idle caption
      above still names them separately, which is where the reader needs the detail. */
-  const unit = noun==="court names"? "name" : /folder/.test(noun)? "row" : "title";
+  const unit = noun==="court names"? "name" : /\bset\b/.test(noun)? "row" : "title";
   if(state.mode==="active") return `${fmtN(state.matches)} of ${fmtN(state.loaded)} loaded ${unit}s match "${state.q}"${state.orderTail!==undefined? state.orderTail : " · newest first"}`;
   if(state.mode==="zero")
     return state.demo? (state.total>state.loaded
@@ -6681,7 +6681,7 @@ function applyQ(qRaw){
   /* SO DO THE SHOW CHIPS AND THE FIGURE OVER THE BOX. Both are rendered from
      the window totals and stayed there: with a folder ticked the chip read
      OPEN 8 directly above a section headed OPEN 2, and the box still offered to
-     search "all 14 claims and folders" when it would only ever match 9 of them.
+     search "all 14 claims and 3 sets" when it would only ever match 9 of them.
      COUNTED OFF THE ROWS, NOT off data-q, because the chain's lists have none —
      that attribute is what the search counts, and these chips count what is on
      screen. */
@@ -6721,7 +6721,7 @@ function applyQ(qRaw){
     ? (matches? {mode:"active", matches, loaded:QCTX.loaded, q, kind:QCTX.kind, orderTail:QCTX.orderTail}
               : {mode:"zero", demo:QCTX.demo, q, kind:QCTX.kind, loaded:QCTX.loaded, total:QCTX.total})
     /* A SURFACE WITH A HEADING SAYS IT ONCE. The court page states the count in
-       "Search · all 22 claims and folders" above the box; the idle caption under
+       "Search · all 22 claims and 3 sets" above the box; the idle caption under
        it then repeated the same figure in different words. While a query runs
        the caption earns its line — it is the match count, which nothing else
        shows — so only the IDLE branch is dropped. */
@@ -6932,7 +6932,7 @@ on(/^\/$/, async ()=>{
         <div class="bd">
           <div class="line"><span class="l">A slug and a name</span><span class="r">The slug is the address — <span class="mono">/covid</span> — and cannot be changed afterwards. Both are placeholders in the transaction until you edit them.</span></div>
           <div class="line"><span class="l">Its own coin</span><span class="r">The court mints one, and every stake, bond and reward on it is denominated in that coin rather than in GNOT.</span></div>
-          <div class="line"><span class="l">You moderate it</span><span class="r">The address that starts a court is its first moderator: you can file folders, seed claims and hide rows. Moderation never touches a stake, a bond or a verdict.</span></div>
+          <div class="line"><span class="l">You moderate it</span><span class="r">The address that starts a court is its first moderator: you can file sets, seed claims and hide rows. Moderation never touches a stake, a bond or a verdict.</span></div>
           <div class="line"><span class="l">The polish window</span><span class="r">The second button opens the court with one hour before staking begins, so an author can fix wording nobody has staked against yet. A court started without it takes stake immediately, and a title freezes at the first stake either way.</span></div>
           <p class="small muted">Starting a court is a transaction like any other on this site: it is signed with your own key and costs the chain's ordinary fee. Nothing here holds it for you.</p>
         </div></dialog>`;
@@ -7078,7 +7078,7 @@ on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
      totalClaims stays a claims-only number beside it: it answers the jump hint ("no
      claim #40 — this court has 19"), where folders have no part. */
   const foldRows = document.querySelectorAll("#qscope .folderrow[data-q]").length;
-  QCTX = {kind: foldRows? "claim titles and folder names" : "claim titles",
+  QCTX = {kind: foldRows? "claim titles and set names" : "claim titles",
     demo:!isLive(), loaded:allRows.length + foldRows,
     total:totalClaims + foldRows, slug, totalClaims, orderTail:"", headed:true};
   if(QP.sort) applySort(QP.sort); // before applyQ — the search caption reads QCTX.orderTail
@@ -7249,7 +7249,7 @@ function folderCount(f){
    EXTRACTED FROM THE ROUTE so it can be tested. It lived inline in the folder
    view and carried a regression nothing could reach: when chainFolders started
    nesting, this searched only the root array, so every chain SUBFOLDER answered
-   "no such folder" while the court page linked to it. A harness that could only
+   "no such set" while the court page linked to it. A harness that could only
    see chainFolders' output tested the tree and never the lookup.
 
    Returns {folder, trail} or null. */
@@ -7366,13 +7366,13 @@ function folderSubtree(f, path, out){
    so the row loses nothing it had. */
 function folderRowHtml(slug,f,path,toggle){
   const n = folderCount(f), subs = (f.folders||[]).length;
-  const meta = `<span><span class="t">${safeInline(f.name)}</span><span class="m" style="display:block">${n} claim${n===1?"":"s"}${subs?` · ${subs} subfolder${subs===1?"":"s"}`:""}</span></span>
+  const meta = `<span><span class="t">${safeInline(f.name)}</span><span class="m" style="display:block">${n} claim${n===1?"":"s"}${subs?` · ${subs} subset${subs===1?"":"s"}`:""}</span></span>
     <span class="px"><b>${n}</b><small>claims</small></span>`;
   if(!toggle) return `<a class="crow folderrow" data-q="${esc(f.name + " " + (f.desc||""))}"
     href="#/c/${esc(slug)}/f/${path}">
     <span class="id">${ICN_FOLDER}</span>
     ${meta}
-    <span class="pill void">folder</span></a>`;
+    <span class="pill void">set</span></a>`;
   const keys = folderSubtree(f, path, []).join(" ");
   return `<div class="crow folderrow foldsel" role="checkbox" aria-checked="false" tabindex="0"
     data-q="${esc(f.name + " " + (f.desc||""))}" data-fold-keys="${esc(keys)}">
@@ -7380,8 +7380,8 @@ function folderRowHtml(slug,f,path,toggle){
     ${meta}
     <a class="pill void foldopen" href="#/c/${esc(slug)}/f/${path}">open →</a></div>`;
 }
-/* "all 19 claims and 3 folders" — TWO NOUNS, TWO NUMBERS. It read "all 22 claims
-   and folders": one figure covering both, which parses as "22 claims-and-folders"
+/* "all 19 claims and 3 sets" — TWO NOUNS, TWO NUMBERS. It read "all 22 claims
+   and 3 sets": one figure covering both, which parses as "22 claims-and-folders"
    and leaves a reader unable to tell whether the folders listed right above it
    are inside that 22 or extra to it. They were inside it — the number was a sum —
    so anyone who guessed the other way was wrong about how much the box searches.
@@ -7391,7 +7391,7 @@ function folderRowHtml(slug,f,path,toggle){
    two separate expressions that happened to match. */
 function searchScope(nClaims, nFolders){
   const c = `${fmtN(nClaims)} claim${nClaims===1? "":"s"}`;
-  return "all " + (nFolders? `${c} and ${fmtN(nFolders)} folder${nFolders===1? "":"s"}` : c);
+  return "all " + (nFolders? `${c} and ${fmtN(nFolders)} set${nFolders===1? "":"s"}` : c);
 }
 function isDone(c){ const st=(c.statusText||"").toLowerCase(); return /^closed|provclose|settled/.test(st); }
 /* ---------------- the one-way curve, quoted client-side ----------------
@@ -9228,7 +9228,7 @@ function mapTree(data, mode){
        as f/2.0, f/2.1 and f/2.2. resolveFolderPath rejects a dotted path on a
        chain court outright — "one exact integer", deliberately, since 1.2 is not
        an alias of 1 — so every subfolder on the map was a dead link that landed
-       on "No such folder on this court". The root folders worked, which is what
+       on "No such set on this court". The root folders worked, which is what
        made it look like the map was fine.
        The index path stays as the fallback for a curation folder, which has no
        fid and for which position genuinely is the only handle it has. */
@@ -9237,9 +9237,9 @@ function mapTree(data, mode){
     return node;
   };
   const tops = (data.folders||[]).map((f,i)=>folderNode(f, f.path!=null? String(f.path) : String(i)));
-  /* "(no folder)" ONLY MEANS SOMETHING WHEN THERE IS A FOLDER. On a court that
+  /* "(no set)" ONLY MEANS SOMETHING WHEN THERE IS A FOLDER. On a court that
      has none — a new one, or any docket nobody has curated — every claim is
-     loose, and wrapping the whole docket in a node labelled "(no folder)" says
+     loose, and wrapping the whole docket in a node labelled "(no set)" says
      nothing at all while costing a ring: the claims become depth 2 and sit
      outside a container that contains everything. Two claims came out at r=341
      from the court where 255 was the clearance, behind a box whose only content
@@ -9247,7 +9247,7 @@ function mapTree(data, mode){
      court directly — which is also the picture the map is meant to be. */
   if(loose.length){
     if(tops.length)
-      tops.push(folderNode({name:data.looseName||"(no folder)", claims:loose, folders:[], pseudo:true}, null));
+      tops.push(folderNode({name:data.looseName||"(no set)", claims:loose, folders:[], pseudo:true}, null));
     else for(const id of loose){
       if(!data.claims[id] || drawn.has(id)) continue;
       drawn.add(id);
@@ -9714,7 +9714,7 @@ function mapFolderCard(f, data, slug){
     return `<li><button type="button" class="mapsel-c" data-go="${id}">`
       + `<span class="mono">#${id}</span> ${safeInline(t.length>52? t.slice(0,51)+"…" : t)}</button></li>`;
   }).join("");
-  return `<div class="mapsel-h"><span class="mono">folder</span>`
+  return `<div class="mapsel-h"><span class="mono">set</span>`
     + `<button type="button" class="mapsel-x" id="msel-x" aria-label="Clear selection">×</button></div>`
     + `<p class="mapsel-t">${safeInline(f.name)}</p>`
     // The moderators' own words for what belongs in here — the one thing that
@@ -9722,13 +9722,13 @@ function mapFolderCard(f, data, slug){
     // only: a curation folder has no description field to show.
     + (f.desc? `<p class="mapsel-d">${safeInline(f.desc)}</p>` : "")
     + `<p class="small muted">${f.count} claim${f.count===1?"":"s"} in all`
-    + (f.subs? `, in ${f.subs} subfolder${f.subs===1?"":"s"}` : "")
+    + (f.subs? `, in ${f.subs} subset${f.subs===1?"":"s"}` : "")
     + (ids.length? `; ${ids.length} filed here directly` : "") + `</p>`
     + (rows? `<ul class="mapsel-l">${rows}</ul>` : "")
     + (ids.length>shown.length? `<p class="small muted">…and ${ids.length-shown.length} more</p>` : "")
     + (!f.pseudo && f.path!=null && data.linkFolders
-        ? `<div class="mapsel-a"><a class="btn" href="#/c/${esc(slug)}/f/${f.path}">Open folder page →</a></div>`
-        : `<p class="small muted">the map's own bucket — the court has filed no folder for these</p>`);
+        ? `<div class="mapsel-a"><a class="btn" href="#/c/${esc(slug)}/f/${f.path}">Open set page →</a></div>`
+        : `<p class="small muted">the map's own bucket — the court has filed no set for these</p>`);
 }
 /* THE COURT'S OWN CARD. Clicking the centre used to clear the selection, so the
    node the whole drawing hangs off answered nothing. What it has to say is what
@@ -9757,7 +9757,7 @@ function mapCourtCard(data, slug, L){
     + (folders.length? `, under ${folders.length} folder${folders.length===1?"":"s"}` : "")
     + `</p>`
     + (frows? `<ul class="mapsel-l">${frows}</ul>` : "")
-    + (crows? `<p class="small muted">filed under no folder</p><ul class="mapsel-l">${crows}</ul>` : "")
+    + (crows? `<p class="small muted">filed under no set</p><ul class="mapsel-l">${crows}</ul>` : "")
     + (!frows && !crows? `<p class="small muted">nothing hangs off this court yet</p>` : "");
 }
 /* WHAT ONE CLICK LIGHTS, as a pure function of the layout so it can be tested
@@ -10099,7 +10099,7 @@ function mapSvg(L, data, slug){
        selects on, and having a page to link to is not the same question as being
        able to click a box. The map's own bucket is drawn whenever some claims are
        filed and some are not, mapFolderCard has a branch written for it — "the
-       map's own bucket — the court has filed no folder for these" — and that
+       map's own bucket — the court has filed no set for these" — and that
        branch could never run, because the only folder the handler could see was
        one with a page. A visible box on an interactive map that did nothing. */
     else out.push(`<g class="mfold-a" data-fid="${i}">${tag}${tip}</g>`);
@@ -10607,7 +10607,7 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
   // that could tell you WHICH DRAWER a word lives in was the surface that vanished
   // when you asked.
   const foldersSec = (pageOf()===1 && cur && cur.folders.length)
-    ? `<section data-qsec><h2 class="sec-h">Folders <span class="count">${cur.folders.length}${srcLabel}</span></h2>
+    ? `<section data-qsec><h2 class="sec-h">Sets <span class="count">${cur.folders.length}${srcLabel}</span></h2>
        <div class="docket">${cur.folders.map((f,i)=>folderRowHtml(slug,f,f.path!=null? String(f.path):String(i),true)).join("")}</div></section>` : "";
   const foldOf = cur && cur.folders.length? folderKeys(cur.folders, {}, null) : {};
   const rows = list => list.map(cl=>docketRow(slug,cl,fmeta[cl.id],foldOf[cl.id])).join("");
@@ -10617,7 +10617,7 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
      the small kind of untrue that makes a reader distrust the big numbers too. */
   const foldN = (pageOf()===1 && cur && cur.folders.length)? cur.folders.length : 0;
   /* The reader's noun, not the matcher's. The caption under the box still says
-     "claim titles and folder names" because that one is about what a MATCH is
+     "claim titles and set names" because that one is about what a MATCH is
      tested against; this one is about what is in the list. */
   const searchCount = searchScope(rowsAll.length, foldN);
   /* BUILT HERE, NOT IN THE ROUTE, because this is where the two halves of it
@@ -10702,7 +10702,7 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
     + courtStatsHtml(slug, s)
     + foldersSec
     + searchHead
-    + qBarHtml("title, folder or #id", idleCap)
+    + qBarHtml("title, set or #id", idleCap)
     + showChips
     + (pager||"")
     + `<section data-qsec data-group="open"${foldersSec?' style="margin-top:22px"':""}><h2 class="sec-h">Open ${secHelp("Claims this court has not settled yet — the ones you can still stake on. Settled claims move down to Recently settled.")}<span class="count" data-count="open">${openWin}</span></h2>`
@@ -10796,21 +10796,21 @@ on(/^\/c\/([a-z0-9-]+)\/curate$/, async (slug)=>{
          <span class="tacts"><a class="tlink" href="#/c/${esc(slug)}">docket<span aria-hidden="true">→</span></a><a class="tlink" href="#/c/${esc(slug)}/map">${ICN_CONSTEL}map<span aria-hidden="true">→</span></a><a class="tlink" href="#/raw/${esc(slug)}/mod">moderation log<span aria-hidden="true">→</span></a></span></div>
        <p class="small mono" style="margin:10px 0 14px">${esc(srcLine)}</p>`
     + `<section><h2 class="sec-h">Moderator actions <span class="count">no bonds — gas only</span></h2>
-       <p class="small" style="margin:0 0 10px">These write to the chain. Any active moderator can create folders and file claims into them for gas alone — no deposit, no bond. Hiding or unhiding a claim takes several moderators agreeing.</p>
+       <p class="small" style="margin:0 0 10px">These write to the chain. Any active moderator can create sets and file claims into them for gas alone — no deposit, no bond. Hiding or unhiding a claim takes several moderators agreeing.</p>
        <p class="small" style="margin:0 0 10px">This page does not check who you are. If you are not a moderator of this court, the court refuses the transaction when you sign it.</p>
-       <p class="small" style="margin:0 0 10px">Folders nest, reorder, retire, and carry a one-line description. Links between claims are on the chain too — including a re-filing, which the court verifies rather than taking your word for: the older claim must really have gone unanswered, and the newer one must come after it.</p>
-       <div class="panel"><h2>Folders</h2><div class="actions">
-         ${btn("Create folder","CreateFolder",{courtSlug:slug,name:"Folder name",desc:"One line on what belongs here"})}
-         ${btn("Create subfolder","CreateFolderIn",{courtSlug:slug,parentID:1,name:"Folder name",desc:"One line on what belongs here"},"","under a heading, four deep")}
-         ${btn("Rename folder","RenameFolder",{courtSlug:slug,folderID:1,name:"New name",desc:"New one-liner"})}
-         ${btn("Move folder","MoveFolder",{courtSlug:slug,folderID:2,newParent:1},"","0 is a root heading")}
-         ${btn("Retire folder","RetireFolder",{courtSlug:slug,folderID:1},"","struck from the tree, row kept")}
-         ${btn("Restore folder","RestoreFolder",{courtSlug:slug,folderID:1})}
-         ${btn("Add claim to folder","AddToFolder",{courtSlug:slug,folderID:1,claimID:1})}
-         ${btn("Remove claim from folder","RemoveFromFolder",{courtSlug:slug,folderID:1,claimID:1})}</div></div>
+       <p class="small" style="margin:0 0 10px">Sets nest, reorder, retire, and carry a one-line description. Links between claims are on the chain too — including a re-filing, which the court verifies rather than taking your word for: the older claim must really have gone unanswered, and the newer one must come after it.</p>
+       <div class="panel"><h2>Sets</h2><div class="actions">
+         ${btn("Create set","CreateFolder",{courtSlug:slug,name:"Set name",desc:"One line on what belongs here"})}
+         ${btn("Create subset","CreateFolderIn",{courtSlug:slug,parentID:1,name:"Set name",desc:"One line on what belongs here"},"","under a heading, four deep")}
+         ${btn("Rename set","RenameFolder",{courtSlug:slug,folderID:1,name:"New name",desc:"New one-liner"})}
+         ${btn("Move set","MoveFolder",{courtSlug:slug,folderID:2,newParent:1},"","0 is a root heading")}
+         ${btn("Retire set","RetireFolder",{courtSlug:slug,folderID:1},"","struck from the tree, row kept")}
+         ${btn("Restore set","RestoreFolder",{courtSlug:slug,folderID:1})}
+         ${btn("Add claim to set","AddToFolder",{courtSlug:slug,folderID:1,claimID:1})}
+         ${btn("Remove claim from set","RemoveFromFolder",{courtSlug:slug,folderID:1,claimID:1})}</div></div>
        <div class="panel" style="margin-top:14px"><h2>Order</h2><div class="actions">
-         ${btn("Order folders","OrderFolders",{courtSlug:slug,parentID:0,ids:"3,1,2"},"","every sibling under that heading, once each")}
-         ${btn("Move a claim within a folder","MoveItemInFolder",{courtSlug:slug,folderID:1,claimID:1,to:0},"","0 is first")}</div></div>
+         ${btn("Order sets","OrderFolders",{courtSlug:slug,parentID:0,ids:"3,1,2"},"","every sibling under that heading, once each")}
+         ${btn("Move a claim within a set","MoveItemInFolder",{courtSlug:slug,folderID:1,claimID:1,to:0},"","0 is first")}</div></div>
        <div class="panel" style="margin-top:14px"><h2>Relations</h2><div class="actions">
          ${btn("Argue one claim bears on another","AddAssociation",{courtSlug:slug,from:1,to:2,stance:"supports"},"","anyone — free for the claim's author or a moderator, a refundable bond for everybody else")}
          ${btn("Approve an association","ApproveAssociation",{courtSlug:slug,from:1,to:2},"","a moderator — returns the bond, the edge stays")}
@@ -11035,7 +11035,7 @@ on(/^\/c\/([a-z0-9-]+)\/map$/, async (slug)=>{
     .filter(r=>validIds.has(r.from)&&validIds.has(r.to));
   const data = {folders:curFolders, all:parsed.map(cl=>cl.id), claims, courtName:cs.name,
     relations:mergeRelations(chainRels, curRels),
-    looseName: demo? "(no folder)" : "docket — newest "+parsed.length,
+    looseName: demo? "(no set)" : "docket — newest "+parsed.length,
     linkFolders: !!cur};
   const total = demo? data.all.length : (cs.claims!=null? cs.claims : parsed.length+(parsed.more||0));
   const countLine = mapCountLine(demo, demo? data.all.length : parsed.length, total);
@@ -11051,7 +11051,7 @@ on(/^\/c\/([a-z0-9-]+)\/map$/, async (slug)=>{
     ? "sample curation — demo mode reads no chain at all; on a live court the map draws the chain's own relations too"
     : chainRels.length
     ? `this court's moderators have filed no folders; ${chainRelNote}, drawn over the flat docket`
-    : "this court's moderators have filed no folders and no relations are on chain — the map shows the docket alone";
+    : "this court's moderators have filed no sets and no relations are on chain — the map shows the docket alone";
   /* THE KEY DRAWS WHAT THE MAP DRAWS. A settled claim wears an oval hung off its
      corner and no dot at all, so the two square swatches here described a mark
      that appears nowhere — the same failure the note over the dot warns about in
@@ -11595,7 +11595,7 @@ on(/^\/c\/([a-z0-9-]+)\/f\/([0-9.]+)$/, async (slug,fpath)=>{
   }
   if(!curF || !curF.folders.length){
     main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:courtCrumb(slug),href:"#/c/"+slug}])
-      + notFound(isLive()? "This court's moderators have filed no folders, and no local curation is present — the docket is the whole record." : "No folders in this court.");
+      + notFound(isLive()? "This court's moderators have filed no sets, and no local curation is present — the docket is the whole record." : "No folders in this court.");
     return;
   }
   const hit = resolveFolderPath(curF, fpath);
@@ -11609,7 +11609,7 @@ on(/^\/c\/([a-z0-9-]+)\/f\/([0-9.]+)$/, async (slug,fpath)=>{
   }
   if(!hit){
     main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:courtCrumb(slug),href:"#/c/"+slug}])
-      + notFound(curF.source==="chain"? "No such folder on this court." : "No such folder.");
+      + notFound(curF.source==="chain"? "No such set on this court." : "No such set.");
     return;
   }
   const f = hit.folder;
@@ -11692,8 +11692,8 @@ on(/^\/c\/([a-z0-9-]+)\/f\/([0-9.]+)$/, async (slug,fpath)=>{
        that the page does not already say in words. */
     + (f.img? `<img class="folderface" src="${esc(f.img)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : "")
     + (fdesc? `<p class="sub">${esc(fdesc)}</p>` : "")
-    + `<p class="page-sub">A folder is moderator curation with zero economic weight — the claims below are ordinary claims of this court. ${curF.source==="chain"? "Read live from the chain." : curF.source==="local"? CUR_LABEL+"." : "Read from the sample data."}${omitted? ` ${omitted} hidden or unreadable row${omitted===1?" is":"s are"} omitted.`:""}</p>`
-    + (subs? `<section><h2 class="sec-h">Subfolders</h2><div class="docket">${subs}</div></section>` : "")
+    + `<p class="page-sub">A set is moderator curation with zero economic weight — the claims below are ordinary claims of this court. ${curF.source==="chain"? "Read live from the chain." : curF.source==="local"? CUR_LABEL+"." : "Read from the sample data."}${omitted? ` ${omitted} hidden or unreadable row${omitted===1?" is":"s are"} omitted.`:""}</p>`
+    + (subs? `<section><h2 class="sec-h">Subsets</h2><div class="docket">${subs}</div></section>` : "")
     /* WHAT THIS COUNT COUNTS, when the two possible answers differ. The court
        page's folder row shows folderCount — the whole subtree — so Fauci reads
        "9 claims" there; this section lists only what is filed DIRECTLY in the
@@ -11709,7 +11709,7 @@ on(/^\/c\/([a-z0-9-]+)\/f\/([0-9.]+)$/, async (slug,fpath)=>{
         return `<section${subs?' style="margin-top:22px"':""}><h2 class="sec-h">Claims <span class="count">${count}</span></h2>`; })()
     + fpager
     + (fwin.length? `<div class="docket">${fwin.map(cl=>docketRow(slug,cl)).join("")}</div>`
-        : `<div class="empty"><div class="g">◌</div><p>No claims filed directly in this folder.</p></div>`)
+        : `<div class="empty"><div class="g">◌</div><p>No claims filed directly in this set.</p></div>`)
     + `</section>`;
 });
 /* one classifier for every status surface — pills, docket rows, map dots agree */

@@ -127,10 +127,12 @@ const PAGE = 'file://' + path.join(__dirname, '..', '..', 'index.html');
      subtree. */
   const subtree = await page.evaluate(async () => {
     // THE ROW IS FOUND BY WHAT IT SAYS, not by what the attribute already
-    // contains. Looking for a row that has several keys made this assertion
+    // contains. That couples it to the copy, which is the intended trade: when
+    // "subfolder" became "subset" this went red rather than quietly finding no
+    // row, which is exactly the behaviour the next paragraph asks for. Looking for a row that has several keys made this assertion
     // skip itself the moment the keys stopped being written — a mutant that
     // carried only the folder's own path passed by making the case disappear.
-    const r = [...document.querySelectorAll(".foldsel")].find(x => /subfolder/.test(x.textContent));
+    const r = [...document.querySelectorAll(".foldsel")].find(x => /subset/.test(x.textContent));
     if (!r) return {noParent: true};
     const keys = (r.getAttribute("data-fold-keys") || "").split(" ").filter(Boolean);
     // and behaviourally: ticking the parent must reveal a claim filed in a CHILD.
@@ -324,7 +326,7 @@ const PAGE = 'file://' + path.join(__dirname, '..', '..', 'index.html');
   const cap = await page.evaluate(() => {
     const read = () => {
       const e = document.querySelector("[data-qcount]");
-      const m = (e ? e.textContent.trim() : "").match(/^all ([\d,]+) claims?(?: and ([\d,]+) folders?)?$/);
+      const m = (e ? e.textContent.trim() : "").match(/^all ([\d,]+) claims?(?: and ([\d,]+) sets?)?$/);
       return {text: e ? e.textContent.trim() : null,
               claims: m ? +m[1].replace(/,/g, "") : null,
               folders: m && m[2] ? +m[2].replace(/,/g, "") : null};

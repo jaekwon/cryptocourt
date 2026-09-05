@@ -177,11 +177,11 @@ ok("the map drew claim anchors", !!claimA(1) && !!claimA(2) && !!claimA(3));
 // ---- THE THREE BUGS THE OWNER FOUND --------------------------------------
 folderA().click();
 ok("clicking a folder opens the folder card", /Fauci/.test(panel.innerHTML));
-ok("and the folder card is a FOLDER card", /Open folder page/.test(panel.innerHTML));
+ok("and the folder card is a SET card", /Open set page/.test(panel.innerHTML));
 
 const ev = claimA(2).click();
 ok("clicking a claim while a folder card is open is intercepted", ev.defaultPrevented);
-ok("...and the folder card is REPLACED, not left open", !/Open folder page/.test(panel.innerHTML));
+ok("...and the folder card is REPLACED, not left open", !/Open set page/.test(panel.innerHTML));
 ok("...by the claim's own card", /Open claim page/.test(panel.innerHTML));
 ok("...naming that claim", /#2/.test(panel.innerHTML));
 
@@ -194,7 +194,7 @@ ok("and the node is marked selected", claimA(1).classList.contains("selected"));
 
 // folder then folder
 folderA().click();
-ok("a folder click after a claim swaps back", /Open folder page/.test(panel.innerHTML));
+ok("a folder click after a claim swaps back", /Open set page/.test(panel.innerHTML));
 ok("and the claim is no longer marked", !claimA(1).classList.contains("selected"));
 
 // clearing
@@ -312,7 +312,7 @@ ok("closing returns the hint", /Click a claim/.test(panel.innerHTML));
     ok("clicking the bucket opens a card, like any other folder",
        /mapsel-h/.test(panel.innerHTML) && !/Click a claim/.test(panel.innerHTML));
     ok("...and that card is the bucket's own, not a folder page offer",
-       /own bucket/.test(panel.innerHTML) && !/Open folder page/.test(panel.innerHTML));
+       /own bucket/.test(panel.innerHTML) && !/Open set page/.test(panel.innerHTML));
     ok("...and it lists what is in it", /#2/.test(panel.innerHTML));
   }
 }
