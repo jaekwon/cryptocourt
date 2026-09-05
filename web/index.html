@@ -9954,24 +9954,38 @@ function mapSvg(L, data, slug){
      natural width inside it, which is what a mark of one to three characters wants.
      The SIDE keeps its textLength: YES and NO are words, and fitting them exactly is
      what stops a long side from touching the ring. */
-  const vpill=(txt,cls,right,cy,owner)=>{
+  /* A MARK NOBODY CAN READ IS A MARK THAT SAYS NOTHING. `!` means the answer
+     went against the stake, and the only place that was written down was the
+     legend at the foot of the map and the card behind a click. Reported: hovering
+     the mark should say it.
+     A TITLED <g>, NOT A title ON THE RECT. The pill is a rect with the glyph
+     drawn over it and neither takes pointer-events away from the other, so a
+     title on the rect alone is a tooltip with a hole in the middle of it —
+     exactly over the `!` a reader is pointing at. Grouping puts one title behind
+     both, and gets it read aloud, which a `title=` attribute on SVG would not. */
+  const vpill=(txt,cls,right,cy,owner,say)=>{
     const fs=VTAG.fs, w=est(txt,fs,"mvt"), h=fs+2*VTAG.py, ovw=w+2*VTAG.px;
     const fit = cls.startsWith("s") ? "" : ` textLength="${w}" lengthAdjust="spacing"`;
-    return {w:ovw, svg:`<rect class="mvtag ${cls}" x="${(right-ovw).toFixed(1)}" `
+    const body = `<rect class="mvtag ${cls}" x="${(right-ovw).toFixed(1)}" `
       + `y="${(cy-h/2).toFixed(1)}" width="${ovw.toFixed(1)}" height="${h.toFixed(1)}" `
       + `rx="${(h/2).toFixed(1)}" data-owner="${owner}"/>`
       + `<text class="mtext ${cls.startsWith("s")?"mvs":"mvt "+cls}" x="${(right-VTAG.px).toFixed(1)}" `
       + `y="${(cy+0.36*fs).toFixed(1)}" font-size="${fs}" text-anchor="end"${fit} `
-      + `data-owner="${owner}">${txt}</text>`};
+      + `data-owner="${owner}">${txt}</text>`;
+    return {w:ovw, svg: say? `<g class="vsay"><title>${esc(say)}</title>${body}</g>` : body};
   };
   const vbadge=(pc,n,fh,cl)=>{
     const side=pc.side, c=side==="NO"?"n":"y", owner="c"+n.id;
     const cy=n.y+fh;                                     // the frame's bottom edge
     const mark=mapMark(pc, cl);
+    // THE SAME SENTENCE THE CARD PRINTS. One wording for the badge, the card and
+    // the reader a screen reader is describing it to — a mark explained twice is
+    // a mark explained two ways the day one of them is edited.
+    const say = mapMarkWords(pc, cl);
     let right=n.x+n.w-K.tpad, out="";
-    if(mark.t){ const p=vpill(mark.t,"s"+(mark.reopen?" re":""),right,cy,owner);
+    if(mark.t){ const p=vpill(mark.t,"s"+(mark.reopen?" re":""),right,cy,owner,say);
       out+=p.svg; right-=p.w+K.vgap; }
-    return vpill(side,c,right,cy,owner).svg + out;
+    return vpill(side,c,right,cy,owner,say).svg + out;
   };
   /* THE COURT'S STRIKE, drawn as GEOMETRY rather than as text-decoration. Every
      label on this map is laid out with textLength + lengthAdjust="spacing", so

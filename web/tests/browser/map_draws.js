@@ -221,6 +221,31 @@ const {PAGE, demoPage} = require('./harness');
     }
   }
 
+  /* EVERY BADGE SAYS WHAT IT MEANS ON HOVER. `!` is the answer that went against
+     the stake, and it was written down in exactly two places a reader has to
+     already be looking for: the legend at the foot of the map, and the card
+     behind a click. Reported — hovering the mark itself said nothing.
+     THE TITLE HANGS ON THE GROUP, not on the pill's rect: the glyph is drawn
+     over that rect and takes the pointer, so a title on the rect alone leaves a
+     hole in the tooltip directly over the mark being pointed at. */
+  const said = await page.evaluate(() => {
+    const gs = [...document.querySelectorAll("#mapbox g.vsay")];
+    const badges = [...document.querySelectorAll("#mapbox .mvtag")];
+    return {groups: gs.length, badges: badges.length,
+            titled: gs.filter(g => (g.querySelector("title") || {}).textContent).length,
+            loose: badges.filter(r => !r.closest("g.vsay")).length,
+            // the mark this was reported about, from the function that draws it
+            bang: typeof mapMarkWords === "function"
+                  ? mapMarkWords({short: "settled", side: "NO"}, {inst: 72, route: "vote"}) : null};
+  });
+  ok("the map draws verdict badges", said.groups > 0, JSON.stringify(said));
+  ok("...every one of them carries its sentence", said.titled === said.groups, JSON.stringify(said));
+  ok("...and no badge is left without one", said.loose === 0, JSON.stringify(said));
+  ok("the `!` mark explains that the verdict went against the stake",
+     /went against the stake/.test(said.bang || ""), JSON.stringify(said.bang));
+  ok("...and says which way the money sat", /\b72% the other way/.test(said.bang || ""),
+     JSON.stringify(said.bang));
+
   // A page error is a failure even when the frame looks right: the map may have
   // drawn a first pass and thrown on the data.
   ok("no page errors on the map route", errs.length === 0, errs.slice(0, 2).join(" | "));
