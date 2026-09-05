@@ -9454,6 +9454,19 @@ function mapClip(a, b){
 function mapTree(data, mode){
   const inFolder = new Set();
   (function walk(fs){ for(const f of fs||[]){ (f.claims||[]).forEach(c=>inFolder.add(c)); walk(f.folders); } })(data.folders);
+  /* A CLAIM THAT BECAME A SET IS DRAWN AS THE SET, the same rule the docket
+     took: the set node and the claim it was decided into are one object, and the
+     map drew both — a box named for the claim beside the folder it had just
+     created.
+     ONE GUARD, IN folderNode, and it is enough for both shapes: an unfiled claim
+     is drawn through a pseudo-folder, so it meets the same loop as a filed one.
+     Filtering `loose` as well looked thorough and was redundant — measured, and
+     the cost was not the extra line. Each suppression masked the other's
+     mutation, so both read as covered while neither was: removing either one
+     alone still hid the claim, and the test could not tell.
+     NOT COUNTED EITHER WAY. The affirming claim is not a member of the set it
+     makes — FolderItems does not list it — so nothing here changes a count. */
+  const bornIds = (function ids(fs, out){ (fs||[]).forEach(f=>{ if(f.born) out.add(Number(f.born)); ids(f.folders, out); }); return out; })(data.folders, new Set());
   const loose = data.all.filter(id=>!inFolder.has(id));
   const drawn = new Set(), alsoIn = [];
   const folderNode = (f, path) => {
@@ -9466,7 +9479,7 @@ function mapTree(data, mode){
       img:f.img,
       count, size:mapFolderSize(f.name, count, mode)};
     for(const id of (f.claims||[])){
-      if(!data.claims[id]) continue;
+      if(!data.claims[id] || bornIds.has(id)) continue;
       // Filed here AND drawn somewhere else. The spoke records it on the map;
       // `also` records it on the folder, so the folder can still say so.
       if(drawn.has(id)){ alsoIn.push({folder:node, id}); (node.also = node.also || []).push(id); }
@@ -11341,8 +11354,19 @@ on(/^\/c\/([a-z0-9-]+)\/map$/, async (slug)=>{
   // gets a lighter "also filed here" spoke to the node's one drawing, which is
   // the whole point of a cross-cut: it is a reading order, not a second copy.
   // Dropping the membership here would throw away the fact the spoke needs.
+  /* THE THIRD REBUILD THAT NAMES WHAT IT KEEPS, and the third to lose a field by
+     doing so — img went this way once and born went this way twice. Each is a
+     claim-id FILTER; every other field is a passenger, and a passenger not
+     listed is a passenger dropped.
+     A GUARD FOR THIS WAS TRIED AND REMOVED, recorded so it is not tried the same
+     way again: the three are not peers. chainFolders BUILDS a folder out of
+     chain reads and originates fid, parent and path; these two FILTER a tree
+     that already exists, and curation folders have no fid to carry. Requiring
+     one field set across all three failed on five fields that differ for good
+     reasons, and the only way to make it pass was to name the passengers in the
+     guard — a fourth place to update and a fourth to forget. */
   const filterFolders = fs => (fs||[]).map(f=>({name:f.name, path:f.path, fid:f.fid, chain:f.chain,
-    img:f.img,
+    img:f.img, born:f.born,
     claims:(f.claims||[]).filter(id=>validIds.has(id)),
     folders:filterFolders(f.folders)}));
   const curFolders = cur? filterFolders(cur.folders) : [];

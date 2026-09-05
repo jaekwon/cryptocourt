@@ -142,12 +142,15 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
      giving one to annex or orem would move the fixtures three other harnesses
      measure, which is a worse trade than naming the gap here. The recursion is
      one line and this is what watches it. */
-  ok("the affirmed-claim walk recurses into subsets", (()=>{
+  ok("every affirmed-claim walk recurses into subsets", (()=>{
     const src = require("fs").readFileSync(
       require("path").join(__dirname, "..", "index.html"), "utf8");
-    const i = src.indexOf("const bornIds =");
-    const line = src.slice(i, src.indexOf("\n", i));
-    return /f\.born/.test(line) && /ids\(f\.folders,\s*out\)/.test(line);
+    // BOTH of them: the docket collects affirmed claims to drop their rows, the
+    // map to drop their nodes, and each carries its own copy of the walk. A pin
+    // on "the" walk would have watched whichever came first in the file.
+    const lines = [...src.matchAll(/const bornIds =[^\n]*/g)].map(m => m[0]);
+    return lines.length === 2
+        && lines.every(l => /f\.born/.test(l) && /ids\(f\.folders,\s*out\)/.test(l));
   })());
   // bare-bracket shape fallback
   QSHAPE="bare"; const cf2 = await chainFolders("orem");

@@ -271,6 +271,30 @@ const {PAGE, demoPage} = require('./harness');
   if (said.pair) ok("a badge's two pills differ on the page too",
      said.pair[0].say !== said.pair[1].say, JSON.stringify(said.pair));
 
+  /* A CLAIM THAT BECAME A SET IS DRAWN AS THE SET, here too. The map drew both —
+     a box named for the claim beside the folder that claim had just created — and
+     the two are one object. The docket stopped drawing the second; this is the
+     other surface the duplicate was reported on.
+     ON annex, the only court whose offline sample has a claim-born set. */
+  await page.goto(PAGE + '#/c/annex/map', {waitUntil: 'networkidle0'});
+  await new Promise(z => setTimeout(z, 4200));
+  const setborn = await page.evaluate(() => {
+    const ids = [...document.querySelectorAll('#mapbox a[data-id]')].map(a => a.dataset.id);
+    // what the court page says was affirmed, read from the same demo data
+    const born = (typeof DEMO_OVERLAY !== "undefined")
+      ? (DEMO_OVERLAY.courts.annex.folders || []).map(f => f.born).filter(Boolean).map(String)
+      : [];
+    return {ids, born, drawn: born.filter(b => ids.includes(b)),
+            folders: document.querySelectorAll('#mapbox a[data-fid]').length};
+  });
+  ok("the map has a claim-born set to test against",
+     setborn.born.length > 0 && setborn.folders > 0, JSON.stringify(setborn));
+  ok("...and the claim that made it is not a node of its own",
+     setborn.drawn.length === 0, JSON.stringify(setborn));
+  /* AND THE REST STILL DRAW. Suppressing every claim would satisfy the line
+     above and leave an empty map, which is the failure that reads as success. */
+  ok("...while the court's other claims still do", setborn.ids.length > 0, JSON.stringify(setborn.ids));
+
   // A page error is a failure even when the frame looks right: the map may have
   // drawn a first pass and thrown on the data.
   ok("no page errors on the map route", errs.length === 0, errs.slice(0, 2).join(" | "));
