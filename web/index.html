@@ -4540,6 +4540,29 @@ function unesc(s){ return String(s).replace(/\\([\\`*_\[\]()~>\-+.!#<&])/g, "$1"
 /* Untrusted text (claim titles, court names by strangers): HTML-escaped.
    The realm sanitizes for its markdown; the overlay must not re-introduce a hole. */
 function safeInline(s){ return esc(s); }
+/* clipText caps a string at n CHARACTERS, spending the last one on an ellipsis
+   when it has to cut.
+
+   CODE POINTS, NOT UTF-16 UNITS, and this was `t.slice(0, n-1)` at four sites
+   until it was measured. .slice() cuts by code unit, and an astral character —
+   every emoji, and the hieroglyphs this repo's own demo data uses — is a
+   SURROGATE PAIR of two units. A cut landing between the halves leaves a lone
+   surrogate, which the browser draws as U+FFFD. Measured: a title of 🔥 came
+   back ending "\ud83d…".
+
+   And the width was wrong in the same breath. `.length` counts units too, so a
+   44-character budget spent on emoji showed 23 characters — the reader saw half
+   the title and nothing said the cut had to do with the alphabet it was in.
+
+   BMP text was never affected, which is why this survived: Cyrillic, Greek and
+   ordinary CJK are one unit each, so every non-astral script cut correctly and
+   the failure only appeared for emoji and the rarer planes. That is the opposite
+   of the same bug in the Go and realm halves, where CJK was the visible case —
+   three encodings, three different sets of characters that break, one rule. */
+function clipText(t, n){
+  const s = String(t ?? ""), cp = Array.from(s);
+  return cp.length > n ? cp.slice(0, n - 1).join("") + "…" : s;
+}
 /* THE CLAIM'S OWN STATEMENT OF WHAT IT MEANS — what would settle it, what is in
    view, what it is not asking. COURTS_STRUCTURE.md §4: fixed at creation, because
    a revisable body would let an author take a position, watch the market, then
@@ -9099,10 +9122,15 @@ function mapTextW(t, fs, cls){
 function mapClipW(t, px, fs, cls){
   t = String(t);
   if(mapTextW(t, fs, cls) <= px) return t;
-  let lo = 0, hi = t.length;
+  /* THE SEARCH RUNS OVER CHARACTERS, not code units — see clipText. Bisecting
+     t.length lands `mid` between the halves of a surrogate pair about half the
+     time it meets one, and the label is then drawn with a lone surrogate in it.
+     The algorithm is unchanged; only what it indexes is. */
+  const cp = Array.from(t);
+  let lo = 0, hi = cp.length;
   while(lo < hi){ const mid = (lo+hi+1)>>1;
-    if(mapTextW(t.slice(0,mid)+"…", fs, cls) <= px) lo = mid; else hi = mid-1; }
-  return t.slice(0, Math.max(1, lo))+"…";
+    if(mapTextW(cp.slice(0,mid).join("")+"…", fs, cls) <= px) lo = mid; else hi = mid-1; }
+  return cp.slice(0, Math.max(1, lo)).join("")+"…";
 }
 function mapWrapTitle(title, innerW, fs, maxLines, cls){
   const size = fs||MAPK.fs.title, cap = Math.max(1, maxLines||MAPK.maxTitleLines);
@@ -9914,7 +9942,7 @@ function mapSelCard(id, data, slug, L){
         const t = oc ? oc.title : "";
         return `<li><button type="button" class="mapsel-c" data-go="${other}">`
           + `<span class="mono">#${other}</span> <span class="muted">${esc(phrase)}</span> `
-          + `${safeInline(t.length>44? t.slice(0,43)+"…" : t)}</button></li>`;
+          + `${safeInline(clipText(t, 44))}</button></li>`;
       }).join("") + `</ul>`
       + (near.length>showRel.length
          ? `<p class="small muted">…and ${near.length-showRel.length} more</p>` : "")
@@ -9999,7 +10027,7 @@ function mapFolderCard(f, data, slug){
     const c = data.claims[id];
     const t = c? c.title : "";
     return `<li><button type="button" class="mapsel-c" data-go="${id}">`
-      + `<span class="mono">#${id}</span> ${safeInline(t.length>52? t.slice(0,51)+"…" : t)}</button></li>`;
+      + `<span class="mono">#${id}</span> ${safeInline(clipText(t, 52))}</button></li>`;
   }).join("");
   return `<div class="mapsel-h"><span class="mono">set</span>`
     + `<button type="button" class="mapsel-x" id="msel-x" aria-label="Clear selection">×</button></div>`
@@ -10034,7 +10062,7 @@ function mapCourtCard(data, slug, L){
   const crows = loose.slice(0, 12).map(id=>{
     const t = (data.claims[id]||{}).title || "";
     return `<li><button type="button" class="mapsel-c" data-go="${id}">`
-      + `<span class="mono">#${id}</span> ${safeInline(t.length>52? t.slice(0,51)+"…" : t)}</button></li>`;
+      + `<span class="mono">#${id}</span> ${safeInline(clipText(t, 52))}</button></li>`;
   }).join("");
   const n = (data.all||[]).length;
   return `<div class="mapsel-h"><span class="mono">court</span>`
@@ -15590,7 +15618,7 @@ function drawClip(slug, id, d, courtName, theme, note, url, ser, tl){
   const status = (d && d.statusText) ? d.statusText : "a court of claims of fact";
   const hasURL = url && /^https?:\/\//.test(String(url));
   x.fillStyle = mut; x.font = "400 24px ui-sans-serif,system-ui,sans-serif";
-  x.fillText(status.length > 78 ? status.slice(0, 77) + "…" : status, 56, STATUS_Y);
+  x.fillText(clipText(status, 78), 56, STATUS_Y);
   // Where to check it. A card with no address is an assertion; a card with one
   // is a citation, and it is the only thing on the PNG a reader can follow.
   // Guarded here as well as at the call site. The leak is one-way: once the card

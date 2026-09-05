@@ -19,7 +19,7 @@
 const fs = require('fs');
 const SRC = require('path').join(__dirname, '..', 'index.html');
 const src = fs.readFileSync(SRC, 'utf8');
-const { slice } = require("./srcslice");
+const { slice, fn } = require("./srcslice");
 
 // A canvas that records instead of painting, so the clip's geometry is
 // checkable without a browser. measureText is proportional to the text so the
@@ -58,6 +58,10 @@ code += slice('function heightDater(', 'async function claimTimeline(');
 code += 'const BLOCK_SECS = 5;\n';
 code += slice('function shareDialog(', '/* ================================ embeds');
 code += slice('function embedTheme(', 'async function embedClaimView(');
+// clipText is a shared helper the lifted region calls — it lives outside the
+// slice, so it has to be brought in or the region throws ReferenceError.
+// Its own rule is asserted in cliptext_test.js; this is only the definition.
+eval(fn("clipText"));
 eval(code);
 
 let fail = 0; const ok = (n,c)=>{ if(!c){ fail++; console.log("FAIL:", n); } else console.log("ok:", n); };

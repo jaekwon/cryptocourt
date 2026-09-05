@@ -113,6 +113,10 @@ global.safeInline = s => global.esc(s);
 // noticing — which is how the card came to drop the verdict side in the first place.
 // the subject glyphs the map draws on a folder with no picture — sliced,
 // so a change to the real table is a change to what these tests exercise
+// clipText is a shared helper the lifted region calls — it lives outside the
+// slice, so it has to be brought in or the region throws ReferenceError.
+// Its own rule is asserted in cliptext_test.js; this is only the definition.
+eval(fn("clipText"));
 eval(slice('const SUBJECT_WORDS', "/* A COURT'S FACE."));
 // mapLayout asks this for the claims that became sets, whose nodes it drops
 eval(slice('function bornClaimIds(', 'function folderCount('));

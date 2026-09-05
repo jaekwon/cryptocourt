@@ -73,6 +73,10 @@ function buildCode(patch){
   if(patch) code = patch(code);
   return code;
 }
+// clipText is a shared helper the lifted region calls — it lives outside the
+// slice, so it has to be brought in or the region throws ReferenceError.
+// Its own rule is asserted in cliptext_test.js; this is only the definition.
+eval(fn("clipText"));
 eval(buildCode());
 
 let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else console.log("ok:",n); };
