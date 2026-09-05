@@ -214,7 +214,7 @@ class Scenario:
     # A block is 5 seconds of chain time (the overlay's own BLOCK_SECS).
     BLOCK_SECS = 5
 
-    def advance_height(self, blocks, why=""):
+    def advance_height(self, blocks, why="", with_time=False):
         """Move the BLOCK HEIGHT forward without producing blocks.
 
         The twin of advance(). Conviction accrues per block, emission rolls per
@@ -227,6 +227,29 @@ class Scenario:
         Prefer this to mine(). `mine` is still right when a scenario is
         asserting something about REAL block production; it is wrong when the
         scenario is merely waiting.
+
+        `with_time` also advances the clock by blocks x BLOCK_SECS, exactly as
+        mine(with_time=True) does — one spelling for "this much chain time
+        passed", rather than a height call and a hand-computed second call that
+        have to be kept in step by whoever edits either.
+
+        IT IS WHAT THREE SCENARIOS NEEDED AND NONE COULD SAY. p/governor moved
+        its vote deadline from a height to a STAMP (closesTime, read by
+        votingClosed), so a scenario closing a week-long vote has to move both
+        clocks; scn_covid, scn_dispute and scn_rewards_demo each moved only the
+        height and left the vote open at ANY height until 8ce2717 repaired them
+        by hand, one 700_000 at a time.
+
+        OPT-IN, for mine()'s reason and not a weaker one: "a scenario testing a
+        deadline boundary needs the clock to move only when it says so". smoke.py
+        advances to one second short of the dead-claim timeout and asserts the
+        chain still refuses — silent per-block time would break exactly that.
+
+        AND NOT FOR A CALENDAR SCENARIO. covid.py walks real dates through
+        goto(), which computes its delta from the narrative date it tracks and
+        cannot see a bare advance; using this there would put the chain days
+        ahead of every date the file prints. It uses goto() for its dispute
+        close, and should keep doing so.
         """
         if not self._clock_armed:
             raise ValueError("advance_height before arm_clock: the height only moves when armed")
@@ -234,6 +257,10 @@ class Scenario:
             raise ValueError("the test height moves forward")
         self._call(DEPLOYER, "AdvanceTestHeight", [str(blocks)], note=why)
         self._advanced_height += blocks
+        if with_time:
+            self.advance(blocks * self.BLOCK_SECS,
+                         f"the same {blocks:,} blocks on the wall clock, which is "
+                         f"what a vote actually closes on")
 
     def mine(self, blocks, why="", with_time=False):
         """Burn blocks. The ONLY way to age height — conviction accrues per

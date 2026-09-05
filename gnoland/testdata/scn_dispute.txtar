@@ -92,7 +92,7 @@ stdout 'OK!'
 gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func AdvanceTestHeight -args '140000' -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
 stdout 'OK!'
 
-# those same 140,000 blocks at governor's secsPerBlock of 5
+# the same 140,000 blocks on the wall clock, which is what a vote actually closes on
 gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func AdvanceTestClock -args '700000' -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
 stdout 'OK!'
 

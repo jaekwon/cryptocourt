@@ -72,14 +72,18 @@ s.vote(erin, "orem", 1, "no")
 s.note("THE POINT: close a week-long vote by telling the chain both its clocks")
 # votingBlocks (120,960) + graceBlocks. Sized generously — the scenario cannot
 # predict real height (ruling O1) and only needs to be PAST the close.
-s.advance_height(140_000, "votingBlocks + grace, in one transaction")
-# AND THE WALL CLOCK, which is the one the vote actually closes on: p/governor
-# stamps closesTime at propose() and votingClosed() reads Now() whenever that
-# stamp is set. The height is now the secondary reference — dispute.gno says so
-# where DisputeVoteCloses is declared ("the governor gates on a STAMP now").
-# This note used to end "by telling the chain the height", and that was true
-# when it was written.
-s.advance(700_000, "those same 140,000 blocks at governor's secsPerBlock of 5")
+# with_time, because the wall clock is the one the vote actually closes on:
+# p/governor stamps closesTime at propose() and votingClosed() reads Now()
+# whenever that stamp is set. The height is the secondary reference now, and
+# dispute.gno says so where DisputeVoteCloses is declared ("the governor gates
+# on a STAMP now"). This note used to end "by telling the chain the height",
+# and that was true when it was written.
+#
+# The seconds are DERIVED rather than restated. They were `s.advance(700_000)`
+# on the line below, which is 140,000 x BLOCK_SECS worked out by hand — correct,
+# and a second number to keep in step with the first for ever.
+s.advance_height(140_000, "votingBlocks + grace, in one transaction",
+                 with_time=True)
 s.call(alice, "ResolveDispute", ["orem", 1])
 s.expect("DisputeOpen", ["orem", 1], "false")
 
