@@ -763,6 +763,19 @@ a.card:hover{border-color:var(--line-2)}
    reader clicked; the tint and the filled box are the whole of the state, so
    the control never reorders itself under the hand that is using it. */
 .foldsel{cursor:pointer}
+/* A NAMED SUBSET, inline in its parent's meta line. Underlined on hover only:
+   three links in a row that is already a control should read as text until you
+   reach for one. */
+.folderrow .subname{color:var(--accent-2); text-decoration:none}
+.folderrow .subname:hover{text-decoration:underline; text-underline-offset:2px}
+/* The note that something is nested inside a named subset. Quieter than the
+   name it follows, because it is a hint about what you would find, not a thing
+   you can click. */
+.folderrow .deeper{color:var(--muted); font-size:.92em}
+/* The names may run past one line where the bare count never did, so this row
+   alone is allowed to wrap — the compaction that made a set row one line was
+   about a count printed twice, not about forbidding content. */
+.docket .crow.folderrow .t{white-space:normal}
 /* ONE ICON IN TWO STATES, swapped by the row's own aria-checked — so the control
    has no JS of its own and cannot fall out of step with the attribute that drives
    the filter. Both eyes ship in the markup; exactly one is ever displayed.
@@ -7422,7 +7435,39 @@ function folderRowHtml(slug,f,path,toggle){
      fraction of the content. The meta goes inline after the name and the px
      column goes, because a count printed twice is not emphasis, it is the row
      failing to decide where the count lives. */
-  const meta = `<span class="t">${safeInline(f.name)} <span class="m">${n} claim${n===1?"":"s"}${subs?` · ${subs} subset${subs===1?"":"s"}`:""}</span></span>`;
+  /* FEW SUBSETS ARE NAMED; MANY ARE COUNTED. "· 3 subsets" stated a fact the
+     page then made you leave to see — the section lists roots, so a set born
+     inside another was invisible from the court page until you opened its
+     parent. Three names cost less room than the sentence describing them, and
+     they are the answer to the question the count only raises.
+     THE CUTOFF IS THREE, and it is a judgement not a measurement: past that the
+     names stop being a glance and become a list, and the row is one line. A
+     court that nests widely gets the count, which is what the count is for.
+     LINKS, so a named set is also a way in — and marked .foldopen, which is the
+     class the row's own click handler already steps over for "open →". Without
+     it, clicking a subset name would tick the parent instead of following the
+     link, which is exactly the bug that carve-out exists for. */
+  const SUBS_NAMED = 3;
+  const kids = f.folders || [];
+  const subTail = !subs ? ""
+    : subs <= SUBS_NAMED
+      ? ` · ${kids.map((sf,i)=>{
+          const kp = sf.path!=null? String(sf.path) : path+"."+i;
+          /* ONE LEVEL IS NAMED; THE NEXT IS ADMITTED. Naming a set's children
+             answers "what is in there" for one level and then silently stops —
+             a set two deep was as invisible as before, and the row gave no hint
+             it was hiding anything. So a named subset that has children of its
+             own says so: the name when there is one, a count when there are
+             more. It is a note, not a third level — the row is a glance, and
+             the way to actually go deeper is the link it is attached to. */
+          const gk = sf.folders || [];
+          const deeper = !gk.length ? ""
+            : gk.length === 1 ? ` <span class="deeper">(${safeInline(gk[0].name)})</span>`
+            : ` <span class="deeper">(${gk.length} inside)</span>`;
+          return `<a class="foldopen subname" href="#/c/${esc(slug)}/f/${esc(kp)}">${safeInline(sf.name)}</a>${deeper}`;
+        }).join(", ")}`
+      : ` · ${subs} subsets`;
+  const meta = `<span class="t">${safeInline(f.name)} <span class="m">${n} claim${n===1?"":"s"}${subTail}</span></span>`;
   if(!toggle) return `<a class="crow folderrow" data-q="${esc(f.name + " " + (f.desc||""))}"
     href="#/c/${esc(slug)}/f/${path}">
     <span class="id">${ICN_EYE_OPEN}</span>
