@@ -132,7 +132,15 @@ const PAGE = 'file://' + path.join(__dirname, '..', '..', 'index.html');
     // row, which is exactly the behaviour the next paragraph asks for. Looking for a row that has several keys made this assertion
     // skip itself the moment the keys stopped being written — a mutant that
     // carried only the folder's own path passed by making the case disappear.
-    const r = [...document.querySelectorAll(".foldsel")].find(x => /subset/.test(x.textContent));
+    /* A ROW THAT SHOWS ITS CHILDREN, in either of the two ways it can. Few
+       subsets are NAMED inline (.subname links) and many are COUNTED
+       ("N subsets"), so a probe that only knew the count went blind the day the
+       names arrived — which is exactly what happened: this went red with
+       noParent the moment "· 1 subset" became "· Elections". Both shapes are
+       matched, and it is still found by what the row SHOWS rather than by the
+       attribute under test. */
+    const r = [...document.querySelectorAll(".foldsel")]
+      .find(x => x.querySelector(".subname") || /\d+ subsets/.test(x.textContent));
     if (!r) return {noParent: true};
     const keys = (r.getAttribute("data-fold-keys") || "").split(" ").filter(Boolean);
     // and behaviourally: ticking the parent must reveal a claim filed in a CHILD.
