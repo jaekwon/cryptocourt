@@ -166,15 +166,23 @@ web-guards:
 # it wants a headless Chrome, and the gate must not. It caught a grid rule that
 # put the whole page body below the sidebar, which reading the CSS did not.
 #
-# EVERY HARNESS DRIVES A REAL BROWSER, so none is cheap: about two minutes for
-# the five (chat_all 34s, embed_layout 23s, rowscope_layout 23s, route_crawl
-# 21s, tagrow_layout 14s). That is the right cost before a commit and the wrong
-# one after every edit. ONLY takes a substring so you can run the one that
-# covers what you touched:
+# EVERY HARNESS DRIVES A REAL BROWSER, so none is cheap: SEVENTEEN of them, about
+# three and three quarter minutes end to end, measured. That is the right cost
+# before a commit and the wrong one after every edit. ONLY takes a substring so
+# you can run the one that covers what you touched:
 #
 #   make web-visual ONLY=rowscope      # rows on every route
 #   make web-visual ONLY=route_crawl   # every internal link resolves
-#   make web-visual                    # all five, before a commit
+#   make web-visual                    # all of them, before a commit
+#
+# THE COUNT IS NOT WRITTEN DOWN HERE, and that is deliberate. This paragraph used
+# to name five harnesses and their individual timings; there are seventeen now and
+# it still said five, which is the same lie the note above this one is about — ten
+# harnesses broken by one commit "reported green because only four were run by
+# hand". A reader trusting "all five" would have believed they had covered the
+# suite. The list that decides is ALL in web/tests/browser/run.js, and
+# check-browser-checks-registered fails if a file is not reachable from it, so the
+# count is a question with an answer rather than a number to maintain here.
 web-visual:
 	@if ! command -v node >/dev/null 2>&1; then \
 		echo "node not installed - skipping browser checks"; exit 0; \
