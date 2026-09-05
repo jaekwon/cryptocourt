@@ -470,6 +470,53 @@ const run = async (rows, v, mode) => {
     const t = docketSignal(null, 53.14);
     return t.includes("53.1%") && t.includes("staked YES") && !t.includes("YES now");
   })());
+  /* AND THE FIGURE IS THE DECIDED SIDE'S. A settled-NO claim read "53.1% staked
+     YES" beside its own NO oval — the majority figure for the side the court
+     rejected, which invites a reader to check the two against each other and
+     find them disagreeing. They never did: 53.1% on YES IS 46.9% on NO, one
+     stake read from the other end. Reported from the live docket. */
+  ok("...and it is read from the side the court decided", (()=>{
+    const t = docketSignal(null, 53.14, "NO");
+    return t.includes("46.9%") && t.includes("staked NO") && !t.includes("53.1%");
+  })());
+  ok("...the sparkline branch too, which draws the same figure", (()=>{
+    const t = docketSignal([10, 20, 53.14], 53.14, "NO");
+    return t.includes("46.9%") && t.includes("staked NO");
+  })());
+  /* AN UNDECIDED CLAIM KEEPS YES: there is no side to follow, and YES is the axis
+     the sparkline is already drawn on. */
+  ok("...while an undecided claim still reads on YES", (()=>{
+    const a = docketSignal(null, 53.14, "");
+    const b = docketSignal(null, 53.14);
+    return a === b && a.includes("53.1%") && a.includes("staked YES");
+  })());
+  ok("...and a nonsense side is not trusted to flip it", (()=>{
+    const t = docketSignal(null, 53.14, "MAYBE");
+    return t.includes("53.1%") && t.includes("staked YES");
+  })());
+  /* THE PLUMBING, PINNED IN SOURCE. Three paths carry the side to the figure and
+     none of them runs offline: the demo dataset ships its series inline, so the
+     async sweep never fires, and the chain's policing lists are empty without a
+     chain. A browser check against the sample passed with all three severed —
+     measured, not assumed — so they are asserted here rather than left to a walk
+     that cannot reach them.
+     THE SWEEP IS THE ONE THAT MATTERS. It fills every list a claim appears in
+     from one read, seconds after the row is drawn; dropping the side there puts
+     "staked YES" back over a NO row's figure the moment the series lands, which
+     is the reported bug arriving late. */
+  ok("the docket row hands its verdict to the figure", (()=>{
+    /* BOTH BRANCHES, counted. docketRow emits the cell twice — once carrying a
+       figure, once empty and waiting for the sweep — and the sweep reads the side
+       back off whichever one it finds. An assertion satisfied by one of them
+       passes while the other goes out bare, which is the branch a young claim
+       takes. */
+    const n = (src.match(/data-side="\$\{dSide\}"/g) || []).length;
+    return src.includes('docketSignal(c.series, c.inst, dSide)') && n >= 2;
+  })());
+  ok("...the chain's policing rows too", src.includes('docketSignal(c.series, c.inst, sd)'));
+  ok("...and the async fill reads it back off the cell", (()=>{
+    return src.includes('el.innerHTML = docketSignal(ser, inst, el.getAttribute("data-side"));');
+  })());
   /* A MISSING SPARKLINE IS NOT NEWS. This asserted the caption SAID "no trend" (and
      did not say "no trend yet"). Both spent half the caption on the absence of a
      decoration — a reader who has never seen the line cannot miss it, and one who has

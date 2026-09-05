@@ -461,7 +461,8 @@ ok("the policing rows are claim rows, so the shape is shared not copied",
 ok("...drawing the percentage with the docket's own builder", (()=>{
   const i = src.indexOf("const polrow = (r, metaLine)");
   const body = src.slice(i, src.indexOf("const srow = r => polrow", i));
-  return body.includes("docketSignal(c.series, c.inst)");
+  // ...and hands it the verdict, so a settled-NO row reads its own side
+  return body.includes("docketSignal(c.series, c.inst, sd)");
 })());
 ok("...and the status pill on the meta line, as the docket puts it", (()=>{
   const i = src.indexOf("const polrow = (r, metaLine)");

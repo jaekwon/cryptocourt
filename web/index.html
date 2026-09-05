@@ -815,7 +815,11 @@ a.card:hover{border-color:var(--line-2)}
   padding-top:8px; padding-bottom:8px; align-items:center}
 .docket .crow.folderrow .t{display:flex; align-items:baseline; gap:8px; min-width:0;
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
-.docket .crow.px{display:flex; flex-direction:column; align-items:flex-end; min-width:64px}
+/* `.crow .px`, A DESCENDANT — the cell is inside the row, not the row itself.
+   Written as `.crow.px` it matched nothing at all, so the figure and its caption
+   fell back to inline and ran together: "53.1%staked" on one line with "YES"
+   wrapped under it. Reported from the live docket. */
+.docket .crow .px{display:flex; flex-direction:column; align-items:flex-end; min-width:64px}
 .px b{font-family:var(--mono); font-size:13px; font-weight:500; font-variant-numeric:tabular-nums}
 .px small{font-size:10px; color:var(--muted); letter-spacing:.05em}
 .spark{width:60px; height:16px; display:block; margin-bottom:2px}
@@ -4440,7 +4444,7 @@ function claimSeries(d){
    So the figure rides the meta line instead of a track of its own — where the
    pill and the clock already are, and where it costs the title none of the width
    it just got back. No new read: the record is the one the docket drew from. */
-function docketSignal(ser, inst){
+function docketSignal(ser, inst, side){
   /* "staked YES", NOT "YES now". Beside a row whose title already carries the
      answer's oval, "YES now" reads as a second opinion on the verdict — and it
      is not one: it is the share of STAKE sitting on YES. Reported on #19, where
@@ -4455,8 +4459,17 @@ function docketSignal(ser, inst){
      (Before that it said "no trend yet", and the note is worth keeping: the `yet`
      promised one was coming, and on a claim that never moves again none is. Both
      versions were answering a question nobody asked.) */
-  if(ser) return `${sparkSvg(ser)}<b>${ser[2].toFixed(1)}%</b><small>staked YES</small>`;
-  if(Number.isFinite(inst)) return `<b>${inst.toFixed(1)}%</b><small>staked YES</small>`;
+  /* THE FIGURE IS THE DECIDED SIDE'S, when there is one. A settled-NO claim read
+     "53.1% staked YES" beside its own NO oval — the majority figure for the side
+     the court rejected, which invites the reader to check the two against each
+     other and find them disagreeing. They never did: 53.1% on YES IS 46.9% on
+     NO, the same stake read from the other end. Reported.
+     UNDECIDED CLAIMS KEEP YES. With no verdict there is no side to follow, and
+     YES is the axis the sparkline is already drawn on. */
+  const s = side==="NO" || side==="YES"? side : "YES";
+  const of = v => (s==="NO"? 100-v : v).toFixed(1);
+  if(ser) return `${sparkSvg(ser)}<b>${of(ser[2])}%</b><small>staked ${s}</small>`;
+  if(Number.isFinite(inst)) return `<b>${of(inst)}%</b><small>staked ${s}</small>`;
   return `<small class="muted">not staked yet</small>`;
 }
 function esc(s){ return String(s).replace(/[&<>"'`]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;","`":"&#96;"}[c])); }
@@ -7151,7 +7164,12 @@ on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
         // being given its own.
         const cells = document.querySelectorAll(`[data-pct="${slug}-${cl.id}"]`);
         cells.forEach(el => {
-          el.innerHTML = docketSignal(ser, inst);
+          /* THE SIDE RIDES THE CELL. This sweep fills every list the claim
+             appears in from one read and has no verdict in hand — docketRow does,
+             and wrote it onto the cell it built. Without it the fill would land
+             "staked YES" over a NO row's figure the moment the series arrived,
+             which is the same bug arriving a second later. */
+          el.innerHTML = docketSignal(ser, inst, el.getAttribute("data-side"));
           // The sort key rides the row, and it is the INSTANT ratio either way —
           // keying it off the spark meant a docket of young claims could not be
           // sorted at all.
@@ -10784,8 +10802,8 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
         // One cell either way: it carries the figure when the record already has
         // one and waits for the fill when it does not, so the key is written in
         // a single place rather than once per branch.
-        const px = `<span class="px" data-pct="${esc(slug)}-${r.id}">${
-          c && (c.series || Number.isFinite(c.inst))? docketSignal(c.series, c.inst) : ""}</span>`;
+        const px = `<span class="px" data-pct="${esc(slug)}-${r.id}"${sd?` data-side="${sd}"`:""}>${
+          c && (c.series || Number.isFinite(c.inst))? docketSignal(c.series, c.inst, sd) : ""}</span>`;
         /* THE FOLDER RIDES THE ROW HERE TOO. Taken from the folder tree rather
            than from the loaded claim, so a row for a claim this page never
            loaded still resolves — byId above is the docket's window, foldOf is
@@ -11879,8 +11897,8 @@ function docketRow(slug,c,meta,foldKeys){
      review the figure in Recently settled rather than a second rendering of the
      same number. */
   const px = (c.series || Number.isFinite(c.inst))
-    ? `<span class="px" data-pct="${esc(slug)}-${c.id}">${docketSignal(c.series, c.inst)}</span>`
-    : `<span class="px" data-pct="${esc(slug)}-${c.id}"></span>`;
+    ? `<span class="px" data-pct="${esc(slug)}-${c.id}"${dSide?` data-side="${dSide}"`:""}>${docketSignal(c.series, c.inst, dSide)}</span>`
+    : `<span class="px" data-pct="${esc(slug)}-${c.id}"${dSide?` data-side="${dSide}"`:""}></span>`;
   const sortKey = c.series ? c.series[2] : (Number.isFinite(c.inst) ? c.inst : null);
   return `<a class="crow claimrow${c.offp?" offp":""}" data-id="${c.id}" data-fold="${esc(foldKeys && foldKeys.length? foldKeys.join(" ") : "~none")}"${sortKey!=null?` data-yes="${sortKey}"`:""}${stakeSortAttrs(c.yesStake, c.noStake, phaseClass(c.statusText).side)} data-q="${esc("#"+c.id+" "+c.title)}" href="#/c/${esc(slug)}/${c.id}">
     <span class="id">#${c.id}</span>
@@ -14018,8 +14036,25 @@ function resolutionSection(slug,id,d,nowH,tl){
        with the same wash, and ✕ rather than refuse's ⚠: the mark for false, not
        the mark for something went wrong. */
     const ruledNo = sideName(v) === "NO";
+    /* A SETTLED SET-HEADING IS THE ONE CLAIM WITH AN ACTION LEFT AFTER SETTLING.
+       The court has agreed the heading should exist; AffirmSet is what turns
+       that agreement into a set, it is PERMISSIONLESS, and until somebody sends
+       it the decision sits there done-but-uncarried. That state is invisible
+       without this: the page would say "Settled YES" and offer nothing, and a
+       reader would have no way to know the last step was theirs to take.
+       DRAWN FROM THE TITLE, not from a chain read, because the mark IS the
+       fact — parseSetTitle on chain matches the same codepoint and delimiter.
+       Whether it has already been carried is a read, so the button ships and
+       fillSetAffirm below removes it once ClaimSet answers non-zero; the realm
+       refuses a second call regardless, so the worst case is a clear panic
+       rather than a duplicate set. */
+    const isSetHead = String(d.title||"").startsWith(SET_MARK + " ");
     inner = `<div class="notice ${ruledNo? "ruled-no" : "good"}"><span class="g">${ruledNo? "✕" : "✓"}</span><div><b>Settled ${sideName(v)}</b>${d.route?" — "+esc(d.route)+"":""}.
       Both sides withdraw principal 1×; the winning side also draws its accuracy reward once the rewards are opened.
+      ${isSetHead && !ruledNo? `<div class="actions" id="setaffirm" style="margin-top:10px">
+        ${btn("Carry it — make the set","AffirmSet",{courtSlug:slug,claimID:id},"","anyone may; the verdict is the authority")}
+        <span class="small muted" style="display:block;margin-top:6px">The court agreed this heading should exist. It becomes a set when somebody sends the transaction${d.setParentName? ` — filed under <b>${safeInline(d.setParentName)}</b>, because that is where this claim itself is filed` : ""}.</span>
+      </div>`:""}
       ${d.rewardsOpened && d.route==="vote"? `<p class="small" style="margin:8px 0 0">Voters whose ballot matched the final verdict may pull a small participation carrot — newly issued, capped just under half the court's base bond — 2% of its trailing average stake, or 1 KOURT, whichever is larger — and queued behind earlier awards; abstain and against-verdict ballots receive nothing.</p>`:""}</div></div>`;
   } else if(d.phase==="disputed"){
     inner = `<div class="notice warn"><span class="g">⚖</span><div><b>A dispute is under way</b>${d.round?` (after ${d.round} failed round${d.round>1?"s":""})`:""}.

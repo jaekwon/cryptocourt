@@ -125,6 +125,52 @@ const ROUTES = ["#/c/orem", "#/c/orem/f/0", "#/c/orem/f/1", "#/c/orem/11", "#/c/
     ok(`${r}: ...sitting under the list it belongs to`, act.belowList === true, JSON.stringify(act));
   }
 
+  /* THE FIGURE AND ITS CAPTION STACK. `.px` is a flex column — figure over
+     caption — and the rule was narrowed to `.docket .crow.px`, which matches
+     NOTHING: the cell is INSIDE the row, not the row itself. So the two ran
+     together inline and wrapped: "53.1%staked" on one line with "YES" beneath.
+     Reported from the live docket, and invisible to any source-level check,
+     since the selector it broke is still spelled plausibly. */
+  /* ON ledger, NOT orem. The rule that matters is "the figure follows the
+     verdict", and orem's visible docket has no settled-NO row to break — three
+     mutants that severed the plumbing survived against it, all of them silently
+     correct on a court where every verdict is YES. ledger has one. */
+  await page.goto(PAGE + "#/c/ledger", {waitUntil: 'networkidle0'});
+  await new Promise(z => setTimeout(z, 1500));
+  const px = await page.evaluate(() => {
+    const cells = [...document.querySelectorAll(".docket .crow.claimrow .px")]
+      .filter(c => c.querySelector("b") && c.querySelector("small"));
+    if (!cells.length) return {none: true};
+    const c = cells[0], cs = getComputedStyle(c);
+    const b = c.querySelector("b").getBoundingClientRect();
+    const sm = c.querySelector("small").getBoundingClientRect();
+    /* READ FROM THE ROW'S OWN OVAL, not from the attribute the cell carries:
+       data-side is half the mechanism under test, so comparing the caption to it
+       passes when both are dropped together. The oval is built by a different
+       function from a different read. */
+    const rowSide = x => {
+      const r = x.closest(".crow");
+      const o = r && r.querySelector(".sidetag");
+      const t = o ? o.textContent.trim() : "";
+      return t === "YES" || t === "NO" ? t : "";
+    };
+    const decided = cells.filter(x => rowSide(x));
+    return {n: cells.length, decided: decided.length,
+            no: decided.filter(x => rowSide(x) === "NO").length,
+            display: cs.display, dir: cs.flexDirection,
+            // the caption sits BELOW the figure, not beside it
+            stacked: sm.top >= b.bottom - 1,
+            mismatched: decided.filter(x => {
+              const cap = (x.querySelector("small") || {}).textContent || "";
+              return !cap.includes("staked " + rowSide(x));
+            }).map(x => rowSide(x) + " oval / " + (x.querySelector("small") || {}).textContent)};
+  });
+  ok("the docket's figure and caption stack", !px.none && px.display === "flex" && px.dir === "column",
+     JSON.stringify(px));
+  ok("...with the caption under the figure, not run against it", px.stacked === true, JSON.stringify(px));
+  ok("...the court has a decided NO row to test against", px.no > 0, JSON.stringify(px));
+  ok("...and every figure names its own row's verdict", px.mismatched.length === 0, JSON.stringify(px));
+
   console.log(fail ? "\n" + fail + " FAILURES" : "\nALL PASS");
   await browser.close();
   process.exit(fail ? 1 : 0);
