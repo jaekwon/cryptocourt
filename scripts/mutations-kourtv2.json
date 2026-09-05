@@ -7137,7 +7137,7 @@
   "pkg": "kourtv2",
   "file": "moderation.gno",
   "label": "maxReasonLen: a purge code of exactly the maximum length is refused",
-  "find": "\tif len(code) == 0 || len(code) > maxReasonLen {",
+  "find": "\tif len(code) == 0 || runeLen(code) > maxReasonLen {",
   "replace": "\tif len(code) == 0 || len(code) >= maxReasonLen {"
  },
  {
@@ -7196,8 +7196,8 @@
   "pkg": "kourtv2",
   "file": "moderation.gno",
   "label": "mustCategoryCode: an EMPTY purge code is accepted",
-  "find": "\tif len(code) == 0 || len(code) > maxReasonLen {",
-  "replace": "\tif len(code) > maxReasonLen {",
+  "find": "\tif len(code) == 0 || runeLen(code) > maxReasonLen {",
+  "replace": "\tif runeLen(code) > maxReasonLen {",
   "why": "The other half of the same line, writable for the first time now that the check has one site. Purge erases text behind a code and takes a global-DAO threshold to fire, so the code IS the record of why; an empty one makes the act unauditable."
  },
  {
