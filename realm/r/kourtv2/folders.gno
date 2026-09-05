@@ -68,6 +68,13 @@ type folder struct {
 	// entry would renumber the world underneath it. FolderCount is folders.Size(),
 	// so a retired folder still counts and every id still resolves.
 	retired bool
+	/* bornOf: the claim that carried this set into existence, or 0 for one a
+	   moderator simply created. See governedset.gno — a 𓂀 claim that settles
+	   YES gets a set bound to it, and this is the binding. Kept on the folder
+	   rather than in a second index because the folder is the thing that can be
+	   retired, purged and moved, and a separate map would be a second place to
+	   remember to do that. */
+	bornOf uint64
 	// parent folder, 0 = a root heading. Zero on pre-nesting folders, which read
 	// as roots — the same "zero on pre-upgrade" shape claimState.openedAtTime
 	// already uses, so there is no migration step and no version field.
