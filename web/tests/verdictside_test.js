@@ -473,15 +473,19 @@ const run = async (rows, v, mode) => {
   })());
 
 
-  /* WHAT THE FIGURE IS, said beside it. The caption read "YES now" next to a
-     title that already carries the answer's oval, so the row said YES? on one
-     line and "YES now" on the next about two different things — one the verdict
-     under dispute, the other the share of STAKE. Reported on #19.
-     And "no trend", not "no trend yet": the yet promises one is coming, and on a
-     claim that never moves again none is. */
+  /* WHAT THE FIGURE IS, ASKED FOR RATHER THAN SAID. It used to carry the words
+     beside it — "53.1% staked YES" — and the owner's call is that a percentage on
+     a docket is the YES share unless a verdict moved it, which the row need not
+     restate. It is still a choice of side, since an unanswered claim holds stake
+     both ways, so the subject moved onto the figure's own label instead of
+     leaving: bare in the row, named on hover and to a screen reader.
+     NOT "YES now" EITHER, which is the older bug this assertion was written for:
+     beside a title already carrying the answer's oval it read as a second opinion
+     on the verdict rather than the share of STAKE. Reported on #19. */
   ok("the percentage says it is stake, not a verdict", (()=>{
     const t = docketSignal(null, 53.14);
-    return t.includes("53.1%") && t.includes("staked YES") && !t.includes("YES now");
+    return t.includes("53.1%") && /title="[^"]*stake[^"]*sits on YES"/.test(t)
+        && !t.includes("YES now") && !t.includes("staked YES");
   })());
   /* AND THE FIGURE IS THE DECIDED SIDE'S. A settled-NO claim read "53.1% staked
      YES" beside its own NO oval — the majority figure for the side the court
@@ -490,22 +494,38 @@ const run = async (rows, v, mode) => {
      stake read from the other end. Reported from the live docket. */
   ok("...and it is read from the side the court decided", (()=>{
     const t = docketSignal(null, 53.14, "NO");
-    return t.includes("46.9%") && t.includes("staked NO") && !t.includes("53.1%");
+    return t.includes("46.9%") && /sits on NO"/.test(t) && !t.includes("53.1%");
   })());
   ok("...the sparkline branch too, which draws the same figure", (()=>{
     const t = docketSignal([10, 20, 53.14], 53.14, "NO");
-    return t.includes("46.9%") && t.includes("staked NO");
+    return t.includes("46.9%") && /sits on NO"/.test(t);
   })());
   /* AN UNDECIDED CLAIM KEEPS YES: there is no side to follow, and YES is the axis
      the sparkline is already drawn on. */
   ok("...while an undecided claim still reads on YES", (()=>{
     const a = docketSignal(null, 53.14, "");
     const b = docketSignal(null, 53.14);
-    return a === b && a.includes("53.1%") && a.includes("staked YES");
+    return a === b && a.includes("53.1%") && /sits on YES"/.test(a);
   })());
   ok("...and a nonsense side is not trusted to flip it", (()=>{
     const t = docketSignal(null, 53.14, "MAYBE");
-    return t.includes("53.1%") && t.includes("staked YES");
+    return t.includes("53.1%") && /sits on YES"/.test(t);
+  })());
+  /* NEITHER BRANCH CARRIES WORDS. The browser check reads this off the page and
+     the demo sample only ever renders the sparkline branch — every claim it ships
+     has a series inline — while on a live court most rows take the OTHER one,
+     drawn from ClaimHead before the sweep arrives. Measured: 19 of 25 live rows.
+     So both are asserted here, where the function is in hand. */
+  ok("neither branch spells the side out beside the figure", (()=>{
+    const bare = docketSignal(null, 53.14, "NO");
+    const line = docketSignal([10, 20, 53.14], 53.14, "NO");
+    return !/<small/.test(bare) && !/<small/.test(line)
+        && !/staked/.test(bare) && !/staked/.test(line);
+  })());
+  ok("...and both name it in the label instead", (()=>{
+    const bare = docketSignal(null, 53.14, "NO");
+    const line = docketSignal([10, 20, 53.14], 53.14, "NO");
+    return /sits on NO"/.test(bare) && /sits on NO"/.test(line);
   })());
   /* THE PLUMBING, PINNED IN SOURCE. Three paths carry the side to the figure and
      none of them runs offline: the demo dataset ships its series inline, so the
@@ -524,12 +544,12 @@ const run = async (rows, v, mode) => {
        passes while the other goes out bare, which is the branch a young claim
        takes. */
     // one emitter now: the run is built once and carries its figure or waits empty
-    return src.includes('docketSignal(c.series, c.inst, dSide, !!dSide)')
+    return src.includes('docketSignal(c.series, c.inst, dSide)')
         && src.includes('data-side="${dSide}"');
   })());
-  ok("...the chain's policing rows too", src.includes('docketSignal(c.series, c.inst, sd, !!sd)'));
+  ok("...the chain's policing rows too", src.includes('docketSignal(c.series, c.inst, sd)'));
   ok("...and the async fill reads it back off the cell", (()=>{
-    return src.includes('el.innerHTML = docketSignal(ser, inst, el.getAttribute("data-side"), !!el.getAttribute("data-side"));');
+    return src.includes('el.innerHTML = docketSignal(ser, inst, el.getAttribute("data-side"));');
   })());
   /* A MISSING SPARKLINE IS NOT NEWS. This asserted the caption SAID "no trend" (and
      did not say "no trend yet"). Both spent half the caption on the absence of a

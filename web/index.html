@@ -838,8 +838,19 @@ a.card:hover{border-color:var(--line-2)}
    squeezed the title into a second line. Same fix as the chips replaced. */
 .docket .crow.folderrow{grid-template-columns:auto minmax(0,1fr) auto; gap:0 10px;
   padding-top:8px; padding-bottom:8px; align-items:center}
-.docket .crow.folderrow .t{display:flex; align-items:baseline; gap:8px; min-width:0;
-  white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+/* THE META FLOWS AS A SENTENCE, not as flex items. `.docket .m` is
+   display:flex with gap:12px — written for a claim row, where the meta is two
+   or three separate chips. Here the meta is prose with links in it, so every
+   name AND EVERY COMMA became its own flex item: the commas detached from the
+   words they follow, sat 12px out on both sides, and the third name broke to a
+   line of its own while there was room beside the second.
+   So this row's title and meta are ordinary text: display:block on the title so
+   the name and the meta share one flowing paragraph, inline on the meta so its
+   links and commas wrap like words. min-width:0 stays — it is what lets the
+   grid column shrink instead of forcing the row wide. */
+.docket .crow.folderrow .t{display:block; min-width:0; white-space:normal;
+  overflow:hidden; text-overflow:ellipsis}
+.docket .crow.folderrow .m{display:inline; gap:0; margin-top:0; white-space:normal}
 /* `.crow .px`, A DESCENDANT — the cell is inside the row, not the row itself.
    Written as `.crow.px` it matched nothing at all, so the figure and its caption
    fell back to inline and ran together: "53.1%staked" on one line with "YES"
@@ -4468,13 +4479,8 @@ function claimSeries(d){
    So the figure rides the meta line instead of a track of its own — where the
    pill and the clock already are, and where it costs the title none of the width
    it just got back. No new read: the record is the one the docket drew from. */
-function docketSignal(ser, inst, side, oval){
-  /* "staked YES", NOT "YES now". Beside a row whose title already carries the
-     answer's oval, "YES now" reads as a second opinion on the verdict — and it
-     is not one: it is the share of STAKE sitting on YES. Reported on #19, where
-     the row said YES? on one line and "YES now" on the next about different
-     things.
-     AND A MISSING SPARKLINE SAYS NOTHING. This used to append "· no trend", which
+function docketSignal(ser, inst, side){
+  /* A MISSING SPARKLINE SAYS NOTHING. This used to append "· no trend", which
      spent half the caption on the absence of a decoration: a reader who has never
      seen the line on another row cannot miss it, and one who has can see that this
      row has no line by looking at the row. The figure is the statement either way,
@@ -4492,13 +4498,21 @@ function docketSignal(ser, inst, side, oval){
      YES is the axis the sparkline is already drawn on. */
   const s = side==="NO" || side==="YES"? side : "YES";
   const of = v => (s==="NO"? 100-v : v).toFixed(1);
-  /* THE OVAL ALREADY NAMED THE SIDE, so a decided row does not name it twice:
-     the run reads "(NO) 46.9%", the oval and the figure one phrase. A row with no
-     verdict has no oval to lean on and keeps the words. */
-  const cap = oval? "" : `<small>staked ${s}</small>`;
+  /* THE FIGURE STANDS ALONE. A decided row's oval already named the side, and on
+     an undecided one the owner's call is that the bare number reads better than
+     two words restating a convention the whole docket keeps: a percentage here is
+     the YES share unless a verdict moved it.
+     SO THE SUBJECT MOVES RATHER THAN LEAVING. An unanswered claim does hold stake
+     on both sides — this is the YES share, not the only number there is — so the
+     figure says which side it is on where a reader can ask for it, and where a
+     screen reader gets it either way. Bare in the row, named on hover: the same
+     bargain the map's marks make.
+     ON THE <b>, NOT THE RUN, so the sparkline beside it keeps its own silence —
+     it is a decoration and has nothing to say that the figure has not. */
+  const say = v => `${of(v)}% of the stake on this claim sits on ${s}`;
   // FIGURE, THEN LINE: the line is the history behind the number, so it trails it.
-  if(ser) return `<b>${of(ser[2])}%</b>${cap}${sparkSvg(ser)}`;
-  if(Number.isFinite(inst)) return `<b>${of(inst)}%</b>${cap}`;
+  if(ser) return `<b title="${esc(say(ser[2]))}">${of(ser[2])}%</b>${sparkSvg(ser)}`;
+  if(Number.isFinite(inst)) return `<b title="${esc(say(inst))}">${of(inst)}%</b>`;
   return `<small class="muted">not staked yet</small>`;
 }
 function esc(s){ return String(s).replace(/[&<>"'`]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;","`":"&#96;"}[c])); }
@@ -7198,7 +7212,7 @@ on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
              and wrote it onto the cell it built. Without it the fill would land
              "staked YES" over a NO row's figure the moment the series arrived,
              which is the same bug arriving a second later. */
-          el.innerHTML = docketSignal(ser, inst, el.getAttribute("data-side"), !!el.getAttribute("data-side"));
+          el.innerHTML = docketSignal(ser, inst, el.getAttribute("data-side"));
           // The sort key rides the row, and it is the INSTANT ratio either way —
           // keying it off the spark meant a docket of young claims could not be
           // sorted at all.
@@ -10864,7 +10878,7 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
         // one and waits for the fill when it does not, so the key is written in
         // a single place rather than once per branch.
         const px = `<span class="sig" data-pct="${esc(slug)}-${r.id}"${sd?` data-side="${sd}"`:""}>${
-          c && (c.series || Number.isFinite(c.inst))? docketSignal(c.series, c.inst, sd, !!sd) : ""}</span>`;
+          c && (c.series || Number.isFinite(c.inst))? docketSignal(c.series, c.inst, sd) : ""}</span>`;
         /* THE FOLDER RIDES THE ROW HERE TOO. Taken from the folder tree rather
            than from the loaded claim, so a row for a claim this page never
            loaded still resolves — byId above is the docket's window, foldOf is
@@ -11965,7 +11979,7 @@ function docketRow(slug,c,meta,foldKeys){
      data-pct STAYS THE KEY. The async sweep fills every list a claim appears in
      by that attribute; only where the run sits has changed. */
   const px = `<span class="sig" data-pct="${esc(slug)}-${c.id}"${dSide?` data-side="${dSide}"`:""}>${
-    (c.series || Number.isFinite(c.inst))? docketSignal(c.series, c.inst, dSide, !!dSide) : ""}</span>`;
+    (c.series || Number.isFinite(c.inst))? docketSignal(c.series, c.inst, dSide) : ""}</span>`;
   const sortKey = c.series ? c.series[2] : (Number.isFinite(c.inst) ? c.inst : null);
   return `<a class="crow claimrow${c.offp?" offp":""}" data-id="${c.id}" data-fold="${esc(foldKeys && foldKeys.length? foldKeys.join(" ") : "~none")}"${sortKey!=null?` data-yes="${sortKey}"`:""}${stakeSortAttrs(c.yesStake, c.noStake, phaseClass(c.statusText).side)} data-q="${esc("#"+c.id+" "+c.title)}" href="#/c/${esc(slug)}/${c.id}">
     <span class="id">#${c.id}</span>

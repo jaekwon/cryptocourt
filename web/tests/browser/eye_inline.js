@@ -167,9 +167,14 @@ const ROUTES = ["#/c/orem", "#/c/orem/f/0", "#/c/orem/f/1", "#/c/orem/11", "#/c/
               const cap = (x.g.querySelector("small") || {}).textContent || "";
               return cap && !cap.includes("staked " + side(x));
             }).length,
-            // an undecided row has no oval, so the run must name the side itself
+            // the figure stands alone in the row — no side spelled out beside it
             open: runs.filter(x => !side(x)).length,
-            openNamed: runs.filter(x => !side(x) && /staked (YES|NO)/.test(x.g.textContent)).length,
+            worded: runs.filter(x => /staked|YES|NO/.test(x.g.textContent)).length,
+            // ...and says which side it is on where a reader can ask
+            titled: runs.filter(x => {
+              const f = x.g.querySelector("b"), t = f && f.getAttribute("title");
+              return t && new RegExp("sits on " + (side(x) || "YES") + "$").test(t);
+            }).length,
             // and the figure leads, the line trails it — "(NO) 46.9% ~", as asked
             sparked: runs.filter(x => x.g.querySelector("svg")).length,
             figFirst: runs.filter(x => {
@@ -188,11 +193,16 @@ const ROUTES = ["#/c/orem", "#/c/orem/f/0", "#/c/orem/f/1", "#/c/orem/11", "#/c/
      four words; the oval is the side and the figure is its share. */
   ok("...and does not name the side the oval just named", sig.captioned === 0, JSON.stringify(sig));
   ok("...while every figure still reads from its row's verdict", sig.wrong === 0, JSON.stringify(sig));
-  /* AN UNDECIDED ROW HAS NO OVAL TO LEAN ON. Dropping the caption everywhere
-     leaves a bare "53.1%" against a claim nobody has answered — a number with no
-     subject, which is worse than the two words it saves. */
-  ok("...and a row with no verdict still names the side its figure is on",
-     sig.open > 0 && sig.openNamed === sig.open, JSON.stringify(sig));
+  /* THE FIGURE STANDS ALONE, the owner's call: a percentage on a docket is the
+     YES share unless a verdict moved it, and the row does not restate a
+     convention the whole page keeps.
+     THE SUBJECT MOVED RATHER THAN LEAVING, which is the half worth testing. An
+     unanswered claim holds stake on both sides, so the bare number IS a choice of
+     side; it is named on the figure where a reader can ask for it and a screen
+     reader gets it regardless. */
+  ok("...with no side spelled out beside the figure", sig.worded === 0, JSON.stringify(sig));
+  ok("...but every figure says which side it is on when asked",
+     sig.open > 0 && sig.titled === sig.n, JSON.stringify(sig));
   /* FIGURE, THEN LINE — the shape asked for. The line is the history behind the
      number; leading with it puts a 44px graphic between the oval and the figure
      it belongs to. */
