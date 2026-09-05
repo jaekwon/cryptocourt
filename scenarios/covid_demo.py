@@ -1330,6 +1330,44 @@ s.expect("BoardPartyRows", [SLUG, PJ], r"[|]answerer[|]", final=True)
 # than which is which.
 s.expect("BoardNewest", [SLUG, P3, 0, 25], r"[|]h[|]", final=True)
 
+# ---------------------------------------------- one heading left unborn
+#
+# A SET THE COURT HAS ALREADY AGREED TO, AND NOBODY HAS CARRIED. It is opened
+# with the mark, filed into Origins — which is what declares its parent, since
+# the title has room for a name and not a path — staked, answered YES and
+# settled. Every gate AffirmSet checks is satisfied. The one thing missing is
+# the transaction itself, which is permissionless: any address may send it, and
+# whoever does turns this claim into a subset of Origins.
+#
+# LEFT DELIBERATELY UNDONE, because "the court decides its filing system" is a
+# claim about a process, and a seed where every set arrives already built shows
+# only the result. This one is the process caught mid-step, and it is the state
+# a visitor can act on rather than read about.
+#
+# LAST, so the docket keeps its numbering: the six headings are 1..6 and the
+# claims 7..25, and this becomes 26 rather than displacing anything.
+s.note("a seventh heading, settled and waiting: the court said yes and nobody "
+       "has carried it yet — AffirmSet is permissionless, so anyone may")
+PENDING_NAME = "Furin cleavage site"
+PENDING_CID = 26
+s.claim(accounts["genomics"], SLUG, SET_MARK + " " + PENDING_NAME,
+        "Whether the site has a natural analogue is the question three claims "
+        "here already turn on; this heading gathers them.")
+# THE FILING IS THE PARENT. AffirmSet reads ClaimFolders and refuses a claim
+# filed in more than one set, so exactly one AddToFolder here is load-bearing.
+s.call(DEPLOYER, "AddToFolder", [SLUG, str(FOLDER_ID[("Origins",)]), str(PENDING_CID)])
+for _r in range(3):
+    if _r:
+        s.advance_height(EPOCH_BLOCKS, why="an epoch, so the seventh heading's interest matures")
+    s.stake(accounts["genomics"], SLUG, PENDING_CID, YES, SET_STAKE)
+s.answer(accounts["arbiter"], SLUG, PENDING_CID, YES)
+s.advance(72 * 3600 + 60, why="the 72h window in wall clock, for the seventh heading")
+s.advance_height(int(51_840), why="...and in blocks, so its series is not empty")
+s.settle(accounts["arbiter"], SLUG, PENDING_CID)
+# AND NO AffirmSet. That is the point.
+s.expect("ClaimSet", [SLUG, PENDING_CID], r"0", final=True)
+s.expect("IsSetClaim", [SLUG, PENDING_CID], r"true", final=True)
+
 # ------------------------------------------------------------ what it built
 #
 # Asserted, not described. A folder id tracked in this process rather than read

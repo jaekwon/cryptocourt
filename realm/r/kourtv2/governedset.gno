@@ -185,13 +185,38 @@ func AffirmSet(cur realm, courtSlug string, claimID uint64) uint64 {
 		panic("kourtv2: a folder by that name already exists")
 	}
 
-	fid := newFolderCore(cm, name, "", 0)
+	/* 5. THE PARENT IS WHERE THE CLAIM ITSELF IS FILED, which is what makes a
+	   SUBSET expressible at all. The title is spent on the name and carries no
+	   room for a path, so the alternative was to birth every set at the root and
+	   have a moderator move it — which put a moderator back in the middle of the
+	   one act this feature exists to take out of their hands.
+	   Filed in one set, born inside it. Filed in none, born at the root.
+	   AND FILED IN SEVERAL IS A REFUSAL, not a guess. A claim may belong to any
+	   number of sets — ClaimSets returns a slice precisely because of that — so
+	   "the parent" is only well defined when there is exactly one. Picking the
+	   first would make the tree depend on iteration order, which is the kind of
+	   thing that is stable until the day it is not.
+   newFolderCore re-checks the depth cap for us: a parent already four deep
+	   refuses there, with the message that names the cap.
+	   TWO READS, ONE LETTER APART, and they answer opposite questions:
+	     ClaimFolders(claim) — the sets this claim is FILED IN  (the parent)
+	     ClaimSet(claim)     — the set this claim BORE          (guard 3, above)
+	   Reading the wrong one here would silently nest every set under itself. */
+	var parent uint64
+	if in := ClaimFolders(courtSlug, claimID); len(in) == 1 {
+		parent = in[0]
+	} else if len(in) > 1 {
+		panic("kourtv2: this claim is filed in more than one set; a born set needs exactly one parent")
+	}
+
+	fid := newFolderCore(cm, name, "", parent)
 	cm.mustFolder(fid).bornOf = claimID
 	emitModAct(c.id, claimID, "folder-create", cs.author)
 	chain.Emit("SetAffirmed",
 		"court", c.id,
 		"claim", strconv.FormatUint(claimID, 10),
 		"folder", strconv.FormatUint(fid, 10),
+		"parent", strconv.FormatUint(parent, 10),
 		"name", name,
 		"height", eventHeight(),
 	)

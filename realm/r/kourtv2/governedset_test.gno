@@ -198,6 +198,87 @@ func TestAffirmRefusesANameTakenSinceTheClaimOpened(cur realm, t *testing.T) {
 	uassert.Equal(t, uint64(0), ClaimSet("gst1", id))
 }
 
+/* THE PARENT COMES FROM THE CLAIM'S OWN FILING, which is the whole of how a
+   SUBSET is expressible: the title carries the name and has no room for a path.
+   Three arms, because the rule has three cases and only one of them is the
+   happy one — and the refusal is the interesting one, since a claim may be
+   filed in any number of sets and "the parent" is only defined when there is
+   exactly one. */
+func TestABornSetNestsWhereItsClaimIsFiled(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("gsp-alice")
+	testCourt(cur, "gsp1", alice, 50_000_000_000)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	parent := CreateFolder(cross(cur), "gsp1", "Origins", "where it began")
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "gsp1", tD010+" Furin cleavage site")
+	// FILED FIRST, and that filing is what declares the parent.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	AddToFolder(cross(cur), "gsp1", parent, id)
+
+	matureOI(cur, "gsp1", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "gsp1", id, sideYES)
+	testing.SkipHeights(settleDelay)
+	SettleUndisputed(cross(cur), "gsp1", id)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	fid := AffirmSet(cross(cur), "gsp1", id)
+	uassert.Equal(t, parent, FolderParent("gsp1", fid))
+	uassert.Equal(t, "Furin cleavage site", FolderName("gsp1", fid))
+}
+
+// Filed nowhere, born at the root — the case every set in the seed's first
+// generation takes, and the one that must not start nesting by accident.
+func TestAnUnfiledSetClaimIsBornAtTheRoot(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("gsr-alice")
+	testCourt(cur, "gsr1", alice, 50_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "gsr1", tD010+" A root heading")
+	matureOI(cur, "gsr1", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "gsr1", id, sideYES)
+	testing.SkipHeights(settleDelay)
+	SettleUndisputed(cross(cur), "gsr1", id)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	fid := AffirmSet(cross(cur), "gsr1", id)
+	uassert.Equal(t, uint64(0), FolderParent("gsr1", fid))
+}
+
+/* FILED IN TWO IS A REFUSAL. A claim may belong to any number of sets — that is
+   why ClaimFolders returns a slice — so picking one would make the tree depend
+   on iteration order: stable until the day it is not. The claim keeps its
+   filings and carries no set, so nothing is half-done. */
+func TestASetClaimFiledTwiceRefusesToBeBorn(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("gsa-alice")
+	testCourt(cur, "gsa1", alice, 50_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	a := CreateFolder(cross(cur), "gsa1", "Origins", "one")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	b := CreateFolder(cross(cur), "gsa1", "Fauci", "two")
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "gsa1", tD010+" Ambiguous parent")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	AddToFolder(cross(cur), "gsa1", a, id)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	AddToFolder(cross(cur), "gsa1", b, id)
+
+	matureOI(cur, "gsa1", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "gsa1", id, sideYES)
+	testing.SkipHeights(settleDelay)
+	SettleUndisputed(cross(cur), "gsa1", id)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "more than one set", func() {
+		AffirmSet(cross(cur), "gsa1", id)
+	})
+	uassert.Equal(t, uint64(0), ClaimSet("gsa1", id))
+	uassert.Equal(t, 2, FolderCount("gsa1"))   // the two it was filed in, and no third
+}
+
 // A moderator's ordinary folder has no claim behind it. This is what stops
 // SetBornOf being read as "every folder came from somewhere".
 func TestAModeratorFolderIsBornOfNothing(cur realm, t *testing.T) {

@@ -12145,6 +12145,7 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
      subtract two heights from the same clock. */
   fillClaimSide(slug, id, d, tline, nowH);
   fillClaimComments(slug, id);
+  fillSetAffirm(slug, id);
   // arrived from an embed's side button
   if(QP.side) focusStakeSide(QP.side);
   // ?ex=N opens that exhibit, after the list it indexes into has been drawn.
@@ -12462,6 +12463,38 @@ function claimCommentsHtml(slug, id, n, open, rows, kids, roles, withheld, nowH)
 
 /* The reads, and the ordering matters: BoardSize first, so a claim nobody has
    commented on costs one read and renders an invitation rather than a thread. */
+/* THE CARRY BUTTON, CORRECTED BY THE CHAIN. The button is rendered from the
+   title alone, which is the right default — the mark is the fact, and drawing it
+   optimistically means the action is offered the moment a set-heading settles,
+   with no read in the way. What the title cannot say is whether somebody has
+   ALREADY carried it, so this asks, and removes the button if so.
+   IT ALSO NAMES THE PARENT, from the claim's own filing. AffirmSet reads
+   ClaimFolders and refuses a claim filed in more than one set, so the sentence
+   under the button can state exactly where the set will land — and when the
+   answer is ambiguous it says that instead of promising a place.
+   FAILURES ARE SILENT AND LEAVE THE BUTTON. A read that does not answer is not
+   evidence the set exists, and the realm refuses a second AffirmSet anyway, so
+   the worst case is a clear panic in the wallet rather than a duplicate set. */
+async function fillSetAffirm(slug, id){
+  const box = document.getElementById("setaffirm");
+  if(!box || !isLive()) return;
+  try{
+    const [carried, folders] = await Promise.all([
+      one(`ClaimSet(${gstr(slug)},${id})`).catch(()=>null),
+      one(`ClaimFolders(${gstr(slug)},${id})`).catch(()=>null),
+    ]);
+    if(carried && String(carried).trim() !== "0"){ box.remove(); return; }
+    const ids = String(folders||"").match(/\d+/g) || [];
+    const note = box.querySelector(".small");
+    if(!note) return;
+    if(ids.length === 1){
+      const nm = await one(`FolderName(${gstr(slug)},${ids[0]})`).catch(()=>null);
+      if(nm) note.innerHTML = `The court agreed this heading should exist. It becomes a set when somebody sends the transaction — filed under <b>${safeInline(unesc(nm))}</b>, because that is where this claim itself is filed.`;
+    } else if(ids.length > 1){
+      note.textContent = "This claim is filed in more than one set, so the chain cannot tell which should be its parent — it refuses until one filing is left.";
+    }
+  }catch(_){ /* leave the button and its default sentence */ }
+}
 async function fillClaimComments(slug, id){
   const slot = document.getElementById("claimcomments");
   if(!slot) return;
