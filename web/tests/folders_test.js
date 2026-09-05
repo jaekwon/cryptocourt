@@ -31,6 +31,15 @@ global.qeval = async expr => {
     const fid=+expr.match(/,(\d+)\)/)[1];
     return fid===2? `("[purged:9.2]<img src=x onerror=alert(1)>" string)` : `("Folder ${fid}" string)`;
   }
+  /* THE TYPED SHAPE, deliberately: "(6 uint64)" is what a node actually answers,
+     and "uint64" ENDS IN 64 — a reader that strips non-digits turns folder 6's
+     claim into 664. The trap is documented in uint64List and this is the read
+     that walks into it. FBORN says which folder was affirmed and by whom. */
+  if(/SetBornOf/.test(expr)){
+    const fid=+expr.match(/,(\d+)\)/)[1];
+    const m = global.FBORN || {};
+    return `(${m[fid] || 0} uint64)`;
+  }
   if(/FolderItems/.test(expr)){
     const fid=+expr.match(/,(\d+)\)/)[1];
     if(QSHAPE==="tokens") return `(slice[(${fid} uint64),(${fid+10} uint64)] []uint64)`;
@@ -96,12 +105,50 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
   ok("3 folders read", cf.folders.length===3 && cf.count===3 && !cf.capped);
   ok("ids parsed from (N uint64) tokens", JSON.stringify(cf.folders[0].claims)==="[1,11]" && JSON.stringify(cf.folders[2].claims)==="[3,13]");
   ok("no 64 leakage", !cf.folders.some(f=>f.claims.includes(64)));
-  // 2 + 2F now: FolderCount, FolderTree, then name+items per folder. The extra
-  // read is the whole point of FolderTree — the parent, retired and purged bits
-  // it carries would otherwise be three MORE reads per folder, 300 at the cap.
-  // Pinned because a read count is the one cost a client can regress silently.
-  ok("read count = 2 + 2F", CALLS.length===2+2*3);
+  /* 2 + 3F: FolderCount, FolderTree, then name + items + bornOf per folder. The
+     tree read is the whole point of FolderTree — the parent, retired and purged
+     bits it carries would otherwise be three MORE reads per folder, 300 at the
+     cap. Pinned because a read count is the one cost a client can regress
+     silently, and this raise is the first time it has moved.
+     WHAT THE THIRD READ BUYS is which claim the court affirmed to create the
+     set, so a governed set can say so and the claim that made it stops appearing
+     twice on the court page. It is charged per FOLDER, not per claim — bounded
+     by the cap rather than the docket — and it rides the folder's existing
+     Promise.all, so it costs a request and not a round trip.
+     AND IT IS THE WRONG PLACE FOR IT, by this file's own argument: bornOf is a
+     per-folder bit, which is exactly what the tree row exists to carry. Folding
+     it in as a fourth field would take this back to 2 + 2F and cost nothing —
+     that is a realm change, so it belongs in the next chain reset rather than
+     in a web commit. Recorded here so the next person to read this number knows
+     it is a debt and not a shape. */
+  ok("read count = 2 + 3F", CALLS.length===2+3*3);
   ok("fids contiguous + paths set", cf.folders.every((f,i)=>f.fid===i+1 && f.path===String(i+1) && f.chain===true));
+  /* WHICH CLAIM AFFIRMED THE SET, read back off the chain and parsed with the
+     helper rather than by hand. 664 is the failure this asserts against: it is
+     what "(6 uint64)" becomes when a reader strips non-digits, and the tree is
+     full of that mistake's cousins. */
+  global.FBORN={2:6}; CALLS=[]; const cfb = await chainFolders("orem");
+  ok("a set carries the claim that affirmed it", cfb.folders[1].born===6, JSON.stringify(cfb.folders[1].born));
+  ok("...and the type name's own 64 does not leak into it",
+     cfb.folders[1].born!==664 && !cfb.folders.some(f=>f.born===664));
+  ok("...while a declared set carries none",
+     cfb.folders[0].born===undefined && cfb.folders[2].born===undefined,
+     JSON.stringify(cfb.folders.map(f=>f.born)));
+  global.FBORN=undefined;
+  /* A SET NESTED IN ANOTHER IS STILL BORN OF A CLAIM — mod:newset takes a
+     parentID — so the walk that collects affirmed claims has to recurse, or a
+     subset's claim keeps its duplicate row while a root set's loses it.
+     PINNED IN SOURCE, because the offline sample has no nested born set to walk:
+     giving one to annex or orem would move the fixtures three other harnesses
+     measure, which is a worse trade than naming the gap here. The recursion is
+     one line and this is what watches it. */
+  ok("the affirmed-claim walk recurses into subsets", (()=>{
+    const src = require("fs").readFileSync(
+      require("path").join(__dirname, "..", "index.html"), "utf8");
+    const i = src.indexOf("const bornIds =");
+    const line = src.slice(i, src.indexOf("\n", i));
+    return /f\.born/.test(line) && /ids\(f\.folders,\s*out\)/.test(line);
+  })());
   // bare-bracket shape fallback
   QSHAPE="bare"; const cf2 = await chainFolders("orem");
   ok("bare-bracket shape also parses", JSON.stringify(cf2.folders[0].claims)==="[1,11]");
@@ -115,7 +162,9 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
   const cfi = await chainFolders("orem");
   ok("only the flagged folder is asked for a picture",
      CALLS.filter(e=>/FolderImage/.test(e)).length===1 && /FolderImage\("orem",2\)/.test(CALLS.find(e=>/FolderImage/.test(e))));
-  ok("read count = 2 + 2F + 1 picture", CALLS.length===2+2*3+1);
+  // ...and the picture is still the only read that is CONDITIONAL: 3F is the
+  // floor every folder pays, plus one for the single folder the tree flagged.
+  ok("read count = 2 + 3F + 1 picture", CALLS.length===2+3*3+1);
   ok("the flagged folder carries an archive URL",
      cfi.folders[1].img==="https://kourt.xyz/m/"+"a".repeat(64));
   ok("the unflagged folders carry no picture", cfi.folders[0].img==="" && cfi.folders[2].img==="");

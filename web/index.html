@@ -8761,10 +8761,19 @@ async function chainFolders(slug){
       // "i" flag exists so this is not a third round trip per folder — a hundred
       // at the cap for a field most folders never set. The read failing takes
       // the picture and not the folder: the name and the claims are the page.
-      const [name, itemsRaw, imgRaw] = await Promise.all([
+      /* WHICH CLAIM AFFIRMED IT, in the same batch. Unlike the picture this is
+         not flag-guarded: the tree row carries no bit for it, and a governed set
+         has one by definition, so the guard would save a read on declared sets
+         only. It costs a request per FOLDER — bounded by the cap and small in
+         practice — not per claim, and it rides the existing Promise.all, so it
+         adds no round trip to the folder's own fetch.
+         0 MEANS DECLARED. A moderator's CreateFolder leaves bornOf zero, and a
+         set nobody voted for must not claim to have been affirmed. */
+      const [name, itemsRaw, imgRaw, bornRaw] = await Promise.all([
         one(`FolderName(${s2},${fid})`),
         tup(`FolderItems(${s2},${fid})`).then(t=>t[0]),
-        sh0 && sh0.hasImage ? one(`FolderImage(${s2},${fid})`).then(unesc).catch(()=>null) : null]);
+        sh0 && sh0.hasImage ? one(`FolderImage(${s2},${fid})`).then(unesc).catch(()=>null) : null,
+        one(`SetBornOf(${s2},${fid})`).catch(()=>null)]);
       const ids = uint64List(itemsRaw);
       const sh = shape.get(fid);
       // ARCHIVE-ONLY, like a claim node's thumbnail and for the same reason
@@ -8774,7 +8783,16 @@ async function chainFolders(slug){
       // rather than the src being assembled by hand.
       const img = (imgRaw && typeof mediaNodeThumb === "function")
         ? mediaNodeThumb(mediaParse(imgRaw), siteHost()) : "";
+      /* Number, because one() has already parsed: parseTyped strips the "(N
+         uint64)" wrapper and hands back an integer, so the 64-in-the-type-name
+         trap that uint64List exists for cannot reach this path — it bites the
+         RAW wire text, which is what the slice reads take.
+         AND IT FAILS TOWARD SHOWING. Anything unparseable lands on 0, which
+         means "declared", which means the claim keeps its own row. The other
+         direction would hide a claim on a bad read. */
+      const born = Number(bornRaw) || 0;
       return {name:String(name), claims:ids, folders:[], fid, img,
+              born: born || undefined,
               parent: sh? sh.parent : 0, path:String(fid), chain:true};
     }catch(_){ return {name:"read failed — reload to retry", claims:[], folders:[], fid, path:String(fid), chain:true, failed:true}; }
   });
@@ -10859,8 +10877,21 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
   const cur = cur0? (cur0.source==="chain"? cur0
     : Object.assign({}, cur0, {folders: curFilterFolders(cur0.folders, curValidSet(slug, s.claims))})) : null;
   const fmeta = cur && cur.folders.length? folderMeta(cur.folders,"",{}) : {};
+  /* A CLAIM THAT BECAME A SET IS SHOWN AS THE SET. It appeared twice on this
+     page — once as the drawer it created, once as a claim of its own, adjacent
+     and identically named — and the two rows are one object: the set IS what the
+     court decided that claim into. Reported as the duplicate.
+     THE SET ROW CARRIES IT NOW, "affirmed by #6", so nothing is lost by dropping
+     the second: the claim is one click away, with its stakes, its bond and the
+     verdict that made the drawer. That link landed first, deliberately — hiding
+     a row before the way to it exists is how a record becomes unreachable.
+     NOT DELETED AND NOT HIDDEN: its URL still opens the claim page, and the
+     moderation bit stays for moderation. This is a rendering decision about one
+     list, taken where the list is assembled. */
+  const bornIds = (function ids(fs, out){ (fs||[]).forEach(f=>{ if(f.born) out.add(Number(f.born)); ids(f.folders, out); }); return out; })(cur && cur.folders, new Set());
   const winIds = new Set(claims.map(cl=>cl.id));
-  const rowsAll = (allRows||claims).map(cl=>winIds.has(cl.id)? cl : Object.assign({}, cl, {offp:true}));
+  const rowsAll = (allRows||claims).filter(cl=>!bornIds.has(cl.id))
+    .map(cl=>winIds.has(cl.id)? cl : Object.assign({}, cl, {offp:true}));
   const open = rowsAll.filter(cl=>!isDone(cl)), done = rowsAll.filter(isDone);
   const openWin = open.filter(cl=>!cl.offp).length, doneWin = done.filter(cl=>!cl.offp).length;
   const srcLabel = cur? (cur.source==="local"? ` · ${CUR_LABEL}`

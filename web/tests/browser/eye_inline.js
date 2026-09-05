@@ -324,6 +324,29 @@ const ROUTES = ["#/c/orem", "#/c/orem/f/0", "#/c/orem/f/1", "#/c/orem/11", "#/c/
      Every set saying "affirmed by" would be the same failure as none of them
      saying it. */
   ok("...while a set nobody voted for claims nothing", born.plain > 0, JSON.stringify(born));
+  /* AND THE CLAIM IT NAMES IS NOT ALSO A ROW. That is the duplicate this whole
+     thread is about: the set and the claim it was decided into are one object,
+     shown twice, adjacent and identically named. The set row is the one that
+     stays, because it is the thing the court made. */
+  const dupe = await page.evaluate(() => {
+    const ids = [...document.querySelectorAll(".crow.claimrow")]
+      .map(r => ((r.querySelector(".id") || {}).textContent || "").replace("#", ""));
+    const born = [...document.querySelectorAll(".folderrow .t")]
+      .map(t => (t.textContent.match(/affirmed by #(\d+)/) || [])[1]).filter(Boolean);
+    return {born, ids, both: born.filter(b => ids.includes(b))};
+  });
+  ok("...and does not appear as a claim row beside it",
+     dupe.born.length > 0 && dupe.both.length === 0, JSON.stringify(dupe));
+  /* THE URL STILL OPENS IT. Suppressed from one list is not deleted and not
+     hidden: the claim carries the stakes, the bond and the verdict the set rests
+     on, and a reader who follows "affirmed by #6" must land on it. */
+  await page.goto(PAGE + "#/c/annex/" + dupe.born[0], {waitUntil: 'networkidle0'});
+  await new Promise(z => setTimeout(z, 1100));
+  const still = await page.evaluate(() => {
+    const t = document.querySelector(".main").innerText.slice(0, 300);
+    return {ok: !/not found|no such claim/i.test(t), head: (document.querySelector(".main h1") || {}).textContent.trim().slice(0, 40)};
+  });
+  ok("...while its own page still opens", still.ok && !!still.head, JSON.stringify(still));
 
   console.log(fail ? "\n" + fail + " FAILURES" : "\nALL PASS");
   await browser.close();
