@@ -771,30 +771,87 @@ for _pth, _dsc in FOLDER_DESC.items():
                          f"CreateFolder outright, which a seed run learns 400 "
                          f"transactions in.")
 
-s.note("the filing system on chain: CreateFolder for a root, CreateFolderIn for "
-       "a child, parents first — moderator-only, single-signer, no bond")
-FOLDER_ID = {}
-_folder_seq = 0
+# EVERY SET IS BORN OF A CLAIM. Not one CreateFolder in the docket's filing
+# system: each heading is filed as an ordinary claim whose title opens with the
+# wedjat, staked and answered and settled like any other, and only then carried
+# into a set by AffirmSet. That is the whole point of the mark — the court
+# decides its own filing system rather than being handed one.
+#
+# BATCHED IN PHASES, and the arithmetic is why. A set-claim needs its open
+# interest matured (three stakes across two epochs, 1,440 blocks) and then the
+# 51,840-block settle delay. Done one set at a time that is ~53,280 blocks each
+# and seven of them would be 373,000 — three emission periods spent on filing.
+# Done in phases, every set shares the same two waits: 53,280 blocks TOTAL,
+# under half a period, against a 1,209,600 budget already 598,320 spent.
+#
+# THE CLAIM IDS COME FIRST, deliberately. These have to exist and be affirmed
+# before any docket claim can be filed into them, so they take 1..N and the
+# docket starts after — see `ids`, whose enumeration begins at len(SET_PATHS)+1
+# for exactly this reason. Any hardcoded #/c/covid/<n> from before this change
+# names a different claim now.
+#
+# THE DESCRIPTION BECOMES THE CLAIM'S BODY rather than the folder's desc field.
+# AffirmSet creates the set with an empty description on purpose: the claim
+# behind it has a body, a stake history and a verdict, which is a better account
+# of what belongs in the set than a line anybody could have written, and it means
+# the text lives in exactly one place.
+s.note("the filing system on chain: every set is BORN — a wedjat claim, staked, "
+       "answered and settled, then carried by AffirmSet. No CreateFolder here.")
 
+SET_MARK = "\U00013080"   # U+13080 EGYPTIAN HIEROGLYPH D010, the exact codepoint
 
-def ensure_folder(path):
-    """The id of this path's folder, creating it and any missing ancestor."""
-    global _folder_seq
-    if path in FOLDER_ID:
-        return FOLDER_ID[path]
-    parent = ensure_folder(path[:-1]) if len(path) > 1 else 0
-    desc = FOLDER_DESC.get(path, "")
-    if parent:
-        s.call(DEPLOYER, "CreateFolderIn", [SLUG, str(parent), path[-1], desc])
-    else:
-        s.folder(DEPLOYER, SLUG, path[-1], desc)
-    _folder_seq += 1
-    FOLDER_ID[path] = _folder_seq
-    return _folder_seq
-
-
+# Parents before children: a child is MoveFolder'd under its parent after both
+# exist, so the parent's id has to be known first.
+SET_PATHS = []
 for _c in D:
-    ensure_folder(_c["path"])
+    for _i in range(1, len(_c["path"]) + 1):
+        if _c["path"][:_i] not in SET_PATHS:
+            SET_PATHS.append(_c["path"][:_i])
+SET_PATHS.sort(key=len)
+
+SET_CID = {}      # path -> the claim that asks for it
+FOLDER_ID = {}    # path -> the set it became
+STAKER = "foia"   # takes no side beyond the documents; a fitting filer of headings
+# unit() is defined further down, with the docket it serves; spelled out here
+# rather than moved, because moving a definition the whole file already reads
+# from is a bigger change than one multiplication.
+SET_STAKE = 40 * 1_000_000   # whole coin, in the realm's smallest unit
+
+# Phase 1 — file every heading as a claim, and open its position.
+for _n, _path in enumerate(SET_PATHS, start=1):
+    SET_CID[_path] = _n
+    s.claim(accounts[STAKER], SLUG, SET_MARK + " " + _path[-1],
+            FOLDER_DESC.get(_path, "") or None)
+    s.stake(accounts[STAKER], SLUG, _n, YES, SET_STAKE)
+
+# Phase 2 — two more rounds across two epochs, which is what matures the
+# trailing average an answer is sized against. Shared by every set at once.
+for _round in range(2):
+    s.advance_height(EPOCH_BLOCKS, why="an epoch, so the headings' open interest matures")
+    for _path in SET_PATHS:
+        s.stake(accounts[STAKER], SLUG, SET_CID[_path], YES, SET_STAKE)
+
+# Phase 3 — answered YES, then ONE settle delay for all of them.
+for _path in SET_PATHS:
+    s.answer(accounts["arbiter"], SLUG, SET_CID[_path], YES)
+s.advance_height(int(51_840), why="the 72h undisputed window, once, for every heading")
+
+# Phase 4 — settled, then carried. AffirmSet is permissionless: the verdict is
+# the authority, so the staker calls it rather than a moderator.
+_folder_seq = 0
+for _path in SET_PATHS:
+    s.settle(accounts["arbiter"], SLUG, SET_CID[_path])
+    s.call(accounts[STAKER], "AffirmSet", [SLUG, str(SET_CID[_path])])
+    _folder_seq += 1
+    FOLDER_ID[_path] = _folder_seq
+
+# Phase 5 — the nesting. AffirmSet creates at the root because the title is spent
+# on the name, so the tree is assembled afterwards by the same moderator
+# authority that could have retired any of these anyway.
+for _path in SET_PATHS:
+    if len(_path) > 1:
+        s.call(DEPLOYER, "MoveFolder",
+               [SLUG, str(FOLDER_ID[_path]), str(FOLDER_ID[_path[:-1]])])
 FAUCI = ("Fauci",)
 
 def unit(n):
@@ -811,8 +868,15 @@ def unit(n):
 # The table is grouped by subject because that is how it is read; the chain
 # numbers by filing date. Both, from one list, is the whole point of counting them
 # here rather than writing them down.
+# AFTER THE HEADINGS. The set-claims take 1..len(SET_PATHS) because they must be
+# affirmed before anything can be filed into them, so the docket begins past
+# them. Derived rather than written as a literal: a set added to the tree moves
+# every docket id, and a constant here would be wrong the first time that
+# happened and silently — the ids would still be contiguous, just off by one,
+# which shows up as a claim filed in the wrong folder rather than as an error.
 ids = {}
-for _n, _c in enumerate(sorted(D, key=lambda c: (c["on"], D.index(c))), start=1):
+for _n, _c in enumerate(sorted(D, key=lambda c: (c["on"], D.index(c))),
+                        start=len(SET_PATHS) + 1):
     ids[_c["key"]] = _n
 
 # ------------------------------------------------------------ one timeline
