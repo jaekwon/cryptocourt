@@ -6019,10 +6019,34 @@ function navTrail(hash, folders){
   const dir = nav && nav.querySelector('[data-k="dir"]');
   if(!dir) return;
   nav.querySelectorAll("a.trail").forEach(a=>a.remove());
-  const m = /^\/c\/([a-z0-9-]+)(?:\/(\d+))?/.exec(hash);
-  if(!m) return;
-  const slug = m[1], id = m[2];
   const fs = (folders && folders.length)? folders : null;
+  const m = /^\/c\/([a-z0-9-]+)(?:\/(\d+))?/.exec(hash);
+  /* THE DIRECTORY'S OWN CHILDREN, hung the same way a court's folders are. On
+     the front page the rail said "Directory" and stopped, so the one place that
+     lists what a reader can open said nothing about what there is — while the
+     same rail, one click later, is happy to show COVID and a claim under it.
+     THE LIT EDGE STAYS ON DIRECTORY HERE, which is the one thing this branch does
+     differently: on a court or claim route the marker moves DOWN to the row you
+     are on, because you are past Directory. On "/" you ARE on it, and the courts
+     below are places to go rather than where you are.
+     LIKE THE FOLDER VIEW, the route calls back: setNav runs before any read, and
+     on a live chain the court list is a query away, so this hangs nothing until
+     it is handed something. That also makes it idempotent — the rows are rebuilt
+     from scratch every render, so the empty first pass costs nothing. */
+  if(!m){
+    if(hash !== "/" || !fs) return;
+    let after0 = dir;
+    for(const c of fs){
+      const a = document.createElement("a");
+      a.className = "trail";
+      a.href = c.href;
+      a.innerHTML = `<span class="b">\u21b3</span>` + esc(c.label);
+      after0.insertAdjacentElement("afterend", a);
+      after0 = a;
+    }
+    return;
+  }
+  const slug = m[1], id = m[2];
   const rows = [{cls:"trail" + (id || fs? "" : " on"), href:"#/c/"+slug,
                  label:slug.toUpperCase()}];
   // A FOLDER'S NAME IS NOT IN THE ROUTE, only its id -- /c/covid/f/2 says
@@ -6574,6 +6598,20 @@ on(/^\/$/, async ()=>{
   ]);
   const featured = courts.filter(c=>c.tier===2);
   let listed = courts.filter(c=>c.tier!==2);
+  /* AND HANG THEM IN THE RAIL. setNav ran before this read and hung nothing, so
+     the rail said "Directory" and stopped on the one page whose whole job is to
+     list what can be opened. Called back here with the courts in hand, the same
+     way the folder view calls back with the path it just resolved.
+     FEATURED FIRST, THEN LISTED, which is the order the page itself renders them
+     in — a rail that disagreed with the column beside it about what comes first
+     would be worse than an empty one.
+     CAPPED. This is a nav, not a second directory: eight rows is already the
+     length of the rest of the rail, and a court list that outgrows the viewport
+     turns the sidebar into the thing you have to scroll past to reach "Your
+     positions". The page below it is where the full list lives, and every row
+     here links into it. */
+  navTrail("/", featured.concat(listed).slice(0, 8)
+    .map(c=>({label:(c.slug||"").toUpperCase(), href:"#/c/"+esc(c.slug)})));
   const page = pageOf();
   // Every page keeps the render's own order — burn-ranked. Deep pages come
   // from ListedCourtsBy("burn", offset, limit), the same index the render
@@ -8468,13 +8506,77 @@ const MAPK = {
    mode a folder node is 26px tall and two lines of 12px text do not fit — the
    second one lands outside its own box, which is the one thing check B exists to
    catch, and it caught it. */
-function mapWrapTitle(title, innerW, fs, maxLines){
+/* ONE MEASURER FOR THE WRAP AND THE DRAW, and the reason it had to be hoisted.
+   The wrap counted CHARACTERS — floor(inner/(fs*charW)) — while the draw measured
+   PIXELS with canvas measureText and set textLength from the result. charW is one
+   average ratio standing in for a proportional serif, and it has to be
+   conservative enough that a line of capitals never overflows; so on ordinary
+   lowercase it under-fills, badly. Measured on covid's map: 214px of room per
+   node and a widest title line of 136–161px, leaving 35–61px of every node
+   unused across four and five line titles. Reported as: the titles do not reach
+   the right edge.
+   Filling by the same measurement the draw uses closes that gap by construction —
+   a line grows until the thing that will be RENDERED no longer fits, rather than
+   until an estimate of it stops fitting.
+   THE FALLBACK IS THE OLD ESTIMATE, and it is load-bearing rather than tidy:
+   web/tests/*.js eval these functions under plain node, where there is no
+   document to make a canvas from. That path keeps charW's meaning as the
+   conservative fit budget it always was, so the source harnesses go on pinning
+   the same layout they always pinned. */
+const MAPW = {ctx: undefined, face: {}, w: {}};
+function mapFace(cls){
+  const k = String(cls||"").split(/\s+/)[0];
+  if(MAPW.face[k] !== undefined) return MAPW.face[k];
+  // The token, not a copy of the token: --serif here and --serif in .mtitle's
+  // rule are the same string by construction, so the measurement cannot drift
+  // from what is drawn.
+  const tok = (k==="mtitle"||k==="mcourt-t") ? "--serif" : k==="mid" ? "--mono" : "--sans";
+  const wt  = k==="mcourt-t" ? "700"
+            : (k==="mid"||k==="mverdict"||k==="mhdr-t"||k==="mvt") ? "600" : "400";
+  let fam="";
+  try{ fam=getComputedStyle(document.documentElement).getPropertyValue(tok).trim(); }catch(e){}
+  return (MAPW.face[k] = wt+" "+(fam||"sans-serif"));
+}
+function mapTextW(t, fs, cls){
+  if(MAPW.ctx === undefined){
+    try{ MAPW.ctx = document.createElement("canvas").getContext("2d"); }
+    catch(e){ MAPW.ctx = null; }
+  }
+  if(!MAPW.ctx) return Math.round(String(t).length*fs*MAPK.charW*10)/10;
+  const key = fs+"|"+(cls||"")+"|"+t;
+  if(MAPW.w[key] !== undefined) return MAPW.w[key];
+  const f = mapFace(cls), sp = f.indexOf(" ");
+  MAPW.ctx.font = f.slice(0,sp)+" "+fs+"px "+f.slice(sp+1);
+  return (MAPW.w[key] = Math.round(MAPW.ctx.measureText(t).width*10)/10);
+}
+// Trim to what FITS, by the same measurement — the character-budget version cut
+// a line short for the same reason the wrap did.
+function mapClipW(t, px, fs, cls){
+  t = String(t);
+  if(mapTextW(t, fs, cls) <= px) return t;
+  let lo = 0, hi = t.length;
+  while(lo < hi){ const mid = (lo+hi+1)>>1;
+    if(mapTextW(t.slice(0,mid)+"…", fs, cls) <= px) lo = mid; else hi = mid-1; }
+  return t.slice(0, Math.max(1, lo))+"…";
+}
+function mapWrapTitle(title, innerW, fs, maxLines, cls){
   const size = fs||MAPK.fs.title, cap = Math.max(1, maxLines||MAPK.maxTitleLines);
-  const budget = Math.floor(innerW/(size*MAPK.charW));
+  /* A line holds what will RENDER inside innerW, not what an average character
+     width predicts will — measured in THE FACE IT WILL BE DRAWN IN.
+     The first version measured everything as mtitle, the serif, on the guess
+     that the other labels were narrower and would err toward fitting. Backwards:
+     mhdr-t is a 600-weight sans and is WIDER, so a folder header wrapped as
+     serif overflowed its box, textLength clamped it to the room, and the glyphs
+     were squeezed to 0.93 of natural. browser/map_type.js measures exactly that
+     ratio per class and named the label — "Infrastructure" — which is the check
+     doing the job the source harnesses cannot. */
+  const face = cls || "mtitle";
+  const fits = t => mapTextW(t, size, face) <= innerW;
+  const budget = Math.floor(innerW/(size*MAPK.charW));   // the ellipsis floor, below
   const words = String(title).split(/\s+/); const lines=[]; let cur="";
   for(const w of words){
     const t = cur? cur+" "+w : w;
-    if(t.length<=budget){ cur=t; continue; }
+    if(fits(t)){ cur=t; continue; }
     if(cur) lines.push(cur);
     // BREAK WHEN THE CAP IS FULL, not when its last line is STARTED. The old
     // test was `lines.length+1>=cap`, which fired the moment the final line
@@ -8486,11 +8588,21 @@ function mapWrapTitle(title, innerW, fs, maxLines){
     // written, and nothing pinned it, because the wrap has no owner among the
     // harnesses — geometry checks ask where the text sits, never what it says.
     if(lines.length>=cap){ cur=""; break; }
-    cur=w.slice(0,budget);
+    // A single word wider than the line is trimmed to what fits, measured.
+    cur = fits(w)? w : mapClipW(w, innerW, size, face);
   }
   if(cur && lines.length<cap) lines.push(cur);
-  if(lines.join(" ").length < String(title).length && lines.length)
-    lines[lines.length-1] = lines[lines.length-1].slice(0, Math.max(1,budget-1))+"…";
+  /* THE ELLIPSIS IS APPENDED, THEN TRIMMED IF IT HAS TO BE. The character-budget
+     version cut the last line to budget-1 and stuck "…" on the end
+     unconditionally, which always produced one. Measuring instead, the last line
+     usually still FITS — so a clip-to-width returned it untouched and the mark
+     that says "there is more of this sentence" disappeared. Add it; only trim
+     when adding it is what overflows. */
+  if(lines.join(" ").length < String(title).length && lines.length){
+    const last = lines[lines.length-1];
+    lines[lines.length-1] = fits(last+"…")? last+"…"
+      : mapClipW(last, innerW, size, face);
+  }
   return lines;
 }
 /* The box a node needs. Claims carry their own, measured from their title when
@@ -8558,7 +8670,7 @@ function mapFitHeight(lines, fs){ return lines*(fs + 2) + 6; }
    the name in two lines inside the 76 it already had. */
 function mapCourtSize(name, mode){
   const base = MAPK.cnode[mode], fs = MAPK.fs.court;
-  const lines = mapWrapTitle(String(name || ""), base.w - 2*MAPK.tpad, fs, 4);
+  const lines = mapWrapTitle(String(name || ""), base.w - 2*MAPK.tpad, fs, 4, "mcourt-t");
   // wrapMid derives its own cap from the box height, so the height IS the cap.
   return {w: base.w, h: Math.max(base.h, Math.min(base.w, mapFitHeight(lines.length, fs)))};
 }
@@ -8568,7 +8680,7 @@ function mapFolderSize(name, count, mode){
   const label = count != null ? `${name} · ${count}` : String(name || "");
   const holds = w => {
     const lines = mapWrapTitle(label, w - 2*MAPK.tpad, MAPK.fs.header,
-                                mapFitLines(base, MAPK.fs.header));
+                                mapFitLines(base, MAPK.fs.header), "mhdr-t");
     // The same two failures wrapFit weighs at draw time: an ellipsis, or a last
     // line carrying the "· 3" and no word — which reads as a broken label.
     return mapWrapHolds(lines, label)
@@ -8605,7 +8717,7 @@ function mapTileSize(w){
 function mapClaimSize(title, mode, tiles){
   const base = MAPK.node[mode];
   if(mode!=="titles") return base;
-  const lines = mapWrapTitle(String(title||""), base.w-2*MAPK.tpad, MAPK.fs.title, MAPK.maxTitleLines);
+  const lines = mapWrapTitle(String(title||""), base.w-2*MAPK.tpad, MAPK.fs.title, MAPK.maxTitleLines, "mtitle");
   // The strip is one row whatever it holds — mediaNodeTiles caps it — so a claim
   // with four exhibits is no taller than a claim with one.
   const strip = tiles? mapTileSize(base.w) + MAPK.tile.pad : 0;
@@ -9268,7 +9380,7 @@ function mapSvg(L, data, slug){
      drift is not silent: a wrong weight or face here shows up as a ratio away
      from 1.00 in map_type.js, per class, by name. */
   const faceCache = {};
-  const faceOf=(cls)=>{
+  const faceOfUnused=(cls)=>{
     const k=String(cls||"").split(/\s+/)[0];
     if(faceCache[k]!==undefined) return faceCache[k];
     // The token, not a copy of the token: --serif here and --serif in .mtitle's
@@ -9281,16 +9393,11 @@ function mapSvg(L, data, slug){
     try{ fam=getComputedStyle(document.documentElement).getPropertyValue(tok).trim(); }catch(e){}
     return (faceCache[k]= wt+" "+(fam||"sans-serif"));
   };
-  const wCache = {};
-  const est=(t,fs,cls)=>{
-    if(!mctx) return Math.round(t.length*fs*K.charW*10)/10;
-    const key=fs+"|"+(cls||"")+"|"+t;
-    if(wCache[key]!==undefined) return wCache[key];
-    const f=faceOf(cls), sp=f.indexOf(" ");
-    mctx.font = f.slice(0,sp)+" "+fs+"px "+f.slice(sp+1);
-    return (wCache[key]=Math.round(mctx.measureText(t).width*10)/10);
-  };
-  const clip=(t,px,fs)=>{ const b=Math.floor(px/(fs*K.charW)); return t.length>b? t.slice(0,Math.max(1,b-1))+"…" : t; };
+  // Both delegate to the hoisted measurer, so the width that decided where a
+  // line BREAKS is the width that draws it. Two caches measuring the same string
+  // is how they came to disagree in the first place.
+  const est=(t,fs,cls)=>mapTextW(t,fs,cls);
+  const clip=(t,px,fs,cls)=>mapClipW(t,px,fs,cls||"mtitle");
   const label=(t,box,fs,y,cls,owner,dx)=>{
     const off=dx||0, room=box.w-2*K.tpad-off;
     const nm=clip(t, room, fs);
@@ -9394,7 +9501,7 @@ function mapSvg(L, data, slug){
      number. */
   const wrapFit=(name, count, box, fs, cls, owner)=>{
     const withN = count!=null? `${name} · ${count}` : name;
-    const a = mapWrapTitle(withN, box.w-2*K.tpad, fs, mapFitLines(box, fs));
+    const a = mapWrapTitle(withN, box.w-2*K.tpad, fs, mapFitLines(box, fs), cls);
     // Two ways the count costs more than it is worth: it pushes the wrap over and
     // the name gets an ellipsis, or it lands on a line of its own — "Learning
     // loss ·" above a bare "1", which reads as a broken label rather than a
@@ -9403,7 +9510,7 @@ function mapSvg(L, data, slug){
     return wrapMid((mapWrapHolds(a, withN) && !orphan)? withN : name, box, fs, cls, owner);
   };
   const wrapMid=(txt, box, fs, cls, owner)=>{
-    const lines=mapWrapTitle(txt, box.w-2*K.tpad, fs, mapFitLines(box, fs));
+    const lines=mapWrapTitle(txt, box.w-2*K.tpad, fs, mapFitLines(box, fs), cls);
     const y0=box.y+box.h/2 - (lines.length-1)*(fs+2)/2 + fs*0.36;
     return lines.map((ln,i)=>label(ln, box, fs, Math.round((y0+i*(fs+2))*10)/10, cls, owner)).join("");
   };
@@ -9511,7 +9618,7 @@ function mapSvg(L, data, slug){
          It is still WRAPPED as one string, so the break points account for the id
          and no word is lost between the two elements. */
       const idTxt=`#${n.id}`;
-      const lines=mapWrapTitle(`${idTxt} ${cl.title}`, n.w-2*K.tpad, K.fs.title, K.maxTitleLines);
+      const lines=mapWrapTitle(`${idTxt} ${cl.title}`, n.w-2*K.tpad, K.fs.title, K.maxTitleLines, "mtitle");
       const rest=(lines[0]||idTxt).slice(idTxt.length).replace(/^ /,"");
       // ONE EXPRESSION, TWO CALLERS: where line 0's title begins is also where
       // its strike begins, and the two must not measure the id apart.
