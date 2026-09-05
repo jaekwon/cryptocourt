@@ -1774,6 +1774,21 @@ tr.youare .mono{font-weight:600}
    folder appeared to highlight nothing: the folders and the court kept full
    strength, so there was no contrast for the lit node to stand out against. */
 .mnode-a.dim,.mfold-a.dim,.mcourt-a.dim{opacity:.35}
+/* NO RING AROUND A RING. Arriving at ?focus=4 marks the node .focused, selects it
+   AND gives it DOM focus — so it wore its own 3px accent stroke and the global
+   :focus-visible outline 2px outside that, same colour, same idea. Reported as: at
+   first the node has two borders, a border around the border, and clicking around
+   makes one disappear. It does: the click moves focus, the outline goes with it,
+   and the stroke stays. The bug is the pair, not either ring.
+   CANCELLED ONLY WHERE THE NODE DRAWS ITS OWN. A node reached by TAB carries
+   neither class and keeps the standard ring; these four states already show focus
+   more loudly than an outline can — a 3px accent stroke, and 1.35x scale on the
+   selected ones. Both properties cancelled, for the reason .page-h gives above:
+   whatever :focus-visible grows, this has to cancel all of it. */
+.mnode-a.focused:focus,.mnode-a.focused:focus-visible,
+.mnode-a.selected:focus,.mnode-a.selected:focus-visible,
+.mfold-a.selected:focus,.mfold-a.selected:focus-visible,
+.mcourt-a.selected:focus,.mcourt-a.selected:focus-visible{outline:none; box-shadow:none}
 /* THE CARD GETS ITS OWN COLUMN, and does not float over the map. It did float,
    at top-right with a z-index, and that made the nodes underneath unclickable —
    on a map with anything in its top-right corner, selecting one of those claims

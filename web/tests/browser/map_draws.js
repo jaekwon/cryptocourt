@@ -158,6 +158,53 @@ const {PAGE, demoPage} = require('./harness');
        && v.far.ring !== "none" && v.far.word !== "none", JSON.stringify(v.far));
   }
 
+  /* ONE RING ON THE FOCUSED NODE, NOT TWO.
+     Arriving at ?focus=N marks the node .focused, selects it and gives it DOM
+     focus, so it drew its own 3px accent stroke AND the global :focus-visible
+     outline 2px outside that — the same colour, one border around the other.
+     Reported from the live map; it "went away" on the next click only because the
+     click moved focus.
+     A COMPUTED-STYLE FACT, invisible to any source check: both rings are real CSS
+     applying to the same element, and only a laid-out page with focus somewhere
+     can say whether both are on. The pair is asserted — outline gone AND the
+     node's own stroke still there — because "no outline" alone would also pass on
+     a node with no focus indication at all. */
+  {
+    const id = await page.evaluate(() => {
+      const a = document.querySelector('a.mnode-a[data-id]');
+      return a ? a.getAttribute('data-id') : null;
+    });
+    if (id) {
+      await page.evaluate((s, i) => { location.hash = `/c/${s}/map?focus=${i}`; }, slug, id);
+      await new Promise(r => setTimeout(r, 1400));
+      const f = await page.evaluate(i => {
+        const a = document.querySelector(`a.mnode-a[data-id="${i}"]`);
+        if (!a) return null;
+        const cs = getComputedStyle(a);
+        const rect = a.querySelector('.mnode');
+        return {cls: a.getAttribute('class'), focused: document.activeElement === a,
+                outline: cs.outlineStyle, width: cs.outlineWidth,
+                stroke: rect ? getComputedStyle(rect).strokeWidth : null};
+      }, id);
+      ok("the focus target is marked and holds focus",
+         f && /focused|selected/.test(f.cls), JSON.stringify(f));
+      ok("...with no outline around its own ring", f && f.outline === "none", JSON.stringify(f));
+      ok("...and that ring is still drawn", f && parseFloat(f.stroke) >= 3, JSON.stringify(f));
+      // And an ordinary node still gets the standard ring, or this fix has taken
+      // the keyboard's focus indicator with it.
+      const plain = await page.evaluate(() => {
+        const a = [...document.querySelectorAll('a.mnode-a')]
+          .find(x => !/focused|selected/.test(x.getAttribute('class') || ''));
+        if (!a) return null;
+        a.focus();
+        const cs = getComputedStyle(a);
+        return {outline: cs.outlineStyle, width: cs.outlineWidth};
+      });
+      ok("an unselected node keeps the standard focus ring",
+         plain && plain.outline === "solid" && parseFloat(plain.width) >= 2, JSON.stringify(plain));
+    }
+  }
+
   // A page error is a failure even when the frame looks right: the map may have
   // drawn a first pass and thrown on the data.
   ok("no page errors on the map route", errs.length === 0, errs.slice(0, 2).join(" | "));
