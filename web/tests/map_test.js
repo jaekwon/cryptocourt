@@ -384,8 +384,14 @@ ok("A-I pass on live 50-claim ring (both modes)", livepass);
   ok("...and names the phase nowhere else on the card", !/class="pill/.test(cNo));
   ok("a settled-YES card rings the side and leaves the sentence standing",
      cYes.includes('vtag y">YES<') && !cYes.includes("<s>") && !/class="pill/.test(cYes));
-  ok("an open card keeps its pill and wears no oval",
-     /class="pill [^"]*">open</.test(cOpen)
+  /* AN OPEN CARD EXPLAINS ITSELF AND WEARS NO OVAL. It used to keep the phase pill,
+     which was right while an open claim's node said "open" in words; the node wears
+     the running clock now, and a reader who clicks an unfamiliar mark gets the
+     sentence rather than the mark restated as a chip. The oval must still be
+     absent: an open claim asserts no verdict, and nothing strikes it. */
+  ok("an open card explains itself in words and wears no oval",
+     /Nobody has answered/i.test(cOpen)
+     && !/class="pill [^"]*">open</.test(cOpen)
      && !cOpen.includes("sidetag") && !cOpen.includes("<s>"));
   ok("a settled card whose side is unnamed keeps its pill, not an empty oval",
      /class="pill/.test(cUnk) && !cUnk.includes("sidetag") && !cUnk.includes("<s>"));
@@ -1021,10 +1027,13 @@ const TILES = svg => [...svg.matchAll(
        oval's own class, and the absence of the dot is checked with it.
        mapBadged rather than a second copy of the rule: the page decides who wears
        one, and a rule restated here would drift from it. */
-    if(mapBadged(pc)){
+    if(mapBadged(pc, claimsMap[id])){
       const ov=(new RegExp(`<rect class="mvtag ([yn])"[^>]*data-owner="c${id}"`).exec(svgs.titles)||[])[1];
-      const want = pc.side==="YES" ? "y" : "n";
-      if(dot){ agree=false; console.log("  #"+id+" is decided and still carries a dot", dot); }
+      // A SIDE ONLY WHERE THERE IS ONE. An open claim wears the clock alone and an
+      // undecided vote wears the dash alone, so "no oval" is the expectation there
+      // rather than a missing one — mapSided is the page's own answer to which.
+      const want = mapSided(pc) ? (pc.side==="YES" ? "y" : "n") : undefined;
+      if(dot){ agree=false; console.log("  #"+id+" wears a badge and still carries a dot", dot); }
       if(ov!==want){ agree=false; console.log("  oval mismatch #"+id, ov, "want", want); }
       /* THE SIDE RING SAYS THE SIDE AND NOTHING ELSE; the state rides a second ring
          beside it. Both are read here — the hue check above would pass on a badge
@@ -1032,11 +1041,21 @@ const TILES = svg => [...svg.matchAll(
          the answer is final, contested or surprising. */
       const word=(new RegExp(`<text class="mtext mvt [yn]"[^>]*data-owner="c${id}"[^>]*>([^<]*)</text>`)
         .exec(svgs.titles)||[])[1];
-      if(word!==pc.side){ agree=false; console.log("  #"+id+" side ring reads", word, "want", pc.side); }
+      const wantWordRing = mapSided(pc) ? pc.side : undefined;
+      if(word!==wantWordRing){ agree=false; console.log("  #"+id+" side ring reads", word, "want", wantWordRing); }
       const state=(new RegExp(`<text class="mtext mvs"[^>]*data-owner="c${id}"[^>]*>([^<]*)</text>`)
         .exec(svgs.titles)||[])[1] || "";
       const wantMark = mapMark(pc, claimsMap[id]).t;
       if(state!==wantMark){ agree=false; console.log("  #"+id+" state ring reads", state, "want", wantMark); }
+      continue;
+    }
+    /* WHAT IS LEFT WITHOUT A BADGE, and it is two states rather than seven.
+       NEVER ANSWERED DRAWS NOTHING AT ALL — no clock ran, nobody answered, no vote
+       was held, and the absence is the statement. A SETTLED CLAIM OF UNKNOWN SIDE
+       keeps the old row of words and its dot: it was decided and the sentence does
+       not say which way, so an oval would assert a decision it cannot read. */
+    if(pc.short==="never answered"){
+      if(dot){ agree=false; console.log("  #"+id+" was never answered and still draws a dot", dot); }
       continue;
     }
     const wantFamily = pc.short==="settled"
@@ -1121,7 +1140,10 @@ ok("controls present", ["mt-titles","mt-ids","mz-in","mz-out","mz-fit","mz-slide
   ok("...and carries no phase dot beside it", dotOf(svgT,1) === undefined);
   ok("a settled-YES node keeps it", ovalOfHue(svgT,2) === "y");
   ok("the two settled ovals differ", ovalOfHue(svgT,1) !== ovalOfHue(svgT,2));
-  ok("an open node is unaffected", dotOf(svgT,3) === "v");
+  /* AND ITS DOT WENT WITH THE WORDS. The dot was the phase channel for claims with
+     no verdict; the mark is that channel now, and drawing both is the same "said
+     twice" the settled dot was removed for. */
+  ok("an open node carries no dot either", dotOf(svgT,3) === undefined);
   ok("a settled claim of unknown side claims neither colour", (()=>{
      const u = JSON.parse(JSON.stringify(d));
      u.claims[1].statusText = "settled — every stake withdraws 1×";
@@ -1164,8 +1186,15 @@ ok("controls present", ["mt-titles","mt-ids","mz-in","mz-out","mz-fit","mz-slide
   ok("the phase word is gone from a decided node's row",
      !rowOf(1,"mverdict").length && !rowOf(2,"mverdict").length
      && !/settled: /.test(svgT));
-  ok("an open node says open, wears no oval, and claims no verdict",
-     rowOf(3,"mverdict").map(t=>t.t).join("")==="open" && ovalOf(svgT,3)===undefined);
+  /* AN OPEN NODE WEARS THE CLOCK AND NO OVAL. It used to say "open" in words on a
+     row of its own; the side answers "is there an answer" and the mark answers
+     "what is the clock doing", so a claim with no answer yet is exactly the mark
+     alone. The oval must still be absent — an open claim asserts no verdict. */
+  ok("an open node wears the running clock, alone, and claims no verdict", (()=>{
+     const mark = TT.filter(t=>t.id===3 && t.cls==="mvs").map(t=>t.t).join("");
+     return mark==="\u2026" && ovalOf(svgT,3)===undefined
+       && rowOf(3,"mverdict").length===0;   // and the words are gone
+  })());
   ok("a settled claim of unknown side keeps the words rather than an empty oval",
      (()=>{
        const u = JSON.parse(JSON.stringify(d));
@@ -1257,6 +1286,35 @@ ok("controls present", ["mt-titles","mt-ids","mz-in","mz-out","mz-fit","mz-slide
        identically and the map says a reopenable verdict is final. */
     ok("...and wears a broken ring, because a new dispute can reopen it",
        /<rect class="mvtag s re"[^>]*data-owner="c3"/.test(mark(line.provisional,{inst:90}).svg));
+    /* THE SIDELESS STATES, WHICH THE MAP ONLY LEARNED TO DRAW AFTER THE WORDS WENT.
+       The side answers "is there an answer" and the mark answers "what is the clock
+       doing", so these three are the same vocabulary with the oval left off. */
+    ok("an open claim wears the clock, alone",
+       mark("open — stake YES or NO; unstake freely until an answer posts", {inst:90})
+         .mark === "\u2026");
+    ok("a vote that decided nothing wears the dash, alone",
+       mark("closed without a decision — everyone withdraws 1×, deposit and fee refunded",
+            {inst:90}).mark === "\u2013");
+    ok("and a claim nobody answered draws no badge at all", (()=>{
+       const got = mark("closed — never answered; stakes were never frozen (unstake freely), "
+                      + "the deposit refunded, the fee burned", {inst:90});
+       return got.mark === "" && got.side === "";
+    })());
+    /* AND NONE OF THEM CAN BE AGAINST THE STAKE. `!` says the ANSWER went the other
+       way, so a claim with no answer cannot wear it — with no side, the share held
+       fell to 100-inst and every open claim on a lopsided docket drew (!…), while a
+       claim nobody answered drew (!) instead of nothing. Found by looking at the
+       demo map; pinned here so it cannot come back. */
+    for(const [name, st] of [
+      ["an open claim", "open — stake YES or NO; unstake freely until an answer posts"],
+      ["a vote that decided nothing",
+       "closed without a decision — everyone withdraws 1×, deposit and fee refunded"],
+      ["a claim nobody answered",
+       "closed — never answered; stakes were never frozen (unstake freely), the deposit "
+       + "refunded, the fee burned"],
+    ]) ok("...so " + name + " is never marked against the stake",
+          !/!/.test(mark(st, {inst:97}).mark) && !/!/.test(mark(st, {inst:3}).mark));
+
     /* AND THE CARD SAYS IT IN WORDS. A reader who clicks a badge they do not
        recognise is exactly the reader who needs a sentence, and the card is where
        there is room for one — it used to print statusPill instead, which restated
@@ -1320,7 +1378,12 @@ ok("controls present", ["mt-titles","mt-ids","mz-in","mz-out","mz-fit","mz-slide
      const t2 = textsOf(mapSvg(mapLayout(u,"titles"), u, "covid")).filter(x=>x.id===1);
      return t2.some(x=>x.cls==="mid" && x.t==="#1")
          && t2.some(x=>x.cls==="mtitle" && /Pneumonoultra/.test(x.t)); })());
-  ok("nothing was ellipsized", TT.every(t=>!t.t.includes("\u2026")));
+  /* LABELS, NOT MARKS. This asks whether any label was TRUNCATED, and the state
+     ring's own glyph for "the clock is running" is an ellipsis — so a check over
+     every text on the map now reads the mark as a cut-off title. Scoped to the
+     classes that carry prose. */
+  ok("nothing was ellipsized",
+     TT.filter(t=>t.cls!=="mvs").every(t=>!t.t.includes("\u2026")));
   ok("ids mode is the id alone", I.includes("#1") && I.includes("#2"));
   ok("and carries no side it has no room for", !I.some(t=>/YES|NO/.test(t)));
 }

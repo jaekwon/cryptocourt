@@ -208,8 +208,22 @@ const {PAGE, demoPage} = require('./harness');
       }
       return out;
     });
+    /* A CLASS THE DEMO COURT NO LONGER DRAWS IS NOT A FAILURE, and mverdict is now
+       one of them: the sideless states wear marks instead of words, so the phase
+       label survives for exactly one case — a settled claim whose side the realm's
+       sentence does not name — which this court happens not to have. Measured as
+       "unreadable" it reported `undefined:1`, which is the harness describing its
+       own fixture rather than the page.
+       ABSENT IS ALLOWED, MISSED IS NOT: the classes that must always be on a map
+       stay required, and mverdict is required only when it appears. map_test pins
+       that the state itself still draws its words. */
+    const MAYBE = new Set(["mverdict"]);
     for (const [cls, floor] of Object.entries(WANT)) {
       const got = seen[cls];
+      if (got === undefined && MAYBE.has(cls)) {
+        console.log(`ok: ${scheme}: ${cls} is not drawn on this court — nothing to read`);
+        continue;
+      }
       ok(`${scheme}: ${cls} reads against its own box (${got}:1, needs ${floor})`,
          got !== undefined && got !== null && got >= floor);
     }

@@ -9219,10 +9219,20 @@ function mapClaimSize(title, mode, tiles, badged){
    Provisional used to be excluded on the grounds that an oval would read as
    settled. That was true while the oval stood alone; with a mark beside it the
    distinction is drawn rather than withheld — see mapMark. */
-function mapBadged(pc){
+function mapSided(pc){
   return (pc.short==="settled" || pc.short==="in dispute"
        || pc.short==="provisional" || pc.short==="proposed")
       && (pc.side==="YES" || pc.side==="NO");
+}
+/* WHETHER THIS CLAIM WEARS A BADGE AT ALL, which is now a wider question than
+   whether it has a side. A sideless claim wears a lone mark — (…) open, (–) voted
+   with no decision — so the badge is drawn whenever there is EITHER an oval or a
+   mark to put in it, and a claim with neither draws nothing.
+   TWO CALLERS DEPEND ON THIS ANSWER for different reasons: mapClaimSize reserves
+   the corner for it, and mapSvg decides between a badge and a row of words. They
+   have to agree, or a box comes out a row shorter than what is inside it. */
+function mapBadged(pc, cl){
+  return mapSided(pc) || !!mapMark(pc, cl).t;
 }
 /* THE SAME FACTS IN WORDS, for the card a click opens. The node has room for two
    marks and no more; the card has room for a sentence, and a reader who has just
@@ -9266,6 +9276,16 @@ function mapMarkWords(pc, cl, part){
                              : `Settled ${side}, and it is final.`;
     // no glyph on a settled claim nobody voted on: mapMark draws no mark there
     glyph   = c.route==="vote"? "A vote decided it." : "";
+  } else if(pc.short==="open"){
+    /* THE SIDELESS STATES SPEAK TOO, now that they wear a mark rather than their
+       own name in words. The card is where an unfamiliar glyph is explained, and
+       these two are the glyphs a reader meets first — a court's docket is mostly
+       open claims. */
+    verdict = "Nobody has answered this yet. Staking is open, and the clock is running.";
+    glyph   = "No answer yet, and the clock is still running.";
+  } else if(pc.short==="no decision"){
+    verdict = "A vote was held and decided nothing — every stake withdraws, and no side stands.";
+    glyph   = "A vote was held and no side came out of it.";
   } else return "";
   // the round note belongs to the dispute, so it rides whichever sentence says so
   if(part === "side") return verdict + round;
@@ -9276,10 +9296,20 @@ function mapMarkWords(pc, cl, part){
 /* WHAT THE SECOND BUBBLE SAYS, and it is one string built from three facts.
    The vocabulary is compositional, so a reader learns four glyphs and not eight
    combinations:
-       …   the clock is running — answered, nobody has disputed it yet
+       …   the clock is running: answered and undisputed, or not yet answered
        ?   a dispute is running: a sealed vote is deciding
-       .   a vote decided it; the clock is stopped
+       .   a vote decided it
+       –   a vote decided NOTHING: rounds were held and no side stands
        !   the answer went AGAINST the stake, which is the surprising case
+   THE SIDE ANSWERS A DIFFERENT QUESTION FROM THE MARK, which is what lets a mark
+   ride alone. The oval says whether there is an answer and what it was; the mark
+   says what the clock is doing. So (…) with no oval is an open claim — the clock
+   runs, nobody has answered — and (–) with no oval is a vote that ended with no
+   side to show for it. Neither needed a new glyph.
+   AND NOTHING AT ALL FOR A CLAIM NOBODY ANSWERED. No clock ran, no vote was held,
+   nothing was decided: an empty badge would be a mark for the absence of every
+   fact this vocabulary has. It is also why an open claim keeps its clock rather
+   than sharing that blank — a live claim and a dead one must not look alike.
    and they compose: (YES)(!…) is a surprising answer nobody has challenged yet,
    (YES)(!?) is one somebody has, (YES)(.…) is a provisional verdict — decided by
    a vote and reopenable, which is exactly a period followed by a clock.
@@ -9293,7 +9323,7 @@ function mapMarkWords(pc, cl, part){
    paint on a live court (one ClaimHead read per drawn claim), so until they do a
    settled claim shows no mark rather than a wrong one, and `!` never appears on a
    guess. */
-const MAPMARK = {clock:"…", asked:"?", done:".", against:"!", surprise:0.45};
+const MAPMARK = {clock:"…", asked:"?", done:".", none:"–", against:"!", surprise:0.45};
 /* THE RING CARRIES ONE FACT THE GLYPHS CANNOT, and it earned that job by a drawing
    that failed. Provisional was specified as a period then a clock — decided, and
    reopenable — which is exactly right as a sentence and unreadable as a mark: at
@@ -9311,7 +9341,14 @@ function mapMark(pc, cl){
   // either side of half is not a surprise — see the constant.
   const inst = Number.isFinite(c.inst)? c.inst : null;   // % of stake on YES
   const held = inst==null? null : (pc.side==="YES"? inst : 100-inst);
-  const bang = (held!=null && held < MAPMARK.surprise*100)? MAPMARK.against : "";
+  /* AND IT TAKES A SIDE TO GO AGAINST ONE. `!` says the ANSWER went the other way
+     from the stake, so a claim with no answer cannot wear it — and it did: with no
+     side, `held` fell to 100-inst, so every open claim on a lopsided docket drew
+     (!…) and a claim nobody ever answered drew (!) instead of nothing at all.
+     Found by looking at the demo map rather than by a test, which is the argument
+     for looking at the drawing every time. */
+  const bang = (mapSided(pc) && held!=null && held < MAPMARK.surprise*100)
+    ? MAPMARK.against : "";
   const rep = m => m + (many(rounds+1)? "×"+many(rounds+1) : "");
   const M = (t, reopen) => ({t: bang + t, reopen: !!reopen});
   if(pc.short==="in dispute")  return M(rep(MAPMARK.asked));
@@ -9319,6 +9356,21 @@ function mapMark(pc, cl){
   if(pc.short==="proposed")    return M(MAPMARK.clock);
   // settled: a vote stopped the clock, or nobody ever started one.
   if(pc.short==="settled")     return M(c.route==="vote"? MAPMARK.done : "");
+  /* AND THE STATES WITH NO SIDE AT ALL, which used to say themselves in words.
+     The side answers "is there an answer"; the mark answers "what is the clock
+     doing" — so the same glyphs work with no oval beside them, and the words go:
+       (…)   open: the clock is running and nothing has been answered yet
+       (–)   voted, no decision: rounds were held and none produced a side
+       — —   never answered: nothing ever happened, so nothing is drawn
+     THE DASH IS THE COURT'S OWN MARK FOR "no side": sideName returns "—" when it
+     cannot name one, so a vote that ended without one wears exactly that.
+     NOTHING FOR NEVER ANSWERED, and the absence is the statement — the one state
+     where no clock ran, nobody answered and no vote was held has nothing to say.
+     It is why `open` cannot also be blank: a live claim and a dead one must not
+     look alike, and the ellipsis is what separates them. */
+  if(pc.short==="open")           return M(MAPMARK.clock);
+  if(pc.short==="no decision")    return M(MAPMARK.none);
+  if(pc.short==="never answered") return M("");
   return M("");
 }
 /* Where the centre-to-centre line leaves a's box: half-extent in each axis,
@@ -9370,7 +9422,8 @@ function mapTree(data, mode){
       else { drawn.add(id); node.kids.push({kind:"claim", id, kids:[],
              size:mapClaimSize("#"+id+" "+((data.claims[id]||{}).title||""), mode,
                                mapNodeTiles(data.claims[id]).length,
-                               mapBadged(phaseClass((data.claims[id]||{}).statusText||"")))}); }
+                               mapBadged(phaseClass((data.claims[id]||{}).statusText||""),
+                                         data.claims[id]))}); }
     }
     /* A CHAIN SUBFOLDER IS ADDRESSED BY ITS OWN FID, exactly as a root one is.
        The root walk below already reads `f.path!=null? String(f.path) : String(i)`
@@ -9407,7 +9460,8 @@ function mapTree(data, mode){
       drawn.add(id);
       tops.push({kind:"claim", id, kids:[], size:mapClaimSize("#"+id+" "+((data.claims[id]||{}).title||""), mode,
                                                                mapNodeTiles(data.claims[id]).length,
-                                                               mapBadged(phaseClass((data.claims[id]||{}).statusText||"")))});
+                                                               mapBadged(phaseClass((data.claims[id]||{}).statusText||""),
+                                                                         data.claims[id]))});
     }
   }
   const courtName = data.courtName||"this court";
@@ -9807,7 +9861,7 @@ function mapSelCard(id, data, slug, L){
      in gold. The pill stays for the phases that wear no badge, where it is the only
      signal the card has: open, never answered, no decision, and a settled claim
      whose side the status line does not name. */
-  const marked = mapBadged(pc);
+  const marked = mapBadged(pc, c);
   return `<div class="mapsel-h"><span class="mono">#${id}</span>`
     + (side || marked ? "" : statusPill(c.statusText))
                                  /* ONE pill builder, when there is a pill: this card
@@ -10130,7 +10184,12 @@ function mapSvg(L, data, slug){
     let right=n.x+n.w-K.tpad, out="";
     if(mark.t){ const p=vpill(mark.t,"s"+(mark.reopen?" re":""),right,cy,owner,markSay||say);
       out+=p.svg; right-=p.w+K.vgap; }
-    return vpill(side,c,right,cy,owner,say).svg + out;
+    /* THE SIDE RING ONLY WHEN THERE IS A SIDE. A claim nobody has answered has
+       none, and its mark rides alone — (…) on an open claim, (–) on one a vote
+       left undecided. The mark keeps its place against the frame's padding either
+       way, so a column of nodes lines up on the thing that changes rather than on
+       the thing that is sometimes missing. */
+    return (mapSided(pc)? vpill(side,c,right,cy,owner,say).svg : "") + out;
   };
   /* THE COURT'S STRIKE, drawn as GEOMETRY rather than as text-decoration. Every
      label on this map is laid out with textLength + lengthAdjust="spacing", so
@@ -10374,8 +10433,19 @@ function mapSvg(L, data, slug){
          sentence does not name one — an oval with nothing in it would be a mark
          asserting a decision it cannot read. mapBadged is the one place that rule
          is written, because mapClaimSize has to agree with it. */
-      if(mapBadged(pc)) out.push(vbadge(pc, n, fh, cl));
-      else {
+      /* A BADGE, NOTHING, OR THE OLD ROW OF WORDS — in that order, and the middle
+         one is the interesting case.
+         NEVER ANSWERED DRAWS NOTHING. No clock ran, nobody answered, no vote was
+         held: there is no fact to mark, and the absence IS the statement. It is
+         also why an open claim keeps its (…) rather than sharing the blank — a
+         live claim and a dead one must not look alike.
+         THE ROW OF WORDS SURVIVES FOR ONE CASE: a settled claim whose side the
+         realm's sentence does not name. It has been decided and we cannot read
+         which way, so an oval would assert a decision it cannot read and a mark
+         would say the wrong thing about it. It says "settled" in words, with the
+         dot beside it, exactly as everything used to. */
+      if(mapBadged(pc, cl)) out.push(vbadge(pc, n, fh, cl));
+      else if(pc.short !== "never answered"){
         /* The dot rides the verdict row rather than the top-right corner: it is the
            verdict's colour, so it belongs beside the verdict, and moving it hands
            the whole first line back to the title instead of reserving 14px of it
@@ -11218,7 +11288,19 @@ on(/^\/c\/([a-z0-9-]+)\/map$/, async (slug)=>{
     : chainRels.length
     ? `this court's moderators have filed no folders; ${chainRelNote}, drawn over the flat docket`
     : "this court's moderators have filed no sets and no relations are on chain — the map shows the docket alone";
-  /* THE KEY DRAWS WHAT THE MAP DRAWS. A settled claim wears an oval hung off its
+  /* THE DOT KEYS ARE GONE, BECAUSE THE DOTS ARE. Six of these named a phase by the
+     colour of a dot — in dispute, provisional, answered, open, no decision, never
+     answered — and every one of those states wears a MARK now. A key for a mark
+     nothing draws is the same lie as a key that shows a square for an oval, in the
+     other direction: a reader hunting the map for an amber circle finds none.
+     ONE DOT SURVIVES and has no key: a settled claim whose side the realm's
+     sentence does not name keeps the old row of words with its dot beside it, and
+     the words say what it is without help.
+     THE LAST KEY IS THE COMPOSITION, not a state: the clock with no oval beside it
+     is a claim nobody has answered, and that is the only way to learn that reading
+     a legend rather than a docket. A claim nobody ever answered draws nothing, so
+     it has no key either — there is no mark to explain.
+     THE KEY DRAWS WHAT THE MAP DRAWS. A settled claim wears an oval hung off its
      corner and no dot at all, so the two square swatches here described a mark
      that appears nowhere — the same failure the note over the dot warns about in
      the other direction: a key that shows a square for an oval is a key that lies.
@@ -11233,12 +11315,8 @@ on(/^\/c\/([a-z0-9-]+)\/map$/, async (slug)=>{
       <span><svg width="18" height="12"><rect x="1" y="1" width="16" height="10" rx="5" class="mvtag q"/><text class="mvq" x="9" y="9.5" font-size="8" text-anchor="middle">.</text></svg> a vote decided it</span>
       <span><svg width="18" height="12"><rect x="1" y="1" width="16" height="10" rx="5" class="mvtag q re"/><text class="mvq" x="9" y="9.5" font-size="8" text-anchor="middle">.</text></svg> …and a new dispute can reopen it</span>
       <span><svg width="18" height="12"><rect x="1" y="1" width="16" height="10" rx="5" class="mvtag q"/><text class="mvq" x="9" y="9.5" font-size="8" text-anchor="middle">!</text></svg> the answer went against the stake</span>
-      <span><svg width="12" height="12"><circle cx="6" cy="6" r="4" class="mdot e"/></svg> in dispute</span>
-      <span><svg width="12" height="12"><circle cx="6" cy="6" r="4" class="mdot ed"/></svg> provisional</span>
-      <span><svg width="12" height="12"><circle cx="6" cy="6" r="4" class="mdot o"/></svg> answered</span>
-      <span><svg width="12" height="12"><circle cx="6" cy="6" r="4" class="mdot v"/></svg> open</span>
-      <span><svg width="12" height="12"><circle cx="6" cy="6" r="4" class="mdot vd"/></svg> no decision</span>
-      <span><svg width="12" height="12"><circle cx="6" cy="6" r="4" class="mdot vf"/></svg> never answered</span>`;
+      <span><svg width="18" height="12"><rect x="1" y="1" width="16" height="10" rx="5" class="mvtag q"/><text class="mvq" x="9" y="9.5" font-size="8" text-anchor="middle">&#8211;</text></svg> a vote decided nothing</span>
+      <span><svg width="18" height="12"><rect x="1" y="1" width="16" height="10" rx="5" class="mvtag q"/><text class="mvq" x="9" y="9.5" font-size="8" text-anchor="middle">&#8230;</text></svg> with no side beside it: not answered yet</span>`;
   /* THE SKELETON GETS A KEY, AND IT GOES FIRST. The containment spokes are the
      heaviest lines on the map now; before they were hairlines, and a hairline
      that nobody names is background. The heaviest line on a drawing being the

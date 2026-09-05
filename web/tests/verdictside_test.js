@@ -162,8 +162,14 @@ const run = async (rows, v, mode) => {
      everything would pass a check that only looked for the badge arm. */
   ok("the card's pill is conditional on the verdict side and the badge",
      /\+ \(side \|\| marked \? "" : statusPill\(c\.statusText\)\)/.test(selCard));
+  /* THE CLAIM RECORD RIDES ALONG NOW. Whether a claim wears a badge stopped being
+     a question about its phase alone the day the sideless states got marks of
+     their own — an open claim wears (…) and a vote that decided nothing wears (–)
+     — and both of those are read off the record, not the sentence. So the card
+     asks with the claim in hand, which is also what lets the words below it name
+     the stake and the round. */
   ok("...and a badged claim gets words in its place",
-     /mapMarkWords\(pc, c\)/.test(selCard) && /const marked = mapBadged\(pc\);/.test(selCard));
+     /mapMarkWords\(pc, c\)/.test(selCard) && /const marked = mapBadged\(pc, c\);/.test(selCard));
   ok("...and the side it reads is a SETTLED side, not any phase's",
      /const side = pc\.short === "settled" \? pc\.side : "";/.test(selCard));
   ok("...and its title goes through the shared sentence builder",
