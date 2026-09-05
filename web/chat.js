@@ -514,6 +514,28 @@ const CHATCSS = `
   border:1px solid rgba(128,128,128,.35);border-radius:4px;padding:.3rem .4rem}
 .chatmoniker:focus,.chatinput:focus{outline:none;border-color:rgba(128,128,128,.7)}
 .chatmoniker::placeholder,.chatinput::placeholder{color:inherit;opacity:.4}
+/* THE NAME IS WHO YOU ARE, UNTIL YOU GO TO CHANGE IT. At rest it wore the same
+   empty box as the message beside it, which said "type here" about a field that
+   already holds an answer — you are anon — and put two identical invitations in
+   a row where only one of them is asking for anything.
+   So it rests as a chip in the send button's own clothes and turns back into a
+   field the moment it is focused. Asked for as "white like send"; send is not
+   white, it is a translucent grey that READS light on a dark page and stays
+   right on a light one, which is the same reason this file inherits its colours
+   rather than naming them. Literal white is what these inputs looked like before
+   anyone styled them, and the note above records how that went.
+   :focus, NOT :focus-visible -- a tap focuses without matching focus-visible, so
+   on a touch screen the chip would never become a field and the name could not
+   be changed at all. The same lesson .sq learned in index.html. */
+.chatmoniker{text-align:center;cursor:pointer;
+  border-color:rgba(128,128,128,.45);background:rgba(128,128,128,.18)}
+.chatmoniker:hover{background:rgba(128,128,128,.32);border-color:rgba(128,128,128,.7)}
+/* AND THE PLACEHOLDER STOPS WHISPERING. "anon" is not a prompt here, it is the
+   name the message will carry, so it reads at the weight of a name and not at
+   the .4 opacity of a hint. */
+.chatmoniker::placeholder{color:inherit;opacity:.85}
+.chatmoniker:focus{text-align:left;cursor:text;background:transparent}
+.chatmoniker:focus::placeholder{opacity:.4}
 /* SEND IS A BUTTON AND SHOULD LOOK LIKE ONE. It carried no styling at all, so
    a browser drew its own — flat and grey beside two inputs that had just been
    given borders and a radius, which made the one control that DOES something
