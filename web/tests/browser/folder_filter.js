@@ -38,9 +38,16 @@ const PAGE = 'file://' + path.join(__dirname, '..', '..', 'index.html');
     const c = k => { const e = document.querySelector(`[data-count="${k}"]`); return e ? +e.textContent.trim() : null; };
     const chip = k => { const e = document.querySelector(`.gchips [data-show="${k}"] .n`); return e ? +e.textContent.trim() : null; };
     const head = document.querySelector("[data-qcount]");
+    const chain = (() => { const sec = document.querySelector('[data-group="review"]'); if(!sec) return null;
+      const rows = [...sec.querySelectorAll(".crow.claimrow")];
+      return {vis: rows.filter(r => !r.classList.contains("fhide")).length, total: rows.length,
+              head: (sec.querySelector("[data-chaincount]") || {}).textContent,
+              gone: sec.classList.contains("qhide"),
+              chip: (document.querySelector('.gchips [data-show="review"] .n') || {}).textContent,
+              chipGone: !!document.querySelector('.gchips [data-show="review"].ghide')}; })();
     const rows = [...document.querySelectorAll(".foldsel")];
     return {rows: shown.length, open: c("open"), settled: c("settled"),
-            chipOpen: chip("open"), chipAll: chip("all"),
+            chipOpen: chip("open"), chipAll: chip("all"), chain,
             head: head ? head.textContent.trim() : null,
             folders: rows.length,
             ticked: rows.filter(r => r.getAttribute("aria-checked") === "true").length,
@@ -114,6 +121,42 @@ const PAGE = 'file://' + path.join(__dirname, '..', '..', 'index.html');
      drawers inside it, and a chain subfolder's path is its own fid rather than
      "parent.child", so there is no prefix to test — the row carries its whole
      subtree. */
+  /* THE CHAIN'S OWN LISTS NARROW TOO. Reported: ticking a folder of three
+     claims left "Still flaggable" below it listing far more than three. Those
+     rows carry no data-q — that is deliberate, it keeps a claim that is also on
+     the docket from being counted twice — and the filter had been reading the
+     same attribute, so it never saw them. */
+  const chainNarrow = await page.evaluate(async () => {
+    const rows = [...document.querySelectorAll(".foldsel")];
+    const sec = document.querySelector('[data-group="review"]');
+    const all = [...sec.querySelectorAll(".crow.claimrow")];
+    const out = {total: all.length, seen: []};
+    const saved = new Set(FOLD_ON);   // this probe drives the selection; put it back
+    for(const r of rows){
+      FOLD_ON = new Set(); applyFolders(); r.click();
+      await new Promise(z => setTimeout(z, 150));
+      out.seen.push({vis: all.filter(x => !x.classList.contains("fhide")).length,
+                     gone: sec.classList.contains("qhide"),
+                     chip: (document.querySelector('.gchips [data-show="review"] .n')||{}).textContent,
+                     chipGone: !!document.querySelector('.gchips [data-show="review"].ghide'),
+                     head: (sec.querySelector("[data-chaincount]")||{}).textContent});
+    }
+    FOLD_ON = saved; applyFolders(); await new Promise(z => setTimeout(z, 150));
+    return out;
+  });
+  ok("the chain's flaggable list narrows to the folder",
+     chainNarrow.seen.some(v => v.vis > 0 && v.vis < chainNarrow.total), JSON.stringify(chainNarrow));
+  ok("...its heading says how many of the chain's list that is",
+     chainNarrow.seen.every(v => /^\d+ of /.test(v.head || "")), JSON.stringify(chainNarrow.seen.map(v=>v.head)));
+  ok("...its chip counts the same rows",
+     chainNarrow.seen.every(v => +v.chip === v.vis), JSON.stringify(chainNarrow.seen));
+  /* AND AN EMPTY ONE GOES, rather than sitting there as a heading over nothing
+     with a chip that blanks the page when picked. */
+  ok("...and when the folder holds none of them the list goes away",
+     chainNarrow.seen.some(v => v.vis === 0 && v.gone), JSON.stringify(chainNarrow.seen));
+  ok("...taking its chip with it",
+     chainNarrow.seen.every(v => (v.vis === 0) === v.chipGone), JSON.stringify(chainNarrow.seen));
+
   const subtree = await page.evaluate(async () => {
     // THE ROW IS FOUND BY WHAT IT SAYS, not by what the attribute already
     // contains. Looking for a row that has several keys made this assertion

@@ -373,6 +373,18 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
     ok("...and it inherits the link's colour", !/#[0-9a-f]{3,6}/i.test(decl)
        && (decl.match(/currentColor/g) || []).length >= 2);
   }
+  /* THE CHAIN'S LISTS RESOLVE A FOLDER FROM THE TREE, NOT FROM THE DOCKET.
+     Still flaggable and Awaiting an answer are the realm's own lists and can
+     name a claim this page never loaded — byId is the docket's window, foldOf
+     is the whole court. Gating the lookup on byId would leave those rows with
+     no folder, so a filter would drop them from every folder while the reader
+     is looking straight at them. Pinned in source because the case needs a
+     court whose chain list reaches past its first page, which the offline
+     sample has no way to build. */
+  ok("the chain lists take the folder from the tree, not the loaded window",
+     src.includes("const fk = foldOf[r.id];")
+     && /data-fold="\$\{esc\(fk && fk\.length\? fk\.join\(" "\) : "~none"\)\}"/.test(src));
+
   console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");
   process.exit(fail?1:0);
 })();

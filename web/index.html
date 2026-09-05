@@ -6598,22 +6598,50 @@ function applyQ(qRaw){
     el.textContent = String([...sec.querySelectorAll("[data-q]")]
       .filter(r=>!r.classList.contains("qhide") && !folded(r) && !r.classList.contains("offp")).length);
   });
+  /* THE CHAIN'S TWO LISTS NARROW WITH EVERYTHING ELSE. Still flaggable and
+     Awaiting an answer are the realm's own lists and their rows carry no data-q
+     on purpose, so that a claim also on the docket is not counted twice by the
+     search. The folder filter read the same attribute and walked straight past
+     them: ticking a folder of three claims left "still flaggable" listing
+     claims from every folder in the court, under a heading that still said so.
+     Reported. They are filtered on the folder now, which the rows carry. */
+  box.querySelectorAll("section[data-qfold]").forEach(sec=>{
+    const vis = [...sec.querySelectorAll(".crow.claimrow")].filter(r=>!folded(r)).length;
+    sec.classList.toggle("qhide", FOLD_ON.size>0 && !vis);
+    const n = sec.querySelector("[data-chaincount]");
+    if(n) n.textContent = FOLD_ON.size>0
+      ? `${vis} of ${n.hasAttribute("data-more")? `the chain's first ${n.getAttribute("data-listed")}` : n.getAttribute("data-listed")}`
+      : n.getAttribute("data-rest");
+    /* "…and 38 more" counts the chain's queue, which the folder says nothing
+       about. True at rest, misleading under a filter. */
+    const more = sec.querySelector("[data-chainmore]");
+    if(more) more.classList.toggle("qhide", FOLD_ON.size>0);
+  });
   /* SO DO THE SHOW CHIPS AND THE FIGURE OVER THE BOX. Both are rendered from
      the window totals and stayed there: with a folder ticked the chip read
      OPEN 8 directly above a section headed OPEN 2, and the box still offered to
      search "all 14 claims and folders" when it would only ever match 9 of them.
-     THE CHAIN'S TWO LISTS KEEP THEIR FIGURES. Needs review and Awaiting an
-     answer are published by the realm without a folder, so the filter never
-     hides one of their rows — recounting them would only make the chip disagree
-     with the section it names, which is the bug being fixed here. */
-  const gvis = key => [...box.querySelectorAll(`[data-group="${key}"] [data-q]`)]
+     COUNTED OFF THE ROWS, NOT off data-q, because the chain's lists have none —
+     that attribute is what the search counts, and these chips count what is on
+     screen. */
+  const gvis = key => [...box.querySelectorAll(`[data-group="${key}"] .crow.claimrow`)]
     .filter(r=>!r.classList.contains("qhide") && !folded(r) && !r.classList.contains("offp")).length;
   box.querySelectorAll(".gchips [data-show]").forEach(b=>{
     const n = b.querySelector(".n"); if(!n) return;
     const key = b.getAttribute("data-show");
-    if(key==="all") n.textContent = String(gvis("open")+gvis("settled"));
-    else if(key==="open"||key==="settled") n.textContent = String(gvis(key));
+    n.textContent = String(key==="all"? gvis("open")+gvis("settled") : gvis(key));
   });
+  /* A CHIP FOR AN EMPTY LIST IS A DEAD CONTROL. These are only rendered when
+     they have something in them, which stopped being true once a folder could
+     empty one: picking a chip reading 0 hides every other section and leaves
+     the reader on a blank page. They step aside while empty, and a view that
+     empties under the reader falls back to ALL rather than going blank. */
+  const act = box.querySelector('.gchips [data-show][aria-pressed="true"]');
+  box.querySelectorAll(".gchips [data-show]").forEach(b=>{
+    const k = b.getAttribute("data-show"), c = +(b.querySelector(".n")||{}).textContent || 0;
+    b.classList.toggle("ghide", k!=="all" && c===0);
+  });
+  if(act && act.classList.contains("ghide")) applyShow("all");
   const shead = box.querySelector("[data-qcount]");
   if(shead){
     // every row the box can match, off-page ones included — the corpus, not the
@@ -10478,7 +10506,12 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
         // a single place rather than once per branch.
         const px = `<span class="px" data-pct="${esc(slug)}-${r.id}">${
           c && (c.series || Number.isFinite(c.inst))? docketSignal(c.series, c.inst) : ""}</span>`;
-        return `<a class="crow claimrow" href="#/c/${esc(slug)}/${r.id}">
+        /* THE FOLDER RIDES THE ROW HERE TOO. Taken from the folder tree rather
+           than from the loaded claim, so a row for a claim this page never
+           loaded still resolves — byId above is the docket's window, foldOf is
+           the whole court. */
+        const fk = foldOf[r.id];
+        return `<a class="crow claimrow" data-fold="${esc(fk && fk.length? fk.join(" ") : "~none")}" href="#/c/${esc(slug)}/${r.id}">
         <span class="id">#${r.id}</span>
         <span><span class="t">${c? verdictSentence(r.title, sd, rv.contested) : safeInline(r.title)}</span>${metaLine}${c && !sd? `<span class="m rowpill">${statusPill(c.statusText)}</span>` : ""}</span>
         ${px}</a>`; };
@@ -10496,16 +10529,16 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
       const prow = r => polrow(r, r.seeded? `<span class="m" style="display:block">seeded by a moderator</span>` : "");
       let g = "";
       if(stripQ && stripQ.rows && stripQ.rows.length){
-        g += `<section data-qfold data-group="review" style="margin-top:22px"><h2 class="sec-h">Still flaggable <span class="count">${stripQ.more? `first ${stripQ.rows.length} of ${fmtN(stripQ.rows.length+stripQ.more)}` : stripQ.rows.length} · the chain's own list</span></h2>
+        g += `<section data-qfold data-group="review" style="margin-top:22px"><h2 class="sec-h">Still flaggable <span class="count"><span data-chaincount data-listed="${stripQ.rows.length}"${stripQ.more? " data-more":""} data-rest="${esc(String(stripQ.more? `first ${stripQ.rows.length} of ${fmtN(stripQ.rows.length+stripQ.more)}` : stripQ.rows.length))}">${stripQ.more? `first ${stripQ.rows.length} of ${fmtN(stripQ.rows.length+stripQ.more)}` : stripQ.rows.length}</span> · the chain's own list</span></h2>
         <p class="small muted" style="margin:0 0 8px">answered claims that can still be flagged as spam — nearest deadline first. A claim leaves this list when its rewards are opened, not when it settles, so a settled claim stays here while it can still be flagged. This list ignores moderation: a claim hidden from the docket above still appears here while it can still be flagged.</p>
         <div class="docket">${stripQ.rows.map(srow).join("")}</div>
-        ${stripQ.more? `<p class="small muted" style="margin:6px 0 0">…and ${fmtN(stripQ.more)} more — the chain's page shows the nearest 50; <a href="#/raw/${esc(slug)}" style="color:var(--accent-2)">the full queue is on the chain's own page →</a></p>`:""}</section>`;
+        ${stripQ.more? `<p class="small muted" data-chainmore style="margin:6px 0 0">…and ${fmtN(stripQ.more)} more — the chain's page shows the nearest 50; <a href="#/raw/${esc(slug)}" style="color:var(--accent-2)">the full queue is on the chain's own page →</a></p>`:""}</section>`;
       }
       if(pendQ && pendQ.rows && pendQ.rows.length){
-        g += `<section data-qfold data-group="pending" style="margin-top:22px"><h2 class="sec-h">Awaiting an answer <span class="count">${pendQ.more? `first ${pendQ.rows.length} of ${fmtN(pendQ.rows.length+pendQ.more)}` : pendQ.rows.length} · the chain's own list</span></h2>
+        g += `<section data-qfold data-group="pending" style="margin-top:22px"><h2 class="sec-h">Awaiting an answer <span class="count"><span data-chaincount data-listed="${pendQ.rows.length}"${pendQ.more? " data-more":""} data-rest="${esc(String(pendQ.more? `first ${pendQ.rows.length} of ${fmtN(pendQ.rows.length+pendQ.more)}` : pendQ.rows.length))}">${pendQ.more? `first ${pendQ.rows.length} of ${fmtN(pendQ.rows.length+pendQ.more)}` : pendQ.rows.length}</span> · the chain's own list</span></h2>
         <p class="small muted" style="margin:0 0 8px">Seeded and appeal claims that no one has answered yet — oldest first.</p>
         <div class="docket">${pendQ.rows.map(prow).join("")}</div>
-        ${pendQ.more? `<p class="small muted" style="margin:6px 0 0">…and ${fmtN(pendQ.more)} more — <a href="#/raw/${esc(slug)}" style="color:var(--accent-2)">the full list is on the chain's own page →</a></p>`:""}</section>`;
+        ${pendQ.more? `<p class="small muted" data-chainmore style="margin:6px 0 0">…and ${fmtN(pendQ.more)} more — <a href="#/raw/${esc(slug)}" style="color:var(--accent-2)">the full list is on the chain's own page →</a></p>`:""}</section>`;
       }
       return g;
     })()
