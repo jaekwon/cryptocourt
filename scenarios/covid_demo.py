@@ -955,6 +955,33 @@ for a, b, kind, _ in REL:
         s.call(accounts[author_of[a]], "SupersedeClaim",
                [SLUG, str(ids[a]), str(ids[b])])
 
+# --------------------------------------------------- one claim, two folders
+#
+# THE CROSS-CUT, which nothing else in this docket exercises. AddToFolder
+# de-duplicates only within the folder it is adding to and never consults the
+# others — "folder membership couples nothing", folders.gno — so a claim may sit
+# in several at once, and ClaimFolders returns a slice for exactly that reason.
+#
+# The overlay has been built for this and had nothing to draw. mapTree gives a
+# shared claim ONE node with a lighter "also filed here" spoke to every folder
+# past the first, and that legend row stayed hidden on a docket where every claim
+# sat in exactly one drawer — so the feature was only ever visible to somebody who
+# ran AddToFolder by hand. Twice, here, it was: both writes were lost to a re-seed,
+# which is the argument for it living in the scenario instead.
+#
+# gof rather than a contrived pair. The grant record is the subject of
+# "Gain-of-function funding" and it is also part of the origins story the first
+# folder collects, which is what a cross-cut IS: a reading order, not a second
+# copy. The claim is decided once either way — folders carry no economic weight.
+#
+# NOT IN THE DEMO TREE BELOW, and that is the documented split rather than an
+# oversight: tree() is built from each claim's single `path`, because local
+# curation enforces one folder per claim while the chain is flat and allows
+# several. A merged view of the two has no honest caption.
+s.note("one claim filed in two folders — a cross-cut, not a move")
+s.call(DEPLOYER, "AddToFolder",
+       [SLUG, str(FOLDER_ID[("Origins",)]), str(ids["gof"])])
+
 # ------------------------------------------------------------- the boards
 #
 # COMMENTS, ON THE TWO CLAIMS THAT CAN STILL TAKE THEM. boardOpen is
