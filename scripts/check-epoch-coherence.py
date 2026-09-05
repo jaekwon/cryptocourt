@@ -605,9 +605,10 @@ CREDIT_HOOK_CALLS_N = 2
 PURGED_GATE = re.compile(r"courtIsPurged\(c\)")
 PURGED_GATE_ENTRY = {
     "OpenClaim", "OpenClaimP", "OpenClaimPM", "OpenClaimSeeded",  # a new claim
+    "OpenClaimIn",                                 # ...filed into a set as it opens
     "PostComment", "UpvoteComment",                # a new board row
 }
-PURGED_GATE_N = 6  # +1: OpenClaimPM, a claim opened with media
+PURGED_GATE_N = 7  # +1: OpenClaimIn, a claim opened straight into a set
 # CourtPurged, the render/test read, spells it courtIsPurged(mustCourt(...)) and
 # so is not counted. Deliberate: it decides nothing, it reports.
 

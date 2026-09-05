@@ -342,6 +342,45 @@ func OpenClaim(cur realm, courtSlug, title string) uint64 {
 // bootstrapping a young court's docket with somebody else's question; writing a
 // body on another author's behalf is a different act from filing one, and it
 // should not be a quiet parameter on an existing waiver path.
+/* OPEN IT WHERE YOU ARE READING. A set page offered "Open a claim" and then had
+   to admit "it opens in <court>; a moderator files it here" — the claim landed
+   loose and somebody with the moderator bit had to file it afterwards, which for
+   a reader browsing a set is the whole point missed.
+   UNGATED NARROWLY, and every word of that is load-bearing:
+     - AT OPEN ONLY. You file the claim you are creating in this transaction.
+       There is no path here to an existing claim, so nobody can file someone
+       else's work into a set of their choosing.
+     - ONE SET. The argument is a single id; a claim that belongs in several
+       still needs a moderator, which keeps ClaimFolders's multi-membership a
+       curated fact rather than an author's assertion.
+     - LIVE SETS ONLY. A retired set is struck from the tree and a purged one is
+       tombstoned; filing into either would put a claim somewhere no reader can
+       reach.
+     - THE CAP STILL BINDS, through the same fileInto the moderator path uses.
+   WHAT IT COSTS AN ABUSER is what a claim costs: the deposit and the fee are
+   charged by openClaim before this runs, so filing is never cheaper than
+   filing. And a moderator still holds RemoveFromFolder, so this widens who may
+   PUT something in a set, not who may keep it there. */
+func OpenClaimIn(cur realm, courtSlug string, folderID uint64, title, body string) uint64 {
+	if !cur.IsCurrent() {
+		panic(errStaleRealm)
+	}
+	c := mustCourt(courtSlug)
+	if courtIsPurged(c) {
+		panic("kourtv2: this court is purged; no new claims may be opened")
+	}
+	cm := ensureMod(c)
+	f := cm.mustFolder(folderID)
+	if f.retired || f.purged {
+		panic("kourtv2: that set is retired; a claim filed there would be unreachable")
+	}
+	who := cur.Previous().Address()
+	id := openClaim(c, who, title, body, false)
+	fileInto(f, id)
+	emitModAct(c.id, id, "folder-add", who)
+	return id
+}
+
 func OpenClaimP(cur realm, courtSlug, title, body string) uint64 {
 	if !cur.IsCurrent() {
 		panic(errStaleRealm)

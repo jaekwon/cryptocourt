@@ -11878,10 +11878,25 @@ on(/^\/c\/([a-z0-9-]+)\/f\/([0-9.]+)$/, async (slug,fpath)=>{
        So the button says what it does and the line beside it says what happens
        next, in the same voice the court's own opener uses. */
     + `<div class="actions" style="margin-top:10px">`
-      + btn("Open a claim", "OpenClaimP",
-            {courtSlug:slug, title:"Your claim of fact",
-             body:"What would settle it — the evidence in view, and what this is NOT asking"},
-            "", "it opens in " + esc(slug) + "; a moderator files it here")
+      /* IT FILES ITSELF NOW — WHEN THE SET IS ON CHAIN. This said "it opens in
+         <court>; a moderator files it here": true at the time, and the wrong
+         shape for a reader browsing a set, who was being told the way to add to
+         it is to open a loose claim and wait for somebody with the bit.
+         OpenClaimIn takes the set id, so the claim lands where it was opened
+         from and the sentence has nothing left to admit.
+         THE FALLBACK IS NOT A LEFTOVER. A curation set is held in this browser
+         and exists on no chain, so it HAS no folder id to file into — the old
+         wording is exactly right there and stays. f.fid is the discriminator:
+         chainFolders stamps it, curation folders never have one. */
+      + (f.fid != null
+          ? btn("Open a claim here", "OpenClaimIn",
+                {courtSlug:slug, folderID:f.fid, title:"Your claim of fact",
+                 body:"What would settle it — the evidence in view, and what this is NOT asking"},
+                "", "it opens filed in " + esc(f.name))
+          : btn("Open a claim", "OpenClaimP",
+                {courtSlug:slug, title:"Your claim of fact",
+                 body:"What would settle it — the evidence in view, and what this is NOT asking"},
+                "", "this set is local curation; the claim opens in " + esc(slug)))
       + `</div><div id="courtcompose"></div>`
     + `</section>`;
 });

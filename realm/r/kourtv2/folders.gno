@@ -428,6 +428,16 @@ func AddToFolder(cur realm, courtSlug string, folderID, claimID uint64) {
 	cm := requireFolderMod(c, who)
 	_ = mustClaim(c, claimID) // the claim must exist
 	f := cm.mustFolder(folderID)
+	fileInto(f, claimID)
+	emitModAct(c.id, claimID, "folder-add", who)
+}
+
+/* THE FILING ITSELF, without the authority question. Two callers reach it — a
+   moderator through AddToFolder, and an author filing the claim they are
+   opening through OpenClaimIn — and what is true of the FOLDER is true either
+   way: already there is a no-op, and the cap is the cap. Only who may ask
+   differs, and that is settled before this is called. */
+func fileInto(f *folder, claimID uint64) {
 	for _, x := range f.items {
 		if x == claimID {
 			return
@@ -437,7 +447,6 @@ func AddToFolder(cur realm, courtSlug string, folderID, claimID uint64) {
 		panic("kourtv2: a folder holds at most " + strconv.Itoa(maxFolderItems) + " claims")
 	}
 	f.items = append(f.items, claimID)
-	emitModAct(c.id, claimID, "folder-add", who)
 }
 
 // RemoveFromFolder drops a claim from a folder (order-preserving).

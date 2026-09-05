@@ -288,3 +288,89 @@ func TestAModeratorFolderIsBornOfNothing(cur realm, t *testing.T) {
 	fid := CreateFolder(cross(cur), "gsm1", "Hand filed", "by a moderator")
 	uassert.Equal(t, uint64(0), SetBornOf("gsm1", fid))
 }
+
+/* ABLATED, against a control that fails nothing:
+     - open but never file (drop fileInto)  -> 2: the filing test and the
+       no-power test, which asserts the set holds exactly bob's one claim.
+     - drop the retired guard               -> 1: the retired test alone.
+     - ungate AddToFolder itself            -> 2: the no-power test, plus
+       TestFolderSuspensionRefuses, which is the moderator gate's own arm — the
+       right pair, since that ablation removes exactly one thing and both tests
+       depend on it.
+   THE FIRST RUN OF THE FIRST ABLATION REPORTED ZERO, and the instrument was at
+   fault, not the test: the runner's grep filtered test names to Set|Born|Affirm
+   and TestOpenClaimInFilesTheClaimItOpens matches none of those, so its failure
+   was invisible rather than absent. A filtered runner cannot be used to measure
+   whether a test fires; the second pass greps every line.
+
+FILING AT OPEN, UNGATED NARROWLY. A set page offered "Open a claim" and then
+   had to admit a moderator would file it here later; OpenClaimIn closes that.
+   What matters is the SHAPE of the ungating, so each arm below is one of the
+   limits rather than one of the happy paths: an author files the claim they are
+   opening, into one live set, under the same cap a moderator obeys — and gains
+   no power over anything else. */
+func TestOpenClaimInFilesTheClaimItOpens(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("oci-alice")
+	c := testCourt(cur, "oci1", alice, 50_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	fid := CreateFolder(cross(cur), "oci1", "Origins", "where it began")
+
+	// NOT A MODERATOR. bob is the whole point: the old path needed the bit.
+	// FUNDED, because opening a claim costs a deposit and a fee — the same cost
+	// that keeps this ungating from being a spam faucet. An unfunded bob fails
+	// on the money, which proves the cost exists but not the filing.
+	bob := testutils.TestAddress("oci-bob")
+	c.coin.Mint(bob, 5_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(bob))
+	id := OpenClaimIn(cross(cur), "oci1", fid, "A claim of fact.", "what would settle it")
+
+	uassert.Equal(t, 1, len(FolderItems("oci1", fid)))
+	uassert.Equal(t, id, FolderItems("oci1", fid)[0])
+	uassert.Equal(t, 1, len(ClaimFolders("oci1", id)))
+	// ...and the claim is bob's, not the moderator's.
+	uassert.Equal(t, bob, ClaimAuthor("oci1", id))
+}
+
+// A RETIRED SET IS UNREACHABLE, so filing into one would strand the claim
+// somewhere no reader can browse to.
+func TestOpenClaimInRefusesARetiredSet(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("ocr-alice")
+	c := testCourt(cur, "ocr1", alice, 50_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	fid := CreateFolder(cross(cur), "ocr1", "Gone", "retired below")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	RetireFolder(cross(cur), "ocr1", fid)
+
+	bob := testutils.TestAddress("ocr-bob")
+	c.coin.Mint(bob, 5_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(bob))
+	uassert.AbortsContains(t, cur, "retired", func() {
+		OpenClaimIn(cross(cur), "ocr1", fid, "A claim of fact.", "")
+	})
+}
+
+/* THE UNGATING DOES NOT LEAK. Opening into a set must not hand an author the
+   moderator's verb: bob may file the claim he is creating and still cannot file
+   an EXISTING claim — his own or anyone's — into any set. That is the line
+   between "open it where I am reading" and "curate this court". */
+func TestOpenClaimInGivesNoPowerOverOtherClaims(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("ocl-alice")
+	c := testCourt(cur, "ocl1", alice, 50_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	fid := CreateFolder(cross(cur), "ocl1", "Origins", "")
+
+	bob := testutils.TestAddress("ocl-bob")
+	c.coin.Mint(bob, 5_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(bob))
+	mine := OpenClaimIn(cross(cur), "ocl1", fid, "Bob's own claim.", "")
+	testing.SetRealm(testing.NewUserRealm(bob))
+	other := OpenClaim(cross(cur), "ocl1", "A separate claim nobody filed.")
+
+	// His own, already open: still a moderator's call.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	uassert.AbortsContains(t, cur, "moderator", func() {
+		AddToFolder(cross(cur), "ocl1", fid, other)
+	})
+	uassert.Equal(t, 1, len(FolderItems("ocl1", fid)))
+	uassert.Equal(t, mine, FolderItems("ocl1", fid)[0])
+}
