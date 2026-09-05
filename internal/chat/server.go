@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 // Server is the HTTP surface. It enforces; it never scans.
@@ -79,7 +80,41 @@ type Server struct {
 	// somebody probing the origin directly, in which case they choose the rate. See
 	// logClientRefusal.
 	loggedNoClient, loggedUntrustedPeer sync.Once
+
+	// The long poll's wake-up, built on first use so a zero Server still works —
+	// every other field here is optional and this one is not going to be the
+	// reason a caller has to call a constructor. See pulse.go.
+	pulseOnce sync.Once
+	pulses    *pulse
 }
+
+// MaxWait caps how long a GET may hold open waiting for something to happen.
+//
+// TWENTY SECONDS, AND THE NUMBER COMES FROM THE SERVER IT RUNS ON. cmd/kourtchat
+// sets WriteTimeout to 30s, so a hold plus the write it is followed by has to fit
+// inside that with room to spare; a hold longer than the timeout is a request the
+// server kills mid-answer, which reads to a client as the service being broken
+// rather than as nothing having happened.
+//
+// It is also short enough to sit under any ordinary proxy read timeout — nginx
+// defaults to 60 — so this needs no deployment change to work through one.
+const MaxWait = 20 * time.Second
+
+func (s *Server) pulse() *pulse {
+	s.pulseOnce.Do(func() { s.pulses = newPulse() })
+	return s.pulses
+}
+
+// Wake tells waiting readers that a court changed. Called by the server's own
+// write path, and exported for the operator tools: kourtchatctl hides a message
+// or lifts a consequence through the STORE, in a different process, so nothing
+// wakes here — a hidden message still leaves the panel on the next ordinary
+// poll, which is the behaviour that existed before the long poll and remains the
+// floor under it.
+func (s *Server) Wake(chain, court string) { s.pulse().fire(pulseKey(chain, court)) }
+
+// WakeAll is the same for a change that names no single court.
+func (s *Server) WakeAll() { s.pulse().fireAll() }
 
 var (
 	courtRe = regexp.MustCompile(`^[a-z0-9-]{1,32}$`)
@@ -386,6 +421,30 @@ type getReply struct {
 	Now int64 `json:"now"`
 }
 
+/*
+HOW LONG THE CALLER ASKED TO WAIT, in seconds, clamped to MaxWait.
+
+	ABSENT MEANS ZERO, and zero means answer now: this is the parameter that keeps
+	an older panel working against a newer server, so its default has to be the old
+	behaviour rather than a helpful guess. Junk means zero for the same reason —
+	`wait=soon` is a client bug, and holding its request for twenty seconds turns a
+	typo into a hang.
+*/
+func waitFor(q string) time.Duration {
+	if q == "" {
+		return 0
+	}
+	n, err := strconv.Atoi(q)
+	if err != nil || n <= 0 {
+		return 0
+	}
+	d := time.Duration(n) * time.Second
+	if d > MaxWait {
+		d = MaxWait
+	}
+	return d
+}
+
 func (s *Server) get(w http.ResponseWriter, r *http.Request, chain, court, ipHash, netHash string) {
 	// Clamped, because unclamped they are a whole-table dump per request.
 	since, _ := strconv.ParseInt(r.URL.Query().Get("since"), 10, 64)
@@ -395,6 +454,46 @@ func (s *Server) get(w http.ResponseWriter, r *http.Request, chain, court, ipHas
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
 	if limit <= 0 || limit > 200 {
 		limit = 50
+	}
+	/* THE LONG POLL, AND WHY IT NEEDS A SECOND CURSOR.
+	   `since` is a CONTENT cursor: Recent returns rows after it. The panel does not
+	   use it — it re-reads a court's last fifty rows every time, and that full
+	   re-read is what makes a moderator's hide vanish from a screen already showing
+	   it, which an append-by-id client would never notice.
+	   So the long poll asks its question with `seen`, which changes nothing about
+	   the reply: it is the highest id the caller has already drawn, and the only
+	   thing this handler does with it is decide whether to answer now or wait. The
+	   first version of this reused `since` and the reply came back EMPTY — one
+	   parameter cannot be both a filter and a watermark, and the test that caught it
+	   compares the held payload against the unheld one for exactly that reason.
+	   WAIT IS OPT-IN AND CAPPED. Without it this behaves exactly as it did; with it
+	   the request holds until the court changes, the cap expires, or the client goes
+	   away. An older client sends nothing and gets the old behaviour; an older
+	   SERVER ignores both parameters and answers at once, and the panel's own
+	   interval carries it — which is what makes this safe to deploy in either
+	   order. */
+	seen, _ := strconv.ParseInt(r.URL.Query().Get("seen"), 10, 64)
+	if seen < 0 {
+		seen = 0
+	}
+	wait := waitFor(r.URL.Query().Get("wait"))
+	if wait > 0 {
+		// Watched BEFORE the read, or a post landing between the two would close a
+		// channel nobody held and this would sleep through it. See pulse.watch.
+		here, anywhere := s.pulse().watch(pulseKey(chain, court))
+		fresh, err := s.Store.HasSince(r.Context(), chain, court, seen)
+		if err == nil && !fresh {
+			timer := time.NewTimer(wait)
+			select {
+			case <-here:
+			case <-anywhere:
+			case <-r.Context().Done():
+				timer.Stop()
+				return // the client hung up; there is nobody to answer
+			case <-timer.C:
+			}
+			timer.Stop()
+		}
 	}
 	msgs, err := s.Store.Recent(r.Context(), chain, court, since, limit)
 	switch {
@@ -599,6 +698,11 @@ func (s *Server) post(w http.ResponseWriter, r *http.Request, chain, court strin
 	})
 	switch {
 	case err == nil:
+		// EVERY READER IN THIS ROOM, NOW. The message is committed, so a waiter
+		// woken here re-reads and finds it; waking before the write would send
+		// them back to a store that does not have it yet, and they would wait
+		// again with nothing to show for the round trip.
+		s.Wake(chain, court)
 		writeJSON(w, http.StatusOK, map[string]int64{"id": id})
 	case errors.Is(err, ErrKicked):
 		you, _ := s.Store.Status(r.Context(), ipHash, netHash)

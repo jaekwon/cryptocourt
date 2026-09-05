@@ -46,6 +46,9 @@ eval(PANELSRC);
 // written here would agree with the panel on the day it was typed and never again.
 // paneldrift_test.go pins the same declaration against the server's DefaultMoniker.
 const DEFAULTNAME = (PANELSRC.match(/const CHATDEFAULTNAME = "([^"]*)"/) || [])[1];
+// The hold, read out of the panel for the same reason: a number retyped here would
+// agree with chat.js today and quietly stop meaning the same thing tomorrow.
+const CHATHOLDFOR = +(PANELSRC.match(/const CHATHOLD = (\d+)/) || [])[1];
 
 let fail = 0;
 const ok = (n, c) => { if (!c) { fail++; console.log("FAIL:", n); } else console.log("ok:", n); };
@@ -430,6 +433,50 @@ function mkDoc() {
        sent && JSON.parse(sent.body).moniker === DEFAULTNAME);
     ok("the default is not remembered as a choice",
        STORE["kourt.chat.moniker"] === undefined);
+    stop();
+  }
+
+  /* THE LONG POLL ASKS FOR A HOLD, AND ASKS THE RIGHT WAY. Two facts, and both
+     have bitten already: `wait` is what makes the server hold the request, and
+     the watermark must ride `seen` and NOT `since` — `since` is the endpoint's
+     content cursor, so asking with it returns the rows AFTER it and empties the
+     panel. That was the first version, and the server's own test caught it; this
+     one pins the client half so the pair cannot drift back together. */
+  {
+    FETCHES = [];
+    let urls = [];
+    FETCH = async (url, init) => {
+      if (init && init.method === "POST") return {ok: true, json: async () => ({id: 9})};
+      urls.push(String(url));
+      return {ok: true, json: async () => ({messages: [{id: 7, moniker: "a", body: "hi",
+        created_at: 1}], you: {state: "ok"}, next: 7})};
+    };
+    const el = mkRoot();
+    const stop = mountChat(el, {cfg: {mode: "live", chat: "http://x"}, court: "orem"});
+    await tickMicro(); await tickMicro();
+    // The health request goes out first and is not a transcript read; picking by
+    // `limit` rather than by position keeps this pinned to the read under test.
+    const reads = urls.filter(u => /[?&]limit=/.test(u));
+    /* THE FIRST READ IS THE PAINT AND MUST NOT HOLD. On an empty court there is
+       nothing newer than a watermark of zero, so a hold here is a blank panel for
+       the length of the hold — on exactly the courts that look broken when blank.
+       chat_live found it by timing out waiting for a transcript. */
+    ok("the first read does not hold — it is the paint",
+       !/[?&]wait=/.test(reads[0] || "") && !/[?&]seen=/.test(reads[0] || ""));
+    ok("...and is a FULL fetch, as every read here is", /[?&]limit=50/.test(reads[0] || ""));
+    /* AND THE URL IT BUILDS FOR A POLL, asserted on the builder rather than by
+       waiting out a six-second timer in a unit test. The two parameters are the
+       drift-prone half: `wait` is what makes the server hold, and the watermark
+       must ride `seen` — `since` is the endpoint's CONTENT cursor, so asking with
+       that one returns the rows after it and empties the panel. That was the first
+       version of this feature, and the server's own test caught it. */
+    const held = chatFetchUrl("http://x", "dev", "orem", 50, CHATHOLDFOR, 7);
+    ok("a poll asks the server to hold", /[?&]wait=\d+/.test(held));
+    ok("...for no longer than the server will allow",
+       +( /[?&]wait=(\d+)/.exec(held) || [0,999] )[1] <= 20);
+    ok("...carrying the watermark as `seen`", /[?&]seen=7\b/.test(held));
+    ok("...never as `since`, which would filter the reply", !/[?&]since=/.test(held));
+    ok("...and never dropping the full fetch", /[?&]limit=50/.test(held));
     stop();
   }
 

@@ -54,6 +54,24 @@ const CHATLIMITS = {body: 400, moniker: 24, bytes: 4096};
 // same fact with less furniture. The blank field is what the server defaults.
 const CHATDEFAULTNAME = "anon";
 
+// CHATHOLD is how long a read may hang waiting for something to happen, in
+// seconds. It is the OLD POLL INTERVAL, and that is the whole argument: the hold
+// is a floor on how stale this panel can be about anything the chat server does
+// not itself do.
+//
+// A post wakes every held read in that court immediately, which is the point of
+// the exercise — a message crosses a room in a round trip instead of in up to six
+// seconds. But an operator's kick is applied by kourtchatctl against the DATABASE,
+// in another process, so nothing in the server wakes: a kicked reader finds out
+// when their hold expires. Fifteen seconds of holding made that fifteen seconds of
+// typing into a box that was already refusing them — caught by chat_live, which
+// waits twenty for the composer to disable and got there with nothing to spare.
+//
+// So the hold matches the interval it replaces. Delivery gets faster; nothing gets
+// staler; the request rate is what it always was. A longer hold would buy fewer
+// requests on an idle court and pay for it in exactly the case that matters most.
+const CHATHOLD = 6;
+
 // CHATMONIKERUNITS is the `maxlength` attribute's crude keystroke stop, in UTF-16
 // units, and it is deliberately LOOSER than the real check below. The moniker's
 // limit counts LETTERS, not code points, because in Hebrew, Arabic, Thai and
@@ -339,10 +357,29 @@ function chatEndpoint(cfg) {
 // for the rest of the session after the moderator hid it. Re-reading the last 50 rows
 // every few seconds is how hiding becomes visible at all. Cheap, and bounded by the
 // server's own clamp.
-async function chatFetch(base, chain, court, limit) {
-  const url = base + "/api/chat/" + encodeURIComponent(chain) + "/"
-    + encodeURIComponent(court) + "?limit=" + (limit || 50);
-  const r = await fetch(url, {method: "GET", cache: "no-store"});
+// The read's URL, as its own function so it can be asserted without a network and
+// without waiting out a poll interval. Every parameter here is optional and the
+// omissions matter: a request with no `wait` is the old behaviour exactly, which is
+// what the first read wants and what an older server understands.
+function chatFetchUrl(base, chain, court, limit, wait, seen) {
+  return base + "/api/chat/" + encodeURIComponent(chain) + "/"
+    + encodeURIComponent(court) + "?limit=" + (limit || 50)
+    + (wait ? "&wait=" + wait : "") + (seen ? "&seen=" + seen : "");
+}
+
+async function chatFetch(base, chain, court, limit, wait, seen) {
+  /* `wait` AND `seen` ARE THE LONG POLL, AND NEITHER CHANGES THE REPLY.
+     The server holds this request until the court changes, the cap expires, or
+     this page goes away — and then answers the same full transcript it always
+     did. `seen` is the highest id already drawn, and the server uses it for one
+     question: is there anything newer than what this reader has? It is NOT
+     `since`, which filters the reply: asking with that one returns the rows AFTER
+     it and empties the panel, which is how the first version of this failed.
+     A SERVER THAT DOES NOT KNOW THE PARAMETERS ANSWERS AT ONCE, and the poller
+     below carries on at its interval. That is what lets the panel and the service
+     be deployed in either order. */
+  const r = await fetch(chatFetchUrl(base, chain, court, limit, wait, seen),
+                        {method: "GET", cache: "no-store"});
   // 410 is a decision, not a fault. A court withdrawn from service must not be reported
   // as "unreachable" — that sends a reader to reload, and an operator to check the
   // network, for something that is working exactly as intended.
@@ -663,11 +700,44 @@ function mountChat(el, opts) {
   });
 
   let timer = null;
+  /* THE HIGHEST ID ALREADY ON SCREEN, which is the only thing the long poll needs
+     from this side. It is not a cursor — every fetch is still the full transcript,
+     because that is what makes a moderator's hide disappear from a panel that is
+     already showing it. It is the watermark the server compares against to decide
+     whether to answer now or hold. */
+  let seen = 0;
+  let first = true;
   async function tick() {
     if (!live()) return;
     try {
-      const d = await chatFetch(base, chain, court, o.limit || 50);
+      /* HELD, NOT POLLED, WHEN THE SERVER OFFERS IT. The interval below is what
+         made a message take up to six seconds to cross a room; this asks the
+         server to hold the request until something happens instead, so the same
+         message lands in about a round trip.
+         THE INTERVAL STAYS as the floor under it. A server that ignores `wait`
+         answers immediately and the loop is exactly what it was, and a hold that
+         expires with nothing to report costs one round trip every CHATHOLD
+         seconds rather than every six — fewer requests than before, not more.
+         NOT WHILE HIDDEN. A backgrounded tab holding a connection open for twenty
+         seconds at a time is a socket per idle tab; the 60s back-off below is the
+         right behaviour there and a long poll would quietly undo it. */
+      const idleNow = typeof document !== "undefined" && document.hidden;
+      /* THE FIRST READ NEVER HOLDS. It is the paint, not a poll: a reader arriving
+         at a court wants what is there now, and on an EMPTY court there is nothing
+         newer than a watermark of zero — so a hold on the first read is fifteen
+         seconds of blank panel on exactly the courts that look most broken when
+         blank. Caught by chat_live, which waits fifteen seconds for a transcript
+         and got one at the moment it gave up.
+         Every read after it holds, because by then there is something on screen
+         and the question has changed from "what is there" to "tell me when it
+         changes". */
+      const d = await chatFetch(base, chain, court, o.limit || 50,
+                                (first || idleNow) ? 0 : (o.hold || CHATHOLD), seen);
+      first = false;
       if (!live()) return;
+      // AFTER the fetch resolves and before the paint, so a message that arrives
+      // while this request was in flight cannot be counted as already seen.
+      for (const m of (d.messages || [])) if (m && m.id > seen) seen = m.id;
       // Before painting, so the ages in this very repaint are already corrected.
       learnSkew(d);
       paint(d.messages, d.you);

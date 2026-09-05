@@ -235,6 +235,152 @@ func TestABlankNameIsAnon(t *testing.T) {
 	}
 }
 
+/*
+THE LONG POLL, MEASURED. Every claim here is about TIME, so every one of them
+
+	is timed: "it waits" and "it returns as soon as something happens" are not
+	properties a status code can carry, and a handler that ignored `wait` outright
+	would pass any assertion about the body.
+	THE BASELINE IS THE FIRST ARM. Without the parameter the request must still
+	answer at once — that is what keeps an older panel working against this server,
+	and it is the behaviour every other test in this file assumes.
+*/
+func TestLongPollHoldsUntilSomethingHappens(t *testing.T) {
+	srv, _, clock := newServer(t)
+	// The throttle is one message every MinInterval from one address, and this test
+	// posts twice from the same one — so the fake clock moves between them. Real
+	// time is not involved in that rule and must not be: a test that slept for it
+	// would be two seconds slower and no more truthful.
+	post := func(body string) {
+		if rec := do(t, srv, postReq(t, "/api/chat/dev/orem", "alice", body)); rec.Code != 200 {
+			t.Fatalf("seed: %d %s", rec.Code, rec.Body)
+		}
+		*clock = clock.Add(MinInterval)
+	}
+	get := func(q string) (*httptest.ResponseRecorder, time.Duration) {
+		start := time.Now()
+		rec := do(t, srv, httptest.NewRequest(http.MethodGet, "/api/chat/dev/orem"+q, nil))
+		return rec, time.Since(start)
+	}
+	post("the first thing said here")
+	var first getReply
+	rec, took := get("")
+	if err := json.Unmarshal(rec.Body.Bytes(), &first); err != nil {
+		t.Fatal(err)
+	}
+	if took > 200*time.Millisecond {
+		t.Fatalf("a request with no wait must answer at once, took %v", took)
+	}
+	// `seen`, not `since`: the payload must stay the FULL transcript either way,
+	// which is the assertion three lines down and the bug this split fixed.
+	cursor := fmt.Sprintf("?seen=%d&wait=1", first.Next)
+
+	// 1. NOTHING TO SAY: it holds, and then answers anyway. A long poll that
+	//    answered early with an empty change would be an ordinary poll wearing a
+	//    parameter, and one that never answered would be a leak.
+	rec, took = get(cursor)
+	if rec.Code != 200 {
+		t.Fatalf("held request must still answer 200, got %d", rec.Code)
+	}
+	if took < 900*time.Millisecond {
+		t.Fatalf("wait=1 returned after %v — it did not hold", took)
+	}
+	if took > 3*time.Second {
+		t.Fatalf("wait=1 held for %v — the cap is not being applied", took)
+	}
+	var again getReply
+	if err := json.Unmarshal(rec.Body.Bytes(), &again); err != nil {
+		t.Fatal(err)
+	}
+	if len(again.Messages) != len(first.Messages) {
+		t.Fatalf("the payload is the full transcript either way: %d vs %d",
+			len(again.Messages), len(first.Messages))
+	}
+
+	// 2. SOMETHING TO SAY: a post released it, and the reply carries the message
+	//    rather than merely the news that there is one. Timed from the wait's own
+	//    start, and the margin is generous on purpose — this asserts "long before
+	//    the cap", not a scheduler's exact latency.
+	done := make(chan struct{})
+	var wrec *httptest.ResponseRecorder
+	var wtook time.Duration
+	go func() { defer close(done); wrec, wtook = get("?seen=" + fmt.Sprint(first.Next) + "&wait=20") }()
+	time.Sleep(150 * time.Millisecond)
+	post("and here is the second")
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("a post did not release the waiting reader")
+	}
+	if wtook > 3*time.Second {
+		t.Fatalf("released after %v, which is the cap and not the post", wtook)
+	}
+	var woke getReply
+	if err := json.Unmarshal(wrec.Body.Bytes(), &woke); err != nil {
+		t.Fatal(err)
+	}
+	if len(woke.Messages) != 2 || woke.Messages[1].Body != "and here is the second" {
+		t.Fatalf("the released reply must carry the new message, got %d", len(woke.Messages))
+	}
+}
+
+/*
+THE CAP IS THE SERVER'S, NOT THE CALLER'S. A client asking for an hour would
+
+	otherwise hold a connection until WriteTimeout killed it mid-answer, which
+	reads as a broken service rather than as nothing having happened. Asserted on
+	the parser, because asserting it on the wire would mean waiting MaxWait.
+*/
+func TestWaitIsClampedAndOptional(t *testing.T) {
+	for _, c := range []struct {
+		in   string
+		want time.Duration
+	}{
+		{"", 0},             // absent: the old behaviour, which is what makes this deployable
+		{"soon", 0},         // junk is a client bug; holding it turns a typo into a hang
+		{"0", 0}, {"-5", 0}, // nor may a caller ask for nothing and get something
+		{"5", 5 * time.Second}, // taken at its word inside the cap
+		{"3600", MaxWait},      // and clamped outside it
+	} {
+		if got := waitFor(c.in); got != c.want {
+			t.Errorf("waitFor(%q) = %v, want %v", c.in, got, c.want)
+		}
+	}
+	if MaxWait >= 30*time.Second {
+		t.Errorf("MaxWait %v must stay under cmd/kourtchat's 30s WriteTimeout, "+
+			"or a held request is killed mid-answer", MaxWait)
+	}
+}
+
+/*
+A HIDDEN MESSAGE IS NOT NEWS. It is the wake-up path that has to carry a hide
+
+	to a screen — see pulse.go — and this is the other half of that: the change
+	probe must not treat a hidden row as something new, or every waiter in a court
+	would be woken by a moderator's hide and find nothing to draw.
+*/
+func TestHasSinceIgnoresHiddenRows(t *testing.T) {
+	srv, st, _ := newServer(t)
+	ctx := context.Background()
+	if rec := do(t, srv, postReq(t, "/api/chat/dev/orem", "alice", "a visible thing")); rec.Code != 200 {
+		t.Fatalf("seed: %d", rec.Code)
+	}
+	fresh, err := st.HasSince(ctx, "dev", "orem", 0)
+	if err != nil || !fresh {
+		t.Fatalf("a posted message is news: %v %v", fresh, err)
+	}
+	if err := st.HideMessage(ctx, 1); err != nil {
+		t.Fatal(err)
+	}
+	fresh, err = st.HasSince(ctx, "dev", "orem", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fresh {
+		t.Fatal("a hidden message must not read as something new to show")
+	}
+}
+
 // A kicked caller learns their state from the GET, not by having a message eaten.
 func TestKickedCallerIsToldBeforeTyping(t *testing.T) {
 	srv, st, _ := newServer(t)

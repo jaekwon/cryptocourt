@@ -720,6 +720,30 @@ func statusTx(ctx context.Context, q querier, ipHash, netHash string, now time.T
 // needs the content gone runs the pruner afterwards, and §9 says so — the two are separate
 // acts on purpose, because "stop showing this" and "destroy the evidence" are different
 // decisions and one of them is irreversible.
+/* IS THERE ANYTHING THIS READER HAS NOT SEEN? One row, one index, no payload —
+   the question a long poll asks before it decides whether to wait.
+   VISIBLE ROWS ONLY, which is the same rule Recent reads by: a message hidden by
+   a consequence is not news, and a waiter woken for one would re-read, find the
+   transcript unchanged, and wait again. The hides that DO need to reach a screen
+   arrive as a wake-up rather than as a row — see pulse.go.
+   A FROZEN COURT ANSWERS TRUE. Recent turns that into the 410 the panel needs, so
+   this must not hold the request open while the answer is waiting to be given. */
+func (s *Store) HasSince(ctx context.Context, chain, court string, since int64) (bool, error) {
+	frozen, err := s.IsFrozen(ctx, chain, court)
+	if err != nil || frozen {
+		return true, err
+	}
+	var n int
+	err = s.r.QueryRowContext(ctx,
+		`SELECT EXISTS(SELECT 1 FROM messages
+		   WHERE chain=? AND court=? AND id > ? AND hidden=0)`,
+		chain, court, since).Scan(&n)
+	if err != nil {
+		return false, err
+	}
+	return n == 1, nil
+}
+
 func (s *Store) Recent(ctx context.Context, chain, court string, since int64, limit int) ([]Message, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
