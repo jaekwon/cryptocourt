@@ -11066,6 +11066,25 @@ on(/^\/c\/([a-z0-9-]+)\/curate$/, async (slug)=>{
          ${btn("Appoint moderators","AppointMods",{courtSlug:slug,m:1,mods:"g1address1,g1address2"},"","creator only, free")}
          ${btn("Describe this court","SetCourtDesc",{courtSlug:slug,desc:"One line on what this court is for"},"","one line, no newlines")}</div></div>
       </section>`
+    /* PROPOSING IS NOT A MODERATOR ACT, and the realm says so where the verb is
+       declared: "ANY HOLDER MAY PROPOSE, because proposing is the interactive
+       half — the point of the verb is that the filing system stops being the
+       moderators' alone." It had no control on any page, so the one entrypoint
+       written to be used by somebody other than a moderator was the one nobody
+       could reach. check-curation-reachable had been saying so; nothing ran it,
+       because `make check` stopped at an earlier failure every time.
+       ITS OWN SECTION, not a tenth button under "Moderator actions". Putting it
+       there would file it under the exact authority it exists to widen, and the
+       count beside a heading is where this page says who may act.
+       AND IT SAYS WHAT IT DOES NOT DO. A proposal creates no set: it records a
+       name so an appeal can carry it, and until one does the row sits
+       unreferenced. A button that reads like "Create set" one panel up, and then
+       silently makes nothing, is worse than no button. */
+    + `<section style="margin-top:22px"><h2 class="sec-h">Propose a set <span class="count">any holder — gas only</span></h2>
+       <p class="small" style="margin:0 0 10px">This writes to the chain and creates nothing on its own. It records a proposed set so the court can decide on it: a <span class="mono">mod:newset</span> appeal in the meta court has to carry a bonded answer and survive 72 hours of anyone's dispute before the set exists. Until then the proposal is an unreferenced row, which is what keeps the verb cheap to leave open.</p>
+       <div class="panel"><div class="actions">
+         ${btn("Propose a set","RegisterFolderProposal",{courtSlug:slug,name:"Set name",desc:"One line on what belongs here",parentID:0},"","parentID 0 files it at the root")}</div></div>
+      </section>`
     + `<section style="margin-top:22px"><h2 class="sec-h">Local curation <span class="count">anyone — this browser only</span></h2>
        <p class="small" style="margin:0 0 10px">What the chain cannot hold — claim-to-claim containment and supersedes — lives in a file you keep. Descriptions, nested folders and associations are ON CHAIN now; this file still carries them for demo courts and for anything the moderators have not filed. Nothing here writes to any chain: export it, edit it, share the file, import someone else's. </p>
        <div class="panel"><h2>Export</h2>
