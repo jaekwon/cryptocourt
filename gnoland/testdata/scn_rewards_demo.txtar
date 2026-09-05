@@ -69,16 +69,16 @@ gnokey query vm/qeval --data '"gno.land/r/kourt/kourtv2.Settled(\"orem\",1)"'
 stdout 'true'
 
 
-# --- the quiet window: 17,280 blocks, and this is the part that cost 2 hours 
+# --- the participant-only week on OpenRewards --------------------------
 # the gate must REFUSE before the advance, or the test proves nothing
-! gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func OpenRewards -args 'orem' -args '1' -gas-fee 1000000ugnot -gas-wanted 200000000 -simulate skip -broadcast -chainid=tendermint_test alice
-stderr 'quiet window'
+! gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func OpenRewards -args 'orem' -args '1' -gas-fee 1000000ugnot -gas-wanted 200000000 -simulate skip -broadcast -chainid=tendermint_test test1
+stderr 'participant-only'
 
-# past priorityWindowBlocks
-gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func AdvanceTestHeight -args '17300' -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
+# past finalizeGraceSecs (clock.gno, 7*86400)
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func AdvanceTestClock -args '604860' -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
 stdout 'OK!'
 
-gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func OpenRewards -args 'orem' -args '1' -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test alice
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func OpenRewards -args 'orem' -args '1' -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
 stdout 'OK!'
 
 gnokey query vm/qeval --data '"gno.land/r/kourt/kourtv2.RewardsOpened(\"orem\",1)"'

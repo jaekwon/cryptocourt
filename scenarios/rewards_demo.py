@@ -31,7 +31,7 @@ import pathlib
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent / "scripts"))
-from scenario import Scenario, YES  # noqa: E402
+from scenario import Scenario, YES, DEPLOYER  # noqa: E402
 
 s = SCENARIO = Scenario("rewards_demo", __doc__.split("\n\n")[0])
 
@@ -63,9 +63,26 @@ s.advance(72 * 3600 + 60, "just past the settle window")
 s.settle(alice, "orem", 1)
 s.expect("Settled", ["orem", 1], "true")
 
-s.note("the quiet window: 17,280 blocks, and this is the part that cost 2 hours")
-s.expect_refuse(alice, "OpenRewards", ["orem", 1], "quiet window",
+# THIS TESTED THE 24h QUIET WINDOW, which the realm deleted on purpose, and the
+# deletion is documented where the gate used to stand. openrewards.gno: the
+# window read lastFlagEventAt, the quality lane was the only thing that ever
+# stamped it, and with that lane gone the field is zero on every claim, leaving
+# "a check that can only fire in the first day of a chain's life". This file
+# went on asserting a refusal the realm had stopped making.
+#
+# What survives on OpenRewards is the week it stays participant-only, so the
+# assertion moves there rather than being dropped — the shape of the old test
+# was right and its subject had gone.
+#
+# DEPLOYER is the stranger: alice authored the claim and staked it, bob staked
+# it and answered, so isParticipant is true for both and this gate can never
+# refuse either of them, at any time.
+s.note("the participant-only week on OpenRewards")
+s.expect_refuse(DEPLOYER, "OpenRewards", ["orem", 1], "participant-only",
                 note="the gate must REFUSE before the advance, or the test proves nothing")
-s.advance_height(17300, "past priorityWindowBlocks")
-s.call(alice, "OpenRewards", ["orem", 1])
+# SECONDS, not blocks. The gate reads verdictAtTime whenever the verdict carries
+# a stamp and a settled verdict does, so no number of blocks would open it —
+# the same height-to-stamp migration the dispute scenarios now advance for.
+s.advance(7 * 86400 + 60, "past finalizeGraceSecs (clock.gno, 7*86400)")
+s.call(DEPLOYER, "OpenRewards", ["orem", 1])
 s.expect("RewardsOpened", ["orem", 1], "true")

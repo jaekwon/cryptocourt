@@ -87,9 +87,13 @@ gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func VoteDispute -args 'or
 stdout 'OK!'
 
 
-# --- THE POINT: close a week-long vote by telling the chain the height -
+# --- THE POINT: close a week-long vote by telling the chain both its clocks 
 # votingBlocks + grace, in one transaction
 gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func AdvanceTestHeight -args '140000' -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
+stdout 'OK!'
+
+# those same 140,000 blocks at governor's secsPerBlock of 5
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func AdvanceTestClock -args '700000' -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
 stdout 'OK!'
 
 gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func ResolveDispute -args 'orem' -args '1' -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test alice

@@ -261,6 +261,10 @@ stdout 'OK!'
 gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func AdvanceTestHeight -args '140000' -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
 stdout 'OK!'
 
+# 2022-03-02 — the week-long dispute vote closes
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func AdvanceTestClock -args '691200' -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
+stdout 'OK!'
+
 gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func ResolveDispute -args 'covid' -args '5' -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test journo
 stdout 'OK!'
 
@@ -268,7 +272,7 @@ gnokey query vm/qeval --data '"gno.land/r/kourt/kourtv2.DisputeOpen(\"covid\",5)
 stdout 'false'
 
 # 2023-02-26 — the Department of Energy assessment is reported
-gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func AdvanceTestClock -args '31881600' -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
+gnokey maketx call -pkgpath gno.land/r/kourt/kourtv2 -func AdvanceTestClock -args '31190400' -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid=tendermint_test test1
 stdout 'OK!'
 
 

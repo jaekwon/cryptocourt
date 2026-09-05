@@ -258,6 +258,17 @@ s.vote(biosafety, "covid", PROXIMAL, "no")
 s.vote(oversight, "covid", PROXIMAL, "no")
 s.vote(trader, "covid", PROXIMAL, "yes")
 s.advance_height(140_000, why="votingBlocks + grace, in one transaction")
+# AND THE SAME SPAN ON THE CALENDAR, because the height is not what the vote
+# closes on. p/governor stamps closesTime at propose() and votingClosed() reads
+# Now() whenever that stamp is set, so the height alone leaves the round open
+# for ever — the two test clocks are independent by construction (testclock.gno
+# calls them twins and moves each on its own verb).
+#
+# A goto rather than a bare s.advance, so the narrative date and the chain clock
+# stay the same number. goto() computes its delta from _at["iso"], which a raw
+# advance does not touch: one would silently put the chain eight days ahead of
+# every date this file prints from here to 2025.
+goto("2022-03-02", "the week-long dispute vote closes")
 s.call(journo, "ResolveDispute", ["covid", str(PROXIMAL)])
 s.expect("DisputeOpen", ["covid", PROXIMAL], "false")
 
