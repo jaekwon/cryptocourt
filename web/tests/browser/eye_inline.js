@@ -94,6 +94,37 @@ const ROUTES = ["#/c/orem", "#/c/orem/f/0", "#/c/orem/f/1", "#/c/orem/11", "#/c/
   ok("...so the heading is one line tall", head.h < 60, JSON.stringify(head));
   ok("...and the eye is wrapped, like every other one", head.wrapped, JSON.stringify(head));
 
+  /* A SET PAGE OFFERS A WAY TO ACT. It listed a set's claims and stopped, so a
+     reader who had just read three claims on one subject and wanted to file a
+     fourth had to find their way back to the court first. Asked for.
+     AND IT DOES NOT PROMISE THE SET. AddToFolder is moderator-only and no
+     OpenClaim variant takes a set, so a claim opened here lands in the court's
+     docket and a moderator files it. A button reading "file a claim in this set"
+     would name an outcome the chain will not deliver — and the reader would
+     learn that after paying for the claim. */
+  for (const r of ["#/c/orem/f/0", "#/c/orem/f/1"]) {
+    await page.goto(PAGE + r, {waitUntil: 'networkidle0'});
+    await new Promise(z => setTimeout(z, 800));
+    const act = await page.evaluate(() => {
+      const a = document.querySelector(".main .actions");
+      if (!a) return {none: true};
+      const b = a.querySelector(".btn");
+      const sec = a.closest("section");
+      const dk = sec ? sec.querySelector(".docket, .empty") : null;
+      return {label: b ? b.textContent.trim() : null,
+              fn: b ? (b.dataset.fn || b.getAttribute("data-fn")) : null,
+              // it belongs under the list, not above it
+              belowList: dk ? dk.getBoundingClientRect().bottom <= a.getBoundingClientRect().top + 2 : null};
+    });
+    ok(`${r}: the set page offers a way to file a claim`, !act.none && /Open a claim/.test(act.label || ""),
+       JSON.stringify(act));
+    ok(`${r}: ...and says the claim opens in the court, not in the set`,
+       /opens in \w+; a moderator files it here/.test(act.label || ""), JSON.stringify(act.label));
+    ok(`${r}: ...and it does not claim to file into the set`,
+       !/(file|filed) (a claim )?(in|into) this set/i.test(act.label || ""), JSON.stringify(act.label));
+    ok(`${r}: ...sitting under the list it belongs to`, act.belowList === true, JSON.stringify(act));
+  }
+
   console.log(fail ? "\n" + fail + " FAILURES" : "\nALL PASS");
   await browser.close();
   process.exit(fail ? 1 : 0);

@@ -11773,6 +11773,23 @@ on(/^\/c\/([a-z0-9-]+)\/f\/([0-9.]+)$/, async (slug,fpath)=>{
     + fpager
     + (fwin.length? `<div class="docket">${fwin.map(cl=>docketRow(slug,cl)).join("")}</div>`
         : `<div class="empty"><div class="g">◌</div><p>No claims filed directly in this set.</p></div>`)
+    /* A WAY TO ACT, WHICH THIS PAGE DID NOT HAVE. It listed a set's claims and
+       stopped: a reader who had just read three claims about the same thing and
+       wanted to file a fourth had to find their way back to the court first.
+       BUT IT DOES NOT PROMISE THE SET. AddToFolder is moderator-only and no
+       OpenClaim variant takes a set, so a claim opened here lands in the court's
+       docket like any other and a moderator files it — or the court itself does,
+       through mod:newset. A button reading "file a claim in this set" would name
+       an outcome the chain will not deliver, and the reader would learn that
+       after paying for the claim.
+       So the button says what it does and the line beside it says what happens
+       next, in the same voice the court's own opener uses. */
+    + `<div class="actions" style="margin-top:10px">`
+      + btn("Open a claim", "OpenClaimP",
+            {courtSlug:slug, title:"Your claim of fact",
+             body:"What would settle it — the evidence in view, and what this is NOT asking"},
+            "", "it opens in " + esc(slug) + "; a moderator files it here")
+      + `</div><div id="courtcompose"></div>`
     + `</section>`;
 });
 /* one classifier for every status surface — pills, docket rows, map dots agree */
