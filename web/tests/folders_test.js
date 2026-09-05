@@ -549,6 +549,28 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
      /setName = String\(d\.title\|\|""\)\.startsWith\(SET_MARK \+ " "\)/.test(src)
      && /\.slice\(SET_MARK\.length \+ 1\)/.test(src));
 
+  /* AND THE AFFIRM PANEL WAITS FOR THE CHAIN BEFORE IT CLAIMS ANYTHING. Measured
+     on kourt.xyz against an already-carried heading: the button appeared at
+     1126ms and was removed at 1228ms, so for a tenth of a second the page offered
+     to create a set that existed and said nobody had carried it. The window is
+     the round trip — it grows with distance from the node, and a press inside it
+     opens a wallet for a transaction the realm panics on.
+     THREE ASSERTIONS, BECAUSE THE BUG HAS THREE PLACES TO COME BACK. The
+     attribute, the stylesheet rule that lets the attribute win, and the reveal on
+     every path that does not refuse. */
+  ok("the affirm panel ships hidden",
+     /<div class="actions" id="setaffirm" hidden/.test(src));
+  /* `.actions` is a class selector and outranks the UA's `[hidden]{display:none}`
+     — the same specificity defeat that put an empty "YOU HAVE" row on the
+     deployed buy panel while every property-based test stayed green. A test that
+     reads `.hidden` cannot see this; only the stylesheet can. */
+  ok("...and the stylesheet lets `hidden` win over .actions{display:flex}",
+     /\.actions\[hidden\]\{display:none\}/.test(src));
+  ok("...and every non-refusing path reveals it",
+     /const show = \(\) => \{ box\.hidden = false; \};/.test(src)
+     && /if\(!isLive\(\)\)\{ show\(\); return; \}/.test(src)
+     && /\}catch\(_\)\{ show\(\);/.test(src));
+
   console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");
   process.exit(fail?1:0);
 })();

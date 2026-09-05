@@ -981,6 +981,12 @@ a.card:hover{border-color:var(--line-2)}
 
 /* buttons / txlinks */
 .actions{display:flex; gap:10px; flex-wrap:wrap; margin-top:6px}
+/* AND `hidden` HAS TO WIN OVER THAT. `.actions` is a class selector, so it beats
+   the user agent's `[hidden]{display:none}` on specificity and a hidden actions
+   row would lay out anyway — which is exactly how `.kv.oneline{display:flex}`
+   once rendered a hidden "YOU HAVE" row live while every property-based test
+   stayed green. One rule, and joinheld_test asserts it is here. */
+.actions[hidden]{display:none}
 .btn{
   display:inline-flex; align-items:center; gap:8px; padding:9px 16px; border-radius:var(--r-sm);
   background:var(--surface); border:1px solid var(--line-2); color:var(--ink); font-weight:560; font-size:14px;
@@ -12997,7 +13003,21 @@ function claimCommentsHtml(slug, id, n, open, rows, kids, roles, withheld, nowH)
    the worst case is a clear panic in the wallet rather than a duplicate set. */
 async function fillSetAffirm(slug, id){
   const box = document.getElementById("setaffirm");
-  if(!box || !isLive()) return;
+  if(!box) return;
+  /* SHIPPED HIDDEN, REVEALED ONLY BY AN ANSWER. Measured on kourt.xyz against a
+     claim whose set was carried long ago: the panel appeared at 1126ms and was
+     removed at 1228ms — a hundred milliseconds of a button offering to create a
+     set that already exists, under a sentence saying nobody has carried it yet.
+     Both false, and the window is the round trip, so it grows with the reader's
+     distance from the node rather than staying at a tenth of a second. Pressing
+     it inside that window opens a wallet for a transaction the realm panics on.
+     THE DEFAULT IS NOW SILENCE, which is the honest default for a fact only the
+     chain has. Every path that ends without a refusal calls show().
+     A READ THAT DOES NOT ANSWER STILL SHOWS IT, because a failed read is not
+     evidence the set exists — the same reasoning the failure comment below has
+     always given, now with the button hidden until something says otherwise. */
+  const show = () => { box.hidden = false; };
+  if(!isLive()){ show(); return; }
   try{
     const [carried, folders] = await Promise.all([
       one(`ClaimSet(${gstr(slug)},${id})`).catch(()=>null),
@@ -13011,14 +13031,16 @@ async function fillSetAffirm(slug, id){
        sitting right above it. The helper was already in this file. */
     const ids = uint64List(folders);
     const note = box.querySelector(".small");
-    if(!note) return;
-    if(ids.length === 1){
+    /* THE SENTENCE BEFORE THE REVEAL, so the panel is never seen carrying the
+       shipped default and then swapping to the parent's name a frame later. */
+    if(note && ids.length === 1){
       const nm = await one(`FolderName(${gstr(slug)},${ids[0]})`).catch(()=>null);
       if(nm) note.innerHTML = `The court agreed to create this set, under <b>${safeInline(unesc(nm))}</b> — which is where this claim itself is filed. Carrying it is a second transaction nobody has sent yet; anyone may send it.`;
-    } else if(ids.length > 1){
+    } else if(note && ids.length > 1){
       note.textContent = "This claim is filed in more than one set, so the chain cannot tell which should be its parent — it refuses until one filing is left.";
     }
-  }catch(_){ /* leave the button and its default sentence */ }
+    show();
+  }catch(_){ show(); /* a read that did not answer is not evidence the set exists */ }
 }
 async function fillClaimComments(slug, id){
   const slot = document.getElementById("claimcomments");
@@ -14675,7 +14697,7 @@ function resolutionSection(slug,id,d,nowH,tl){
     const isSetHead = String(d.title||"").startsWith(SET_MARK + " ");
     inner = `<div class="notice ${ruledNo? "ruled-no" : "good"}"><span class="g">${ruledNo? "✕" : "✓"}</span><div><b>Settled ${sideName(v)}</b>${d.route?" — "+esc(d.route)+"":""}.
       Both sides withdraw principal 1×; the winning side also draws its accuracy reward once the rewards are opened.
-      ${isSetHead && !ruledNo? `<div class="actions" id="setaffirm" style="margin-top:10px">
+      ${isSetHead && !ruledNo? `<div class="actions" id="setaffirm" hidden style="margin-top:10px">
         ${btn({html:`New ${setMarkHtml(safeInline(d.title||""))}`},"AffirmSet",{courtSlug:slug,claimID:id})}
         <span class="small muted" style="display:block;margin-top:6px">The court agreed to create this set. Carrying it is a second transaction nobody has sent yet — and the verdict is the authority, so anyone may send it, moderator or not.</span>
       </div>`:""}
