@@ -1509,6 +1509,16 @@ control("a registered wrapper with an empty list", CHATALL,
         "empty CHECKS list", argv=["python3", BROWREG])
 # And the tripwire, because a guard policing an empty directory reports a clean
 # tree forever.
+# A LEAF THAT NAMES HARNESSES AND NEVER RUNS THEM is walked as a wrapper, so
+# everything it names is counted as reached — coverage claimed for checks nothing
+# invokes, which is this guard's own failure mode one level in. The agreement
+# between the two markers was a measurement in a comment ("MEASURED across all 18
+# files") until the tree grew to twenty-seven; it is a loop now, and this is what
+# holds the loop.
+control("a leaf that lists harnesses it never spawns", "web/tests/browser/map_draws.js",
+        "const {PAGE, demoPage} = require('./harness');",
+        'const CHECKS = ["eye_inline.js"];\nconst {PAGE, demoPage} = require(\'./harness\');',
+        "names .js files but never spawns one", argv=["python3", BROWREG])
 control("a scan too small to be real", BROWREG,
         'if f.endswith(".js")', 'if f == "run.js"',
         "too few to be a real scan", argv=["python3", BROWREG])

@@ -136,9 +136,11 @@ demo-physics:
 nodelegate:
 	python3 scripts/check-nodelegate.py
 
-# Every height read in the realm must go through heightNow(), or a seeded
-# chain sees two different heights in one transaction. 65 call sites; nobody
-# re-checks those by eye.
+# Every height read in the realm must go through heightNow(), or a seeded chain
+# sees two different heights in one transaction. Far too many call sites to
+# re-check by eye — it said 65 and there are seventy-odd now, which is the point:
+# the guard counts them on every run and prints what it found, so the number
+# belongs in its output and not in this comment.
 height-shim:
 	python3 scripts/check-height-shim.py
 

@@ -103,9 +103,12 @@ NAME = re.compile(r"['\"]([^'\"]+\.js)['\"]")
 # code, and any file holding one would be read as an empty wrapper.
 #
 # So a wrapper is identified by what a wrapper DOES: it runs its children as
-# child processes. MEASURED across all 18 files in web/tests/browser — the two
-# markers agree exactly, on chat_all.js and run.js, with no file matching one and
-# not the other. Nothing else was: `module.exports` appears only in harness.js,
+# child processes. The two markers agree exactly — on chat_all.js and run.js,
+# with no file matching one and not the other — and that agreement is CHECKED
+# below rather than asserted here, because it was a measurement over "all 18
+# files" and there are twenty-seven now. A number in a comment is a claim about
+# the day it was written; the loop is a claim about today.
+# Nothing else worked as a marker: `module.exports` appears only in harness.js,
 # which declares itself not-a-check, and an assertion-shaped grep fires for both
 # wrappers AND misses three leaves (compose_upload, route_crawl, stripped_boot),
 # so it discriminates in neither direction.
@@ -133,6 +136,26 @@ if not os.path.isdir(BROWSER):
 present = sorted(f for f in os.listdir(BROWSER) if f.endswith(".js"))
 if ENTRY not in present:
     sys.exit("check-browser-checks-registered: %s is missing" % ENTRY)
+
+# THE TWO MARKERS AGREE, and this used to be a measurement in a comment rather
+# than a check. `listed` reads a name list FIRST and falls back to the spawn, so
+# a file carrying a list it never actually runs is walked as a wrapper and its
+# children counted as reached — coverage claimed for harnesses nothing invokes,
+# which is this guard's own failure mode one level in.
+# The other direction is already caught below as an empty wrapper; this catches
+# the direction that would report a clean tree.
+mismatched = []
+for f in present:
+    src = io.open(os.path.join(BROWSER, f), encoding="utf-8").read()
+    if CHECKS.search(src) and not DELEGATES.search(src):
+        mismatched.append(f)
+if mismatched:
+    for f in mismatched:
+        print("check-browser-checks-registered: %-24s names .js files but never spawns one"
+              % f, file=sys.stderr)
+    sys.exit("\nA file that lists harnesses and does not run them is walked as a "
+             "wrapper, so everything it names is counted as reached. Give it a "
+             "spawn, or stop it naming .js files it does not invoke.")
 
 # WALK, DO NOT COUNT LEVELS. run.js names wrappers, a wrapper names harnesses,
 # and a wrapper of wrappers would be legal too. A recursive walk with a visited
