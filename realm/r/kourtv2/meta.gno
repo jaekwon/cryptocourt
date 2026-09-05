@@ -45,6 +45,13 @@ const (
 // The verbs. Restorative verbs may execute from the undisputed (silence) route:
 // silence may RESTORE visibility. Aggressive verbs may not — silence must never
 // remove visibility, disarm a court, re-arm one, or reseat its moderators.
+//
+// AND THESE STRINGS ARE THE PROTOCOL. A verb is not an identifier the compiler
+// checks. It is the middle of a claim's TITLE, typed by whoever files the appeal
+// and matched here when it is read — syntax and code at the same time. So a verb
+// is renamed the way a wire format is, not the way a symbol is: every title
+// already written with the other word stops parsing as an appeal, and only the
+// structured parse stored at open still knows what it meant.
 const (
 	verbUnhide    = "unhide"    // restorative: clear the courtMod bit
 	verbClear     = "clear"     // restorative: clear the meta bit
@@ -54,14 +61,14 @@ const (
 	verbSetmods   = "setmods"   // aggressive: install a moderator set
 	// RESTORATIVE, and the classification is the whole design decision. An
 	// aggressive verb may execute only from a DECIDED CONTESTED vote with weight
-	// against it — right for seizing authority, perverse for a folder: an
+	// against it — right for seizing authority, perverse for a set: an
 	// uncontested, obviously-good proposal could never carry, so the verb would
-	// be unusable in exactly the case it exists for. A folder is additive, has
-	// zero economic weight, and one moderator undoes it with RetireFolder — the
-	// same reasoning folders.gno already uses to keep folder ops off the m-of-n
+	// be unusable in exactly the case it exists for. A set is additive, has zero
+	// economic weight, and one moderator undoes it with RetireFolder — the same
+	// reasoning folders.gno already uses to keep set ops off the m-of-n
 	// ceremony. The undisputed route is not a free pass: it still needs a bonded
 	// YES answer and 72h in which any holder may dispute.
-	verbNewfolder = "newfolder" // restorative: create a folder the court agreed to
+	verbNewset = "newset" // restorative: create a set the court agreed to
 )
 
 func verbIsAggressive(v string) bool {
@@ -114,7 +121,7 @@ func init() {
 //	mod:unhide:<court>/<claimID>   mod:clear:<court>/<claimID>
 //	mod:hide:<court>/<claimID>     mod:setmods:<court>/<candidateID>
 //	mod:suspend:<court>            mod:unsuspend:<court>
-//	mod:newfolder:<court>/<folderProposalID>
+//	mod:newset:<court>/<folderProposalID>
 func parseModTitle(title string) modParse {
 	p := modParse{}
 	if !strings.HasPrefix(title, metaPrefix) {
@@ -128,7 +135,7 @@ func parseModTitle(title string) modParse {
 	verb := rest[:slash]
 	arg := rest[slash+1:]
 	switch verb {
-	case verbUnhide, verbClear, verbHide, verbSetmods, verbNewfolder:
+	case verbUnhide, verbClear, verbHide, verbSetmods, verbNewset:
 		cut := strings.Index(arg, "/")
 		if cut <= 0 || cut == len(arg)-1 {
 			return p
@@ -167,7 +174,7 @@ func latchKey(p modParse) string {
 		return "set:" + p.court
 	// Per COURT, for setmods' reason: keyed per proposal, an attacker could bank
 	// unlimited parallel folder installs and discharge them one after another.
-	case verbNewfolder:
+	case verbNewset:
 		return "fold:" + p.court
 	case verbSuspend, verbUnsuspend:
 		return "sus:" + p.court
@@ -187,7 +194,7 @@ func onClaimOpened(c *Court, cs *claimState) {
 	}
 	p := parseModTitle(cs.title)
 	meta.parses.Set(beClaimKey(cs.id), &p)
-	cs.noAccuracy = p.valid && p.verb == verbNewfolder
+	cs.noAccuracy = p.valid && p.verb == verbNewset
 	if p.valid {
 		pendingEnter(c, cs)
 	}
@@ -210,10 +217,10 @@ func onTitleEdited(c *Court, cs *claimState) {
 	meta.parses.Set(beClaimKey(cs.id), &p)
 	// AND THE PAY LANE FOLLOWS THE TITLE. noAccuracy is decided by what the title
 	// says, so an edit inside the polish window has to re-decide it: a claim
-	// edited OUT of the newfolder schema must pay its stakers like any other, and
+	// edited OUT of the newset schema must pay its stakers like any other, and
 	// one edited INTO it must not. The window closes before a claim can be
 	// answered, so nothing has been staked on the old answer by now.
-	cs.noAccuracy = p.valid && p.verb == verbNewfolder
+	cs.noAccuracy = p.valid && p.verb == verbNewset
 	// A SEEDED claim stays on the pending list whatever its title says — the set
 	// that seeds content must never be able to embargo it by editing the title
 	// into a non-appeal string (M-A18).
@@ -342,9 +349,9 @@ func ExecuteMetaVerdict(cur realm, metaClaimID uint64) {
 		panic("kourtv2: the target court does not predate this appeal")
 	}
 	var target *claimState
-	// newfolder's target is a PROPOSAL, not a claim, so it is excluded here for
+	// newset's target is a PROPOSAL, not a claim, so it is excluded here for
 	// the reason setmods is and gets its own predate check below.
-	if p.hasTarget && p.verb != verbSetmods && p.verb != verbNewfolder {
+	if p.hasTarget && p.verb != verbSetmods && p.verb != verbNewset {
 		target = mustClaim(tc, p.target)
 		if target.openedAt >= cs.openedAt {
 			panic("kourtv2: the target claim does not predate this appeal")
@@ -360,7 +367,7 @@ func ExecuteMetaVerdict(cur realm, metaClaimID uint64) {
 			panic("kourtv2: the candidate set does not predate this appeal")
 		}
 	}
-	if p.verb == verbNewfolder {
+	if p.verb == verbNewset {
 		// Same attack, same shape: registration is permissionless with a
 		// predictable per-court counter, so an appeal aimed at an unallocated
 		// proposal id would let its author win a vote on a folder nobody could
@@ -517,7 +524,7 @@ func applyMetaVerb(mc, tc *Court, cm *courtMod, p modParse, cs, target *claimSta
 		suspendSet(tc, by)
 	case verbUnsuspend:
 		unsuspendSet(tc, by)
-	case verbNewfolder:
+	case verbNewset:
 		/* RE-CHECKED AT EXECUTION, because weeks pass between a proposal and the
 		   verdict that carries it: the court can fill up, the name can be taken
 		   by an ordinary CreateFolder, and the parent can be retired. Every rule

@@ -245,7 +245,7 @@ type courtMod struct {
 	folders   *bptree.BPTree // folderID (be64) -> *folder (folders.gno)
 	folderSeq uint64
 
-	// Folders PROPOSED but not created: the payload of a `mod:newfolder` appeal.
+	// Folders PROPOSED but not created: the payload of a `mod:newset` appeal.
 	// Registered separately from the appeal for the reason RegisterModCandidate
 	// exists — a name and a description do not fit in a claim title, and the
 	// meta court's predate guard needs something with a height on it to compare.

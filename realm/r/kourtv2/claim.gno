@@ -75,7 +75,7 @@ type claimState struct {
 	seeded   bool  // moderator-seeded (deposit/fee waived; author draw = 0, I5)
 	// noAccuracy: this claim pays no ACCURACY slice — drawWinners is zeroed and
 	// the points stay unminted, exactly as `seeded` does for the author slice.
-	// Set at open for a `mod:newfolder` appeal, whose question ("should this
+	// Set at open for a `mod:newset` appeal, whose question ("should this
 	// court have a folder called X") is a proposal rather than a matter of fact:
 	// paying stakers by conviction for agreeing with a proposal is a vote bought
 	// with the reward pool, and this product's rule is stakes, never ballots. The

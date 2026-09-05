@@ -30,7 +30,7 @@ func TestSetTitleParsesOnlyTheExactMark(cur realm, t *testing.T) {
 		tD006 + " Lab leak",  // and another
 		tD010 + "Lab leak",   // no delimiter: the mark is a prefix, not a first letter
 		" " + tD010 + " Lab", // not at the start
-		"mod:newfolder:x/1",  // the other prefix entirely
+		"mod:newset:x/1",  // the other prefix entirely
 		"Lab leak " + tD010,  // the mark as decoration at the end
 		tD010,                // the mark alone: no name
 		tD010 + " ",          // ...and with an empty name

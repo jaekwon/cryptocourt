@@ -1,4 +1,4 @@
-# `mod:newfolder` — a folder the court decides on
+# `mod:newset` — a set the court decides on
 
 A folder is the one piece of a court's structure created by fiat: `CreateFolder`
 gates on `requireFolderMod` and nothing else writes `cm.folders`. This spec adds
@@ -35,7 +35,7 @@ func RegisterFolderProposal(cur realm, courtSlug, name, desc string, parentID ui
 
 Then the appeal is:
 
-    mod:newfolder:<court>/<proposalID>
+    mod:newset:<court>/<proposalID>
 
 This buys three things beyond tidiness:
 
@@ -85,7 +85,7 @@ Applied to a folder it is perverse. An uncontested, obviously-good proposal coul
 never execute — the folder would exist only if somebody had fought it. The verb
 would be unusable in exactly the case it is for.
 
-So `newfolder` is **restorative**: it may execute from the undisputed route.
+So `newset` is **restorative**: it may execute from the undisputed route.
 That is not a free pass. The undisputed route still requires:
 
 * someone to **answer YES with a bond**, which is money at risk, and
@@ -171,7 +171,7 @@ spec.
 
 **Three ways to resolve it, cheapest first:**
 
-1. **Author bonus only.** Set `drawWinners` to zero for `newfolder` appeals; the
+1. **Author bonus only.** Set `drawWinners` to zero for `newset` appeals; the
    proposer is paid, stakers are not. Smallest change, keeps *stakes, never
    ballots* intact, and still answers "reward me for a good folder".
 2. **Full split, as any other claim.** Simplest code — no special case — and the
@@ -193,7 +193,7 @@ bond and whose stake is at risk.
 
 ## 6. Tests this needs
 
-* the title parses, and a near-miss (`mod:newfolder:covid/0`, missing slash,
+* the title parses, and a near-miss (`mod:newset:covid/0`, missing slash,
   bad slug charset) does not
 * a proposal that does not predate its appeal is refused
 * the undisputed route executes it; a NO verdict does not

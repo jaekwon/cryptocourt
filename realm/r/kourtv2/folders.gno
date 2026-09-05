@@ -260,7 +260,7 @@ func requireFolderMod(c *Court, who address) *courtMod {
 
 /* ONE PLACE A FOLDER COMES INTO BEING, and it checks no authority.
    Three callers now reach it: CreateFolder and CreateFolderIn, which gate on
-   requireFolderMod, and the meta court's `mod:newfolder` execution, whose
+   requireFolderMod, and the meta court's `mod:newset` execution, whose
    authority is a carried verdict rather than an address. Putting the gate inside
    would make the verdict path need a moderator to exist; leaving it out and
    naming the rule here is the shape installModSet already uses for the same
@@ -314,7 +314,7 @@ func newFolderCore(cm *courtMod, name, desc string, parent uint64) uint64 {
 
 /* A PROPOSAL IS NOT A FOLDER. It records what somebody wants filed and nothing
    else: no entry in cm.folders, no id in the contiguous folder range, nothing
-   the overlay enumerates. Only a carried `mod:newfolder` verdict turns one into
+   the overlay enumerates. Only a carried `mod:newset` verdict turns one into
    a folder, and it re-checks every rule at that moment. */
 type folderProposal struct {
 	id     uint64

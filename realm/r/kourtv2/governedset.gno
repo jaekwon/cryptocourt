@@ -19,7 +19,7 @@ package kourtv2
  * and wrong at the level the storage cares about, and only one of those has to
  * be true for the feature to be worth having.
  *
- * WHY THIS IS NOT mod:newfolder AGAIN. That verb asks the META court to overrule
+ * WHY THIS IS NOT mod:newset AGAIN. That verb asks the META court to overrule
  * a court's moderators, and its proposal carries the name because a claim title
  * could not. This asks the court ITSELF, in its own venue, and the title IS the
  * name — which is the whole appeal of the mark. The two do not overlap: one is
@@ -178,7 +178,7 @@ func AffirmSet(cur realm, courtSlug string, claimID uint64) uint64 {
 	// 4. RE-CHECKED NOW, not at open. Weeks pass between opening a claim and
 	//    carrying it: an ordinary CreateFolder can take the name in between, and
 	//    the court can fill up. A name that has since been taken is a REFUSAL —
-	//    the same call mod:newfolder makes, and for the same reason: two live
+	//    the same call mod:newset makes, and for the same reason: two live
 	//    folders sharing a name is worse than a claim that has to be re-filed.
 	cm := ensureMod(c)
 	if folderNameTaken(cm, name) {

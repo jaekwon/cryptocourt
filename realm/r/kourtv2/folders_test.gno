@@ -555,7 +555,7 @@ func TestPurgingAFolderTakesItsImage(cur realm, t *testing.T) {
 	})
 }
 
-/* THE PROPOSAL HALF OF `mod:newfolder`, tested here rather than in meta_test
+/* THE PROPOSAL HALF OF `mod:newset`, tested here rather than in meta_test
    because none of it needs the meta court: registering is an ordinary call any
    holder may make, and what it must NOT do is create anything.
 
