@@ -98,6 +98,9 @@ const ALL = ["embed_layout.js", "tagrow_layout.js", "route_crawl.js",
              // where "details →" lands relative to the Buy button, which only a
              // laid-out page can answer: the markup is one string either way
              "buy_details.js",
+             // the Resolution panel's hue follows the verdict, which only a
+             // laid-out page can answer: the branch emits a class name either way
+             "verdict_notice.js",
              // the artifact deploy.sh actually uploads, with its comments gone
              "stripped_boot.js"];
 const only = (process.env.ONLY || process.argv.slice(2).join(",") || "").trim();
