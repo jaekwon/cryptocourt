@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -246,7 +247,23 @@ THE LONG POLL, MEASURED. Every claim here is about TIME, so every one of them
 	and it is the behaviour every other test in this file assumes.
 */
 func TestLongPollHoldsUntilSomethingHappens(t *testing.T) {
-	srv, _, clock := newServer(t)
+	srv, store, clock := newServer(t)
+	/* THE FAKE CLOCK IS SHARED WITH A GOROUTINE HERE, and only here. Every other
+	   test in this package is sequential, so writing *clock directly is safe in
+	   them; this one holds a long poll open in another goroutine while the main
+	   one posts, and the server reads Now() inside that poll. Unguarded, that is
+	   a genuine data race on the clock — `go test -race` says so, and said so
+	   before this comment existed.
+	   GUARDED HERE RATHER THAN IN newServer, because moving the clock behind a
+	   mutex for everyone would rewrite sixty call sites across six files to fix a
+	   race that exists in one. The override is four lines and stays where the
+	   concurrency is. */
+	var clockMu sync.Mutex
+	store.Now = func() time.Time {
+		clockMu.Lock()
+		defer clockMu.Unlock()
+		return *clock
+	}
 	// The throttle is one message every MinInterval from one address, and this test
 	// posts twice from the same one — so the fake clock moves between them. Real
 	// time is not involved in that rule and must not be: a test that slept for it
@@ -255,7 +272,9 @@ func TestLongPollHoldsUntilSomethingHappens(t *testing.T) {
 		if rec := do(t, srv, postReq(t, "/api/chat/dev/orem", "alice", body)); rec.Code != 200 {
 			t.Fatalf("seed: %d %s", rec.Code, rec.Body)
 		}
+		clockMu.Lock()
 		*clock = clock.Add(MinInterval)
+		clockMu.Unlock()
 	}
 	get := func(q string) (*httptest.ResponseRecorder, time.Duration) {
 		start := time.Now()

@@ -255,8 +255,19 @@ vet:
 # every file in the tree was behind a gnochain or txtar tag — so `check` had no Go
 # test step at all and 162 subtests would have sat in the tree unrun. That is
 # exactly the position web/tests/ was in before it got a runner.
+#
+# -race, AND THE REASON IS THAT IT FOUND ONE. This ran without it and the chat
+# package held a genuine data race: the long-poll test shares its fake clock with
+# the goroutine holding the poll open, and the server reads Now() inside that
+# poll while the main goroutine advances it. Nothing failed, because a race that
+# does not happen to interleave badly looks exactly like a passing test — which
+# is the whole argument for the flag rather than for reading the code harder.
+# The package is the one that serves concurrent readers, so it is the one where
+# an unflagged race would eventually be somebody's dropped message.
+# It costs the chat suite about twenty seconds, against a realm suite that takes
+# nineteen and a browser suite that takes minutes.
 gotest:
-	go test ./internal/... ./cmd/...
+	go test -race ./internal/... ./cmd/...
 
 # The off-chain chat service: an HTTP server, an Ollama-backed scanner, and the
 # operator CLI. Three binaries into ./bin, which is not committed.
