@@ -295,6 +295,58 @@ const PAGE = 'file://' + path.join(__dirname, '..', '..', 'index.html');
      !eyes.few && eyes.off.checked === "false"
        && eyes.off.shut !== "none" && eyes.off.open === "none", JSON.stringify(eyes.off));
 
+  /* THE SEARCH CAPTION NAMES TWO NOUNS AND COUNTS BOTH. It read "all 22 claims
+     and folders" — one figure for both — which parses as "22 claims-and-folders"
+     and leaves a reader unable to tell whether the folders listed directly above
+     are inside that number or extra to it. They were inside it.
+     ASSERTED AS ARITHMETIC, not as a sentence. The claim figure has to follow
+     the fold filter while the folder figure does NOT, and that pair is the whole
+     behaviour: a caption whose two numbers both froze, or both moved, would
+     match any regex that only checked the shape. So the ticked reading is
+     required to be strictly smaller in claims and identical in folders, and the
+     folder figure is checked against the rows actually on screen rather than
+     against a constant.
+     Ablated against a control run that fires nothing, with the counts as
+     measured rather than as guessed:
+       - sum the two back into one figure -> 3 arms, all three of these: the
+         regex stops matching, so both figures read null.
+       - claim count stops following the fold filter (drop the !folded pass) ->
+         2 arms, including this block's third, with the two readings identical.
+       - folder figure counts a constant instead of the rows -> 5 arms, this
+         block's second among them.
+     THE FIRST ATTEMPT AT THE SECOND ABLATION FIRED NOTHING, and it was the
+     instrument that was broken, not the assertion: it froze the count through a
+     `let CAPREST` while assigning to `window.CAPREST`, which are different
+     bindings, so the mutation was a no-op and the run was green for the same
+     reason an unmodified one is. Recorded because a no-op ablation reads exactly
+     like a vacuous test, and the difference is only visible if you go back and
+     check that the mutation took. */
+  const cap = await page.evaluate(() => {
+    const read = () => {
+      const e = document.querySelector("[data-qcount]");
+      const m = (e ? e.textContent.trim() : "").match(/^all ([\d,]+) claims?(?: and ([\d,]+) folders?)?$/);
+      return {text: e ? e.textContent.trim() : null,
+              claims: m ? +m[1].replace(/,/g, "") : null,
+              folders: m && m[2] ? +m[2].replace(/,/g, "") : null};
+    };
+    const rows = [...document.querySelectorAll("#qscope .foldsel")];
+    rows.forEach(r => { if (r.getAttribute("aria-checked") === "true") r.click(); });
+    const rest = read();
+    rows[0] && rows[0].click();
+    const on = read();
+    rows[0] && rows[0].click();
+    return {rest, on, onScreenFolders: rows.length};
+  });
+  ok("the search caption counts claims and folders separately",
+     cap.rest.claims !== null && cap.rest.folders !== null, JSON.stringify(cap.rest));
+  ok("...with the folder figure matching the rows on screen",
+     cap.rest.folders === cap.onScreenFolders,
+     `${cap.rest.folders} vs ${cap.onScreenFolders} rows`);
+  ok("...and the claim figure following the filter while the folders hold",
+     cap.on.claims !== null && cap.on.claims < cap.rest.claims
+       && cap.on.folders === cap.rest.folders,
+     `rest ${JSON.stringify(cap.rest.text)} -> ticked ${JSON.stringify(cap.on.text)}`);
+
   ok("no page errors from the filter", errs.length === 0, errs.slice(0, 2).join(" | "));
   console.log(fail ? "\n" + fail + " FAILURES" : "\nALL PASS");
   await browser.close();

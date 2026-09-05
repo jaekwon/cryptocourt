@@ -98,11 +98,14 @@ ok("C2: the court qbar exists to be placed", src.includes(QBAR_COURT));
 // is short, fixed and the first thing a reader orients by, so pushing it below a
 // search box buried the court's own filing system under a control most visits
 // never touch. The pairing that keeps the first argument honest is that the
-// SEARCH heading names what it covers — "all 22 claims and folders" — so the
-// scope is stated in words where it used to be stated by position.
+// SEARCH heading names what it covers — "all 19 claims and 3 folders" — so the
+// scope is stated in words where it used to be stated by position. Pinned by the
+// BUILDER's name rather than by the sentence: the two nouns are assembled in
+// searchScope, and a check spelling the sentence out here would have to be
+// rewritten for every wording change while proving nothing about the caller.
 ok("C2: court qbar follows the folders, and is scoped by its heading",
    src.indexOf(QBAR_COURT) > src.indexOf("+ foldersSec")
-   && src.includes('claims and folders"'));
+   && src.includes("searchScope(rowsAll.length, foldN)"));
 ok("C2: court qbar precedes its section", src.indexOf(QBAR_COURT) < src.indexOf('<section data-qsec data-group="open"${foldersSec'));
 // FOLDERS ARE IN THE HAYSTACK. Two halves, and either one alone is the old behaviour:
 // the row must carry a data-q for the filter to test it, and the section must be qsec

@@ -6707,9 +6707,13 @@ function applyQ(qRaw){
   if(shead){
     // every row the box can match, off-page ones included — the corpus, not the
     // window, which is what this line has always counted
-    const corpus = [...box.querySelectorAll("[data-q]")].filter(r=>!folded(r)).length;
-    const folds = box.querySelectorAll(".foldsel,.folderrow").length;
-    shead.textContent = `all ${fmtN(corpus)} ${folds? "claims and folders" : (corpus===1? "claim":"claims")}`;
+    /* BOTH COUNTS OFF THE SAME FILTERED SET, so the claim figure is what is left
+       after the folder rows are taken out and cannot go negative. Counting folds
+       with its own querySelectorAll would count folder rows the fold filter has
+       already removed from corpus, and the subtraction would then undercount. */
+    const all = [...box.querySelectorAll("[data-q]")].filter(r=>!folded(r));
+    const folds = all.filter(r=>r.matches(".foldsel,.folderrow")).length;
+    shead.textContent = searchScope(all.length - folds, folds);
   }
   const empty = document.getElementById("qempty");
   if(empty) empty.classList.toggle("qhide", !(active && matches===0));
@@ -7375,6 +7379,19 @@ function folderRowHtml(slug,f,path,toggle){
     <span class="id"><span class="foldbox">${ICN_EYE_OPEN}${ICN_EYE_SHUT}</span>${ICN_FOLDER}</span>
     ${meta}
     <a class="pill void foldopen" href="#/c/${esc(slug)}/f/${path}">open →</a></div>`;
+}
+/* "all 19 claims and 3 folders" — TWO NOUNS, TWO NUMBERS. It read "all 22 claims
+   and folders": one figure covering both, which parses as "22 claims-and-folders"
+   and leaves a reader unable to tell whether the folders listed right above it
+   are inside that 22 or extra to it. They were inside it — the number was a sum —
+   so anyone who guessed the other way was wrong about how much the box searches.
+   ONE BUILDER, TWO CALLERS, which is the point of it existing: the route writes
+   this line once and applyFolders rewrites it on every tick, and those are
+   exactly the two places that have to agree about what is in the list. They were
+   two separate expressions that happened to match. */
+function searchScope(nClaims, nFolders){
+  const c = `${fmtN(nClaims)} claim${nClaims===1? "":"s"}`;
+  return "all " + (nFolders? `${c} and ${fmtN(nFolders)} folder${nFolders===1? "":"s"}` : c);
 }
 function isDone(c){ const st=(c.statusText||"").toLowerCase(); return /^closed|provclose|settled/.test(st); }
 /* ---------------- the one-way curve, quoted client-side ----------------
@@ -10599,11 +10616,10 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
      reading "all 19 claim titles" over a filter that also matches six folder names is
      the small kind of untrue that makes a reader distrust the big numbers too. */
   const foldN = (pageOf()===1 && cur && cur.folders.length)? cur.folders.length : 0;
-  /* "all 22 claims and folders" — the reader's noun, not the matcher's. The
-     caption under the box still says "claim titles and folder names" because
-     that one is about what a MATCH is tested against; this one is about what is
-     in the list. */
-  const searchCount = `all ${fmtN(rowsAll.length + foldN)} ${foldN? "claims and folders" : (rowsAll.length===1? "claim":"claims")}`;
+  /* The reader's noun, not the matcher's. The caption under the box still says
+     "claim titles and folder names" because that one is about what a MATCH is
+     tested against; this one is about what is in the list. */
+  const searchCount = searchScope(rowsAll.length, foldN);
   /* BUILT HERE, NOT IN THE ROUTE, because this is where the two halves of it
      live: rowsAll and foldN are the count, and `claims` is what decides whether
      a chooser is worth showing at all. The route used to own the chips and
