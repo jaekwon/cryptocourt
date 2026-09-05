@@ -68,3 +68,71 @@ func TestAReasonOfExactlyTheMaximumLengthIsAccepted(cur realm, t *testing.T) {
 	PurgeFolder(cross(cur), "rlen", f, atCap)
 	uassert.True(t, FolderPurged("rlen", f))
 }
+
+// THE SAME CAP, IN A SCRIPT THAT IS NOT LATIN — which is the case the test above
+// cannot see, because it spells its bodies with strings.Repeat("r", n) and for
+// ASCII a byte and a character are the same thing.
+//
+// mustCategoryCode counted BYTES while checkReason, ten lines away in the same
+// file and reading the same maxReasonLen, counted runes. runeLen exists precisely
+// to stop that — its own note records why every cap in this realm moved to
+// characters: "a 200-character Russian claim title — about 370 bytes — was refused
+// with 'a title is at most 200 characters', about a title that was 200". The purge
+// code was the one cap that sweep missed.
+//
+// WHAT IT COST: a statutory category in Cyrillic ran out around 100 characters and
+// one in Japanese around 66, against a stated 200 — and the refusal names no
+// length at all, so a moderator was told the code was MISSING when it was present
+// and too long. On an m-of-n act that cannot be undone, with the code being the
+// part that outlives the claim.
+//
+// The pairing is the point: both functions share one constant, so one arm per
+// function at the same rune count is what proves they mean the same thing by it.
+func TestTheCategoryCodeCapCountsCharactersLikeItsSiblingDoes(cur realm, t *testing.T) {
+	// 200 CHARACTERS, 400 BYTES. Under the old byte count this was refused at
+	// exactly twice the stated limit; the assertion is that it is accepted.
+	atCap := strings.Repeat("ф", maxReasonLen)
+	if runeLen(atCap) != maxReasonLen || len(atCap) != 2*maxReasonLen {
+		t.Fatalf("setup: wanted %d runes in %d bytes, got %d in %d",
+			maxReasonLen, 2*maxReasonLen, runeLen(atCap), len(atCap))
+	}
+
+	// checkReason first, the sibling that was already right. It is the control:
+	// without it a reader cannot tell whether this file is asserting a rule or
+	// just describing whatever the code happens to do.
+	checkReason(atCap) // must not panic — 200 characters, and it promises 200
+	mustPanicWith(t, "at most 200 characters",
+		func() { checkReason(strings.Repeat("ф", maxReasonLen+1)) })
+
+	// And now the one that was wrong. Same string, same constant, same answer.
+	mustCategoryCode(atCap)
+	mustPanicWith(t, "statutory category code",
+		func() { mustCategoryCode(strings.Repeat("ф", maxReasonLen+1)) })
+
+	// Through a real purge, because mustCategoryCode is only reachable that way and
+	// a pure-function arm cannot show the entrypoint actually passes the code down.
+	alice := testutils.TestAddress("rlen2-alice")
+	testCourt(cur, "rlen2", alice, 10_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	f := CreateFolder(cross(cur), "rlen2", "Struck", "to be purged")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	RetireFolder(cross(cur), "rlen2", f)
+
+	dadmin := DirectoryAdmin()
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	SetPurgeThreshold(cross(cur), 1)
+
+	// Over the cap in RUNES is still refused — the fix widened the bound, it did
+	// not remove it. Tried first, while there is still a folder to purge.
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	uassert.AbortsContains(t, cur, "kourtv2: purge needs a statutory category code",
+		func() {
+			PurgeFolder(cross(cur), "rlen2", f, strings.Repeat("ф", maxReasonLen+1))
+		})
+	uassert.False(t, FolderPurged("rlen2", f))
+
+	// ...and 200 Cyrillic characters purges, which is the whole bug in one line.
+	testing.SetRealm(testing.NewUserRealm(dadmin))
+	PurgeFolder(cross(cur), "rlen2", f, atCap)
+	uassert.True(t, FolderPurged("rlen2", f))
+}

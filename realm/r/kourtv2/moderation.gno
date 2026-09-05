@@ -577,8 +577,24 @@ func requireEdgeRemover(c *Court, author, who address) {
 // So the code stays free text and every surface escapes it. What callers get
 // instead is this note: purge is m-of-n precisely because it is irreversible, and
 // the code is the part of it that outlives the claim.
+// CHARACTERS, like every other cap in this realm, and like checkReason ten lines
+// below sharing this very constant. This counted BYTES until it was measured —
+// the one cap runeLen's sweep did not convert, which left the two halves of
+// maxReasonLen disagreeing about what maxReasonLen means.
+//
+// The comment above says the code stays FREE TEXT, and that is exactly what made
+// the byte count wrong: a statutory category written in Cyrillic ran out at about
+// 100 characters and one in Japanese at about 66, against a stated 200. The
+// refusal does not mention length either, so a moderator over the byte bound was
+// told "purge needs a statutory category code" about a code they had just
+// written — the message reads as MISSING, not TOO LONG.
+//
+// Strictly more permissive, so nothing that was accepted becomes refused; the
+// empty case is unaffected, since a string is zero bytes exactly when it is zero
+// runes. The extra storage is paid for by the caller's deposit, which is the same
+// trade runeLen's own note records.
 func mustCategoryCode(code string) {
-	if len(code) == 0 || len(code) > maxReasonLen {
+	if len(code) == 0 || runeLen(code) > maxReasonLen {
 		panic("kourtv2: purge needs a statutory category code")
 	}
 }
