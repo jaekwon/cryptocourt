@@ -199,6 +199,8 @@ SEEDEMIT = "scripts/check-seed-emitters.py"
 SCENARIO = "scripts/scenario.py"
 SELF = "scripts/selftest-checks.py"
 ARMED = "scripts/check-guards-armed.py"
+GRUN = "scripts/check-guards-run.py"
+MAKEFILE = "Makefile"
 STALEG = "scripts/check-stale-guards.py"
 BUY = "realm/r/kourtv2/buy.gno"
 STAKE = "realm/r/kourtv2/stake.gno"
@@ -2170,6 +2172,39 @@ control("the guard glob matching nothing", ARMED,
         'glob.glob(os.path.join(REPO, "scripts", "check-nothing-*.py"))',
         "measured nothing",
         argv=["python3", ARMED])
+
+
+print("\ncheck-guards-run")
+# The OTHER half of "is this guard doing anything": check-guards-armed proves a
+# guard has a control arm, and this one proves `make check` still reaches it. A
+# guard nothing runs reads like coverage in the tree and in review, and reports
+# nothing — and the Makefile is edited by hand, so the way one is lost is an
+# ordinary edit. Both mutations below were verified to SURVIVE before this guard
+# existed: nothing in the tree noticed either.
+control("a target `check` no longer depends on", MAKEFILE,
+        "paths guards web-guards controls", "paths guards controls",
+        "reachable from no target", argv=["python3", GRUN])
+control("a guard dropped from its target", MAKEFILE,
+        "\tpython3 scripts/check-curation-reachable.py\n", "",
+        "reachable from no target", argv=["python3", GRUN])
+# AN EXEMPTION IS A CLAIM ABOUT TODAY, so both ways it can rot are armed: naming
+# a guard that no longer exists, and shadowing one that `check` has since started
+# running. A list that only grows becomes the place unrun guards go to be
+# forgotten, which is the failure this guard is about.
+control("an exemption for a guard that is gone", GRUN,
+        '    "check-live-reads.py":',
+        '    "check-gone-forever.py": "stale",\n    "check-live-reads.py":',
+        "no such guard exists", argv=["python3", GRUN])
+control("an exemption shadowing a guard check runs", GRUN,
+        '    "check-isolation.py":',
+        '    "check-web-css.py": "stale",\n    "check-isolation.py":',
+        "runs it now", argv=["python3", GRUN])
+# Fail CLOSED, the rule every census here carries: a scan that matches nothing
+# must not report a clean tree.
+control("a guard scan too small to be real", GRUN,
+        'os.path.join(REPO, "scripts", "check-*.py")',
+        'os.path.join(REPO, "scripts", "check-zzz-*.py")',
+        "matched too little to be real", argv=["python3", GRUN])
 
 
 print("\ncheck-stale-guards")

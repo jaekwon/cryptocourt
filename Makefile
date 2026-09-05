@@ -1,5 +1,5 @@
 .PHONY: check check-frozen realm-test chain-test txtar-test elsewhere-test isolation-test mutate gaps selftest fmt vet gotest chat anchors collisions rendertext paths guards controls staleguards \ web-constants \
-	scenarios scenarios-check demo-physics nodelegate height-shim dump-demo seed-demo web-test web-visual deploy setup chain certs
+	scenarios scenarios-check demo-physics nodelegate height-shim web-guards dump-demo seed-demo web-test web-visual deploy setup chain certs
 
 # The gate against a FROZEN CHECKOUT of HEAD, rather than the working tree.
 #
@@ -59,7 +59,7 @@ check-frozen:
 #
 # realm-test skips cleanly with no gno toolchain and says so; REQUIRE_GNO=1
 # makes a missing toolchain a failure instead of a quiet pass.
-check: fmt vet gotest anchors collisions rendertext paths guards controls staleguards demo-physics nodelegate scenarios-check web-constants web-test height-shim realm-test txtar-test elsewhere-test
+check: fmt vet gotest anchors collisions rendertext paths guards web-guards controls staleguards demo-physics nodelegate scenarios-check web-constants web-test height-shim realm-test txtar-test elsewhere-test
 
 # Guards that need no gno toolchain, kept OUT of realm-test on purpose: that
 # target exits 0 early when gno is missing, so every guard inside it is skipped
@@ -80,6 +80,7 @@ paths:
 # listing; runs no arms and touches no file.
 guards:
 	python3 scripts/check-guards-armed.py
+	python3 scripts/check-guards-run.py
 	@# The browser-side twin, and it says so in its own header: a guard that is
 	@# not registered is not a guard, and a browser check no runner runs is the
 	@# same hole. It was in NO target — measured: `grep -rn
@@ -140,6 +141,14 @@ nodelegate:
 # re-checks those by eye.
 height-shim:
 	python3 scripts/check-height-shim.py
+
+# THE OVERLAY'S OWN GUARDS, and they were hiding under `height-shim`. Seven web
+# checks had accreted onto the target named for the realm's height rule, so a
+# failure in any of them announced itself as "height-shim" — and `make check`
+# stopped at an earlier target for long enough that check-curation-reachable
+# went unrun while it had something to say. A target is a name a failure wears;
+# this one was wearing somebody else's.
+web-guards:
 	python3 scripts/check-web-dupes.py
 	python3 scripts/check-web-css.py
 	python3 scripts/check-web-selectors.py
