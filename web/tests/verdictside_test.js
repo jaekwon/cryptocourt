@@ -170,12 +170,25 @@ const run = async (rows, v, mode) => {
      /<p class="mapsel-t">\$\{verdictSentence\(c\.title, side\)\}<\/p>/.test(selCard));
 
   // 7c. THE SHARED BUILDER ITSELF, which both surfaces now depend on.
+  /* THE OVAL RIDES IN A .vunit, and what trails it rides with it. The docket
+     appends its figure there — "(NO) 46.9% ~" — and the wrapper is what keeps a
+     line break from taking one and leaving the other: without it, a title whose
+     last line ends near the right edge left the oval in place and dropped the
+     figure to a line of its own. */
   ok("a NO strikes the sentence and rings the side",
      verdictSentence("It is so.", "NO")
-       === '<s>It is so.</s> <span class="sidetag vtag n">NO</span>');
+       === '<s>It is so.</s> <span class="vunit"><span class="sidetag vtag n">NO</span></span>');
   ok("a YES rings the side and leaves the sentence standing",
      verdictSentence("It is so.", "YES")
-       === 'It is so. <span class="sidetag vtag y">YES</span>');
+       === 'It is so. <span class="vunit"><span class="sidetag vtag y">YES</span></span>');
+  ok("...and what trails the verdict is inside that unit, not after it", (()=>{
+    const h = verdictSentence("It is so.", "NO", false, false, "<i>TAIL</i>");
+    return h.includes('<span class="vunit">') && /TAIL<\/i><\/span>$/.test(h);
+  })());
+  ok("...while an undecided sentence still takes its tail, with no unit to hold it", (()=>{
+    const h = verdictSentence("It is so.", "", false, false, "<i>TAIL</i>");
+    return h === "It is so.<i>TAIL</i>";
+  })());
   ok("an unknown side returns the bare sentence, not an empty oval",
      verdictSentence("It is so.", "—") === "It is so."
      && verdictSentence("It is so.", "") === "It is so.");
@@ -271,7 +284,7 @@ const run = async (rows, v, mode) => {
   /* THE OVAL IS OUTSIDE THE STRIKE. The claim was contradicted; the verdict was
      not. A strike drawn through both would cross out the court's own finding. */
   ok("the verdict itself is not struck",
-     /<\/s> <span class="sidetag vtag n">/.test(titled({verdict:1})));
+     /<\/s> <span class="vunit"><span class="sidetag vtag n">/.test(titled({verdict:1})));
 
   /* VERDICT BEATS ANSWER, the precedence verdictBanner uses. This is the real
      sample record: answered NO, settled YES. Reading the wrong field strikes a
@@ -510,12 +523,13 @@ const run = async (rows, v, mode) => {
        back off whichever one it finds. An assertion satisfied by one of them
        passes while the other goes out bare, which is the branch a young claim
        takes. */
-    const n = (src.match(/data-side="\$\{dSide\}"/g) || []).length;
-    return src.includes('docketSignal(c.series, c.inst, dSide)') && n >= 2;
+    // one emitter now: the run is built once and carries its figure or waits empty
+    return src.includes('docketSignal(c.series, c.inst, dSide, !!dSide)')
+        && src.includes('data-side="${dSide}"');
   })());
-  ok("...the chain's policing rows too", src.includes('docketSignal(c.series, c.inst, sd)'));
+  ok("...the chain's policing rows too", src.includes('docketSignal(c.series, c.inst, sd, !!sd)'));
   ok("...and the async fill reads it back off the cell", (()=>{
-    return src.includes('el.innerHTML = docketSignal(ser, inst, el.getAttribute("data-side"));');
+    return src.includes('el.innerHTML = docketSignal(ser, inst, el.getAttribute("data-side"), !!el.getAttribute("data-side"));');
   })());
   /* A MISSING SPARKLINE IS NOT NEWS. This asserted the caption SAID "no trend" (and
      did not say "no trend yet"). Both spent half the caption on the absence of a
@@ -541,8 +555,8 @@ const run = async (rows, v, mode) => {
      claim's answer on its sentence with a mark after it; the docket kept a pill.
      Source-asserted: no harness loads docketRow — they all slice up TO it — so
      this pins that the flag reaches the builder rather than the pixels. */
-  ok("the docket row passes the contested flag to the sentence",
-     src.includes("${verdictSentence(c.title, dSide, dv.contested)}"));
+  ok("the docket row passes the contested flag to the sentence, and the figure with it",
+     src.includes("${verdictSentence(c.title, dSide, dv.contested, false, px)}"));
   ok("...taking both halves from one answer, not re-deriving one",
      src.includes("const dv = rowVerdict(c.statusText);"));
 

@@ -125,51 +125,79 @@ const ROUTES = ["#/c/orem", "#/c/orem/f/0", "#/c/orem/f/1", "#/c/orem/11", "#/c/
     ok(`${r}: ...sitting under the list it belongs to`, act.belowList === true, JSON.stringify(act));
   }
 
-  /* THE FIGURE AND ITS CAPTION STACK. `.px` is a flex column — figure over
-     caption — and the rule was narrowed to `.docket .crow.px`, which matches
-     NOTHING: the cell is INSIDE the row, not the row itself. So the two ran
-     together inline and wrapped: "53.1%staked" on one line with "YES" beneath.
-     Reported from the live docket, and invisible to any source-level check,
-     since the selector it broke is still spelled plausibly. */
-  /* ON ledger, NOT orem. The rule that matters is "the figure follows the
-     verdict", and orem's visible docket has no settled-NO row to break — three
-     mutants that severed the plumbing survived against it, all of them silently
-     correct on a court where every verdict is YES. ledger has one. */
+  /* THE SIGNAL RIDES THE SENTENCE. It sat in a column of its own on the right —
+     sparkline over figure over caption — which read as a second subject: the
+     verdict oval ended the title and the figure belonging to it was an inch away.
+     Asked for as "(NO) 49% ~ all inline", and that is the shape asserted: the
+     oval, the figure and the line on one baseline, in that order.
+     ON ledger, NOT orem: the rule underneath is "the figure is the decided
+     side's", and orem's visible docket has no settled-NO row to break — mutants
+     that severed the plumbing survived against it, all silently correct on a
+     court where every verdict is YES. */
   await page.goto(PAGE + "#/c/ledger", {waitUntil: 'networkidle0'});
   await new Promise(z => setTimeout(z, 1500));
-  const px = await page.evaluate(() => {
-    const cells = [...document.querySelectorAll(".docket .crow.claimrow .px")]
-      .filter(c => c.querySelector("b") && c.querySelector("small"));
-    if (!cells.length) return {none: true};
-    const c = cells[0], cs = getComputedStyle(c);
-    const b = c.querySelector("b").getBoundingClientRect();
-    const sm = c.querySelector("small").getBoundingClientRect();
-    /* READ FROM THE ROW'S OWN OVAL, not from the attribute the cell carries:
-       data-side is half the mechanism under test, so comparing the caption to it
-       passes when both are dropped together. The oval is built by a different
-       function from a different read. */
-    const rowSide = x => {
-      const r = x.closest(".crow");
-      const o = r && r.querySelector(".sidetag");
-      const t = o ? o.textContent.trim() : "";
-      return t === "YES" || t === "NO" ? t : "";
+  const sig = await page.evaluate(() => {
+    const rows = [...document.querySelectorAll(".docket .crow.claimrow")];
+    const runs = rows.map(r => ({r, g: r.querySelector(".sig"), o: r.querySelector(".sidetag")}))
+                     .filter(x => x.g && x.g.querySelector("b"));
+    if (!runs.length) return {none: true};
+    const cs = getComputedStyle(runs[0].g);
+    /* THE ROW'S OWN OVAL, not the data-side the run carries: that attribute is
+       half the mechanism under test, so comparing the caption to it passes when
+       both are dropped together. The oval is built by another function. */
+    const side = x => { const t = x.o ? x.o.textContent.trim() : ""; return t === "YES" || t === "NO" ? t : ""; };
+    const decided = runs.filter(side);
+    /* CENTRES, NOT TOPS. The oval is a padded pill and the run is bare text, so
+       two boxes on the same line of type have tops that differ by the padding —
+       comparing tops called every correct row a break. */
+    const inLine = x => {
+      const a = x.o.getBoundingClientRect(), b = x.g.getBoundingClientRect();
+      const mid = r => r.top + r.height / 2;
+      return Math.abs(mid(a) - mid(b)) < Math.max(a.height, b.height) * 0.6 && b.left >= a.left;
     };
-    const decided = cells.filter(x => rowSide(x));
-    return {n: cells.length, decided: decided.length,
-            no: decided.filter(x => rowSide(x) === "NO").length,
-            display: cs.display, dir: cs.flexDirection,
-            // the caption sits BELOW the figure, not beside it
-            stacked: sm.top >= b.bottom - 1,
-            mismatched: decided.filter(x => {
-              const cap = (x.querySelector("small") || {}).textContent || "";
-              return !cap.includes("staked " + rowSide(x));
-            }).map(x => rowSide(x) + " oval / " + (x.querySelector("small") || {}).textContent)};
+    return {n: runs.length, decided: decided.length,
+            no: decided.filter(x => side(x) === "NO").length,
+            display: cs.display, inTitle: !!runs[0].g.closest(".t"),
+            // the caption is dropped where the oval already named the side
+            captioned: decided.filter(x => x.g.querySelector("small")).length,
+            beside: decided.filter(inLine).length,
+            // and the figure is read from the side the court decided
+            wrong: decided.filter(x => {
+              const b = x.g.querySelector("b").textContent;
+              const cap = (x.g.querySelector("small") || {}).textContent || "";
+              return cap && !cap.includes("staked " + side(x));
+            }).length,
+            // an undecided row has no oval, so the run must name the side itself
+            open: runs.filter(x => !side(x)).length,
+            openNamed: runs.filter(x => !side(x) && /staked (YES|NO)/.test(x.g.textContent)).length,
+            // and the figure leads, the line trails it — "(NO) 46.9% ~", as asked
+            sparked: runs.filter(x => x.g.querySelector("svg")).length,
+            figFirst: runs.filter(x => {
+              const b = x.g.querySelector("b"), v = x.g.querySelector("svg");
+              return b && v && b.getBoundingClientRect().left < v.getBoundingClientRect().left;
+            }).length,
+            sample: runs.slice(0, 2).map(x => (x.o ? x.o.textContent.trim() + " " : "") + x.g.textContent.trim())};
   });
-  ok("the docket's figure and caption stack", !px.none && px.display === "flex" && px.dir === "column",
-     JSON.stringify(px));
-  ok("...with the caption under the figure, not run against it", px.stacked === true, JSON.stringify(px));
-  ok("...the court has a decided NO row to test against", px.no > 0, JSON.stringify(px));
-  ok("...and every figure names its own row's verdict", px.mismatched.length === 0, JSON.stringify(px));
+  ok("the docket's signal is one inline run", !sig.none && /inline/.test(sig.display),
+     JSON.stringify(sig));
+  ok("...sitting in the sentence, not a column of its own", sig.inTitle === true, JSON.stringify(sig));
+  ok("...the court has a decided NO row to test against", sig.no > 0, JSON.stringify(sig));
+  ok("...the figure sits beside its oval on one line", sig.decided > 0 && sig.beside === sig.decided,
+     JSON.stringify(sig));
+  /* NO CAPTION WHERE THE OVAL SAID IT. "(NO) 46.9% staked NO" says NO twice in
+     four words; the oval is the side and the figure is its share. */
+  ok("...and does not name the side the oval just named", sig.captioned === 0, JSON.stringify(sig));
+  ok("...while every figure still reads from its row's verdict", sig.wrong === 0, JSON.stringify(sig));
+  /* AN UNDECIDED ROW HAS NO OVAL TO LEAN ON. Dropping the caption everywhere
+     leaves a bare "53.1%" against a claim nobody has answered — a number with no
+     subject, which is worse than the two words it saves. */
+  ok("...and a row with no verdict still names the side its figure is on",
+     sig.open > 0 && sig.openNamed === sig.open, JSON.stringify(sig));
+  /* FIGURE, THEN LINE — the shape asked for. The line is the history behind the
+     number; leading with it puts a 44px graphic between the oval and the figure
+     it belongs to. */
+  ok("...the line trails the figure rather than leading it",
+     sig.sparked > 0 && sig.figFirst === sig.sparked, JSON.stringify(sig));
 
   console.log(fail ? "\n" + fail + " FAILURES" : "\nALL PASS");
   await browser.close();

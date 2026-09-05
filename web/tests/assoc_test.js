@@ -462,7 +462,7 @@ ok("...drawing the percentage with the docket's own builder", (()=>{
   const i = src.indexOf("const polrow = (r, metaLine)");
   const body = src.slice(i, src.indexOf("const srow = r => polrow", i));
   // ...and hands it the verdict, so a settled-NO row reads its own side
-  return body.includes("docketSignal(c.series, c.inst, sd)");
+  return body.includes("docketSignal(c.series, c.inst, sd, !!sd)");
 })());
 ok("...and the status pill on the meta line, as the docket puts it", (()=>{
   const i = src.indexOf("const polrow = (r, metaLine)");
@@ -473,8 +473,10 @@ ok("...and the status pill on the meta line, as the docket puts it", (()=>{
    than one list. An id cannot name two elements; that is why the first attempt
    at this rendered nothing on the second list. */
 ok("the cell is keyed by claim, and the fill writes to all of them",
-   // three emitters: the policing row's one cell, and the docket's two branches
-   (src.match(/data-pct="\$\{esc\(slug\)\}-\$\{(c\.id|r\.id)\}"/g)||[]).length === 3
+   // two emitters now: the docket row's run and the policing row's, one each —
+   // the docket's used to be two branches, filled and empty, and is one span that
+   // carries the figure or waits for it
+   (src.match(/data-pct="\$\{esc\(slug\)\}-\$\{(c\.id|r\.id)\}"/g)||[]).length === 2
    && src.includes('const cells = document.querySelectorAll(`[data-pct="${slug}-${cl.id}"]`)')
    && !src.includes('getElementById(`spk-'));
 /* The helpers the meta-line version needed are gone with it. A second formatter
@@ -496,8 +498,11 @@ ok("no second renderer for the same figure survives",
 /* THE SELECTOR LOST ITS TAG. These read `.docket a.crow` until the folder row
    became a checkbox and stopped being a link; the row layout is keyed on the
    row now, not on the element it happens to be. */
+/* TWO TRACKS NOW. The third held the percentage in a column of its own; the
+   figure rides the sentence it belongs to, so the row is an id and everything
+   else. */
 ok("the claim row's id track is sized for a claim id", 
-   src.includes(".docket .crow.claimrow{grid-template-columns:44px minmax(0,1fr) 64px}"));
+   src.includes(".docket .crow.claimrow{grid-template-columns:44px minmax(0,1fr)}"));
 ok("...and no narrow-width override was left behind for it",
    !/@media[^{]*\{[^}]*\.docket \.crow\.claimrow\{/.test(src));
 ok("chip cluster is right-aligned in its own column", src.includes(".docket .crow.assocrow{grid-template-columns:52px minmax(0,1fr) 268px"));

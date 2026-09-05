@@ -726,7 +726,19 @@ a.card:hover{border-color:var(--line-2)}
    is that the pill moved onto the meta line and the 124px it had reserved was
    empty on every settled row. The other .crow users keep the four-column
    template, because each of them fills it. */
-.docket .crow.claimrow{grid-template-columns:44px minmax(0,1fr) 64px}
+/* TWO TRACKS. The third held the percentage in a column of its own; the figure
+   now rides the sentence it belongs to, so the row is an id and everything else. */
+.docket .crow.claimrow{grid-template-columns:44px minmax(0,1fr)}
+/* THE RUN, INLINE: figure, then the line behind it. baseline so the number sits
+   on the sentence's own baseline rather than floating in the middle of it, and
+   nowrap so "46.9%" never breaks from the spark it belongs to. */
+/* THE OVAL AND WHAT TRAILS IT ARE ONE WORD, so a line break takes both or
+   neither — see verdictSentence. */
+.vunit{white-space:nowrap}
+.sig{display:inline-flex; align-items:baseline; gap:.4em; margin-left:.5em; white-space:nowrap}
+.sig b{font-family:var(--mono); font-size:.82em; font-weight:500; font-variant-numeric:tabular-nums; color:var(--ink-2)}
+.sig small{font-size:.66em; color:var(--muted); letter-spacing:.05em}
+.sig .spark{width:44px; height:11px; margin:0; align-self:center}
 /* 44px, NOT 52. The id track was sized for the four-column template it no longer
    uses; "#19" is 24px of mono and even a five-digit court would not fill 44.
    The assocrow already narrows to 44 and nothing about a claim id is wider. */
@@ -2323,7 +2335,6 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
   .docket .crow{grid-template-columns:44px minmax(0,1fr) auto}
   .docket .crow:not(.courtrow) > span:nth-child(2){grid-column:2/4}
   .docket .crow:not(.courtrow) .id{grid-row:1/3; align-self:start}
-  .docket .crow:not(.courtrow) .px{grid-row:2; grid-column:2; flex-direction:row; flex-wrap:wrap; align-items:baseline; gap:4px 8px; min-width:0}
   .docket .crow:not(.courtrow) .pill{grid-row:2; grid-column:3; justify-self:end}
   /* THE COURT ROW, BY CLASS. Three columns and three rows: the face down the
      left, then the NAME first and full width, because it is the thing being
@@ -4444,7 +4455,7 @@ function claimSeries(d){
    So the figure rides the meta line instead of a track of its own — where the
    pill and the clock already are, and where it costs the title none of the width
    it just got back. No new read: the record is the one the docket drew from. */
-function docketSignal(ser, inst, side){
+function docketSignal(ser, inst, side, oval){
   /* "staked YES", NOT "YES now". Beside a row whose title already carries the
      answer's oval, "YES now" reads as a second opinion on the verdict — and it
      is not one: it is the share of STAKE sitting on YES. Reported on #19, where
@@ -4468,8 +4479,13 @@ function docketSignal(ser, inst, side){
      YES is the axis the sparkline is already drawn on. */
   const s = side==="NO" || side==="YES"? side : "YES";
   const of = v => (s==="NO"? 100-v : v).toFixed(1);
-  if(ser) return `${sparkSvg(ser)}<b>${of(ser[2])}%</b><small>staked ${s}</small>`;
-  if(Number.isFinite(inst)) return `<b>${of(inst)}%</b><small>staked ${s}</small>`;
+  /* THE OVAL ALREADY NAMED THE SIDE, so a decided row does not name it twice:
+     the run reads "(NO) 46.9%", the oval and the figure one phrase. A row with no
+     verdict has no oval to lean on and keeps the words. */
+  const cap = oval? "" : `<small>staked ${s}</small>`;
+  // FIGURE, THEN LINE: the line is the history behind the number, so it trails it.
+  if(ser) return `<b>${of(ser[2])}%</b>${cap}${sparkSvg(ser)}`;
+  if(Number.isFinite(inst)) return `<b>${of(inst)}%</b>${cap}`;
   return `<small class="muted">not staked yet</small>`;
 }
 function esc(s){ return String(s).replace(/[&<>"'`]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;","`":"&#96;"}[c])); }
@@ -7169,7 +7185,7 @@ on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
              and wrote it onto the cell it built. Without it the fill would land
              "staked YES" over a NO row's figure the moment the series arrived,
              which is the same bug arriving a second later. */
-          el.innerHTML = docketSignal(ser, inst, el.getAttribute("data-side"));
+          el.innerHTML = docketSignal(ser, inst, el.getAttribute("data-side"), !!el.getAttribute("data-side"));
           // The sort key rides the row, and it is the INSTANT ratio either way —
           // keying it off the spark meant a docket of young claims could not be
           // sorted at all.
@@ -10802,8 +10818,8 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
         // One cell either way: it carries the figure when the record already has
         // one and waits for the fill when it does not, so the key is written in
         // a single place rather than once per branch.
-        const px = `<span class="px" data-pct="${esc(slug)}-${r.id}"${sd?` data-side="${sd}"`:""}>${
-          c && (c.series || Number.isFinite(c.inst))? docketSignal(c.series, c.inst, sd) : ""}</span>`;
+        const px = `<span class="sig" data-pct="${esc(slug)}-${r.id}"${sd?` data-side="${sd}"`:""}>${
+          c && (c.series || Number.isFinite(c.inst))? docketSignal(c.series, c.inst, sd, !!sd) : ""}</span>`;
         /* THE FOLDER RIDES THE ROW HERE TOO. Taken from the folder tree rather
            than from the loaded claim, so a row for a claim this page never
            loaded still resolves — byId above is the docket's window, foldOf is
@@ -10811,8 +10827,8 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
         const fk = foldOf[r.id];
         return `<a class="crow claimrow" data-fold="${esc(fk && fk.length? fk.join(" ") : "~none")}" href="#/c/${esc(slug)}/${r.id}">
         <span class="id">#${r.id}</span>
-        <span><span class="t">${c? verdictSentence(r.title, sd, rv.contested) : safeInline(r.title)}</span>${metaLine}${c && !sd? `<span class="m rowpill">${statusPill(c.statusText)}</span>` : ""}</span>
-        ${px}</a>`; };
+        <span><span class="t">${c? verdictSentence(r.title, sd, rv.contested, false, px) : safeInline(r.title)+px}</span>${metaLine}${c && !sd? `<span class="m rowpill">${statusPill(c.statusText)}</span>` : ""}</span>
+        </a>`; };
       /* A DEADLINE IS A WHEN, NOT A HEIGHT. This printed the realm's own wording —
          "settles at block 168,480" — which is the machinery rather than the
          answer, the same thing the docket's clock lines stopped doing.
@@ -11896,14 +11912,20 @@ function docketRow(slug,c,meta,foldKeys){
      all of them with the same markup, which is what makes the figure in Needs
      review the figure in Recently settled rather than a second rendering of the
      same number. */
-  const px = (c.series || Number.isFinite(c.inst))
-    ? `<span class="px" data-pct="${esc(slug)}-${c.id}"${dSide?` data-side="${dSide}"`:""}>${docketSignal(c.series, c.inst, dSide)}</span>`
-    : `<span class="px" data-pct="${esc(slug)}-${c.id}"${dSide?` data-side="${dSide}"`:""}></span>`;
+  /* THE SIGNAL RIDES THE SENTENCE. It sat in a column of its own on the right,
+     which read as a second subject: the verdict oval ended the title and the
+     figure belonging to it was an inch away with a caption under it. Inline it is
+     one phrase — "…miscarriage. (NO) 46.9% ~" — and the row is one line of
+     reading instead of two things to join up.
+     data-pct STAYS THE KEY. The async sweep fills every list a claim appears in
+     by that attribute; only where the run sits has changed. */
+  const px = `<span class="sig" data-pct="${esc(slug)}-${c.id}"${dSide?` data-side="${dSide}"`:""}>${
+    (c.series || Number.isFinite(c.inst))? docketSignal(c.series, c.inst, dSide, !!dSide) : ""}</span>`;
   const sortKey = c.series ? c.series[2] : (Number.isFinite(c.inst) ? c.inst : null);
   return `<a class="crow claimrow${c.offp?" offp":""}" data-id="${c.id}" data-fold="${esc(foldKeys && foldKeys.length? foldKeys.join(" ") : "~none")}"${sortKey!=null?` data-yes="${sortKey}"`:""}${stakeSortAttrs(c.yesStake, c.noStake, phaseClass(c.statusText).side)} data-q="${esc("#"+c.id+" "+c.title)}" href="#/c/${esc(slug)}/${c.id}">
     <span class="id">#${c.id}</span>
-    <span><span class="t">${verdictSentence(c.title, dSide, dv.contested)}</span>${meta?`<span class="m" style="display:block">${safeInline(meta.label)}</span>`:""}<span class="m" style="display:block" id="clk-${esc(slug)}-${c.id}">${(()=>{ const t=clockLine(isLive()? null:NOW, phaseClass(c.statusText).short, c.settleAt, c.escrowUntil); return t? esc(t):""; })()}</span>${dSide? "" : `<span class="m rowpill">${statusPill(c.statusText)}</span>`}</span>
-    ${px}</a>`;
+    <span><span class="t">${verdictSentence(c.title, dSide, dv.contested, false, px)}</span>${meta?`<span class="m" style="display:block">${safeInline(meta.label)}</span>`:""}<span class="m" style="display:block" id="clk-${esc(slug)}-${c.id}">${(()=>{ const t=clockLine(isLive()? null:NOW, phaseClass(c.statusText).short, c.settleAt, c.escrowUntil); return t? esc(t):""; })()}</span>${dSide? "" : `<span class="m rowpill">${statusPill(c.statusText)}</span>`}</span>
+    </a>`;
 }
 
 /* --- a claim: the stake panel + the three ratio series + resolution --- */
@@ -13650,9 +13672,16 @@ function setMarkHtml(escaped){
   return `<span class="setmark" role="img" aria-label="set">${ICN_EYE_OPEN}</span>`
     + escaped.slice(SET_MARK.length + 1);
 }
-function verdictSentence(title, side, contested, ask){
+/* `tail` IS WHATEVER TRAILS THE VERDICT, and it rides INSIDE the oval's own
+   unbreakable unit. The docket's figure was appended after this sentence and
+   wrapped away from it: on a title whose last line ends near the right edge, the
+   oval stayed put and "46.9% ~" dropped to a line of its own, starting at the
+   title's left margin where it read as a new item rather than the oval's share.
+   Bound here rather than by a wrapper at the call site, because the oval is
+   emitted from inside this function and nothing outside can reach it. */
+function verdictSentence(title, side, contested, ask, tail){
   const t = setMarkHtml(safeInline(title));
-  if(side !== "YES" && side !== "NO") return t;
+  if(side !== "YES" && side !== "NO") return t + (tail || "");
   /* CONTESTED IS THE SAME SENTENCE, QUESTIONED. The claim heading built this
      shape by hand — oval, then a question mark — while every other surface asked
      verdictSentence for its sentence, so the two could drift and the related
@@ -13663,7 +13692,8 @@ function verdictSentence(title, side, contested, ask){
   // <s>, not a class on the caller's element: the element means "no longer
   // accurate", which is the claim about the sentence — and it keeps the oval
   // outside the strike, since the verdict is not itself struck.
-  return ((side === "NO" && !contested) ? `<s>${t}</s>` : t) + " " + sideOval(side, contested, ask);
+  return ((side === "NO" && !contested) ? `<s>${t}</s>` : t)
+    + ` <span class="vunit">` + sideOval(side, contested, ask) + (tail || "") + `</span>`;
 }
 /* THE OVAL ALONE, for the surfaces that have no sentence to hang it on. Every
    caller used to reach it through verdictSentence, which is right where there is
