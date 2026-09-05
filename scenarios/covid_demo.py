@@ -292,6 +292,47 @@ def short_grind(a, b, c, d):
             (18, c, YES, 2), (20, b, NO, 3), (22, a, YES, 2)]
 
 
+# THE CADENCE IS NOT THE VERDICT OF THE ROOM, and until now it was.
+#
+# A shape fixed both how often a claim traded AND where it ended up, so every
+# claim sharing a shape shared its final split: nine claims on `sparse` all read
+# 47.1% staked YES, eight on `short_grind` all read 53.1%, and the docket showed
+# TWO numbers across nineteen claims. Read off the chain, not guessed. Reported
+# as not looking plausibly real, which is exactly what two numbers look like.
+#
+# So the weights come out. The factories below keep each parent's cadence to the
+# day — same offsets, same actor slots, same number of dated moves, so the height
+# budget above is untouched — and take what each side puts in. The chart is the
+# cadence; the number under it is the claim.
+#
+# THE TOTAL PER CLAIM IS HELD AT ITS PARENT'S, seventeen units for a thin claim
+# and thirty-two for a grinding one. Staked coin is bought coin and the accounts
+# are sized against a measured budget; redistributing between the sides costs
+# nothing, while adding volume is how a seed run dies four hundred transactions
+# in with a balance it cannot cover.
+def sparse_at(y0, n0, y1, n1):
+    """`sparse`'s cadence — four moves, two dated — at the caller's weights."""
+    def shape(a, b, c, d):
+        return [(0, a, YES, y0), (0, b, NO, n0), (9, a, YES, y1), (18, b, NO, n1)]
+    # four moves is the point of a thin claim, so the flat-chart guard skips it.
+    # A FLAG, NOT `is sparse`: that identity test was the only thing marking a
+    # claim thin, and every claim built here is its own function object.
+    shape.thin = True
+    return shape
+
+
+def grind_at(y, n):
+    """`short_grind`'s cadence — eleven moves to day 22 — at the caller's weights.
+
+    y is the six YES moves, n the five NO ones, in the order they land.
+    """
+    def shape(a, b, c, d):
+        return [(0, a, YES, y[0]), (0, b, NO, n[0]), (4, a, YES, y[1]), (6, b, NO, n[1]),
+                (9, c, YES, y[2]), (12, b, NO, n[2]), (14, a, YES, y[3]), (16, d, NO, n[3]),
+                (18, c, YES, y[4]), (20, b, NO, n[4]), (22, a, YES, y[5])]
+    return shape
+
+
 # THE BUDGET THAT DECIDES HOW BIG THIS CAN BE, and it is not the one I expected.
 #
 # ClaimSeries keeps HOURLY points for `hourlyKeep` = 168 epochs of 720 blocks and
@@ -327,6 +368,10 @@ KEEP = {"lab23", "defuse", "furin", "bioweapon", "yanrep", "baric", "baricout",
 #   no       it was answered against — the false ones live here, and watching
 #            them settle NO is the demonstration
 #   dispute  answered, then challenged; a sealed vote is still running
+#   answered answered and nothing else yet — the settle clock is still running
+#            at the story's now. Every other arc reaches a resting state, so a
+#            docket built only from them shows a court where nothing is in
+#            flight; this is the one row a reader refreshes
 #   dead     nobody could answer it inside twelve weeks, so it closed unresolved
 #            — which is the honest outcome for a question the evidence cannot
 #            yet reach, and there is no shame in it
@@ -349,17 +394,17 @@ D = [
        cast=("biosafety", "virology", "oversight", "epi"),
        body='Settles on a finding by a body with subpoena power, or a published determination the relevant experts do not contest.\n\nDeliberately asks about the balance of evidence PUBLIC IN 2023, not the eventual truth: a claim whose answer depends on documents nobody has is unanswerable, and this docket already carries two that died that way.',
        title="A laboratory-associated origin is the more likely explanation, on the evidence public in 2023."),
-  dict(key="defuse", on="2021-09-22", arc="yes", shape=sparse,
+  dict(key="defuse", on="2021-09-22", arc="yes", shape=sparse_at(10, 3, 3, 1),
        path=("Origins",),
        cast=("foia", "virology", "journo", "epi"),
        body='Settles on the document. DRASTIC published the 2018 DARPA proposal in September 2021; the text either describes the insertion or it does not.\n\nAsks ONLY what the proposal says. Whether the work was carried out is a different claim, and DARPA did not fund this one.',
        title="The 2018 DEFUSE proposal describes inserting a furin cleavage site into a SARS-related bat coronavirus."),
-  dict(key="furin", on="2020-06-10", arc="dead", shape=tug,
+  dict(key="furin", on="2020-06-10", arc="dead", shape=reversal,
        path=("Origins",),
        cast=("genomics", "virology", "biosafety", "epi"),
        body='Settles on an identified natural progenitor carrying the motif, or on documentary evidence of insertion. Neither exists, which is why this one is expected to close unanswered.',
        title="The furin cleavage site in SARS-CoV-2 has no close analogue in the sampled sarbecovirus record."),
-  dict(key="bioweapon", on="2020-09-15", arc="no", shape=short_grind,
+  dict(key="bioweapon", on="2020-09-15", arc="no", shape=grind_at((8, 4, 4, 3, 2, 2), (3, 2, 2, 1, 1)),
        path=("Origins",),
        cast=("skeptic", "genomics", "trader", "virology"),
        # ONE PROPOSITION, NOT TWO. This read "deliberately engineered AND
@@ -375,24 +420,24 @@ D = [
        # what the proposal says.
        body='Settles on evidence of deliberate release as a weapon. The published case rests on the Yan Li-Meng reports; no review has sustained them.\n\nAsks ONLY about deliberate release. Whether the virus was engineered is a different claim and is docketed separately in this folder, some of it running the other way — a NO here rejects the weapon story, not the laboratory one.\n\nFiled because it is one of the most circulated claims about this pandemic, and a docket that will not hear the popular claim is not a court.',
        title="SARS-CoV-2 was released deliberately as a Chinese state bioweapon."),
-  dict(key="yanrep", on="2020-10-05", arc="yes", shape=sparse,
+  dict(key="yanrep", on="2020-10-05", arc="yes", shape=sparse_at(2, 9, 3, 3),
        path=("Origins",),
        cast=("genomics", "skeptic", "virology", "trader"),
        body='Settles on the citation record: every published version of the bioweapon claim traces to the two Zenodo preprints, and on whether any peer-reviewed venue has sustained them.\n\nFiled against the claim above rather than in place of it.',
        title="Every published version of the bioweapon claim traces to the Yan Li-Meng preprints, which no peer review has sustained."),
-  dict(key="baric", on="2022-03-12", arc="no", shape=short_grind,
+  dict(key="baric", on="2022-03-12", arc="no", shape=grind_at((7, 4, 3, 3, 2, 1), (4, 3, 2, 2, 1)),
        path=("Origins",),
        cast=("biosafety", "virology", "journo", "genomics"),
        body='Settles on documentary or sequence evidence tying a construct made at that laboratory to SARS-CoV-2. Raised as a question by Sachs and others; nobody has evidenced it.',
        title="Ralph Baric's laboratory constructed the virus that became SARS-CoV-2."),
-  dict(key="baricout", on="2024-05-20", arc="yes", shape=sparse,
+  dict(key="baricout", on="2024-05-20", arc="yes", shape=sparse_at(6, 5, 3, 3),
        path=("Origins",),
        cast=("foia", "oversight", "journo", "virology"),
        body="Settles on the authors' own testimony to congressional investigators, which is on the record.\n\nFiled because it cuts against the claim above from the same body of evidence that is usually cited FOR it: the party closest to the construction work was kept off the paper, deliberately, and said so.",
        title="Ralph Baric was excluded from the Proximal Origin author list on the ground that he was too close to the Wuhan Institute of Virology."),
 
   # ------------------------------------------- Fauci / gain-of-function funding
-  dict(key="gof", on="2021-05-11", arc="yes", shape=sparse,
+  dict(key="gof", on="2021-05-11", arc="yes", shape=sparse_at(11, 2, 3, 1),
        path=("Fauci", "Gain-of-function funding"),
        cast=("journo", "foia", "oversight", "virology"),
        body='Settles on the grant record: the subawards from EcoHealth Alliance to the Wuhan Institute of Virology, and the NIH acknowledgements of them.',
@@ -408,58 +453,63 @@ D = [
 # vote closing next week, which is the state that was reported as nonsense.
 # The subjects are unchanged — a court files a claim about a 2021 event whenever
 # somebody raises it, and the filing date is when it was raised.
-dict(key="p3co", on=before_end(28), arc="dispute", shape=short_grind,
+dict(key="p3co", on=before_end(28), arc="dispute", shape=grind_at((6, 3, 3, 2, 1, 1), (5, 4, 3, 2, 2)),
        path=("Fauci", "Gain-of-function funding"),
        cast=("biosafety", "virology", "oversight", "epi"),
        body='Settles on a determination by HHS or another authorised body that the funded work did or did not meet the P3CO definition.\n\nThe sharpest claim in this folder, because it is the one thing everybody is actually arguing about: nobody disputes that the money reached the work. NIH conceded in 2021 that a limited experiment met some criteria while rejecting the label.',
        title="The NIAID-funded work at the Wuhan Institute of Virology met the federal P3CO definition of gain-of-function research."),
-  dict(key="perjury", on=before_end(24), arc="dispute", shape=short_grind,
+  dict(key="perjury", on=before_end(24), arc="dispute", shape=grind_at((8, 4, 4, 3, 2, 1), (4, 2, 2, 1, 1)),
        path=("Fauci", "Gain-of-function funding"),
        cast=("oversight", "virology", "skeptic", "foia"),
        body='Settles on a perjury referral producing a finding, or an authoritative determination by a body with subpoena power. An accusation attached to a document release is not a finding.',
        title="Testimony given to Congress in 2024 denying participation in intelligence discussions about Wuhan research was false."),
 
   # ------------------------------------------------- Fauci / Proximal Origin
-  dict(key="prompted", on=before_end(26), arc="dispute", shape=short_grind,
+  dict(key="prompted", on=before_end(26), arc="dispute", shape=grind_at((3, 2, 2, 2, 2, 1), (7, 5, 3, 3, 2)),
        path=("Fauci", "Proximal Origin"),
        cast=("foia", "virology", "oversight", "epi"),
        body='Settles on the correspondence together with sworn testimony from the participants. The 1 February 2020 teleconference and the drafting timeline are documented; whether they amount to prompting is what is contested.',
        title="The Proximal Origin paper was drafted at the prompting of the director of NIAID."),
-  dict(key="divergence", on="2023-01-15", arc="yes", shape=sparse,
+  dict(key="divergence", on="2023-01-15", arc="yes", shape=sparse_at(7, 5, 3, 2),
        path=("Fauci", "Proximal Origin"),
        cast=("foia", "genomics", "journo", "virology"),
        body='Settles on the released correspondence, which is public and unredacted.\n\nThe best-evidenced claim in this folder, and the one the corpus most often garbles into something larger.',
        title="The Proximal Origin authors privately assessed the genome as showing engineered features in the week they drafted the paper rejecting that."),
-  dict(key="lancet", on="2021-06-21", arc="yes", shape=sparse,
+  dict(key="lancet", on="2021-06-21", arc="yes", shape=sparse_at(9, 4, 3, 1),
        path=("Fauci", "Proximal Origin"),
        cast=("journo", "foia", "epi", "oversight"),
        body="Settles on the statement's own published correction and the signatory record.",
        title="The organiser of the February 2020 Lancet statement concealed his institute's funding relationship with the Wuhan Institute of Virology."),
 
   # -------------------------------------------------- Fauci / the iPhone texts
-  dict(key="mctext", on=before_end(50), arc="yes", shape=sparse,
+  dict(key="mctext", on=before_end(50), arc="yes", shape=sparse_at(5, 6, 3, 3),
        path=("Fauci", "The iPhone texts"),
        cast=("foia", "vaxsafety", "clinician", "oversight"),
        body='Settles on the message itself, released 10 August 2026 from a government device produced to a Senate subcommittee.\n\nAsks only whether the message says what it is quoted as saying. What follows from it is the two claims after this one.',
        title="In January 2021 the director of NIAID privately raised first-trimester miscarriage as a theoretical risk of the second vaccine dose."),
-  dict(key="concealed", on=before_end(49), arc="no", shape=short_grind,
+  dict(key="concealed", on=before_end(49), arc="no", shape=grind_at((4, 3, 2, 2, 1, 1), (7, 4, 3, 3, 2)),
        path=("Fauci", "The iPhone texts"),
        cast=("oversight", "clinician", "skeptic", "vaxsafety"),
        body='Settles on comparing the private chain with the public statements over the same period.\n\nThe same message chain, one day later, weighs risks against benefits and records ten thousand vaccinated pregnancies with no signal — so the private position and the public one have to be compared whole, not by their first line.',
        title="The January 2021 miscarriage concern was withheld from the public while the same officials recommended vaccination in pregnancy."),
-  dict(key="nochain", on=before_end(48), arc="yes", shape=sparse,
+  # ANSWERED YESTERDAY, SETTLING TOMORROW. Its two siblings above are dated by
+  # the release they read; this one is dated by what it is here to show, the same
+  # licence the three live disputes take. A claim whose answer is still inside its
+  # settle window is the only row on this docket with a clock a reader can watch,
+  # and there was not one.
+  dict(key="nochain", on=before_end(23), arc="answered", shape=sparse_at(8, 4, 3, 2),
        path=("Fauci", "The iPhone texts"),
        cast=("foia", "clinician", "vaxsafety", "oversight"),
        body='Settles on the same released chain that carries the quoted line.\n\nFiled because a quotation with its reply removed is a different claim from the quotation, and the docket should hold both.',
        title="The same message chain records, one day later, more than ten thousand vaccinated pregnancies with no adverse signal."),
 
   # ----------------------------------------------------- vaccine safety claims
-  dict(key="misc82", on="2021-06-01", arc="no", shape=short_grind,
+  dict(key="misc82", on="2021-06-01", arc="no", shape=grind_at((9, 4, 4, 3, 2, 2), (3, 2, 1, 1, 1)),
        path=("Vaccine safety claims",),
        cast=("vaxsafety", "clinician", "skeptic", "statistician"),
        body='Settles on the arithmetic in the source table.\n\nOne of the most-repeated numbers of the pandemic and one of the easiest to check, which is why it is here: a docket that cannot dispose of a checkable false number is not worth running.',
        title="Vaccination in the first or second trimester was followed by miscarriage in 82% of completed pregnancies."),
-  dict(key="denom", on="2021-06-15", arc="yes", shape=sparse,
+  dict(key="denom", on="2021-06-15", arc="yes", shape=sparse_at(2, 10, 2, 3),
        path=("Vaccine safety claims",),
        cast=("statistician", "vaxsafety", "clinician", "modeller"),
        body='Settles on the published table: 104 losses against a denominator of 127 counts only those vaccinated in the first or second trimester, most of whom had not finished their pregnancies.',
@@ -536,7 +586,7 @@ for _c in D:
     _turns = sum(1 for i in range(2, len(_path))
                  if (_path[i] - _path[i-1] > 0) != (_path[i-1] - _path[i-2] > 0))
     _report.append((_c["key"], len(_path), min(_path), max(_path), _spread, _turns))
-    _thin = _c["shape"] is sparse
+    _thin = _c["shape"] is sparse or getattr(_c["shape"], "thin", False)
     if not _thin and len(_path) < 8:
         raise ValueError(f"{_c['key']}: only {len(_path)} points, and it is not a "
                          f"`sparse` claim — a flat chart where a busy one was meant")
@@ -598,7 +648,7 @@ if len(_dates) > 168:
 # buckets, and one calendar step is one bucket — so a claim with an answer arc
 # must move on at least three separate dates before the answer.
 for _c in D:
-    if _c["arc"] in ("yes", "no", "dispute"):
+    if _c["arc"] in ("yes", "no", "dispute", "answered"):
         _dates = {_off for _off, _w, _s2, _a in MOVES[_c["key"]] if _off <= 22}
         if len(_dates) < 3:
             raise ValueError(f"{_c['key']}: moves on {len(_dates)} date(s) before its "
@@ -798,8 +848,11 @@ for c in D:
     for k, (off, who, side, amt) in enumerate(MOVES[c["key"]]):
         if off:
             events.append((days(on, off), 0, ("move", k), cid, c))
-    if arc in ("yes", "no", "dispute"):
+    if arc in ("yes", "no", "dispute", "answered"):
         events.append((days(on, 22), 1, "answer", cid, c))
+    # "answered" stops here on purpose: no settle, no dispute. Filed late enough
+    # that day 22 lands just before the story's now, it is still inside its settle
+    # window when a reader arrives — the state the docket otherwise never holds.
     if arc in ("yes", "no"):
         events.append((days(on, 26), 2, "settle", cid, c))
     if arc == "dispute":
@@ -865,7 +918,7 @@ for iso, _, kind, cid, c in sorted(events, key=lambda e: (e[0], e[1], e[3])):
             s.unstake(accounts[who], SLUG, cid, side, unit(-amt))
     elif kind == "answer":
         who = "arbiter" if c["arc"] != "dispute" else "arbiter2"
-        s.answer(accounts[who], SLUG, cid, YES if c["arc"] in ("yes", "dispute") else NO)
+        s.answer(accounts[who], SLUG, cid, YES if c["arc"] in ("yes", "dispute", "answered") else NO)
     elif kind == "settle":
         s.settle(accounts["arbiter"], SLUG, cid)
     elif kind == "dispute":

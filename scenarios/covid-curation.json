@@ -26,15 +26,15 @@
      "name": "Gain-of-function funding",
      "claims": [
       4,
-      17,
-      19
+      16,
+      18
      ],
      "folders": []
     },
     {
      "name": "Proximal Origin",
      "claims": [
-      18,
+      17,
       11,
       7
      ],
@@ -45,7 +45,7 @@
      "claims": [
       14,
       15,
-      16
+      19
      ],
      "folders": []
     }
@@ -75,7 +75,7 @@
    "stance": "contradicts"
   },
   {
-   "from": 16,
+   "from": 19,
    "to": 15,
    "type": "bears",
    "stance": "contradicts"
@@ -100,7 +100,7 @@
   },
   {
    "from": 4,
-   "to": 17,
+   "to": 16,
    "type": "bears",
    "stance": "supports"
   },
@@ -112,13 +112,13 @@
   },
   {
    "from": 11,
-   "to": 18,
+   "to": 17,
    "type": "bears",
    "stance": "supports"
   },
   {
    "from": 7,
-   "to": 18,
+   "to": 17,
    "type": "bears",
    "stance": "supports"
   },
@@ -130,13 +130,13 @@
   },
   {
    "from": 11,
-   "to": 19,
+   "to": 18,
    "type": "bears",
    "stance": "supports"
   },
   {
    "from": 13,
-   "to": 18,
+   "to": 17,
    "type": "bears",
    "stance": "supports"
   },
