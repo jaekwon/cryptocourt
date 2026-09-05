@@ -2365,6 +2365,7 @@ def vacuity_audit():
     tree = ast.parse(src)
     consts = cca.build(tree, {"REPO": REPO})
     parsed, unresolved, cache, bad = 0, 0, {}, []
+    red = []  # baselines that exited non-zero, counted rather than remembered
     for node in ast.walk(tree):
         if not (isinstance(node, ast.Call) and getattr(node.func, "id", "") == "control"):
             continue
@@ -2400,6 +2401,11 @@ def vacuity_audit():
                                errors="replace", cwd=REPO,
                                stdin=subprocess.DEVNULL, timeout=600)
             cache[key] = r.stdout + r.stderr
+            # KEPT, not used to decide anything — see the note below on why the
+            # return code is ignored. It is COUNTED so the claim in that note
+            # stays a measurement instead of becoming a memory.
+            if r.returncode != 0:
+                red.append(" ".join(cmd))
         # THE RETURN CODE IS DELIBERATELY IGNORED, and this was tried the other way
         # round and REVERTED, so do not "fix" it again.
         #
@@ -2413,25 +2419,46 @@ def vacuity_audit():
         # actionable truth, and the remedy is to FIX THE GUARD'S FINDING rather than
         # to touch the arm.
         #
-        # Two cases proved it. "a control arm whose plant no longer applies" wants
-        # 'anchor matches 0x'; with the eight broken arms still in this file
-        # check-control-anchors exited 1 saying that three times, the arm was flagged,
-        # and fixing the eight cleared the flag with no change to the arm. And "an
-        # entrypoint the product cannot ask for" is flagged today because
-        # check-curation-reachable is red over four image verbs the product cannot
-        # invoke — correct, and it stays flagged until that is decided.
+        # TWO CASES PROVED IT, and both have now run their full course — the flag
+        # appeared, the GUARD'S FINDING was fixed, and the flag cleared with no
+        # change to the arm either time. That is the whole argument, twice.
         #
-        # Gating on rc costs more than it buys: FOUR of the five guards that exit
-        # non-zero here are red BY DESIGN, because the arm's own argv names a
+        #   "a control arm whose plant no longer applies" wants 'anchor matches
+        #   0x'. With the eight broken arms still in this file check-control-anchors
+        #   exited 1 saying exactly that, three times over, and the arm was flagged.
+        #   Fixing the eight cleared it.
+        #
+        #   "an entrypoint the product cannot ask for" was flagged while
+        #   check-curation-reachable stood red over four image verbs the product
+        #   could not invoke. Two of the four turned out to need nothing but a
+        #   button; the other two were exempted with a reason naming what would
+        #   unblock them. The guard went green and the flag cleared, again with no
+        #   change to the arm. This paragraph said "is flagged today" and "stays
+        #   flagged until that is decided" until it was decided.
+        #
+        # Gating on rc costs more than it buys: the guards that exit non-zero
+        # here are red BY DESIGN, because the arm's own argv names a
         # deliberately failing subject — mutate.py's "a suite that is already
         # failing", check-isolation's two --only TestSelfTest* tests, and
         # check-live-reads pointed at 127.0.0.1:1 to exercise its refusal. Skipping
         # those turned one exact verdict into five vague ones and took the
         # did-not-fire list from 4 to 6. Measured, then reverted.
+        #
+        # HOW MANY there are is printed by this audit rather than written here. It
+        # was "FOUR of the five", and it stopped being five the moment
+        # check-curation-reachable went green — a number in a comment is a claim
+        # about the day it was written.
         if want in cache[key]:
             bad.append((label, want, " ".join(cmd)))
     print(f"  {parsed} control(s) parsed, {len(cache)} guard(s) run clean, "
           f"{unresolved} not resolvable")
+    # The measurement the note above used to assert. Named, not just counted:
+    # "3 exited non-zero" invites a hunt, and the names end it — each should be a
+    # guard whose arm deliberately points it at a failing subject. One that is
+    # NOT is a standing failure in the tree, and this is where it surfaces.
+    print(f"  {len(red)} baseline(s) exited non-zero"
+          + (": " + ", ".join(sorted(red)) if red else
+             " — every guard here is green on a clean tree"))
     for label, want, cmd in bad:
         print(f"  {label:<44} WANTS WHAT THE CLEAN RUN ALREADY PRINTS ({want!r})")
         failures.append(f"{label} wants a string {cmd} prints when it passes")
