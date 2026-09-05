@@ -1190,8 +1190,8 @@
   "pkg": "kourtv2",
   "file": "folders.gno",
   "label": "folders: CreateFolder accepts any name/description length",
-  "find": "\tif runeLen(name) == 0 || runeLen(name) > maxFolderTextLen || runeLen(desc) > maxFolderTextLen {\n\t\tpanic(\"kourtv2: a folder name is 1..200 and a description at most 200 characters\")\n\t}\n\tcm.folderSeq++\n",
-  "replace": "\tcm.folderSeq++\n"
+  "find": "\treturn runeLen(name) > 0 && runeLen(name) <= maxFolderTextLen && runeLen(desc) <= maxFolderTextLen\n",
+  "replace": "\treturn true\n"
  },
  {
   "pkg": "kourtv2",
@@ -5493,8 +5493,8 @@
   "pkg": "kourtv2",
   "file": "folders.gno",
   "label": "folders: a court may hold unlimited folders",
-  "find": "\tif cm.folders.Size() >= maxFolders {\n\t\tpanic(\"kourtv2: this court already has \" + strconv.Itoa(maxFolders) + \" folders\")\n\t}\n\tif runeLen(name) == 0",
-  "replace": "\tif runeLen(name) == 0"
+  "find": "\tif cm.folders.Size() >= maxFolders {\n\t\tpanic(\"kourtv2: this court already has \" + strconv.Itoa(maxFolders) + \" folders\")\n\t}\n",
+  "replace": ""
  },
  {
   "pkg": "kourtv2",
@@ -5990,8 +5990,8 @@
   "pkg": "kourtv2",
   "file": "folders.gno",
   "label": "CreateFolderIn: the parent is ignored, so every subfolder is filed at the root",
-  "find": "\tcm.folders.Set(beClaimKey(id), &folder{id: id, name: name, desc: desc, parent: parentID})",
-  "replace": "\tcm.folders.Set(beClaimKey(id), &folder{id: id, name: name, desc: desc, parent: 0})"
+  "find": "\tcm.folders.Set(beClaimKey(id), &folder{id: id, name: name, desc: desc, parent: parent})\n",
+  "replace": "\tcm.folders.Set(beClaimKey(id), &folder{id: id, name: name, desc: desc, parent: 0})\n"
  },
  {
   "pkg": "kourtv2",

@@ -1428,8 +1428,13 @@ print("\ncheck-curation-reachable")
 # all of it. Worst was OpenClaimP: a claim body was asked for by name, shipped,
 # and RENDERED by the claim page, while both "Open a claim" buttons still called
 # OpenClaim, so the field could be read and never written.
+# THE ANCHOR NAMES THE ENTRYPOINT, NOT THE LABEL. It carried the button's words
+# — "Order folders" — and folders became sets, so the plant stopped applying and
+# the arm went SILENT while the guard it protects went on passing. The label is
+# prose and will move again; the entrypoint is the thing under test, and renaming
+# it is the defect being planted.
 control("an entrypoint the product cannot ask for", WEBPAGE,
-        '${btn("Order folders","OrderFolders"', '${btn("Order folders","OrderFoldersXX"',
+        '"OrderFolders",{courtSlug', '"OrderFoldersXX",{courtSlug',
         "named by neither shipped web file", argv=["python3", CURREACH])
 # THE OTHER HALF: naming an entrypoint is not calling it correctly. btn() builds
 # the transaction form from its object literal's KEYS, so a realm parameter that
@@ -1493,8 +1498,12 @@ control("a runner lists a file that is not there", RUNJS,
         "is registered but does not exist", argv=["python3", BROWREG])
 # A wrapper that runs nothing prints "0 browser check(s) pass" — a green line for
 # no work done, which is the exact shape of the failure this guard is about.
+# THE PLANT NAMES THE WHOLE LIST, so it breaks every time a check joins the
+# wrapper — which it just did, and the arm went SILENT rather than red. Anchored
+# on the opening bracket and the first entry instead: enough to be unique, and
+# short enough that the next sub-harness to arrive does not cost this arm.
 control("a registered wrapper with an empty list", CHATALL,
-        '["chat_page.js", "chat_render.js", "chat_live.js", "chat_moderation.js"]', "[]",
+        'const CHECKS = [', 'const CHECKS = []; const CHECKS_WAS = [',
         "empty CHECKS list", argv=["python3", BROWREG])
 # And the tripwire, because a guard policing an empty directory reports a clean
 # tree forever.

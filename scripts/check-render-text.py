@@ -54,6 +54,27 @@ TITLE_READERS = {
     ("meta.gno", "onClaimOpened"): "parse — parseModTitle reads the title as a command",
     ("meta.gno", "onTitleEdited"): "parse — re-parses a meta title edited in the window",
     ("claim.gno", "EditClaimTitle"): "write, not a read",
+    # PARSE, and the parse OUTLIVES the call, which is why this one took looking
+    # at rather than pattern-matching against the two above. AffirmSet reads
+    # `cs.title` through parseSetTitle to get a set's name, and that name is then
+    # STORED as the folder's name — so unlike meta.gno's parses, which end on
+    # meta.parses and are never shown, this text does reach a page.
+    # It reaches it through the folder-name pipeline, which has its own display
+    # gate: every site that writes a folder name to an output buffer sanitises —
+    # render.gno:782, 825, 835 and 857, each `sanitize.InlineText(f.name)`. That
+    # gate is not AffirmSet's to keep, because CreateFolder has fed the same
+    # pipeline with moderator-typed names since before governed sets existed; a
+    # hole there would be a hole for both.
+    # The name also rides the SetAffirmed event. An event is not a render buffer
+    # and no gnoweb page is built from one, but an indexer that prints it owes
+    # its readers the same escaping any other chain string does.
+    ("governedset.gno", "AffirmSet"): "parse — parseSetTitle reads the title as a set name; "
+                                      "the name it yields is displayed only through the "
+                                      "folder-name pipeline, which sanitises at every render site",
+    # The narrowest reader in the census: it parses and throws the parse away.
+    # `_, ok := parseSetTitle(cs.title)` — the name is discarded on the spot and
+    # a bool comes back, so no character of the title survives the call.
+    ("governedset.gno", "IsSetClaim"): "parse — discards it; returns only whether the title parses",
 }
 
 # The court's own two user-text fields. Same policy, separate gates:
