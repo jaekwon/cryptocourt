@@ -114,6 +114,8 @@ global.safeInline = s => global.esc(s);
 // the subject glyphs the map draws on a folder with no picture — sliced,
 // so a change to the real table is a change to what these tests exercise
 eval(slice('const SUBJECT_WORDS', "/* A COURT'S FACE."));
+// mapLayout asks this for the claims that became sets, whose nodes it drops
+eval(slice('function bornClaimIds(', 'function folderCount('));
 eval(slice('function phaseClass(', 'function statusPill('));
 eval(slice('function statusPill(', 'function docketRow('));
 // ...and the real body renderer, for the same reason: the card renders it.

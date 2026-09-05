@@ -7346,6 +7346,21 @@ const ICN_COURT = `<svg class="icn" viewBox="0 0 14 12" aria-hidden="true"><path
 /* Folders ARE on-chain (folders.gno) and LIVE courts now read them —
    chainFolders() fetches the flat chain shape and foldersFor() composes one
    labeled source: local curation ?? chain ?? demo sample ?? none. */
+/* EVERY CLAIM THAT BECAME A SET, anywhere in the tree. Two surfaces ask: the
+   docket, to drop the claim's row, and the map, to drop its node — a set and the
+   claim it was decided into being one object shown twice.
+   ONE COPY, because it was two. Both were byte-identical and differed only in
+   which tree they were handed, and the pin that watches the recursion had to be
+   written to check BOTH occurrences — a pin on "the" walk would have watched
+   whichever came first in the file. A function is cheaper than that.
+   RECURSIVE, because mod:newset takes a parentID: a subset is born of a claim
+   too, and a walk that stopped at the roots would leave that claim duplicated
+   while a root set's claim was not. */
+function bornClaimIds(folders){
+  const out = new Set();
+  (function walk(fs){ (fs||[]).forEach(f=>{ if(f.born) out.add(Number(f.born)); walk(f.folders); }); })(folders);
+  return out;
+}
 function folderCount(f){
   return (f.claims||[]).length + (f.folders||[]).reduce((a,x)=>a+folderCount(x),0);
 }
@@ -9466,7 +9481,7 @@ function mapTree(data, mode){
      alone still hid the claim, and the test could not tell.
      NOT COUNTED EITHER WAY. The affirming claim is not a member of the set it
      makes — FolderItems does not list it — so nothing here changes a count. */
-  const bornIds = (function ids(fs, out){ (fs||[]).forEach(f=>{ if(f.born) out.add(Number(f.born)); ids(f.folders, out); }); return out; })(data.folders, new Set());
+  const bornIds = bornClaimIds(data.folders);
   const loose = data.all.filter(id=>!inFolder.has(id));
   const drawn = new Set(), alsoIn = [];
   const folderNode = (f, path) => {
@@ -10901,7 +10916,7 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
      NOT DELETED AND NOT HIDDEN: its URL still opens the claim page, and the
      moderation bit stays for moderation. This is a rendering decision about one
      list, taken where the list is assembled. */
-  const bornIds = (function ids(fs, out){ (fs||[]).forEach(f=>{ if(f.born) out.add(Number(f.born)); ids(f.folders, out); }); return out; })(cur && cur.folders, new Set());
+  const bornIds = bornClaimIds(cur && cur.folders);
   const winIds = new Set(claims.map(cl=>cl.id));
   const rowsAll = (allRows||claims).filter(cl=>!bornIds.has(cl.id))
     .map(cl=>winIds.has(cl.id)? cl : Object.assign({}, cl, {offp:true}));

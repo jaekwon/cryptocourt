@@ -56,6 +56,9 @@ global.qeval = async expr => {
 
 let code = '';
 code += slice('function esc(', '\n');
+// the affirmed-claim walk, so its recursion is RUN rather than read: it used to
+// be two byte-identical copies and a source pin that had to name both
+code += slice('function bornClaimIds(', 'function folderCount(');
 code += slice('function fmtN(', 'function ugnot(');
 code += 'var NOW='+global.NOW+';\n';
 code += slice('function parseTyped(', 'const gstr').replace(/const one =/,'var one =').replace(/const tup =/,'var tup =');
@@ -142,16 +145,32 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
      giving one to annex or orem would move the fixtures three other harnesses
      measure, which is a worse trade than naming the gap here. The recursion is
      one line and this is what watches it. */
-  ok("every affirmed-claim walk recurses into subsets", (()=>{
-    const src = require("fs").readFileSync(
-      require("path").join(__dirname, "..", "index.html"), "utf8");
-    // BOTH of them: the docket collects affirmed claims to drop their rows, the
-    // map to drop their nodes, and each carries its own copy of the walk. A pin
-    // on "the" walk would have watched whichever came first in the file.
-    const lines = [...src.matchAll(/const bornIds =[^\n]*/g)].map(m => m[0]);
-    return lines.length === 2
-        && lines.every(l => /f\.born/.test(l) && /ids\(f\.folders,\s*out\)/.test(l));
+  /* THE WALK IS A FUNCTION NOW, so this runs it instead of reading it. It was a
+     source pin over two byte-identical copies — the docket's and the map's — and
+     the pin had to name both, because one that said "the" walk would have
+     watched whichever came first in the file. Extracting the copies made the
+     behaviour reachable, so the pin becomes a test.
+     NESTED IS THE CASE THAT MATTERS: mod:newset takes a parentID, so a subset is
+     born of a claim too, and a walk that stopped at the roots would leave that
+     claim duplicated while a root set's claim was not. The offline sample has no
+     nested born set to render — giving it one would move fixtures three other
+     harnesses measure — but the function can simply be handed one. */
+  ok("the affirmed-claim walk finds a root set's claim", (()=>{
+    const got = bornClaimIds([{name:"a", born:7, folders:[]}]);
+    return got.size === 1 && got.has(7);
   })());
+  ok("...and one nested inside another", (()=>{
+    const got = bornClaimIds([{name:"a", born:7, folders:[
+      {name:"b", born:9, folders:[{name:"c", born:11, folders:[]}]}]}]);
+    return got.size === 3 && got.has(7) && got.has(9) && got.has(11);
+  })());
+  ok("...and claims nothing for a set nobody voted for", (()=>{
+    const got = bornClaimIds([{name:"a", folders:[{name:"b", folders:[]}]}]);
+    return got.size === 0;
+  })());
+  ok("...and survives an empty or absent tree",
+     bornClaimIds([]).size === 0 && bornClaimIds(undefined).size === 0
+     && bornClaimIds(null).size === 0);
   // bare-bracket shape fallback
   QSHAPE="bare"; const cf2 = await chainFolders("orem");
   ok("bare-bracket shape also parses", JSON.stringify(cf2.folders[0].claims)==="[1,11]");

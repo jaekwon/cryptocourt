@@ -60,6 +60,10 @@ function buildCode(patch){
   // the real body renderer: mapSelCard shows a claim's body now
   code += slice('function claimBody(', '/* ===');
   code += slice('function siteHost(', 'const store');
+  // mapLayout drops the node of a claim that became a set, and asks this for the
+  // ids. It lives beside folderCount — the other walker over a folder tree — so
+  // it is outside the MAPK slice below and has to be named.
+  code += slice('function bornClaimIds(', 'function folderCount(');
   /* var, not const, for the same reason MAPK gets it: a function declaration in a
      direct eval hoists out to the enclosing scope, and a `const` beside it does
      NOT — so mapWrapTitle escaped while the measurer it now closes over stayed
