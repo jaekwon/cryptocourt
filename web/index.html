@@ -5349,8 +5349,16 @@ async function adenaSign(func, args, el){
          THE FUNCTION NAME ITSELF IS NOT RENAMED. OpenRewards is the realm's
          entrypoint and the tx has to call it; what changes is only what the page
          says out loud. */
+      /* NOTHING IS TRAVELLING. "The coin is on its way" borrowed a parcel's
+         vocabulary for something that is not moving anywhere: no coin exists yet, and
+         none is in transit. The transaction is signed and broadcast, it sits in the
+         mempool, and the coin is MINTED at the moment a block includes it — before
+         that there is nothing to be on its way. Reported as: weird.
+         What replaces it is the mechanism, which is both true and the answer to the
+         question actually being asked ("did I get it?"): not yet, on inclusion, and
+         this panel will say so. */
       const base = func === "Buy"
-        ? "Sent. The coin is on its way — this panel will show what you hold."
+        ? "Sent. The coin is minted when a block includes it — this panel will show what you hold."
         : "Sent. " + (TX_SENT[func] || func) + " is on its way.";
       note(base + " Updating in 7s…", true, hash? "tx "+hash : "");
       /* THE DRAFT CLEARS ONLY HERE. A rejected signature, a wallet on the wrong
