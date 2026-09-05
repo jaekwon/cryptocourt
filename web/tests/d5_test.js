@@ -96,10 +96,22 @@ ok("annex exists, tier 0, five claims", DEMO.courts.annex && DEMO.courts.annex.t
 ok("annex/5 hidden AND answered (strip specimen)", DEMO.claims["annex/5"].hidden===true && DEMO.claims["annex/5"].phase==="answered");
 /* THE PARSER MUST TRACK THE REALM'S HEADING. The strip section is recognised by
    the words the realm prints above it, so renaming one without the other leaves
-   the overlay reading a section that no longer announces itself — the rows would
-   vanish silently rather than fail loudly. Pinned to the current name so the two
-   can only move together. */
-ok("live parser reads all three sections", src.includes('Still flaggable/.test(line)? "strip"'));
+   the overlay reading a section that no longer announces itself — the rows
+   vanish silently rather than fail loudly.
+   AND THE REGEX IS RUN, NOT READ. The first version of this assertion checked
+   that the source CONTAINED "Still flaggable/.test(line)", which it did — while
+   the literal beside it said /^##\\s+Still flaggable/, a double backslash that
+   matches a literal "\s" and therefore matches no heading at all. The section
+   disappeared from the live site and this assertion stayed green. A test that
+   reads a pattern instead of running it tests the spelling of the code. */
+{
+  const lit = (src.match(/: (\/\^##[^\/]*(?:Still flaggable)[^\/]*\/)\.test\(line\)\? "strip"/) || [])[1];
+  ok("the strip heading is recognised by a regex that exists", !!lit, String(lit));
+  ok("...and that regex matches the heading the realm prints",
+     !!lit && eval(lit).test("## Still flaggable"), String(lit));
+  ok("...and does not match a heading it should ignore",
+     !!lit && !eval(lit).test("## Awaiting an answer"));
+}
 ok("strip rows outside data-sortable, folded in search", src.includes('<section data-qfold data-group="review" style="margin-top:22px"><h2 class="sec-h">Still flaggable'));
 /* THE CAPTION IS THE CHAIN'S SENTENCE, and the sentence changed with the realm:
    it used to say "answered and not yet settled", which was false of most rows —

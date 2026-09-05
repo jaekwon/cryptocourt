@@ -3416,7 +3416,7 @@ async function listClaims(slug){
   for(const line of md.split("\n")){
     if(/^##\s/.test(line)){
       sec = /^##\s+Claims/.test(line)? "claims"
-          : /^##\\s+Still flaggable/.test(line)? "strip"
+          : /^##\s+Still flaggable/.test(line)? "strip"
           : /^##\s+Awaiting an answer/.test(line)? "pending" : null;
       continue;
     }
