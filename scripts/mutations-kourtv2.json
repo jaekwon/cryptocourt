@@ -11115,5 +11115,12 @@
   "label": "withSiteBanner: the overlay link climbs back above the title",
   "find": "\tif !strings.HasPrefix(body, \"# \") {\n\t\treturn bar + body\n\t}",
   "replace": "\tif true {\n\t\treturn bar + body\n\t}"
+ },
+ {
+  "pkg": "kourtv2",
+  "file": "posting.gno",
+  "label": "mustSpendPost: level 0 cannot post",
+  "find": "\tif lvl == 0 {\n\t\t// The unsealed case is NOT \"earn standing or buy a pass\": neither is\n",
+  "replace": "\tif false {\n\t\t// The unsealed case is NOT \"earn standing or buy a pass\": neither is\n"
  }
 ]

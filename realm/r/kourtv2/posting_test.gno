@@ -736,3 +736,48 @@ func TestALevelFallsAsTheCourtGrowsWithNoSlash(cur realm, t *testing.T) {
 		t.Fatalf("the page must say the bar moves with the court:\n%s", page)
 	}
 }
+
+/* THE REFUSAL A FIRST-TIME READER ACTUALLY GETS, and the reason it needs a test
+   of its own: mustSpendPost refuses a level-0 caller TWICE OVER. The `lvl == 0`
+   arm says "earn standing, or buy an entry pass"; delete it and the same caller
+   falls through to the throttle, which refuses just as firmly and says "your
+   posting allowance for now is spent — level 0 allows 0 a day".
+
+   Both panic, so the mutation corpus scored it a survivor and the gaps file
+   recorded it as unkillable — "the corpus cannot tell the two panics apart".
+   That is true of the corpus and not of a test. The two messages are not
+   interchangeable: one tells a newcomer what to DO, the other tells them to wait
+   for an allowance that will never arrive, because level 0 has none. For
+   somebody who has never posted, the message is the whole of the refusal.
+
+   SEALED, deliberately. The unsealed court has its own third message, and this
+   asserts the arm that survives sealing — postingFixture crosses two epochs so
+   the supply the ladder reads is non-zero. */
+func TestALevelZeroPosterIsToldWhatToDoNotToWait(cur realm, t *testing.T) {
+	stranger := testutils.TestAddress("po-lvl0")
+	c := postingFixture(cur, "polvl0", stranger, 50_000_000_000)
+	if _, sealed := boardSupply(c); !sealed {
+		t.Fatal("setup: the court must have a sealed epoch, or the third message answers")
+	}
+	if got := postLevel(c, stranger); got != 0 {
+		t.Fatalf("setup: the poster must be level 0, got %d", got)
+	}
+
+	func() {
+		defer func() {
+			r := recover()
+			if r == nil {
+				t.Fatal("a level-0 poster was allowed to post")
+			}
+			msg, _ := r.(string)
+			if !strings.Contains(msg, "earn standing, or buy an entry pass") {
+				t.Fatalf("a level-0 poster was refused with the wrong advice: %q", msg)
+			}
+			// ...and NOT the throttle's, which is what the deleted arm falls to.
+			if strings.Contains(msg, "allowance for now is spent") {
+				t.Fatalf("the throttle answered for the ladder: %q", msg)
+			}
+		}()
+		mustSpendPost(c, stranger)
+	}()
+}

@@ -223,14 +223,6 @@
  },
  {
   "pkg": "kourtv2",
-  "file": "posting.gno",
-  "label": "mustSpendPost: level 0 cannot post",
-  "find": "\tif lvl == 0 {\n\t\t// The unsealed case is NOT \"earn standing or buy a pass\": neither is\n",
-  "replace": "\tif false {\n\t\t// The unsealed case is NOT \"earn standing or buy a pass\": neither is\n",
-  "why": "REFUSES EITHER WAY, so no behavioural test can kill it: with the arm deleted a level-0 caller falls to refill()<1, which is 0, and panics on the allowance message instead. What is lost is the MESSAGE \u2014 \"earn standing, or buy an entry pass\" versus \"your allowance for now is spent\" \u2014 which is the whole content of the refusal for someone who has never posted. Kept for the copy, recorded here because the corpus cannot tell the two panics apart."
- },
- {
-  "pkg": "kourtv2",
   "file": "board.gno",
   "label": "renderBoardOne: the author address is escaped",
   "find": "\tvar b strings.Builder\n\tb.WriteString(\"---\\n\\n**\" + sanitize.InlineText(r.author.String()) + \"**\")\n\tfor _, badge",
