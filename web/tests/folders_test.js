@@ -496,6 +496,59 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
      src.includes("const rest = shown===total? String(shown) : `${fmtN(shown)} of ${fmtN(total)}`;")
      && /chainHead\(stripRows\.length, stripQ\.rows\.length\+\(stripQ\.more\|\|0\)\)/.test(src));
 
+  /* THE DOOR TO A GOVERNED SET, which every other part of this feature assumed
+     somebody had already walked through. The realm parses the heading, the page
+     draws the eye, the affirm button carries a settled YES into a real set — and
+     the only way to START one was to know that a title beginning with a hieroglyph
+     and one space is a proposal, and to type it.
+     THE MARK AND ITS SINGLE SPACE ARE THE WHOLE ASSERTION. parseSetTitle refuses
+     anything else, and the refusal is silent in the worst way: the realm takes the
+     claim, the court votes on it, and it never becomes a set. Two spaces, or none,
+     is an ordinary claim of fact with a strange first character.
+     ASSERTED ON THE SOURCE, because the button is built from constants this
+     harness has no DOM to render. */
+  {
+    const fnSrc = (src.match(/function proposeSetBtn\(slug, fid, into\)\{[\s\S]*?\n\}/)||[""])[0];
+    ok("there is a door to propose a set at all", !!fnSrc);
+    ok("...and the title it prefills is the mark and ONE space",
+       /const title = SET_MARK \+ " Name of the set";/.test(fnSrc));
+    ok("...built from the constant, never a typed hieroglyph",
+       !/\u{13080}/u.test(fnSrc));
+    /* THE NAME IS A PLACEHOLDER, so the signing dialog has to say so — `edit` is
+       the flag StartCourt uses for exactly this, and without it the claim goes as
+       written, titled "Name of the set". */
+    ok("...and it is marked as carrying placeholder text",
+       /"", "the court votes on it[\s\S]*?null, false, true\)/.test(fnSrc));
+    /* A SUBSET IS THE SAME DOOR ONE STEP IN: AffirmSet reads the parent off the
+       claim's own filing, so the proposal has to be FILED in the set it should sit
+       under — which is OpenClaimIn, with the set's id. */
+    ok("...and a subset is proposed by filing the claim in its parent",
+       /btn\(\{html:`Propose \$\{setMarkHtml\(SET_MARK \+ " a subset"\)\}`\}, "OpenClaimIn",[\s\S]*?folderID:fid/.test(fnSrc));
+    // Both surfaces open it, and the set page only where there is an id to file
+    // into: a curation set has none, and a proposal opened from one would be born
+    // at the root and quietly not be the subset it was asked for.
+    ok("the court page offers it", /\$\{proposeSetBtn\(slug\)\}/.test(src));
+    ok("...and a set page offers the subset, but only when the set is on chain",
+       /\+ \(f\.fid != null \? proposeSetBtn\(slug, f\.fid, f\.name\) : ""\)/.test(src));
+  }
+
+  /* AND WHAT A YES WOULD BUILD, SAID BEFORE THE VOTE. The eye on the heading was
+     the only thing marking a set proposal as anything other than a claim of fact,
+     and an eye is not a sentence: a reader was asked to stake on "Reading room"
+     with nothing on the page saying a YES creates a set.
+     THREE ARMS, because the note is wrong in two directions. It must not appear on
+     a SETTLED claim, which already carries the affirm panel and would say it
+     twice; nor on one closed without a decision, where a note about what a YES
+     would have made reads as an offer that is no longer open. */
+  ok("a pending set heading says what a YES would build",
+     /const pending = setName && d\.phase!=="settled" && d\.phase!=="provClose" && d\.phase!=="closed";/.test(src)
+     && /This claim asks the court for a set called/.test(src));
+  ok("...and it says a YES alone does not create it",
+     /A YES does not create it by itself/.test(src));
+  ok("...naming the set from the title's own tail, not a second read",
+     /setName = String\(d\.title\|\|""\)\.startsWith\(SET_MARK \+ " "\)/.test(src)
+     && /\.slice\(SET_MARK\.length \+ 1\)/.test(src));
+
   console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");
   process.exit(fail?1:0);
 })();

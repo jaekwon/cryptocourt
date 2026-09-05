@@ -11205,7 +11205,7 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
     + showChips
     + (pager||"")
     + `<section data-qsec data-group="open"${foldersSec?' style="margin-top:22px"':""}><h2 class="sec-h">Open ${secHelp("Claims this court has not settled yet — the ones you can still stake on. Settled claims move down to Recently settled.")}<span class="count" data-count="open">${openWin}</span></h2>`
-    + (open.length? `<div class="docket" data-sortable data-sortkind="dk">${rows(open)}</div><div class="actions" style="margin-top:10px">${btn("Open a claim","OpenClaimP",{courtSlug:slug,title:"Your claim of fact",body:"What would settle it — the evidence in view, and what this is NOT asking"},"","a body is optional")}</div><div id="courtcompose"></div>`
+    + (open.length? `<div class="docket" data-sortable data-sortkind="dk">${rows(open)}</div><div class="actions" style="margin-top:10px">${btn("Open a claim","OpenClaimP",{courtSlug:slug,title:"Your claim of fact",body:"What would settle it — the evidence in view, and what this is NOT asking"},"","a body is optional")}${proposeSetBtn(slug)}</div><div id="courtcompose"></div>`
         : pageOf()>1? `<p class="small muted">Nothing on this page.</p>`
         : `<div class="empty"><div class="g">◌</div><p>No open claims.</p><p>${btn("Open the first claim","OpenClaimP",{courtSlug:slug,title:"Your claim of fact",body:"What would settle it — the evidence in view, and what this is NOT asking"},"","a body is optional")}</p></div>`)
     + `</section>`
@@ -12295,6 +12295,15 @@ on(/^\/c\/([a-z0-9-]+)\/f\/([0-9.]+)$/, async (slug,fpath)=>{
                 {courtSlug:slug, title:"Your claim of fact",
                  body:"What would settle it — the evidence in view, and what this is NOT asking"},
                 "", "this set is local curation; the claim opens in " + esc(slug)))
+      /* AND A SUBSET IS THE SAME DOOR, ONE STEP IN. AffirmSet takes the parent
+         from where the CLAIM ITSELF is filed — the title is spent on the name and
+         has no room for a path — so a proposal opened here, filed here, becomes a
+         subset of this set if the court carries it. That is the only way to ask
+         for one, and until now a reader had to know it.
+         Only where the set is on chain, for the reason above it: a curation set
+         has no id to file into, so a proposal opened from one would be born at the
+         root and quietly not be the subset it was asked for. */
+      + (f.fid != null ? proposeSetBtn(slug, f.fid, f.name) : "")
       + `</div><div id="courtcompose"></div>`
     + `</section>`;
 });
@@ -14156,6 +14165,36 @@ function focusStakeSide(side){
    the chain does not consider a set — which is the more dangerous direction of
    the two, because it is the one a reader would believe. */
 const SET_MARK = "\u{13080}";
+/* THE DOOR TO A GOVERNED SET, and it was the one thing this feature never had.
+   Everything else existed — the realm parses the heading, the page draws the eye,
+   the affirm button carries a settled YES into a real set — and the only way to
+   START one was to know that a title beginning with a hieroglyph and one space is
+   a proposal, and to type it. That is a feature nobody can find.
+   THE MARK AND ITS SPACE COME FROM SET_MARK, not from a literal typed here:
+   parseSetTitle insists on exactly one space after the mark, and a title carrying
+   two, or none, is an ordinary claim of fact with a strange first character. The
+   realm would take it and the court would vote on it and it would never become a
+   set — a failure with no error anywhere, which is the shape worth spending a
+   constant on.
+   `edit` IS TRUE, like StartCourt's. The name in the title is a placeholder a
+   reader must replace before the claim means anything, and that flag is what makes
+   the signing dialog say so rather than sending it as written.
+   FILED WHERE IT WAS OPENED, when a set id is given: that is what makes it a
+   subset, since AffirmSet reads the parent off the claim's own filing. */
+function proposeSetBtn(slug, fid, into){
+  const title = SET_MARK + " Name of the set";
+  const body = "What belongs in this set, and what does not — the reader arriving "
+    + "at it should be able to tell whether a claim belongs here.";
+  return fid != null
+    ? btn({html:`Propose ${setMarkHtml(SET_MARK + " a subset")}`}, "OpenClaimIn",
+          {courtSlug:slug, folderID:fid, title, body},
+          "", "the court votes on it; carried, it becomes a subset of " + esc(into||"this set"),
+          null, false, true)
+    : btn({html:`Propose ${setMarkHtml(SET_MARK + " a set")}`}, "OpenClaimP",
+          {courtSlug:slug, title, body},
+          "", "the court votes on it; carried, the heading becomes a real set",
+          null, false, true);
+}
 function setMarkHtml(escaped){
   if(!escaped.startsWith(SET_MARK + " ")) return escaped;
   return `<span class="setmark" role="img" aria-label="set">${ICN_EYE_OPEN}</span>`
@@ -14675,7 +14714,28 @@ function resolutionSection(slug,id,d,nowH,tl){
         ${btn("Close dead claim","CloseDeadClaim",{courtSlug:slug,claimID:id},"","if its timeout passed")}</div></div></div>`;
   }
   if(!inner) return "";
-  return `<section id="resolution" tabindex="-1"><h2 class="sec-h">${head}</h2>${inner}</section>`;
+  /* WHAT THIS CLAIM IS FOR, SAID WHILE IT IS STILL BEING DECIDED. A set heading
+     wears an eye on every surface that draws its title, and until it settles the
+     eye is the ONLY thing saying this is not an ordinary claim of fact — a reader
+     is asked to stake on "Reading room" with no sentence anywhere telling them
+     what a YES would build. The settled branch has said the rest for a while;
+     this is the same fact one phase earlier, where the staking decision is
+     actually taken.
+     NOT ON A SETTLED CLAIM, which already carries the affirm panel and would
+     otherwise say it twice, and not on one closed without a decision: there is
+     nothing left to build, and a note about what a YES would have made reads as
+     an offer.
+     THE NAME IS THE TITLE'S OWN TAIL, cut at the mark and its single space, so
+     the sentence cannot disagree with the heading above it. */
+  const setName = String(d.title||"").startsWith(SET_MARK + " ")
+    ? String(d.title).slice(SET_MARK.length + 1) : "";
+  const pending = setName && d.phase!=="settled" && d.phase!=="provClose" && d.phase!=="closed";
+  const ask = pending
+    ? `<p class="small muted" style="margin:8px 0 0">This claim asks the court for a set called
+        <b>${safeInline(setName)}</b>. A YES does not create it by itself — anyone may then carry
+        it into existence, and it lands wherever this claim itself is filed.</p>`
+    : "";
+  return `<section id="resolution" tabindex="-1"><h2 class="sec-h">${head}</h2>${inner}${ask}</section>`;
 }
 
 /* THE REWARD POOLS, and nothing else. This was qualitySection: a tier line, a
