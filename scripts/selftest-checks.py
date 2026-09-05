@@ -1584,6 +1584,23 @@ print("\ncheck-web-constants")
 control("the overlay's mirrored constant drifts", WEBPAGE,
         "const WEEK = 120960;", "const WEEK = 120961;",
         "queries the wrong window", argv=["python3", WEBCONST])
+# THE ROUNDING, NOT ONLY THE CONSTANT. CURVE_D was mirrored and the ceil was not,
+# so a purchase quote could round down while the chain rounded up — a receipt
+# promising a unit the chain will not give, silently, and only on the amounts
+# where the division does not come out even. buy_test.js cross-checks curveQuote
+# against a brute-force reference written in JavaScript, which encodes the same
+# intent as the code beside it and would follow it into the same mistake.
+# BOTH SIDES ARE ARMED, because the divergence is symmetric: the overlay can
+# stop rounding up, or the realm can, and the reader of a receipt cannot tell
+# which happened.
+control("the overlay stops rounding the curve up", WEBPAGE,
+        "(s1*s1 - s0*s0 + 2n*CURVE_D - 1n)/(2n*CURVE_D)",
+        "(s1*s1 - s0*s0)/(2n*CURVE_D)",
+        "no longer computes cost as ceil", argv=["python3", WEBCONST])
+control("the realm stops rounding the curve up", "realm/p/curve/curve.gno",
+        "lo2, carry := bits.Add64(lo, m-1, 0)",
+        "lo2, carry := bits.Add64(lo, 0, 0)",
+        "stopped doing", argv=["python3", WEBCONST])
 
 print("\ncheck-media-hosts")
 # The hosts a claim's evidence may live on are written down three times — the
