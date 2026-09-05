@@ -91,8 +91,8 @@ img,svg{display:block;max-width:100%}
      gold marks PROVENANCE — which record you are looking at — never state.
      Three colours, and only two of them are new: --mark reuses the values
      already proven as --escrow rather than adding a third gold to the palette.
-     --scan and --ring are none/transparent here for the same reason every glow
-     is: a scanline is a CRT artifact and ink does not emit light. */
+     --ring is none here for the same reason every glow is: ink does not emit
+     light. (--scan was beside it until the scanline it fed was removed.) */
   --mark:#7d5c0f; --data:#0f6b7a; --retic:#0d6b5a;
   /* THE SAME GOLD, ON A FILLED BUTTON, WHICH IS A DIFFERENT COLOUR.
      .btn.primary paints itself --accent, and --accent INVERTS between the
@@ -104,8 +104,7 @@ img,svg{display:block;max-width:100%}
      #e2b552 on #2e3a7d is 5.4:1, #523a06 on #9aa8ee is 4.7:1. Both are the
      same gold family the mark comes from, one lit and one deep. */
   --mark-btn:#e2b552;
-  --rule:rgba(46,58,125,.34); --rule-2:rgba(46,58,125,.18);
-  --scan:transparent; --ring:none;
+  --rule:rgba(46,58,125,.34); --rule-2:rgba(46,58,125,.18); --ring:none;
   --serif:"Iowan Old Style","Palatino Linotype",Palatino,"Book Antiqua",Georgia,"Times New Roman",serif;
   --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,system-ui,sans-serif;
   --mono:"SF Mono","JetBrains Mono","Cascadia Code",ui-monospace,Menlo,Consolas,monospace;
@@ -153,8 +152,7 @@ img,svg{display:block;max-width:100%}
     --rule:rgba(154,168,238,.30); --rule-2:rgba(154,168,238,.16);
     /* 1px of black in every 3, multiplied. Imperceptible on near-black; the
        same value on near-white is a huge visible step, which is why the light
-       theme has none. */
-    --scan:rgba(0,0,0,.10); --ring:drop-shadow(0 0 4px rgba(215,178,100,.85));
+       theme has none. */ --ring:drop-shadow(0 0 4px rgba(215,178,100,.85));
   }
 }
 :root[data-theme=light]{
@@ -168,8 +166,7 @@ img,svg{display:block;max-width:100%}
   --glow-a:none; --glow-y:none; --glow-n:none; --glow-e:none;
   --trace:none; --edge:transparent;
   --mark:#7d5c0f; --data:#0f6b7a; --retic:#0d6b5a; --mark-btn:#e2b552;
-  --rule:rgba(46,58,125,.34); --rule-2:rgba(46,58,125,.18);
-  --scan:transparent; --ring:none;
+  --rule:rgba(46,58,125,.34); --rule-2:rgba(46,58,125,.18); --ring:none;
 }
 :root[data-theme=dark]{
   --paper:#11171c; --surface:#171f26; --surface-2:#1d2731; --inset:#0d1317;
@@ -186,8 +183,7 @@ img,svg{display:block;max-width:100%}
   --trace:drop-shadow(0 0 3px rgba(95,211,230,.85)) drop-shadow(0 0 11px rgba(95,211,230,.4));
   --edge:rgba(179,190,243,.9);
   --mark:#d7b264; --data:#5fd3e6; --retic:#7fe3d0; --mark-btn:#523a06;
-  --rule:rgba(154,168,238,.30); --rule-2:rgba(154,168,238,.16);
-  --scan:rgba(0,0,0,.10); --ring:drop-shadow(0 0 4px rgba(215,178,100,.85));
+  --rule:rgba(154,168,238,.30); --rule-2:rgba(154,168,238,.16); --ring:drop-shadow(0 0 4px rgba(215,178,100,.85));
 }
 
 body{
@@ -196,17 +192,19 @@ body{
   display:grid; grid-template-columns:clamp(230px,22vw,290px) 1fr;
   grid-template-rows:auto 1fr; min-height:100vh;
 }
-/* THE RULING. 1px of black in every 3, multiplied, fixed to the viewport so it
-   belongs to the screen and not to the document. It is the one effect here that
-   taxes EVERY contrast ratio on the page — a multiply layer scales text and
-   background together, which pushes their ratio toward 1 — so it is deliberately
-   the weakest thing in the file, and --scan is transparent in the light theme:
-   a scanline is a CRT artifact, and the same value on near-white paper is a huge
-   visible step that reads as a fax rather than as a screen.
-   pointer-events:none, or it would eat every click on the page. */
-body::after{content:""; position:fixed; inset:0; pointer-events:none; z-index:60;
-  background:repeating-linear-gradient(0deg, var(--scan) 0 1px, transparent 1px 3px);
-  mix-blend-mode:multiply}
+/* THE RULING IS GONE, and its own comment predicted why. It was 1px of black in
+   every 3, multiplied over the whole viewport, and it said of itself that it
+   "taxes EVERY contrast ratio on the page" — which was measured against text on a
+   dark ground, where it is invisible. It was never measured against a large PALE
+   surface, and the page has one: the throne in the brand mark, whose seat back is
+   a solid white panel about 30px wide. A 1-in-3 multiply lands on that as a ruled
+   grid, which is what was reported as horizontal lines across the seat — read off
+   a screenshot of the rail, after three rounds of my guessing at the gold instead.
+   REMOVED RATHER THAN EXEMPTED. An effect that has to be masked off the one
+   surface it is visible on is not paying for the contrast it costs everywhere
+   else, and only decoration rested on it. --scan went with it: one reader, this
+   rule, and a token nobody reads is residue. --ring stays — a different token,
+   still read by the chart's end dot. */
 .tnum{font-variant-numeric:tabular-nums}
 code,.mono{font-family:var(--mono)}
 
