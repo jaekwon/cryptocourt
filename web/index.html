@@ -752,20 +752,10 @@ a.card:hover{border-color:var(--line-2)}
    the control never reorders itself under the hand that is using it. */
 .foldsel{cursor:pointer}
 /* ONE ICON IN TWO STATES, swapped by the row's own aria-checked — so the control
-   has no JS of its own and cannot fall out of step with the attribute that
-   actually drives the filter. Both eyes ship in the markup; exactly one is ever
-   displayed. Sized in em so the pair tracks the row's text rather than needing a
-   second number kept in sync, and overflow:visible because the tail is drawn
-   past the viewBox's baseline. */
-/* THE EYE IS THE SET'S ICON NOW, so it is sized like one rather than like a
-   checkbox: it replaced the folder glyph that used to sit beside it, and a mark
-   standing in for an icon has to carry the weight the icon did.
-   ONE COLOUR IN BOTH STATES. The shut eye was dimmed to half alpha, which made
-   "hidden" read as "disabled" — two different claims, and only one of them true:
-   an unticked set is not unavailable, it is simply not being looked at. The lid
-   carries the state on its own, which is the whole reason both eyes are drawn as
-   one object; dimming it was the state being said twice, once wrongly. */
-.eye{height:1.15em; width:auto; overflow:visible; vertical-align:-.22em}
+   has no JS of its own and cannot fall out of step with the attribute that drives
+   the filter. Both eyes ship in the markup; exactly one is ever displayed.
+   ONE INK IN BOTH. The shut eye was dimmed to half alpha, which says DISABLED
+   when it means NOT BEING LOOKED AT. The lid carries the state on its own. */
 .foldsel .foldbox{display:inline-flex; margin-right:8px; color:var(--accent)}
 .foldsel .eye{height:1.6em; vertical-align:-.45em}
 .foldsel .eyeopen{display:none}
@@ -805,9 +795,22 @@ a.card:hover{border-color:var(--line-2)}
    rules and marks rather than colour. The folder icon and the accent title
    below already say "folder", twice. */
 .docket .folderrow:hover{background:var(--surface-2)}
-.docket .folderrow .id .icn{color:var(--accent)}
+/* .icn, not .eye, was the selector here — the folder glyph it named no longer
+   exists, so the rule had stopped colouring anything. */
+.docket .folderrow .id .eye{color:var(--accent)}
 .docket .folderrow .t{color:var(--accent-2)}
-.px{display:flex; flex-direction:column; align-items:flex-end; min-width:64px}
+/* THE STATIC EYE, outside the filter chips: the set page's own heading, the
+   map's row, and the subset rows on a set page. No shown/hidden state there, so
+   the open form is the only honest one and it just needs a size. */
+.eye{height:1.15em; width:auto; overflow:visible; vertical-align:-.22em}
+/* THE SUBSET ROWS on a set page are still rows, and still need their own grid:
+   .docket .crow reserves four columns and these have three, so the unused 124px
+   squeezed the title into a second line. Same fix as the chips replaced. */
+.docket .crow.folderrow{grid-template-columns:auto minmax(0,1fr) auto; gap:0 10px;
+  padding-top:8px; padding-bottom:8px; align-items:center}
+.docket .crow.folderrow .t{display:flex; align-items:baseline; gap:8px; min-width:0;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis}
+.docket .crow.px{display:flex; flex-direction:column; align-items:flex-end; min-width:64px}
 .px b{font-family:var(--mono); font-size:13px; font-weight:500; font-variant-numeric:tabular-nums}
 .px small{font-size:10px; color:var(--muted); letter-spacing:.05em}
 .spark{width:60px; height:16px; display:block; margin-bottom:2px}
@@ -7373,8 +7376,14 @@ function folderSubtree(f, path, out){
    so the row loses nothing it had. */
 function folderRowHtml(slug,f,path,toggle){
   const n = folderCount(f), subs = (f.folders||[]).length;
-  const meta = `<span><span class="t">${safeInline(f.name)}</span><span class="m" style="display:block">${n} claim${n===1?"":"s"}${subs?` · ${subs} subset${subs===1?"":"s"}`:""}</span></span>
-    <span class="px"><b>${n}</b><small>claims</small></span>`;
+  /* ONE LINE, AND THE COUNT ONCE. The row stacked a title, a block meta line
+     under it, and a px column on the right whose big figure was THE SAME NUMBER
+     the meta line had just given — so it spent three lines and a column to say
+     two things, and a set row came out 70px against a claim row's 119px for a
+     fraction of the content. The meta goes inline after the name and the px
+     column goes, because a count printed twice is not emphasis, it is the row
+     failing to decide where the count lives. */
+  const meta = `<span class="t">${safeInline(f.name)} <span class="m">${n} claim${n===1?"":"s"}${subs?` · ${subs} subset${subs===1?"":"s"}`:""}</span></span>`;
   if(!toggle) return `<a class="crow folderrow" data-q="${esc(f.name + " " + (f.desc||""))}"
     href="#/c/${esc(slug)}/f/${path}">
     <span class="id">${ICN_EYE_OPEN}</span>
