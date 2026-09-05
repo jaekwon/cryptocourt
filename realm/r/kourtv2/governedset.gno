@@ -219,6 +219,28 @@ func AffirmSet(cur realm, courtSlug string, claimID uint64) uint64 {
 		panic("kourtv2: this claim is filed in more than one set; a born set needs exactly one parent")
 	}
 
+	/* 6. AND THE PARENT HAS TO STILL BE IN THE TREE. AddToFolder has no retired
+	   guard and mustFolder hands back a retired row like any other, so a claim can
+	   be filed INTO a folder that has been struck — and ClaimFolders reports it,
+	   because that read skips purged rows and only purged rows. Confirmed on a
+	   running chain, not inferred.
+	   Without this, step 5 picks that folder and newFolderCore builds under it:
+	   mustNestable checks depth and cycles, never liveness. The result is a LIVE
+	   folder hanging off a retired one — exactly the shape RetireFolder refuses to
+	   create, reached from underneath instead of from above. Clients survive it
+	   (nestChainFolders roots a folder whose parent was skipped) but a client
+	   being defensive is not the chain being right.
+	   A REFUSAL, NOT A QUIET RE-ROOT, on the same argument step 5 makes about
+	   several filings: a guess is the wrong answer when the caller can say. One
+	   RestoreFolder or one RemoveFromFolder makes it decidable, and the claim
+	   keeps everything the court gave it in the meantime — nothing here expires.
+	   HERE RATHER THAN AT OPEN, with the name check above it, and for that guard's
+	   own reason: weeks pass between filing a claim and carrying it, so what was
+	   true when it was filed has to be true again now. */
+	if parent != 0 && cm.mustFolder(parent).retired {
+		panic("kourtv2: the set this claim is filed in has been retired")
+	}
+
 	fid := newFolderCore(cm, name, "", parent)
 	cm.mustFolder(fid).bornOf = claimID
 	emitModAct(c.id, claimID, "folder-create", cs.author)

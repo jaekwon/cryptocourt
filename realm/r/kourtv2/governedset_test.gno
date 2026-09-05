@@ -70,6 +70,14 @@ func TestSetNameIsTheTitleVerbatim(cur realm, t *testing.T) {
        it split on any space)     TestAnUnmarkedClaimIsNeverASet, which is the
                                   pair that matters: one proves near-misses are
                                   refused, the other that ordinary claims are.
+     - the retired-parent      -> TestASetIsNotBornUnderARetiredParent, and it was
+       guard (step 6)              written RED-FIRST rather than ablated after the
+                                   fact: the guard did not exist, so the shipped
+                                   source WAS the mutant. It failed 14 ok / 3 FAIL
+                                   with "this claim already carries set 2" — the
+                                   affirm having succeeded and built a live folder
+                                   under a retired one, which is the defect stated
+                                   as an error message.
      - ClaimSet made to SKIP   -> TestRetiringABornSetDoesNotFreeTheClaim, and it
        retired rows, matching      dies the second way too: the mutant lets bob's
        folderNameTaken             re-carry SUCCEED, so a live folder takes the
@@ -586,4 +594,73 @@ func TestRetiringABornSetDoesNotFreeTheClaim(cur realm, t *testing.T) {
 	fid2 := AffirmSet(cross(cur), "gsq1", id2)
 	uassert.True(t, fid2 != fid)
 	uassert.Equal(t, "Reading room", FolderName("gsq1", fid2))
+}
+
+/* A SET IS NOT BORN INSIDE A FOLDER THAT HAS BEEN STRUCK FROM THE TREE.
+ *
+ * REACHABLE WITH ONE ORDINARY MODERATOR CALL, and confirmed on a running chain
+ * before this was written: AddToFolder has no retired guard and mustFolder hands
+ * back a retired row like any other, so a claim can be filed INTO a retired
+ * folder — and ClaimFolders reports it, because that read skips purged rows and
+ * only purged rows.
+ *
+ * SO STEP 5 COULD PICK A RETIRED PARENT. newFolderCore's mustNestable checks
+ * depth and cycles, not liveness, and the result is a LIVE folder hanging under a
+ * retired one — precisely the shape RetireFolder refuses to create ("retire the
+ * folders inside it first, so the tree cannot grow orphans"), arrived at from
+ * underneath instead of from above. The overlay survives it — nestChainFolders
+ * roots a folder whose parent was skipped rather than dropping it — but a client
+ * being defensive is not the same as the chain being right.
+ *
+ * REFUSED, NOT RE-ROOTED, on the argument step 5 already makes about multiple
+ * filings: "a guess" is the wrong answer when the caller can say. A retired
+ * parent is one RestoreFolder or one RemoveFromFolder away from being decidable,
+ * and either is cheaper than a set that quietly went somewhere else than the page
+ * said it would.
+ *
+ * AND IT BELONGS AT EXECUTION, with the name check beside it, for that guard's
+ * own stated reason: weeks pass between opening a claim and carrying it, so what
+ * was true at filing has to be re-established now.
+ */
+func TestASetIsNotBornUnderARetiredParent(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("gsv-alice")
+	testCourt(cur, "gsv1", alice, 50_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	AppointMods(cross(cur), "gsv1", 1, alice)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	parent := CreateFolder(cross(cur), "gsv1", "Origins", "where it began")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "gsv1", tD010+" Furin cleavage site")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	AddToFolder(cross(cur), "gsv1", parent, id)
+
+	matureOI(cur, "gsv1", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "gsv1", id, sideYES)
+	testing.SkipHeights(settleDelay)
+	SettleUndisputed(cross(cur), "gsv1", id)
+
+	// THE PARENT GOES AWAY IN THE WINDOW. RetireFolder clears the item list, so
+	// this re-files afterwards — which is the whole point: the filing survives
+	// the retirement because nothing stops it being made again.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	RetireFolder(cross(cur), "gsv1", parent)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	AddToFolder(cross(cur), "gsv1", parent, id)
+	uassert.Equal(t, 1, len(ClaimFolders("gsv1", id))) // the precondition, asserted
+
+	before := FolderCount("gsv1")
+	uassert.AbortsContains(t, cur, "has been retired", func() {
+		AffirmSet(cross(cur), "gsv1", id)
+	})
+	uassert.Equal(t, before, FolderCount("gsv1")) // and nothing was created
+	uassert.Equal(t, uint64(0), ClaimSet("gsv1", id))
+
+	// RESTORE IT AND THE SAME CALL WORKS, so the refusal is a "not yet" rather
+	// than a "never" — the claim keeps everything the court gave it.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	RestoreFolder(cross(cur), "gsv1", parent)
+	fid := AffirmSet(cross(cur), "gsv1", id)
+	uassert.Equal(t, parent, FolderParent("gsv1", fid))
 }
