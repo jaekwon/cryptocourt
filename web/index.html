@@ -726,6 +726,19 @@ a.card:hover{border-color:var(--line-2)}
 .docket .m.rowpill{margin-top:5px}
 /* Waiting for the height sweep, not an empty row of meta. */
 .docket .m[data-settle]:empty{display:none}
+/* THE FOLDER FILTER'S OWN HIDE. Separate from .qhide because the two filters
+   compose — a row taken by the search and a row taken by a folder are different
+   facts, and one class could not say which. */
+.fhide{display:none !important}
+/* THE TOP KNOB. Chips read as pressed by default because everything is shown by
+   default; an unticked one dims rather than vanishing, so the filter never hides
+   its own control. */
+.foldbar{display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin:0 0 10px}
+.foldbar>.small{margin-right:4px}
+.foldbar .foldchip{cursor:pointer; border:1px solid var(--line-2); background:none}
+.foldbar .foldchip .count{margin-left:6px; opacity:.7}
+.foldbar .foldchip[aria-pressed="false"]{opacity:.42; text-decoration:line-through}
+.foldbar .foldchip:hover{border-color:var(--accent)}
 .docket .m.rowpill .pill{font-size:10px; padding:3px 6px}
 .docket a.crow .px{justify-self:end}
 .docket a.crow .pill{justify-self:end}
@@ -6484,6 +6497,46 @@ function qBarHtml(placeholder, cap){
     <span id="qcap" class="mono small muted" role="status">${esc(cap)}</span></div>`;
 }
 let QCTX = null; // {kind, demo, loaded, total, orderTail, slug, totalClaims}
+/* THE FOLDER FILTER — the page's top knob, above the search box.
+   IT COMPOSES WITH THE SEARCH RATHER THAN COMPETING WITH IT. Both hide rows, so
+   each owns its own class — .fhide here, .qhide there — and a row is visible
+   only when neither claims it. Sharing one class would make whichever ran last
+   silently undo the other.
+   applyQ does the counting for both, because the counts, the empty state and the
+   section collapse all have to agree about one set of visible rows; this sets
+   the classes and then asks applyQ to recount with the query still in the box.
+   ALL TICKED IS THE DEFAULT and means "no filter at all" rather than "every
+   folder selected": a claim in no folder is visible under it, which is what a
+   reader expects of a court that has never filed anything. */
+let FOLD_OFF = new Set();   // the unticked ones; empty means everything shows
+function applyFolders(){
+  const bar = document.getElementById("foldbar");
+  if(!bar) return;
+  bar.querySelectorAll("[data-fold-key]").forEach(b=>{
+    const off = FOLD_OFF.has(b.getAttribute("data-fold-key"));
+    b.setAttribute("aria-pressed", off? "false" : "true");
+    b.classList.toggle("off", off);
+  });
+  document.querySelectorAll("#qscope [data-fold]").forEach(row=>{
+    const keys = (row.getAttribute("data-fold")||"~none").split(" ");
+    // A row survives if ANY folder it is in is still ticked. Cross-filed claims
+    // therefore need every one of their folders unticked to disappear, which is
+    // the only reading under which the counts add up.
+    row.classList.toggle("fhide", FOLD_OFF.size>0 && keys.every(k=>FOLD_OFF.has(k)));
+  });
+  applyQ(QP.q || "");
+}
+document.addEventListener("click", ev=>{
+  const chip = ev.target.closest("#foldbar [data-fold-key]");
+  if(chip){
+    const k = chip.getAttribute("data-fold-key");
+    if(FOLD_OFF.has(k)) FOLD_OFF.delete(k); else FOLD_OFF.add(k);
+    applyFolders(); return;
+  }
+  // "all" puts the page back to its default rather than making the reader
+  // re-tick each chip to undo one exploratory click.
+  if(ev.target.closest("#foldall")){ FOLD_OFF = new Set(); applyFolders(); }
+});
 function applyQ(qRaw){
   const box = document.getElementById("qscope"); if(!box || !QCTX) return;
   const q = String(qRaw||"").trim();
@@ -6491,15 +6544,29 @@ function applyQ(qRaw){
   const active = q.length>0;
   box.classList.toggle("qactive", active);
   let matches = 0;
+  // A ROW THE FOLDER FILTER HAS TAKEN IS NOT A MATCH. Both filters hide rows and
+  // each owns its own class; the count, the empty state and the section collapse
+  // all read the same visible set, or the number over the box disagrees with what
+  // is under it.
+  const folded = r => r.classList.contains("fhide");
   box.querySelectorAll("[data-q]").forEach(row=>{
     const hit = !active || qPredicate(row.getAttribute("data-q"), q);
     row.classList.toggle("qhide", active && !hit);
-    if(active && hit) matches++;
+    if(active && hit && !folded(row)) matches++;
   });
   // sections with nothing visible collapse while a query is active
   box.querySelectorAll("section[data-qsec]").forEach(sec=>{
-    const any = [...sec.querySelectorAll("[data-q]")].some(r=>!r.classList.contains("qhide") && (active || !r.classList.contains("offp")));
-    sec.classList.toggle("qhide", active && !any);
+    const any = [...sec.querySelectorAll("[data-q]")].some(r=>!r.classList.contains("qhide") && !folded(r) && (active || !r.classList.contains("offp")));
+    sec.classList.toggle("qhide", (active || FOLD_OFF.size>0) && !any);
+  });
+  /* THE SECTION COUNTS FOLLOW THE FILTER. They are rendered from the data and
+     would otherwise keep announcing a docket the page is no longer showing —
+     which is the whole of what was asked for: untick a folder and the number
+     goes down with the rows. */
+  box.querySelectorAll("[data-count]").forEach(el=>{
+    const sec = el.closest("section[data-qsec]"); if(!sec) return;
+    el.textContent = String([...sec.querySelectorAll("[data-q]")]
+      .filter(r=>!r.classList.contains("qhide") && !folded(r) && !r.classList.contains("offp")).length);
   });
   const empty = document.getElementById("qempty");
   if(empty) empty.classList.toggle("qhide", !(active && matches===0));
@@ -7078,6 +7145,42 @@ function resolveFolderPath(curF, fpath){
   return {folder:f, trail};
 }
 
+/* EVERY FOLDER A CLAIM IS IN, which folderMeta deliberately does not answer.
+   That one is first-wins because the docket row shows ONE label; a filter has to
+   know all of them or unticking a cross-filed claim's second folder would hide a
+   claim that is still in a ticked one. Keys are the folder's path, the same
+   string the chip and the folder row use, so a chip and a row cannot disagree
+   about which drawer they mean. */
+function folderKeys(folders, map, ppath){
+  (folders||[]).forEach((f,i)=>{
+    const path = f.path!=null? String(f.path) : (ppath!=null? ppath+"."+i : String(i));
+    (f.claims||[]).forEach(id=>{ (map[id] = map[id] || []).push(path); });
+    folderKeys(f.folders, map, path);
+  });
+  return map;
+}
+/* THE CHIP ROW — the page's top knob. Every folder starts ticked, so the default
+   view is everything and the control is discoverable without changing what a
+   first-time reader sees. UNFILED IS A CHIP TOO: a court's claims are not all in
+   folders, and without it unticking one folder would leave the unfiled ones on
+   screen with no way to say whether that was intended. */
+function folderChipRow(slug, cur, foldOf, claims){
+  const fs = [];
+  const walk = (folders, prefix, ppath) => (folders||[]).forEach((f,i)=>{
+    const path = f.path!=null? String(f.path) : (ppath!=null? ppath+"."+i : String(i));
+    fs.push({path, label: prefix? prefix+" · "+f.name : f.name});
+    walk(f.folders, prefix? prefix+" · "+f.name : f.name, path);
+  });
+  walk(cur.folders, "", null);
+  const unfiled = claims.filter(cl=>!(foldOf[cl.id]||[]).length).length;
+  if(!fs.length) return "";
+  const chip = (key,label,n) => `<button type="button" class="pill void foldchip" aria-pressed="true" data-fold-key="${esc(key)}">${safeInline(label)}<span class="count">${n}</span></button>`;
+  return `<div class="foldbar" id="foldbar" role="group" aria-label="filter by folder">`
+    + `<span class="small muted">Folders</span>`
+    + fs.map(f=>chip(f.path, f.label, claims.filter(cl=>(foldOf[cl.id]||[]).includes(f.path)).length)).join("")
+    + (unfiled? chip("~none","unfiled",unfiled) : "")
+    + `<button type="button" class="helplink" id="foldall">all</button></div>`;
+}
 function folderMeta(folders, prefix, map, ppath){
   (folders||[]).forEach((f,i)=>{
     const label = prefix? prefix+" · "+f.name : f.name;
@@ -10113,7 +10216,8 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
   const foldersSec = (pageOf()===1 && cur && cur.folders.length)
     ? `<section data-qsec><h2 class="sec-h">Folders <span class="count">${cur.folders.length}${srcLabel}</span></h2>
        <div class="docket">${cur.folders.map((f,i)=>folderRowHtml(slug,f,f.path!=null? String(f.path):String(i))).join("")}</div></section>` : "";
-  const rows = list => list.map(cl=>docketRow(slug,cl,fmeta[cl.id])).join("");
+  const foldOf = cur && cur.folders.length? folderKeys(cur.folders, {}, null) : {};
+  const rows = list => list.map(cl=>docketRow(slug,cl,fmeta[cl.id],foldOf[cl.id])).join("");
   /* THE COUNT IS OF WHAT THE BOX SEARCHES, which is now rows and not just titles.
      Folder rows are in the haystack, so they are in the number beside it: a caption
      reading "all 19 claim titles" over a filter that also matches six folder names is
@@ -10184,15 +10288,16 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
     + courtStatsHtml(slug, s)
     + foldersSec
     + searchHead
+    + (pageOf()===1 && cur && cur.folders.length? folderChipRow(slug, cur, foldOf, rowsAll) : "")
     + qBarHtml("title, folder or #id", idleCap)
     + showChips
     + (pager||"")
-    + `<section data-qsec data-group="open"${foldersSec?' style="margin-top:22px"':""}><h2 class="sec-h">Open ${secHelp("Claims this court has not settled yet — the ones you can still stake on. Settled claims move down to Recently settled.")}<span class="count">${openWin}</span></h2>`
+    + `<section data-qsec data-group="open"${foldersSec?' style="margin-top:22px"':""}><h2 class="sec-h">Open ${secHelp("Claims this court has not settled yet — the ones you can still stake on. Settled claims move down to Recently settled.")}<span class="count" data-count="open">${openWin}</span></h2>`
     + (open.length? `<div class="docket" data-sortable data-sortkind="dk">${rows(open)}</div><div class="actions" style="margin-top:10px">${btn("Open a claim","OpenClaimP",{courtSlug:slug,title:"Your claim of fact",body:"What would settle it — the evidence in view, and what this is NOT asking"},"","a body is optional")}</div><div id="courtcompose"></div>`
         : pageOf()>1? `<p class="small muted">Nothing on this page.</p>`
         : `<div class="empty"><div class="g">◌</div><p>No open claims.</p><p>${btn("Open the first claim","OpenClaimP",{courtSlug:slug,title:"Your claim of fact",body:"What would settle it — the evidence in view, and what this is NOT asking"},"","a body is optional")}</p></div>`)
     + `</section>`
-    + (done.length? `<section data-qsec data-group="settled" style="margin-top:22px"><h2 class="sec-h">Recently settled <span class="count">${doneWin}</span></h2><div class="docket" data-sortable data-sortkind="dk">${rows(done)}</div></section>` : "")
+    + (done.length? `<section data-qsec data-group="settled" style="margin-top:22px"><h2 class="sec-h">Recently settled <span class="count" data-count="settled">${doneWin}</span></h2><div class="docket" data-sortable data-sortkind="dk">${rows(done)}</div></section>` : "")
     + (()=>{ // the chain's own policing lists — page 1, chain order, never sorted or filtered
       if(pageOf()>1) return "";
       const byId = {}; (allRows||claims).forEach(c2=>{ byId[c2.id]=c2; });
@@ -11200,7 +11305,7 @@ function statusPill(statusText){
   if(p.short==="in dispute" && p.side) return `<span class="pill ${p.cls}">${esc(p.side)}?</span>`;
   return `<span class="pill ${p.cls}">${esc(p.short)}${p.side? " "+esc(p.side):""}</span>`;
 }
-function docketRow(slug,c,meta){
+function docketRow(slug,c,meta,foldKeys){
   /* THE DOCKET'S ROWS CARRY TITLES, so the verdict rides the sentence here too.
      These read "SETTLED YES" in a pill beside the claim's own sentence — the
      shape the claim page, the map and the related rows all stopped using, and
@@ -11239,7 +11344,7 @@ function docketRow(slug,c,meta){
     ? `<span class="px" data-pct="${esc(slug)}-${c.id}">${docketSignal(c.series, c.inst)}</span>`
     : `<span class="px" data-pct="${esc(slug)}-${c.id}"></span>`;
   const sortKey = c.series ? c.series[2] : (Number.isFinite(c.inst) ? c.inst : null);
-  return `<a class="crow claimrow${c.offp?" offp":""}" data-id="${c.id}"${sortKey!=null?` data-yes="${sortKey}"`:""}${stakeSortAttrs(c.yesStake, c.noStake, phaseClass(c.statusText).side)} data-q="${esc("#"+c.id+" "+c.title)}" href="#/c/${esc(slug)}/${c.id}">
+  return `<a class="crow claimrow${c.offp?" offp":""}" data-id="${c.id}" data-fold="${esc(foldKeys && foldKeys.length? foldKeys.join(" ") : "~none")}"${sortKey!=null?` data-yes="${sortKey}"`:""}${stakeSortAttrs(c.yesStake, c.noStake, phaseClass(c.statusText).side)} data-q="${esc("#"+c.id+" "+c.title)}" href="#/c/${esc(slug)}/${c.id}">
     <span class="id">#${c.id}</span>
     <span><span class="t">${verdictSentence(c.title, dSide, dv.contested)}</span>${meta?`<span class="m" style="display:block">${safeInline(meta.label)}</span>`:""}<span class="m" style="display:block" id="clk-${esc(slug)}-${c.id}">${(()=>{ const t=clockLine(isLive()? null:NOW, phaseClass(c.statusText).short, c.settleAt, c.escrowUntil); return t? esc(t):""; })()}</span>${dSide? "" : `<span class="m rowpill">${statusPill(c.statusText)}</span>`}</span>
     ${px}</a>`;
