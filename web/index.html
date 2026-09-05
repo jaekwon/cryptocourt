@@ -9704,10 +9704,16 @@ function mapSvg(L, data, slug){
      two of them, and the layout only has to keep the lower half clear. The oval is
      FILLED for that reason and not for decoration: the frame's own border runs
      through the middle of it otherwise — see .mvtag in the stylesheet.
-     DOT, OVAL, MARK, right-aligned as a group. The dot keeps its place at the
-     verdict's left, where the legend says to look for it. The `?` goes OUTSIDE the
-     ring: the oval is what the court decided and the question mark is what is
-     being asked about that, which is the arrangement every other surface uses. */
+     NO PHASE DOT HERE, and that is the second thing this badge removes. The dot is
+     the phase channel and it earns its place on a claim whose phase is all it has
+     — open, provisional, never answered. Beside an oval it says nothing twice: on
+     a settled claim it is the same hue as the ring next to it, and on a disputed
+     one it means "under challenge", which is what the `?` says in a mark a reader
+     can read rather than a colour they have to look up. Every claim WITHOUT an
+     oval keeps its dot, which is every claim that still needs one.
+     THE `?` GOES OUTSIDE THE RING: the oval is what the court decided and the
+     question mark is what is being asked about that — the arrangement every other
+     surface already uses. */
   const vbadge=(pc,n,fh)=>{
     const side=pc.side, contested=pc.short==="in dispute";
     const fs=VTAG.fs, c=side==="NO"?"n":"y", w=est(side,fs,"mvt");
@@ -9718,9 +9724,7 @@ function mapSvg(L, data, slug){
     // The baseline sits below the centre by the same cap-band offset vtag takes off
     // it, so the word rides the middle of the ring rather than its floor.
     const base=cy+0.36*fs;
-    return `<rect class="mdot ${mapDotClass(pc.short, pc.side)}" x="${(left-11).toFixed(1)}" `
-      + `y="${(cy-3).toFixed(1)}" width="6" height="6" data-owner="${owner}"/>`
-      + `<rect class="mvtag ${c}" x="${left.toFixed(1)}" y="${(cy-h/2).toFixed(1)}" `
+    return `<rect class="mvtag ${c}" x="${left.toFixed(1)}" y="${(cy-h/2).toFixed(1)}" `
       + `width="${ovw.toFixed(1)}" height="${h.toFixed(1)}" rx="${(h/2).toFixed(1)}" `
       + `data-owner="${owner}"/>`
       + `<text class="mtext mvt ${c}" x="${(right-VTAG.px).toFixed(1)}" y="${base.toFixed(1)}" `
@@ -10766,8 +10770,17 @@ on(/^\/c\/([a-z0-9-]+)\/map$/, async (slug)=>{
     : chainRels.length
     ? `this court's moderators have filed no folders; ${chainRelNote}, drawn over the flat docket`
     : "this court's moderators have filed no folders and no relations are on chain — the map shows the docket alone";
-  const legendDots = `<span><svg width="12" height="12"><rect x="3" y="3" width="6" height="6" class="mdot g"/></svg> settled YES</span>
-      <span><svg width="12" height="12"><rect x="3" y="3" width="6" height="6" class="mdot gn"/></svg> settled NO</span>
+  /* THE KEY DRAWS WHAT THE MAP DRAWS. A settled claim wears an oval hung off its
+     corner and no dot at all, so the two square swatches here described a mark
+     that appears nowhere — the same failure the note over the dot warns about in
+     the other direction: a key that shows a square for an oval is a key that lies.
+     The `?` gets its own row rather than a hue, because it is the one mark here
+     that is not a colour: it rides whichever oval the side gave it. The dot keys
+     below stay, and every one of them is still drawn — on the claims that have a
+     phase and no verdict, which is what the dot has always been for. */
+  const legendDots = `<span><svg width="24" height="12"><rect x="1" y="1" width="22" height="10" rx="5" class="mvtag y"/></svg> settled YES</span>
+      <span><svg width="24" height="12"><rect x="1" y="1" width="22" height="10" rx="5" class="mvtag n"/></svg> settled NO</span>
+      <span><svg width="10" height="12"><text class="mvq" x="5" y="10" font-size="11" text-anchor="middle">?</text></svg> side under challenge</span>
       <span><svg width="12" height="12"><circle cx="6" cy="6" r="4" class="mdot e"/></svg> in dispute</span>
       <span><svg width="12" height="12"><circle cx="6" cy="6" r="4" class="mdot ed"/></svg> provisional</span>
       <span><svg width="12" height="12"><circle cx="6" cy="6" r="4" class="mdot o"/></svg> answered</span>

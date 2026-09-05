@@ -912,11 +912,20 @@ const TILES = svg => [...svg.matchAll(
   ok("every tile is inside its own node", t.every(x=>inside(rect(x), node)));
   ok("the strip clears every one of its node's labels",
      t.every(x=>own.every(l=>disjoint(rect(x), l))));
-  // Asked of the phase dot rather than of the verdict text: the dot rides the
-  // verdict row, and parseSVG's text regex only catches the left-adjusted
-  // labels — a right-adjusted one would silently make this assertion vacuous.
+  /* Asked of the MARK that closes the node, not of the verdict text: parseSVG's
+     text regex only catches left-adjusted labels, and a right-adjusted one would
+     make this assertion vacuous rather than false.
+     WHICH MARK DEPENDS ON THE CLAIM. One with a phase and no verdict closes with
+     the dot, on a row inside the frame. A decided one has no dot at all — it wears
+     the oval hung off the bottom-right corner — so the oval is what has to clear
+     the strip there, and it is read off the string for the same reason the dot is
+     read off the parse: whichever mark exists, the strip must end above it. */
   const vdot = P.dots.find(c=>c.owner==="c3");
-  ok("the verdict row sits below the strip", !!vdot && vdot.y >= t[0].y + t[0].h - 0.51);
+  const voval = /<rect class="mvtag [yn]" x="[\d.]+" y="([\d.]+)"[^>]*data-owner="c3"/.exec(svgs.titles);
+  const closeY = vdot ? vdot.y : (voval ? +voval[1] : null);
+  ok("the verdict row sits below the strip",
+     closeY != null && closeY >= t[0].y + t[0].h - 0.51,
+     `close=${closeY} strip=${t[0].y}+${t[0].h}`);
   ok("the strip sits below the last line of the title",
      t[0].y >= Math.max(...own.map(x=>x.y + x.h)) - 0.51);
 }
@@ -994,6 +1003,26 @@ const TILES = svg => [...svg.matchAll(
     // settled splits by verdict: the dot must not show the YES green on a claim
     // that decided NO. Spelled out here rather than calling mapDotClass, so this
     // stays an independent expectation and not the function compared to itself.
+    /* A DECIDED CLAIM HAS NO DOT, and that is the assertion for it. The oval hung
+       off its corner is the same hue the dot would have been and says the side in
+       a word besides, so the dot was the phase said twice. What must still hold is
+       that the COLOUR follows the verdict — a court that ruled NO drawn in the YES
+       green is the bug this whole block exists for — so the check moves to the
+       oval's own class, and the absence of the dot is checked with it.
+       mapBadged rather than a second copy of the rule: the page decides who wears
+       one, and a rule restated here would drift from it. */
+    if(mapBadged(pc)){
+      const ov=(new RegExp(`<rect class="mvtag ([yn])"[^>]*data-owner="c${id}"`).exec(svgs.titles)||[])[1];
+      const want = pc.side==="YES" ? "y" : "n";
+      if(dot){ agree=false; console.log("  #"+id+" is decided and still carries a dot", dot); }
+      if(ov!==want){ agree=false; console.log("  oval mismatch #"+id, ov, "want", want); }
+      // A side under challenge carries the mark; a settled one must not.
+      const q=new RegExp(`<text class="mtext mvq"[^>]*data-owner="c${id}"`).test(svgs.titles);
+      if(q!==(pc.short==="in dispute")){
+        agree=false; console.log("  #"+id+" question mark", q, "want", pc.short==="in dispute");
+      }
+      continue;
+    }
     const wantFamily = pc.short==="settled"
       ? (pc.side==="YES" ? "g" : pc.side==="NO" ? "gn" : "gu")
       : {"in dispute":"e",provisional:"ed",proposed:"o","no decision":"vd","never answered":"vf",open:"v"}[pc.short];
@@ -1063,10 +1092,19 @@ ok("controls present", ["mt-titles","mt-ids","mz-in","mz-out","mz-fit","mz-slide
   // for is one fact and should be written once.
   const dotOf = (svg,id) =>
     (new RegExp(`<${MDOT_SHAPE} class="mdot ([a-z]+)"[^>]*data-owner="c${id}"`).exec(svg)||[])[1];
+  /* THE VERDICT'S COLOUR MOVED TO THE OVAL. A settled claim has no dot now — the
+     oval on its corner is the same hue and names the side as well — so the hue
+     these three assertions protect is read off the ring. The bug they were written
+     for is unchanged and still worth the fixture: --good and --yes are the same
+     green, so a court that ruled NO once got the YES colour, and the demo docket
+     has no settled-NO claim to catch it. */
+  const ovalOfHue = (svg,id) =>
+    (new RegExp(`<rect class="mvtag ([yn])"[^>]*data-owner="c${id}"`).exec(svg)||[])[1];
   const svgT = svgOf("titles");
-  ok("a settled-NO node is not drawn in the YES colour", dotOf(svgT,1) === "gn");
-  ok("a settled-YES node keeps it", dotOf(svgT,2) === "g");
-  ok("the two settled dots differ", dotOf(svgT,1) !== dotOf(svgT,2));
+  ok("a settled-NO node is not drawn in the YES colour", ovalOfHue(svgT,1) === "n");
+  ok("...and carries no phase dot beside it", dotOf(svgT,1) === undefined);
+  ok("a settled-YES node keeps it", ovalOfHue(svgT,2) === "y");
+  ok("the two settled ovals differ", ovalOfHue(svgT,1) !== ovalOfHue(svgT,2));
   ok("an open node is unaffected", dotOf(svgT,3) === "v");
   ok("a settled claim of unknown side claims neither colour", (()=>{
      const u = JSON.parse(JSON.stringify(d));
