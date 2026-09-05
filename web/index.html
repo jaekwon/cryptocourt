@@ -6783,7 +6783,27 @@ function applyQ(qRaw){
        already removed from corpus, and the subtraction would then undercount. */
     const all = [...box.querySelectorAll("[data-q]")].filter(r=>!folded(r));
     const folds = all.filter(r=>r.matches(".foldsel,.folderrow")).length;
-    shead.textContent = searchScope(all.length - folds, folds);
+    /* UNDER A FILTER, NAME THE FILTER. At rest this line counts what the box
+       searches — claims and the set rows, both of which are rows you can match.
+       With a set ticked it read "all 10 claims and 3 sets", and the 3 was the
+       set rows still on screen: they are the CONTROL, not content inside the
+       scope. A reader takes it as a statement about the set they just picked,
+       and for Fauci it even looked plausible, since Fauci happens to hold three
+       subsets — a number that agreed with the truth by coincidence and would
+       have disagreed with it for any other set.
+       So a ticked filter says what it is scoped to instead of counting the
+       control. The set rows have not gone anywhere and are still searchable;
+       they are simply not what "in Fauci" is about. */
+    const on = [...box.querySelectorAll(".foldsel[aria-checked=\"true\"]")]
+      .map(r=>{ const t=r.querySelector(".t"); if(!t) return "";
+        // The name only: the meta line beside it carries counts and subset
+        // names, and none of that belongs in a caption.
+        const m=t.querySelector(".m");
+        return (m? t.textContent.slice(0, t.textContent.indexOf(m.textContent)) : t.textContent).trim(); })
+      .filter(Boolean);
+    shead.textContent = on.length === 0 ? searchScope(all.length - folds, folds)
+      : `all ${fmtN(all.length - folds)} claim${all.length-folds===1?"":"s"} in `
+        + (on.length === 1 ? on[0] : `${fmtN(on.length)} sets`);
   }
   const empty = document.getElementById("qempty");
   if(empty) empty.classList.toggle("qhide", !(active && matches===0));

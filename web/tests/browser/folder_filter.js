@@ -362,8 +362,15 @@ const PAGE = 'file://' + path.join(__dirname, '..', '..', 'index.html');
   const cap = await page.evaluate(() => {
     const read = () => {
       const e = document.querySelector("[data-qcount]");
-      const m = (e ? e.textContent.trim() : "").match(/^all ([\d,]+) claims?(?: and ([\d,]+) sets?)?$/);
-      return {text: e ? e.textContent.trim() : null,
+      /* TWO SHAPES NOW. At rest the caption counts what the box searches — "all
+         27 claims and 3 sets". Under a filter it names the scope instead — "all
+         10 claims in Fauci" — because the set rows it used to count are the
+         control rather than content inside that scope. The claim figure is in
+         both, so it parses from either; folders only exist in the resting one. */
+      const t = e ? e.textContent.trim() : "";
+      const m = t.match(/^all ([\d,]+) claims?(?: and ([\d,]+) sets?)?$/)
+             || t.match(/^all ([\d,]+) claims? in \S/);
+      return {text: e ? t : null,
               claims: m ? +m[1].replace(/,/g, "") : null,
               folders: m && m[2] ? +m[2].replace(/,/g, "") : null};
     };
@@ -380,10 +387,21 @@ const PAGE = 'file://' + path.join(__dirname, '..', '..', 'index.html');
   ok("...with the folder figure matching the rows on screen",
      cap.rest.folders === cap.onScreenFolders,
      `${cap.rest.folders} vs ${cap.onScreenFolders} rows`);
-  ok("...and the claim figure following the filter while the folders hold",
-     cap.on.claims !== null && cap.on.claims < cap.rest.claims
-       && cap.on.folders === cap.rest.folders,
+  /* UNDER A FILTER THE CAPTION NAMES THE FILTER, and this arm used to assert the
+     opposite: "the claim figure follows the filter while the folders hold". That
+     was true of the code and wrong for a reader. Ticking Fauci gave "all 10
+     claims and 3 sets", where the 3 counted the set ROWS still on screen — the
+     control, not content in the scope — and a reader takes it as a statement
+     about the set they just picked. For Fauci it even looked plausible, since
+     Fauci holds three subsets; the number agreed with the truth by coincidence
+     and would have disagreed for any other set. Reported, and the assertion was
+     mine, so it is repointed rather than argued with. */
+  ok("...and a ticked set is NAMED rather than counted against the set rows",
+     /^all \d+ claims? in \S/.test(cap.on.text || "") && !/\d+ sets?$/.test(cap.on.text || ""),
      `rest ${JSON.stringify(cap.rest.text)} -> ticked ${JSON.stringify(cap.on.text)}`);
+  ok("...with the claim figure still following the filter",
+     cap.on.claims !== null && cap.on.claims < cap.rest.claims,
+     `${cap.rest.claims} -> ${cap.on.claims}`);
 
   ok("no page errors from the filter", errs.length === 0, errs.slice(0, 2).join(" | "));
   console.log(fail ? "\n" + fail + " FAILURES" : "\nALL PASS");
