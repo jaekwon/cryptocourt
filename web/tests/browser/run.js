@@ -93,6 +93,10 @@ const ALL = ["embed_layout.js", "tagrow_layout.js", "route_crawl.js",
              "rail_sky.js",
              // folders as the court page's top knob: rows AND counts follow it
              "folder_filter.js",
+             // the `?` mark's contrast, in both themes — a token name in the
+             // stylesheet cannot answer "can you see it", and the token was the
+             // thing that was wrong
+             "help_mark.js",
              // the directory leads with courts, and the invitation sits under them
              "directory_lead.js",
              // where "details →" lands relative to the Buy button, which only a

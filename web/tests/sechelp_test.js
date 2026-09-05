@@ -92,8 +92,15 @@ ok("...with no id to thread, so a template without an id scheme can use it",
    above it, the window opened in the wrong place and every assertion below
    failed at once. A rule this file reads has to be found by where it BEGINS. */
 const CSS_AT = src.indexOf("\n.sq{");
-const css = src.slice(CSS_AT, CSS_AT + 1700);
+/* AND IT ENDS AT A MARKER, NOT AT A LENGTH. It used to take a fixed 1700
+   characters, which held exactly as long as nobody wrote anything inside the
+   block: adding ten lines of comment above .sqd pushed the panel rules out of
+   the window and five assertions failed at once, none of them about the panel.
+   A window measured in characters is a window that fails on a comment. */
+const CSS_END = src.indexOf("/* cards + grids */", CSS_AT);
+const css = src.slice(CSS_AT, CSS_END);
 ok("the stylesheet slice found the .sq rule itself", CSS_AT > 0 && /^\n\.sq\{position:static/.test(css));
+ok("...and ends where the control's block does", CSS_END > CSS_AT && css.includes(".sqp{"));
 ok("the button is the 24px target", /\.sq\{[^}]*width:24px; height:24px/.test(css), css.slice(0, 300));
 ok("...and carries no border of its own", /\.sq\{[^}]*border:0/.test(css), css.slice(0, 300));
 ok("...while the mark inside it stays 15px with the ring",

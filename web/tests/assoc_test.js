@@ -220,7 +220,7 @@ ok("...and the contested mark follows the oval, not the row's chip cluster", (()
    same reason. The old rule is gone — asserted, because a dead selector is how a
    stylesheet grows. */
 ok("the contested mark is coloured outside any one surface's scope",
-   /^\.vqm\{[^}]*color:var\(--muted\)/m.test(src)
+   /^\.vqm\{[^}]*color:var\(--ink\)/m.test(src)
    && !/^\.vq\{/m.test(src) && !src.includes('class="vq"'));
 /* AND A ROW NEVER NESTS A CONTROL INSIDE ITS LINK. This is the regression that
    made contestedMark take a flag at all: a <button> inside an <a> is invalid,

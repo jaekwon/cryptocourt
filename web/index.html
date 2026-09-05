@@ -583,10 +583,21 @@ section{margin-top:34px}
    is measured against its neighbours and has to stay 19px. */
 .sq{position:static; flex:none; align-self:center; width:24px; height:24px; padding:0;
   display:inline-flex; align-items:center; justify-content:center;
-  font:600 11px/1 var(--sans); letter-spacing:0; color:var(--muted); cursor:help;
+  font:600 11px/1 var(--sans); letter-spacing:0; color:var(--ink); cursor:help;
   background:none; border:0; margin-block:-5px}
+/* INK, NOT MUTED, AND A RING YOU CAN SEE. Reported as hard to see, and it was:
+   the glyph sat at --muted and the ring at --line-2, which in the dark theme is
+   #2b3843 against a near-black page — a circle at the edge of visible around a
+   grey mark, on the one control whose whole job is to be noticed by a reader who
+   does not yet know what a word means.
+   --ink RATHER THAN WHITE, because this pair has a light theme too, where the
+   foreground is nearly black; the token means "the text colour", which is what
+   was actually asked for. The ring follows it at 55%: lighter than the glyph so
+   the circle stays a footnote, and measured rather than picked — at 45% it came
+   to 2.72:1 in the light theme, under WCAG 1.4.11's 3:1 for the shape of a
+   control, while reading fine in the dark one. help_mark.js measures both. */
 .sq .sqd{display:flex; align-items:center; justify-content:center; width:15px; height:15px;
-  border:1px solid var(--line-2); border-radius:50%; pointer-events:none}
+  border:1px solid color-mix(in srgb, var(--ink) 55%, transparent); border-radius:50%; pointer-events:none}
 /* :focus, NOT :focus-visible. focus-visible is the right choice for a ring you
    do not want on a mouse click — and the wrong one here, because a TAP focuses
    without matching it, so on a touch screen the panel would never open and the
@@ -1191,8 +1202,8 @@ html.embed .main{grid-column:1; grid-row:1; max-width:none; padding:0;
    surface that draws it is inside a link — so it is drawn and titled and its
    sentence is carried beside it for a screen reader. */
 .vqm{display:inline-flex; align-items:center; justify-content:center; width:15px; height:15px;
-  margin-left:.25em; vertical-align:middle; font:600 11px/1 var(--sans); color:var(--muted);
-  border:1px solid var(--line-2); border-radius:50%}
+  margin-left:.25em; vertical-align:middle; font:600 11px/1 var(--sans); color:var(--ink);
+  border:1px solid color-mix(in srgb, var(--ink) 55%, transparent); border-radius:50%}
 /* COLOUR AND WEIGHT ARE NOT SCOPED, for the reason .vtag.y is not: the mark now
    follows the oval on the related rows as well as in the heading, and the same
    qualification must read the same in both. Only the heading's clamp stays. */
