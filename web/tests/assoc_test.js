@@ -469,10 +469,17 @@ ok("...drawing the percentage with the docket's own builder", (()=>{
   // ...and hands it the verdict, so a settled-NO row reads its own side
   return body.includes("docketSignal(c.series, c.inst, sd)");
 })());
-ok("...and the status pill on the meta line, as the docket puts it", (()=>{
+/* AND NO PILL AT ALL, WHICH IS ALSO WHAT THE DOCKET DOES. This asserted the
+   policing row carried the docket's status pill on its meta line; the docket
+   stopped carrying one. Measured before it went: .rowpill had exactly one value
+   left across every list on the site — "open" — because the oval and its mark
+   carry settled, disputed, answered and provisional, and a dead claim says so in
+   words. A chip with one value fires on the absence of every other status.
+   The pairing is what this file is for, so it is still asserted as a pair. */
+ok("...and no status pill on the meta line, as the docket no longer puts one", (()=>{
   const i = src.indexOf("const polrow = (r, metaLine)");
   const body = src.slice(i, src.indexOf("const srow = r => polrow", i));
-  return body.includes('<span class="m rowpill">');
+  return !body.includes('rowpill') && !src.includes('class="m rowpill"');
 })());
 /* The fill is keyed by claim rather than by row, because one claim is in more
    than one list. An id cannot name two elements; that is why the first attempt

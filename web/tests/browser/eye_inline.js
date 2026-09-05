@@ -269,6 +269,29 @@ const ROUTES = ["#/c/orem", "#/c/orem/f/0", "#/c/orem/f/1", "#/c/orem/11", "#/c/
      dead.n > 0 && dead.chipped === 0, JSON.stringify(dead));
   ok("...and still says it", dead.worded === dead.n, JSON.stringify(dead));
 
+  /* AND NO CHIP ON AN OPEN CLAIM. Measured before it went: .rowpill had exactly
+     one value left across every list on the site — "open" — because the oval and
+     its mark carry settled, disputed, answered and provisional, and a dead claim
+     says so in words. A chip with one value is not a status; it fires on the
+     absence of every other status. Asked for.
+     WHAT SAYS IT INSTEAD is position and absence — the section is headed Open,
+     and a row with no oval is a claim nobody has answered — so the test is that
+     the two are still TELLABLE APART, not merely that the chip is gone. */
+  const chips = await page.evaluate(() => {
+    const rows = [...document.querySelectorAll(".docket .crow.claimrow")];
+    const open = [...document.querySelectorAll('[data-group="open"] .crow.claimrow')];
+    return {left: document.querySelectorAll(".rowpill").length,
+            open: open.length,
+            // an open row: no verdict, and no "it is over" words either
+            plain: open.filter(r => !r.querySelector(".sidetag")
+                                 && !/never answered|no decision/.test(r.textContent)).length,
+            // and a settled row is still distinguishable from it
+            settled: rows.filter(r => r.querySelector(".sidetag")).length};
+  });
+  ok("an open claim wears no chip", chips.left === 0, JSON.stringify(chips));
+  ok("...and is still told apart by having no verdict on it",
+     chips.plain > 0 && chips.settled > 0, JSON.stringify(chips));
+
   console.log(fail ? "\n" + fail + " FAILURES" : "\nALL PASS");
   await browser.close();
   process.exit(fail ? 1 : 0);

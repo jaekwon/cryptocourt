@@ -752,7 +752,6 @@ a.card:hover{border-color:var(--line-2)}
 /* .m is a flex row with a 12px gap, so the pill sits in the run of meta facts
    rather than starting a line of its own. margin-top:0 because the .m above it
    has already opened the gap, and the pill's own padding would double it. */
-.docket .m.rowpill{margin-top:5px}
 /* Waiting for the height sweep, not an empty row of meta. */
 .docket .m[data-settle]:empty{display:none}
 /* THE FOLDER FILTER'S OWN HIDE. Separate from .qhide because the two filters
@@ -792,7 +791,6 @@ a.card:hover{border-color:var(--line-2)}
 .foldsel:focus-visible{outline:2px solid var(--accent); outline-offset:-2px}
 .foldsel .foldopen{text-decoration:none}
 
-.docket .m.rowpill .pill{font-size:10px; padding:3px 6px}
 .docket .crow .px{justify-self:end}
 .docket .crow .pill{justify-self:end}
 .docket .t{overflow-wrap:anywhere}
@@ -10886,7 +10884,7 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
         const fk = foldOf[r.id];
         return `<a class="crow claimrow" data-fold="${esc(fk && fk.length? fk.join(" ") : "~none")}" href="#/c/${esc(slug)}/${r.id}">
         <span class="id">#${r.id}</span>
-        <span><span class="t">${c? verdictSentence(r.title, sd, rv.mark, false, px) : safeInline(r.title)+px}</span>${metaLine}${c && !sd? `<span class="m rowpill">${statusPill(c.statusText)}</span>` : ""}</span>
+        <span><span class="t">${c? verdictSentence(r.title, sd, rv.mark, false, px) : safeInline(r.title)+px}</span>${metaLine}</span>
         </a>`; };
       /* A DEADLINE IS A WHEN, NOT A HEIGHT. This printed the realm's own wording —
          "settles at block 168,480" — which is the machinery rather than the
@@ -12003,12 +12001,19 @@ function docketRow(slug,c,meta,foldKeys){
      is over: without them a dead claim in Recently settled is an open one with no
      clock, which reads as settled-somehow when it was never answered at all. The
      map states it the same way, in plain text beside the node. */
+  /* AND NO CHIP ON AN OPEN ONE EITHER. Measured before it went: `.rowpill` had
+     exactly one value left across every list on the site — "open" — because the
+     oval and its mark now carry settled, disputed, answered and provisional, and
+     a dead claim says so in words. A chip with one value is not a status, it is a
+     decoration that fires on the absence of every other status.
+     WHAT SAYS IT INSTEAD is position and absence: the section is headed Open, and
+     a row with no oval is a claim nobody has answered. Asked for. */
   const pcShort = phaseClass(c.statusText).short;
   const overShort = (pcShort === "never answered" || pcShort === "no decision")? pcShort : "";
   const sortKey = c.series ? c.series[2] : (Number.isFinite(c.inst) ? c.inst : null);
   return `<a class="crow claimrow${c.offp?" offp":""}" data-id="${c.id}" data-fold="${esc(foldKeys && foldKeys.length? foldKeys.join(" ") : "~none")}"${sortKey!=null?` data-yes="${sortKey}"`:""}${stakeSortAttrs(c.yesStake, c.noStake, phaseClass(c.statusText).side)} data-q="${esc("#"+c.id+" "+c.title)}" href="#/c/${esc(slug)}/${c.id}">
     <span class="id">#${c.id}</span>
-    <span><span class="t">${verdictSentence(c.title, dSide, dv.mark, false, px)}</span>${meta?`<span class="m" style="display:block">${safeInline(meta.label)}</span>`:""}<span class="m" style="display:block" id="clk-${esc(slug)}-${c.id}">${(()=>{ const t=clockLine(isLive()? null:NOW, phaseClass(c.statusText).short, c.settleAt, c.escrowUntil); return t? esc(t):""; })()}</span>${overShort? `<span class="m" style="display:block">${esc(overShort)}</span>` : ""}${dSide || overShort? "" : `<span class="m rowpill">${statusPill(c.statusText)}</span>`}</span>
+    <span><span class="t">${verdictSentence(c.title, dSide, dv.mark, false, px)}</span>${meta?`<span class="m" style="display:block">${safeInline(meta.label)}</span>`:""}<span class="m" style="display:block" id="clk-${esc(slug)}-${c.id}">${(()=>{ const t=clockLine(isLive()? null:NOW, phaseClass(c.statusText).short, c.settleAt, c.escrowUntil); return t? esc(t):""; })()}</span>${overShort? `<span class="m" style="display:block">${esc(overShort)}</span>` : ""}</span>
     </a>`;
 }
 
