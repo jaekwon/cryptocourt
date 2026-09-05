@@ -235,16 +235,41 @@ const {PAGE, demoPage} = require('./harness');
             titled: gs.filter(g => (g.querySelector("title") || {}).textContent).length,
             loose: badges.filter(r => !r.closest("g.vsay")).length,
             // the mark this was reported about, from the function that draws it
-            bang: typeof mapMarkWords === "function"
-                  ? mapMarkWords({short: "settled", side: "NO"}, {inst: 72, route: "vote"}) : null};
+            bang: mapMarkWords({short: "settled", side: "NO"}, {inst: 72, route: "vote"}, "mark"),
+            oval: mapMarkWords({short: "settled", side: "NO"}, {inst: 72, route: "vote"}, "side"),
+            card: mapMarkWords({short: "settled", side: "NO"}, {inst: 72, route: "vote"}),
+            // and a pair drawn on the page: the two pills of one badge
+            pair: (() => {
+              const g = gs.find(x => x.parentElement && [...x.parentElement.querySelectorAll("g.vsay")].length > 1);
+              if (!g) return null;
+              const two = [...g.parentElement.querySelectorAll("g.vsay")].slice(0, 2);
+              return two.map(x => ({mark: x.querySelector("text").textContent,
+                                    say: x.querySelector("title").textContent}));
+            })()};
   });
   ok("the map draws verdict badges", said.groups > 0, JSON.stringify(said));
   ok("...every one of them carries its sentence", said.titled === said.groups, JSON.stringify(said));
   ok("...and no badge is left without one", said.loose === 0, JSON.stringify(said));
   ok("the `!` mark explains that the verdict went against the stake",
      /went against the stake/.test(said.bang || ""), JSON.stringify(said.bang));
-  ok("...and says which way the money sat", /\b72% the other way/.test(said.bang || ""),
+  ok("...and says which way the stake sat", /\b72% the other way/.test(said.bang || ""),
      JSON.stringify(said.bang));
+  /* THE OVAL AND THE MARK ARE DIFFERENT QUESTIONS. Both bubbles used to hand
+     over the same paragraph, so hovering `!` explained the verdict instead of
+     the glyph under the pointer. */
+  ok("...while the oval beside it says what was decided",
+     /settled this NO/.test(said.oval || ""), JSON.stringify(said.oval));
+  ok("...and does not repeat the mark's sentence",
+     !/against the stake/.test(said.oval || ""), JSON.stringify(said.oval));
+  ok("...so the two are not the same string", said.bang !== said.oval,
+     JSON.stringify([said.bang, said.oval]));
+  /* The card behind a click still gets both, from the same clauses — the whole
+     point of building them in one place. */
+  ok("the card still carries verdict and mark together",
+     /settled this NO/.test(said.card || "") && /against the stake/.test(said.card || ""),
+     JSON.stringify(said.card));
+  if (said.pair) ok("a badge's two pills differ on the page too",
+     said.pair[0].say !== said.pair[1].say, JSON.stringify(said.pair));
 
   // A page error is a failure even when the frame looks right: the map may have
   // drawn a first pass and thrown on the data.

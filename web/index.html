@@ -9114,26 +9114,45 @@ function mapBadged(pc){
    SAYS ONLY WHAT IS KNOWN. Where `route` never arrived — a live court, where it
    costs a read per claim — a settled claim gets "Settled YES." and not a guess
    about whether anybody ever disputed it. Same rule as the marks themselves. */
-function mapMarkWords(pc, cl){
+function mapMarkWords(pc, cl, part){
   const c = cl || {}, side = pc.side;
   const inst = Number.isFinite(c.inst)? c.inst : null;
   const held = inst==null? null : (side==="YES"? inst : 100-inst);
   const against = (held!=null && held < MAPMARK.surprise*100)
-    ? ` The answer went against the stake, which sat ${Math.round(100-held)}% the other way.` : "";
+    ? `The answer went against the stake, which sat ${Math.round(100-held)}% the other way.` : "";
   const rounds = Number.isFinite(c.rounds)? c.rounds : 0;
   const round = rounds>0? ` This is dispute round ${rounds+1}.` : "";
-  if(pc.short==="in dispute")
-    return `Answered ${side}, and disputed — a sealed vote is deciding.${round}${against}`;
-  if(pc.short==="provisional")
-    return `A vote decided ${side}, provisionally — a new dispute can reopen it.${round}${against}`;
-  if(pc.short==="proposed")
-    return `Answered ${side}. Nobody has disputed it yet, and the window is still open.${against}`;
-  if(pc.short==="settled"){
-    if(c.route==="vote") return `A vote settled this ${side}, and it is final.${round}${against}`;
-    if(c.route) return `Settled ${side} — the window closed with nobody disputing the answer.${against}`;
-    return `Settled ${side}, and it is final.${against}`;
-  }
-  return "";
+  /* TWO BUBBLES, TWO SENTENCES. The oval and the mark beside it are different
+     questions — "what did the court decide" and "what is that glyph" — and both
+     were handing over the same paragraph, so hovering `!` explained the verdict
+     rather than the thing being pointed at. Asked for as splitting the helper
+     text, and it is the mark that gains by it: `!` now says only that the answer
+     went the other way from the stake, which is all `!` means.
+     ONE PLACE, THREE READERS. The card behind a click still gets the whole
+     thing; every clause is written once here, because the day a wording is
+     copied is the day two of them start to differ. */
+  let verdict = "", glyph = "";
+  if(pc.short==="in dispute"){
+    verdict = `Answered ${side}, and disputed — a sealed vote is deciding.`;
+    glyph   = "A sealed vote is deciding whether to overturn this answer.";
+  } else if(pc.short==="provisional"){
+    verdict = `A vote decided ${side}, provisionally — a new dispute can reopen it.`;
+    glyph   = "A vote decided it, and a new dispute can reopen it.";
+  } else if(pc.short==="proposed"){
+    verdict = `Answered ${side}. Nobody has disputed it yet, and the window is still open.`;
+    glyph   = "Answered, and the settle clock is still running.";
+  } else if(pc.short==="settled"){
+    verdict = c.route==="vote"? `A vote settled this ${side}, and it is final.`
+            : c.route        ? `Settled ${side} — the window closed with nobody disputing the answer.`
+                             : `Settled ${side}, and it is final.`;
+    // no glyph on a settled claim nobody voted on: mapMark draws no mark there
+    glyph   = c.route==="vote"? "A vote decided it." : "";
+  } else return "";
+  // the round note belongs to the dispute, so it rides whichever sentence says so
+  if(part === "side") return verdict + round;
+  if(part === "mark") return [against, glyph && glyph + (pc.short==="in dispute"? round : "")]
+                        .filter(Boolean).join(" ");
+  return verdict + round + (against? " " + against : "");
 }
 /* WHAT THE SECOND BUBBLE SAYS, and it is one string built from three facts.
    The vocabulary is compositional, so a reader learns four glyphs and not eight
@@ -9987,12 +10006,10 @@ function mapSvg(L, data, slug){
     const side=pc.side, c=side==="NO"?"n":"y", owner="c"+n.id;
     const cy=n.y+fh;                                     // the frame's bottom edge
     const mark=mapMark(pc, cl);
-    // THE SAME SENTENCE THE CARD PRINTS. One wording for the badge, the card and
-    // the reader a screen reader is describing it to — a mark explained twice is
-    // a mark explained two ways the day one of them is edited.
-    const say = mapMarkWords(pc, cl);
+    // The oval answers "what was decided"; the mark answers "what is this glyph".
+    const say = mapMarkWords(pc, cl, "side"), markSay = mapMarkWords(pc, cl, "mark");
     let right=n.x+n.w-K.tpad, out="";
-    if(mark.t){ const p=vpill(mark.t,"s"+(mark.reopen?" re":""),right,cy,owner,say);
+    if(mark.t){ const p=vpill(mark.t,"s"+(mark.reopen?" re":""),right,cy,owner,markSay||say);
       out+=p.svg; right-=p.w+K.vgap; }
     return vpill(side,c,right,cy,owner,say).svg + out;
   };
