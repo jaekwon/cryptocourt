@@ -29,7 +29,6 @@ code += slice('function phaseClass(', 'function docketRow');
 code += "var store={get:k=>{try{return localStorage.getItem(k)}catch(_){return null}},set:()=>{},del:()=>{}};\n";
 code += "const demoCourt = slug => Object.hasOwn(DEMO.courts, slug)? DEMO.courts[slug] : null;\n";
 code += slice('const CURATION_V', '/* ======').replace('const CURATION_V','var CURATION_V');
-code += 'const ICN_FOLDER="<svg/>";\n';   // stubbed as folders_test does: the row needs the mark to exist, not to be drawn
 // verdictSentence dresses the related row's title now — the side rides the
 // sentence here as it does on the claim page and the map, so the builder has to
 // be in scope alongside the row that calls it.
@@ -53,6 +52,7 @@ code += 'var BLOCK_SECS=' + src.match(/const BLOCK_SECS\s*=\s*(\d+)/)[1] + ';\n'
 code += slice('const MON=', 'function resolutionLadder(').replace(/^const MON=/m,'var MON=');
 code += slice('function resolutionLadder(', 'function resolutionSection');
 code += slice('function demoCensus(', 'function courtRecordPanel');
+code += 'const ICN_EYE_OPEN="<svg/>", ICN_EYE_SHUT="<svg/>";\n';   // the row needs the marks to exist, not to be drawn
 code += slice('function folderCount(', 'function folderMeta');
 eval(code);
 

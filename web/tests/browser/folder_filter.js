@@ -288,6 +288,34 @@ const PAGE = 'file://' + path.join(__dirname, '..', '..', 'index.html');
     rows[0].click();                                   // tick exactly the first
     return {on: look(rows[0]), off: look(rows[1])};
   });
+  /* ONE COLOUR IN BOTH STATES, and no folder glyph beside it. The shut eye was
+     dimmed to half alpha, which said "disabled" when it meant "not being looked
+     at" — the lid already carries the state, so the dimming was the state said
+     twice and once wrongly. Asserted as an EQUALITY between the two rows rather
+     than against a hex: the accent is a design value, "both eyes are the same
+     ink" is the requirement.
+     Ablated: putting opacity:.5 back on .eyeshut leaves the computed COLOR equal
+     — opacity is not colour — so this arm needs the opacity too, and it reads
+     both. Measured: with the dim restored, this fails on opacity alone. */
+  const ink = await page.evaluate(() => {
+    const rows = [...document.querySelectorAll("#qscope .foldsel")];
+    rows.forEach(r => { if (r.getAttribute("aria-checked") === "true") r.click(); });
+    rows[0] && rows[0].click();
+    const read = r => { const b = r.querySelector(".foldbox");
+      const e = [...r.querySelectorAll(".eye")].find(x => getComputedStyle(x).display !== "none");
+      return {color: getComputedStyle(b).color,
+              opacity: e ? getComputedStyle(e).opacity : null,
+              boxOpacity: getComputedStyle(b).opacity}; };
+    return {on: read(rows[0]), off: read(rows[1]),
+            folderGlyphs: document.querySelectorAll("#qscope .foldsel .icn").length};
+  });
+  ok("a hidden set's eye is the same ink as a shown one",
+     ink.on.color === ink.off.color, `${ink.on.color} vs ${ink.off.color}`);
+  ok("...and is not dimmed to look disabled",
+     ink.off.opacity === "1" && ink.off.boxOpacity === "1",
+     `eye ${ink.off.opacity}, box ${ink.off.boxOpacity}`);
+  ok("the folder glyph is gone from the set rows", ink.folderGlyphs === 0, String(ink.folderGlyphs));
+
   ok("both eyes ship in every folder row",
      !eyes.few && eyes.on.both && eyes.off.both, JSON.stringify(eyes));
   ok("a ticked folder shows the open eye and only that",

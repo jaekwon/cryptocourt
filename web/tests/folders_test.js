@@ -71,10 +71,10 @@ code += 'async function inChunks(items, size, fn){ const out=[]; for(let i=0;i<i
 code += slice('const CURATION_V', '/* ------').replace('const CURATION_V','var CURATION_V');
 code += slice('const CHAIN_FOLDER_CAP', '/* ======').replace('const CHAIN_FOLDER_CAP','var CHAIN_FOLDER_CAP');
 code += slice('function resolveFolderPath(', 'function folderMeta(');
+code += 'const ICN_EYE_OPEN="<svg/>", ICN_EYE_SHUT="<svg/>";\n';   // the row needs the marks to exist, not to be drawn
 code += slice('function folderCount(', 'function folderRowHtml');
 code += slice('function folderRowHtml(', 'function isDone');
 code += 'function safeInline(x){ return esc(String(x)); }\n';
-code += 'const ICN_FOLDER="<svg/>";\n';
 // F1 asks mapLayout directly now, so the map's own code has to be here.
 code += slice('const MAPK', '/* The join panel').replace('const MAPK','var MAPK');
 code += 'function phaseClass(t){ return {short:"open"}; }\n';
