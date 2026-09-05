@@ -202,11 +202,14 @@ func AffirmSet(cur realm, courtSlug string, claimID uint64) uint64 {
 	   one act this feature exists to take out of their hands.
 	   Filed in one set, born inside it. Filed in none, born at the root.
 	   AND FILED IN SEVERAL IS A REFUSAL, not a guess. A claim may belong to any
-	   number of sets — ClaimSets returns a slice precisely because of that — so
+	   number of sets — ClaimFolders returns a SLICE precisely because of that — so
 	   "the parent" is only well defined when there is exactly one. Picking the
 	   first would make the tree depend on iteration order, which is the kind of
 	   thing that is stable until the day it is not.
-   newFolderCore re-checks the depth cap for us: a parent already four deep
+	   (That sentence said "ClaimSets", which is not a function in this realm and
+	   never has been — a wrong name in the one passage whose point is that two
+	   reads sit a letter apart and confusing them nests every set under itself.)
+	   newFolderCore re-checks the depth cap for us: a parent already four deep
 	   refuses there, with the message that names the cap.
 	   TWO READS, ONE LETTER APART, and they answer opposite questions:
 	     ClaimFolders(claim) — the sets this claim is FILED IN  (the parent)
