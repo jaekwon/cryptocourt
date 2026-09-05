@@ -526,8 +526,8 @@ ok("...with the clause pinned, so a one-sided rename fails the build",
 ok("...offering the buy panel only where buying would work",
    /tooLate \|\| !slug \? ""/.test(src) && /class="btn primary" href="#\/c\/\$\{esc\(slug\)\}\?at=join">Get/.test(src)
    && !src.includes("See the court"));
-ok("...and saying plainly that a purchase cannot fix this round",
-   src.includes("Buying now counts in the next vote, not this one."));
+ok("...and saying plainly that coin taken now cannot fix this round",
+   src.includes("Coin received now counts in the next vote, not this one."));
 // SIMPLE ENGLISH. The first version explained a refusal in the vocabulary of
 // the thing that refused: epoch, snapshot, weigh, frozen at. None of those
 // words survive on either side of the boundary now.

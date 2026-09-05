@@ -4992,7 +4992,7 @@ function noCoinHelp(why, el){
       <button type="button" class="pill void" data-cancel>close</button></div>
     <div class="bd">
       <p>${tooLate
-        ? `You had no ${sym} when this vote started, so you have no say in it. Buying now counts in the next vote, not this one.`
+        ? `You had no ${sym} when this vote started, so you have no say in it. Coin received now counts in the next vote, not this one.`
         : `You need ${sym} to vote here. It is this court's own coin — not an investment, just what gives you a say.`}</p>
       ${tooLate || !slug ? ""
         : `<div class="actions"><a class="btn primary" href="#/c/${esc(slug)}?at=join">Get ${sym}</a></div>`}
@@ -5636,7 +5636,7 @@ document.addEventListener("click",(ev)=>{
   const na = ev.target.closest("[data-needack]");
   if(na){ ev.preventDefault(); let n=na.parentElement.querySelector(".txnote");
     if(!n){ n=document.createElement("div"); n.className="txnote"; n.setAttribute("role","status"); na.parentElement.appendChild(n); }
-    n.textContent="Tick the acknowledgement first — buying is permanent."; return; }
+    n.textContent="Tick the acknowledgement first — the burn is permanent."; return; }
   /* AN EXHIBIT OPENS FULL SIZE, and full size is the only place the overlay can
      say whether the bytes are the ones that were filed — gnoweb's CSP forbids
      the fetch, so it renders and stays silent. Delegated because the card is
@@ -7502,16 +7502,16 @@ function buyRowsHtml(q, price, slug, after){
      inside it as an HTML comment for about a minute — the two backticks quoting those
      selectors closed the literal early and took the whole page's script with them. */
   if(after) return `<dialog class="helper" id="help-buy" aria-labelledby="help-buy-h">
-        <div class="hd"><h3 id="help-buy-h">What this buy costs</h3><button type="button" class="pill void" data-close>Close</button></div>
+        <div class="hd"><h3 id="help-buy-h">What this offering costs</h3><button type="button" class="pill void" data-close>Close</button></div>
         <div class="bd qrows">
           <div class="line"><span class="l">Average price you pay</span><span class="r tnum">${q.avg.toFixed(4)} <small>µGNOT/unit</small></span></div>
           ${q.refund>0n? `<div class="line"><span class="l">Returned to you</span><span class="r tnum">${q.refund.toLocaleString("en-US")} <small>µGNOT, sent back in the same transaction</small></span></div>` : ""}
           <div class="line"><span class="l">Price after this</span><span class="r tnum">${fmtN(q.priceAfter)} <small>µGNOT/unit · now ${fmtN(price)}</small></span></div>
           <div class="line"><span class="l">Your voice share</span><span class="r tnum">${pctText(pct, 100)}</span></div>
           <p class="small muted">${isLive()
-            ? "Quoted from the chain just now — if someone buys first you'll receive fewer units than shown, never more; the transaction's own result is final."
+            ? "Quoted from the chain just now — if another offering lands first you'll receive fewer units than shown, never more; the transaction's own result is final."
             : "Sample data — computed from the demo court, no chain involved."}</p>
-          <p class="small muted">The only way out is a private buyer, and there may not be one. Treat this as GNOT spent for a voice, not GNOT moved.</p>
+          <p class="small muted">The only way out is a private transfer to somebody willing to take it, and there may not be one. Treat this as GNOT spent for a voice, not GNOT moved.</p>
         </div></dialog>`;
   /* NO RAW UNIT COUNT. "19,533,968 units" is the same figure in base units, and
      a reader has no use for it: the coin amount beside it already says what they
@@ -7556,12 +7556,15 @@ function buyActionsHtml(slug, q){
      already says the coin cannot be sold back, in the reader's own words and
      with a tick beside it; five more words of shorthand under the button says
      the same thing worse. */
-  // BUY, NOT GET — the owner's call, and it replaces the argument that stood
-  // here: that "buy" implies a seller and a price you could sell back at, and
-  // there is neither. That fact has a better home than a verb. It is the
-  // acknowledgement directly above this button, in a sentence, with a tick that
-  // has to be ticked before the button will do anything.
-  // The second argument stays "Buy": that is the realm entrypoint, not copy.
+  /* RECEIVE, NOT BUY — the owner's call, and the register is a burnt offering:
+     what you do is burn GNOT, and what you get back is given rather than traded
+     for. "Buy" carries a seller, a price and a way out at that price, and there
+     is none of the three: the GNOT goes to a keyless address and nothing on the
+     other side of the curve is holding anything for you.
+     NOT "GET" EITHER. The panel above already says YOU BURN; the verb under it
+     says what comes back, and "receive" is the half of the exchange the reader
+     is owed a word for.
+     The second argument stays "Buy": that is the realm entrypoint, not copy. */
   // cc(), NOT ccText(): the coin wears the same gold bar here as in the row
   // above, so what you press names what you were just quoted. btn() takes {html}
   // for exactly this, and .btn.primary re-tunes the gold to the accent fill.
@@ -7577,7 +7580,7 @@ function buyActionsHtml(slug, q){
      changed was the TARGET, from the row's 42px down to 23px. That is under the
      24px this file holds itself to elsewhere (SC 2.5.8), and it is the one
      control here a thumb has to find beside a much larger button. */
-  return btn(ok? {html:"Buy "+cc(Number(q.units),slug)} : "Buy the coin",
+  return btn(ok? {html:"Receive "+cc(Number(q.units),slug)} : "Receive the coin",
              "Buy", {slug}, "primary", "", send, gate, false, "", ICN_PLUS)
     // "see details", not "details →". The arrow is this page's mark for LEAVING —
     // every tlink and hjump on it goes somewhere — and this opens a dialog over the
@@ -7733,7 +7736,7 @@ function voteHelpModal(slug, d){
       <p>If you could watch the total, the best move would be to wait and copy whoever voted with the most weight — and the result would be one person's opinion, repeated. So the votes sit un-summed until the vote closes. <b>Sealed means un-summed, not secret.</b></p>
 
       <h4>Who can vote</h4>
-      <p>Anyone holding ${SYM}, this court's token. Your weight is whatever you held at the last hourly snapshot before this round opened, so buying more now adds nothing.</p>
+      <p>Anyone holding ${SYM}, this court's token. Your weight is whatever you held at the last hourly snapshot before this round opened, so receiving more now adds nothing.</p>
       <p>Three people cannot: whoever wrote the claim, whoever answered it, and anyone who staked on it. Holding a position on the outcome disqualifies you from judging it. The court refuses those votes when they are signed, whatever this page shows.</p>
 
       <h4>Where the coin goes</h4>
@@ -10298,7 +10301,7 @@ function joinPanel(slug, s){
     BUYCTX = {slug, noquote:true};
     body = `<div class="kv"><div class="k">coin price</div><div class="v tnum">${priceText(s.price, s.minted)} <small>µGNOT/unit</small></div></div>
         <div class="kv"><div class="k">supply</div><div class="v tnum">${cc(s.supply,slug)}</div></div>
-        <p class="small muted" style="margin:8px 0 0">No quote — the node did not answer the curve read; the chain computes the true amount when you buy.</p>
+        <p class="small muted" style="margin:8px 0 0">No quote — the node did not answer the curve read; the chain computes the true amount when the offering lands.</p>
         <label class="ack small"><input type="checkbox" id="buyack"${ackAttr}> I understand ${sym} cannot be sold back to the court.</label>
         <div class="actions" style="margin-top:10px" id="buyactions">${buyActionsHtml(slug,null)}</div>`;
   }else{
@@ -14077,7 +14080,7 @@ function introStrip(){
 }
 function fourThings(){
   return `<section><div class="primer"><h3>Four things, before any button</h3><ol>
-    <li>Buying the coin is <b>permanent</b> — GNOT flows one way and is burned; there is no sell-back.</li>
+    <li>Receiving the coin is <b>permanent</b> — GNOT flows one way and is burned; there is no sell-back.</li>
     <li>Staked coin comes back <b>1×, win or lose</b>; only the <b>reward</b> rides on the verdict. (The GNOT that minted the coin was already burned — that part was spent, not staked.)</li>
     <li>The reward is <b>conviction</b> — stake × time on the winning side — drawn from newly-minted coin, capped so it can never be farmed.</li>
     <li>Anyone may <b>answer</b> (with a bond; seasoned courts reserve the first day for qualified answerers), anyone but the answerer may <b>dispute</b>, and anyone may <b>flag</b>; bonds spend real tokens with no undo — staking is the one act you can unwind, until an answer posts.</li>
@@ -14444,7 +14447,7 @@ async function meHoldings(addr,courts){
      a single total would be a number that means nothing. One court gets its
      balance; several get a count with the balances spelled out beneath. */
   const heldStat = !heldList.length
-    ? `<div class="stat"><div class="k">coin held</div><div class="v tnum">none</div><div class="sub">buy a court's coin from its own page to take a position</div></div>`
+    ? `<div class="stat"><div class="k">coin held</div><div class="v tnum">none</div><div class="sub">burn GNOT on a court's page to receive its coin and take a position</div></div>`
     : heldList.length===1
     ? `<div class="stat"><div class="k">coin held</div><div class="v tnum">${cc(heldList[0][2], heldList[0][0])}</div><div class="sub">in ${safeInline(heldList[0][1])} — stake it on a claim to earn conviction</div></div>`
     : `<div class="stat"><div class="k">coin held</div><div class="v tnum">${heldList.length} courts</div><div class="sub">${heldList.map(([sl,,b])=>cc(b,sl)).join(" · ")} — one coin per court, never summed</div></div>`;
@@ -14569,7 +14572,7 @@ async function needsList(addr,courts){
       <span class="rt"><span class="pill void">excluded</span></span></div>`;
   const ballotsSec = (ballots.length||bexcluded.length)
     ? `<h2 class="sec-h" style="margin-top:14px">Open ballots — courts you hold <span class="count">${ballots.length} · checked ${ballotCourts} court${ballotCourts===1?"":"s"} you hold coin in</span></h2>
-       <p class="small muted" style="margin:0 0 8px">Sealed votes running in courts whose coin you hold — one question per ballot: overturn the answer? Sealed means un-summed, not secret — this page will not add ballots up mid-vote, and anyone who wants the running count can read it off the chain. Weight is the balance at the hourly snapshot before the round opened — buying now adds nothing; the claim's author, answerer, and stakers are excluded — the court refuses them when they sign.${stripUnchecked? ` …and ${fmtN(stripUnchecked)} more rows awaiting review were not checked — the chain's page shows the nearest 50.`:""}</p>
+       <p class="small muted" style="margin:0 0 8px">Sealed votes running in courts whose coin you hold — one question per ballot: overturn the answer? Sealed means un-summed, not secret — this page will not add ballots up mid-vote, and anyone who wants the running count can read it off the chain. Weight is the balance at the hourly snapshot before the round opened — receiving now adds nothing; the claim's author, answerer, and stakers are excluded — the court refuses them when they sign.${stripUnchecked? ` …and ${fmtN(stripUnchecked)} more rows awaiting review were not checked — the chain's page shows the nearest 50.`:""}</p>
        ${ballots.length? `<div class="docket">${ballots.map(brow).join("")}</div>`:""}
        ${bexcluded.length? `<h2 class="sec-h" style="margin-top:10px">You are excluded from these <span class="count">${bexcluded.length}</span></h2><div class="docket">${bexcluded.map(exrow).join("")}</div>`:""}`
     : "";
@@ -15379,11 +15382,11 @@ on(/^\/about$/, async ()=>{
   main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:"How it works"}])
     + `<h1 class="page-h">How a court works</h1>
     <div class="prose" style="margin-top:16px">
-      <p>A <b>court</b> is a self-contained venue for claims of fact. It mints its own coin on a one-way bonding curve — you buy in with GNOT, and the GNOT is <b>burned</b>. There is no treasury and no sell-back; the coin's worth is what it can stake and earn.</p>
+      <p>A <b>court</b> is a self-contained venue for claims of fact. It mints its own coin on a one-way bonding curve — you burn GNOT and receive the coin in return. There is no treasury and no sell-back; the coin's worth is what it can stake and earn.</p>
       <h2>Claims, and staking</h2>
       <p>Anyone opens a <b>claim</b> — an immutable statement of fact — for a small deposit plus a fee. Both return when the claim runs its course; a claim voted junk burns both, and one that dies unanswered burns the fee (the spam price). Then anyone <b>stakes</b> coin on YES or NO. Staking is <b>no-loss</b>: your principal always returns 1×, whichever way the claim resolves.</p><p>What you earn is a reward proportional to your <b>conviction</b> — stake × time held on the winning side — drawn from newly-minted coin under a hard per-claim cap, so it rewards early, accurate belief and can't be farmed. Unstaking is free until an answer posts; the reward weight you've already earned is kept.</p>
       <h2>Answers, disputes, and flags</h2>
-      <p>Once a claim has enough sustained interest, an <b>answer</b> may be posted with a bond (in seasoned courts, qualified answerers hold the first day). Posting freezes staking. Left alone, the answer settles 72 hours later.</p><p>To contest it, open a <b>dispute</b>: a token vote on <i>“overturn the answer?”</i>, sealed until it closes. Voting weight comes from the hourly snapshot taken before the vote opened — voice bought mid-vote counts for nothing. A forfeited bond is <b>burned</b>, never paid to the other side, and the winner is compensated from fresh issuance — so nothing ever moves between adversaries.</p><p>Separately, a <b>flag</b> asks whether a claim carried real information; a wrong flag burns its bond, a right one is paid, and a vote that fails to settle can burn half. A verdict always shows its route — <i>undisputed</i> or <i>by vote</i>.</p>
+      <p>Once a claim has enough sustained interest, an <b>answer</b> may be posted with a bond (in seasoned courts, qualified answerers hold the first day). Posting freezes staking. Left alone, the answer settles 72 hours later.</p><p>To contest it, open a <b>dispute</b>: a token vote on <i>“overturn the answer?”</i>, sealed until it closes. Voting weight comes from the hourly snapshot taken before the vote opened — voice received mid-vote counts for nothing. A forfeited bond is <b>burned</b>, never paid to the other side, and the winner is compensated from fresh issuance — so nothing ever moves between adversaries.</p><p>Separately, a <b>flag</b> asks whether a claim carried real information; a wrong flag burns its bond, a right one is paid, and a vote that fails to settle can burn half. A verdict always shows its route — <i>undisputed</i> or <i>by vote</i>.</p>
       <h2>This page is optional</h2>
       <p>Everything here is read from the court's own page on the chain and its public data, and every button is an ordinary chain transaction signed in your wallet. Switch the Source to a live node in the left rail to read a deployed court; the sample data lets you explore every state offline.</p>
       ${aboutTour()}

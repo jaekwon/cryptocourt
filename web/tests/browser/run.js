@@ -93,6 +93,9 @@ const ALL = ["embed_layout.js", "tagrow_layout.js", "route_crawl.js",
              "rail_sky.js",
              // folders as the court page's top knob: rows AND counts follow it
              "folder_filter.js",
+             // you burn and you receive — never "buy", checked on the rendered
+             // page because the realm entrypoint is legitimately named Buy
+             "vocab_receive.js",
              // the `?` mark's contrast, in both themes — a token name in the
              // stylesheet cannot answer "can you see it", and the token was the
              // thing that was wrong

@@ -126,7 +126,10 @@ ok("panel: ack sentence", html.includes("cannot be sold back to the court"));
 const plain = h => String(h).replace(/<[^>]*>/g, " ").replace(/\s+/g, " ");
 // The face carries the gold bar now, not plain text — bar, hidden colon, court —
 // so the figure and the symbol survive the strip with the colon spaced out.
-ok("panel: button restates output", /Buy 0\.8\d Kourt : [A-Z]+/.test(plain(html)));
+// RECEIVE, NOT BUY — the register is a burnt offering; see the note beside the
+// button. The rest of this assertion is unchanged: the button still restates the
+// figure it was quoted, which is the thing being checked.
+ok("panel: button restates output", /Receive 0\.8\d Kourt : [A-Z]+/.test(plain(html)));
 // And it is MARKUP on that face, which btn() escapes for every other caller.
 ok("panel: the button's coin is the symbol, not escaped source",
    /<button[^>]*>[\s\S]*?class="ccsym"/.test(html) && !html.includes("&lt;span class=\"ccsym\""));
@@ -144,10 +147,10 @@ ok("panel: demo offers no runnable command for sample data",
    is what you get, what you burn, and the acknowledgement. The disclosure is one
    click away, NOT gone — asserted as the pair, since "present somewhere" and
    "present outside the dialog" are different claims and only the first is true. */
-ok("panel: fineprint worst case", html.includes("private buyer, and there may not be one"));
+ok("panel: fineprint worst case", html.includes("private transfer to somebody willing to take it"));
 ok("panel: ...and it lives inside the details dialog", (()=>{
    const i = html.indexOf('id="help-buy"');
-   const j = html.indexOf("private buyer, and there may not be one");
+   const j = html.indexOf("private transfer to somebody willing to take it");
    const k = html.indexOf("</dialog>", i);
    return i >= 0 && j > i && j < k;
 })());
