@@ -141,7 +141,7 @@ ok("the dispute ballot carries no lock row",
 ok("the reward-pool row keeps its .qrows wrapper",
    /function rewardsSection[\s\S]{0,400}<div class="qrows"><div class="line">/.test(src));
 ok("...in a context the ticket row styles actually reach",
-   /\.ticket \.line,\.qrows \.line\{display:grid/.test(src));
+   /\.ticket \.line,\.qrows \.line[^{]*\{display:grid/.test(src));
 ok("the claim page calls the filler", src.includes('fillVoteCommitment(slug,id);'));
 
 // DisposableOf is the figure the realm enforces. SpendableOf is stake-only and

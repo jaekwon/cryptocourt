@@ -91,6 +91,8 @@ try {
 const ALL = ["embed_layout.js", "tagrow_layout.js", "route_crawl.js",
              "rowscope_layout.js", "map_draws.js", "map_type.js", "map_boing.js", "chat_all.js",
              "rail_sky.js",
+             // the directory leads with courts, and the invitation sits under them
+             "directory_lead.js",
              // where "details →" lands relative to the Buy button, which only a
              // laid-out page can answer: the markup is one string either way
              "buy_details.js",

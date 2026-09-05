@@ -707,11 +707,24 @@ ok("F5: ...without telling them they cannot do what they just did",
 
 // ticket rows: label bold on the LEFT, value left-aligned in its own column,
 // with a real gutter (owner report: bold-right, ragged-left, columns touching)
-ok("ticket rows are a two-track grid with a gutter", src.includes(".ticket .line,.qrows .line{display:grid; grid-template-columns:minmax(0,20ch) minmax(0,1fr); column-gap:24px"));
+// .helper .bd joined the selector when a dialog outside a ticket drew its rows
+// as bare blocks. Matched as a PREFIX plus the shape, so adding a fourth context
+// does not fail this while removing the grid still does.
+ok("ticket rows are a two-track grid with a gutter",
+   /\.ticket \.line,\.qrows \.line[^{]*\{display:grid; grid-template-columns:minmax\(0,20ch\) minmax\(0,1fr\); column-gap:24px/.test(src));
 ok("the label is the bold thing", src.includes(".ticket .line>*:first-child,.qrows .line>*:first-child{font-weight:600; color:var(--ink)}"));
 ok("values read left-to-right, not right-adjusted", src.includes(".ticket .line .r,.qrows .line .r{font-weight:400; color:var(--ink-2); text-align:left"));
 ok("no space-between left in the rule", !src.includes(".ticket .line{display:flex; justify-content:space-between"));
-ok("narrow screens stack the pair", src.includes("@media (max-width:640px){ .ticket .line,.qrows .line{grid-template-columns:minmax(0,1fr)"));
+// Same prefix match as the base rule above, and for the same reason: the
+// narrow-width override has to list every context the base rule does, or a
+// dialog's rows stay two-track on a phone.
+ok("narrow screens stack the pair",
+   /@media \(max-width:640px\)\{ \.ticket \.line,\.qrows \.line[^{]*\{grid-template-columns:minmax\(0,1fr\)/.test(src));
+ok("...in every context the base rule styles", (()=>{
+  const base = /\.ticket \.line,\.qrows \.line([^{]*)\{display:grid/.exec(src);
+  const narrow = /@media \(max-width:640px\)\{ \.ticket \.line,\.qrows \.line([^{]*)\{/.exec(src);
+  return base && narrow && base[1].trim() === narrow[1].trim();
+})());
 // the helper modal: the long "why" lives one click away, keyboard-reachable
 ok("modal: one dialog, native, labelled", html.includes('<dialog class="helper" id="help-vote" aria-labelledby="help-vote-h">'));
 ok("modal: triggers are BUTTONS (an href-less <a> cannot be tabbed to)", html.includes('<button type="button" class="helplink" data-help="help-vote">') && !html.includes('<a class="helplink"'));
