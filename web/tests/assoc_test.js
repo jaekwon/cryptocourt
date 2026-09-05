@@ -32,6 +32,9 @@ code += slice('const CURATION_V', '/* ======').replace('const CURATION_V','var C
 // verdictSentence dresses the related row's title now — the side rides the
 // sentence here as it does on the claim page and the map, so the builder has to
 // be in scope alongside the row that calls it.
+global.SET_MARK = "\u{13080}";
+global.ICN_EYE_OPEN = '<svg class="eye eyeopen"></svg>';   // drawn form; the harness needs it to exist, not to render
+code += fn('setMarkHtml');
 code += fn('verdictSentence');
 // verdictSentence delegates the oval to sideOval now, and the row builders ask
 // rowSide whether there is one — both are new and neither is inside the region

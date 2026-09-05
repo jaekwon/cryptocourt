@@ -25,6 +25,9 @@ code += 'function safeInline(x){ return esc(String(x)); }\n';
 code += slice('function statusPill(','function docketRow(');
 // docketRow renders the verdict as a sentence now, so the harness needs the
 // builders that make one.
+global.SET_MARK = "\u{13080}";
+global.ICN_EYE_OPEN = '<svg class="eye eyeopen"></svg>';   // drawn form; the harness needs it to exist, not to render
+code += fn('setMarkHtml');
 code += fn('verdictSentence');
 /* sideOval's `?` is secHelp now — the same control the section headings use —
    so the real one is loaded rather than stubbed: a stub would let these

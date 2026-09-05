@@ -257,6 +257,9 @@ ok("A-I pass on live 50-claim ring (both modes)", livepass);
   global.safeInline = x => esc(String(x));
   // The card dresses its title with the shared builder now — the same one the
   // claim page's heading uses — so it has to be in scope here too.
+  global.SET_MARK = "\u{13080}";
+  global.ICN_EYE_OPEN = '<svg class="eye eyeopen"></svg>';   // drawn form; the harness needs it to exist, not to render
+  eval(fn('setMarkHtml'));
   eval(fn('sideOval'));   // verdictSentence delegates the oval to it
   eval(fn('verdictSentence'));
   eval(slice('function mapSelCard(', 'function mapDotClass'));

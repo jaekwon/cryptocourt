@@ -44,6 +44,9 @@ eval(slice('function safeInline(', '\n'));
    so the real one is loaded rather than stubbed: a stub would let these
    assertions keep passing over a control that had stopped being a button. */
 eval(fn('secHelp'));
+global.SET_MARK = "\u{13080}";
+global.ICN_EYE_OPEN = '<svg class="eye eyeopen"></svg>';   // drawn form; the harness needs it to exist, not to render
+eval(fn('setMarkHtml'));
 eval(slice('function verdictSentence(', '\nfunction verdictBanner('));
 eval(fn('verdictBanner'));   // fn takes the closing brace with it
 
@@ -495,6 +498,36 @@ const run = async (rows, v, mode) => {
      src.includes("${verdictSentence(c.title, dSide, dv.contested)}"));
   ok("...taking both halves from one answer, not re-deriving one",
      src.includes("const dv = rowVerdict(c.statusText);"));
+
+  /* THE SET MARK IS DRAWN, NOT PRINTED — and only the exact codepoint is.
+     A governed set is a claim whose title opens with U+13080, and that character
+     is what the chain stores: the realm decides the claim is a set heading by
+     matching it, so the overlay cannot substitute anything at the source. What
+     it CAN do is draw the mark instead of printing it, which is what a reader
+     without a hieroglyph font needs — they would otherwise see an empty box.
+     THE NEAR-MISS ARM IS THE ONE THAT MATTERS. U+13079 is a different eye and is
+     one picture with U+13080 at title size. If the overlay drew the mark for it,
+     a claim the chain does NOT consider a set would wear a set's badge — the
+     more dangerous direction, because it is the one a reader would believe. It
+     has to come through as the raw character, exactly as any other unusual first
+     letter would. Confirmed in a browser as well: the near-miss renders as its
+     font glyph and the mark as the drawn SVG, visibly different. */
+  {
+    const M = "\u{13080}", NEAR = "\u{13079}";
+    const marked = verdictSentence(M + " Lab leak evidence", "YES");
+    ok("the mark is replaced by a drawn eye",
+       /class="setmark"/.test(marked) && /<svg/.test(marked));
+    ok("...and the codepoint itself is gone from the output", !marked.includes(M));
+    ok("...while the name it prefixed survives intact", marked.includes("Lab leak evidence"));
+    ok("an unmarked title gets no mark",
+       !/class="setmark"/.test(verdictSentence("An ordinary claim", "YES")));
+    const near = verdictSentence(NEAR + " A near-miss eye", "YES");
+    ok("a near-miss eye is NOT drawn as the mark", !/class="setmark"/.test(near));
+    ok("...and comes through as the raw character", near.includes(NEAR));
+    // The delimiter is required, or "𓂀Name" and "𓂀 Name" become two spellings.
+    ok("the mark without its space is not a prefix",
+       !/class="setmark"/.test(verdictSentence(M + "NoSpace", "YES")));
+  }
 
   console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");
   process.exit(fail?1:0);

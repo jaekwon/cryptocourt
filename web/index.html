@@ -803,6 +803,11 @@ a.card:hover{border-color:var(--line-2)}
    map's row, and the subset rows on a set page. No shown/hidden state there, so
    the open form is the only honest one and it just needs a size. */
 .eye{height:1.15em; width:auto; overflow:visible; vertical-align:-.22em}
+/* The mark drawn in place of the codepoint, in a claim title. Sized to the text
+   it opens rather than to a control, and tinted so it reads as a mark on the
+   sentence rather than as the first letter of it. */
+.setmark{display:inline-flex; color:var(--accent); margin-right:.35em; vertical-align:-.1em}
+.setmark .eye{height:1em}
 /* THE SUBSET ROWS on a set page are still rows, and still need their own grid:
    .docket .crow reserves four columns and these have three, so the unused 124px
    squeezed the title into a second line. Same fix as the chips replaced. */
@@ -13546,8 +13551,26 @@ function focusStakeSide(side){
    stays with the caller; all this does is dress the sentence.
    AN UNKNOWN SIDE RETURNS THE BARE SENTENCE rather than an empty oval — a ring
    with nothing in it would assert a decision nobody can read. */
+/* THE MARK IS THE DATA; THE EYE IS THE PRESENTATION.
+   A governed set is an ordinary claim whose title begins with U+13080, and that
+   codepoint is what the chain stores — it is how the realm decides the claim is
+   a set heading, so it cannot be anything else. But a reader on a machine with
+   no hieroglyph font sees an empty box where the mark should be, and unlike the
+   sidebar icon this one cannot be swapped at the source: it lives in the title.
+   So the page draws it instead. The character stays the truth, the SVG is what
+   is shown, and the two cannot disagree because one is derived from the other.
+   MATCHED ON THE EXACT CODEPOINT AND THE DELIMITER SPACE, the same pair
+   parseSetTitle matches on. A looser test here would draw the eye beside a claim
+   the chain does not consider a set — which is the more dangerous direction of
+   the two, because it is the one a reader would believe. */
+const SET_MARK = "\u{13080}";
+function setMarkHtml(escaped){
+  if(!escaped.startsWith(SET_MARK + " ")) return escaped;
+  return `<span class="setmark" role="img" aria-label="set">${ICN_EYE_OPEN}</span>`
+    + escaped.slice(SET_MARK.length + 1);
+}
 function verdictSentence(title, side, contested, ask){
-  const t = safeInline(title);
+  const t = setMarkHtml(safeInline(title));
   if(side !== "YES" && side !== "NO") return t;
   /* CONTESTED IS THE SAME SENTENCE, QUESTIONED. The claim heading built this
      shape by hand — oval, then a question mark — while every other surface asked

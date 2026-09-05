@@ -120,6 +120,9 @@ eval(slice('function statusPill(', 'function docketRow('));
 eval(slice('function claimBody(', '/* ==='));
 // ...and the shared verdict-sentence builder, which mapSelCard's title goes
 // through: a decided claim's card strikes the sentence and rings the side.
+global.SET_MARK = "\u{13080}";
+global.ICN_EYE_OPEN = '<svg class="eye eyeopen"></svg>';   // drawn form; the harness needs it to exist, not to render
+eval(fn('setMarkHtml'));
 eval(fn('verdictSentence'));
 // claimExhibits lives inside that same region deliberately: the card renders a
 // claim's statement and its evidence together, so a harness that has one and
