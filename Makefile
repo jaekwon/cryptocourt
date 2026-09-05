@@ -95,6 +95,10 @@ guards:
 	@# does not fail — it quietly gives an old record and a new one different
 	@# windows. Static, no toolchain, so it belongs here.
 	python3 scripts/check-block-time.py
+	@# What the mutation corpus covers is a claim about the IMPORT GRAPH, and
+	@# mutate.py's exclusion of cshares and tickbook rests on it. The graph is
+	@# edited far from that map, so the premise could expire silently. Static.
+	python3 scripts/check-mutation-scope.py
 
 # The other half of that check. `guards` asks whether each guard is REGISTERED in
 # selftest-checks.py; this asks whether each control arm's PLANT still applies. A

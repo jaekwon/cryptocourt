@@ -195,6 +195,9 @@ WEBCONST = "scripts/check-web-constants.py"
 MEDIAHOSTS = "scripts/check-media-hosts.py"
 MEDIAGNO = "realm/r/kourtv2/media.gno"
 BLOCKTIME = "scripts/check-block-time.py"
+MUTSCOPE = "scripts/check-mutation-scope.py"
+CLAIMGNO = "realm/r/kourtv2/claim.gno"
+MUTATEPY = "scripts/mutate.py"
 CLOCKGNO = "realm/r/kourtv2/clock.gno"
 GOVGNO = "realm/p/governor/governor.gno"
 NGINXCONF = "deploy/nginx.conf"
@@ -1627,6 +1630,30 @@ control("a deadline's seconds half moves without its blocks half", CLOCKGNO,
         "finalizeGraceSecs = int64(7 * 86400)",
         "finalizeGraceSecs = int64(3 * 86400)",
         "two different deadlines", argv=["python3", BLOCKTIME])
+
+print("\ncheck-mutation-scope")
+# TWO PREMISES, ARMED SEPARATELY, because they expire by different routes.
+#
+# The first is the import graph. mutate.py leaves cshares and tickbook out of
+# PKGS on the stated ground that "only the V1 court realm uses those", and the
+# same note says what should happen if that stops being true: "it belongs in
+# this map with rows of its own." Whoever adds that import is editing a realm
+# file nowhere near mutate.py, so nothing would connect the two.
+#
+# The second is the corpus. A package can sit in PKGS with no rows — staged,
+# never mutated, and reported as covered. The map's own note on offerer says
+# it: "a package present in this map with no row in the corpus is exactly as
+# unmeasured as one that is missing."
+control("a mutated realm imports an unmutated package", CLAIMGNO,
+        '\ttwap "gno.land/p/kourt/twap/v0"',
+        '\ttwap "gno.land/p/kourt/twap/v0"\n\t_ "gno.land/p/kourt/tickbook/v0"',
+        "imports one that is never mutated", argv=["python3", MUTSCOPE])
+control("a package is staged for mutation with no corpus row", MUTATEPY,
+        '    "twap": (os.path.join(REPO, "realm/p/twap"),',
+        '    "tickbook": (os.path.join(REPO, "realm/p/tickbook"),\n'
+        '               "examples/gno.land/p/kourt/tickbook/v0"),\n'
+        '    "twap": (os.path.join(REPO, "realm/p/twap"),',
+        "staged for mutation and never mutated", argv=["python3", MUTSCOPE])
 
 print("\ncheck-media-hosts")
 # The hosts a claim's evidence may live on are written down three times — the
