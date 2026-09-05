@@ -98,6 +98,16 @@ func IsSetClaim(courtSlug string, claimID uint64) bool {
  * the same bound folderNameTaken already walks on every single AddToFolder, so
  * this is not a new cost class — and a second index would be a second thing to
  * keep true.
+ *
+ * AND IT COUNTS RETIRED ROWS, which is where it parts company with
+ * folderNameTaken beside it — that one skips them on purpose, so a retired
+ * folder's NAME comes free again. The asymmetry is not an oversight: a name is a
+ * label and may be reused, a birth is an event and happened once. Make this skip
+ * retired rows to match, and AffirmSet's exactly-once guard reads zero again on a
+ * claim whose set was retired — so it mints a second folder, and a moderator
+ * retiring each one in turn pumps a single settled claim against maxFolders, one
+ * carry per retirement, with RestoreFolder to put them all back afterwards.
+ * Pinned by TestRetiringABornSetDoesNotFreeTheClaim.
  */
 func ClaimSet(courtSlug string, claimID uint64) uint64 {
 	c := mustCourt(courtSlug)

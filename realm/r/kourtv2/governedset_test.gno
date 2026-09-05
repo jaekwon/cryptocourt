@@ -70,6 +70,14 @@ func TestSetNameIsTheTitleVerbatim(cur realm, t *testing.T) {
        it split on any space)     TestAnUnmarkedClaimIsNeverASet, which is the
                                   pair that matters: one proves near-misses are
                                   refused, the other that ordinary claims are.
+     - ClaimSet made to SKIP   -> TestRetiringABornSetDoesNotFreeTheClaim, and it
+       retired rows, matching      dies the second way too: the mutant lets bob's
+       folderNameTaken             re-carry SUCCEED, so a live folder takes the
+                                   name, and the fresh claim at the end of that
+                                   test then aborts UNCAUGHT with "a folder by
+                                   that name already exists". Red either way, and
+                                   the second failure is the consequence spelled
+                                   out — one claim, two live folders.
      - the provClose HALF of   -> NOTHING FAILED, until TestAProvClosedYesCarries-
        the final-YES check         NoSet. Removing the whole `if` is caught (see
                                    below); removing only `|| cs.provClose` was
@@ -507,4 +515,75 @@ func TestTheLongestFilableHeadingCanBeCarried(cur realm, t *testing.T) {
 	// and not a truncation of it — a silent trim here would make the set's name
 	// and the claim's title disagree at exactly the length nobody tests by hand.
 	uassert.Equal(t, name, FolderName("gsl1", fid))
+}
+
+/* RETIRING THE SET DOES NOT FREE THE CLAIM TO MAKE ANOTHER ONE.
+ *
+ * THE BINDING OUTLIVES THE FOLDER, and it has to. ClaimSet walks every folder
+ * row and matches bornOf — retired ones included — which reads at first like an
+ * oversight beside folderNameTaken, three lines below it, which deliberately
+ * SKIPS retired rows so a name comes free again. The asymmetry is the point: a
+ * name is a label and can be reused, a birth is an event and happened once.
+ *
+ * WHAT THE SYMMETRIC VERSION WOULD COST. Make ClaimSet skip retired rows and
+ * AffirmSet's exactly-once guard reads zero again on a claim whose set was
+ * retired — so it mints a second folder, and a moderator who retires each one in
+ * turn can pump a single settled claim against the 100-folder cap, one carry per
+ * retirement. RestoreFolder then puts them all back. That is precisely the
+ * failure guard 3 exists to prevent, arriving through a door nobody was watching,
+ * and it is a plausible "cleanup" for someone reading these two functions side by
+ * side and noticing they disagree.
+ *
+ * THE OVERLAY IS THE OTHER HALF, and it already behaves: chainFolders skips
+ * retired rows, so bornClaimIds never learns of the set, and the claim comes back
+ * to the map and the docket as an ordinary claim. Retiring a set un-hides the
+ * claim that made it — it does not un-make it.
+ */
+func TestRetiringABornSetDoesNotFreeTheClaim(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("gsq-alice")
+	testCourt(cur, "gsq1", alice, 50_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	AppointMods(cross(cur), "gsq1", 1, alice)
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "gsq1", tD010+" Reading room")
+	matureOI(cur, "gsq1", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "gsq1", id, sideYES)
+	testing.SkipHeights(settleDelay)
+	SettleUndisputed(cross(cur), "gsq1", id)
+	fid := AffirmSet(cross(cur), "gsq1", id)
+	uassert.Equal(t, 1, FolderCount("gsq1"))
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	RetireFolder(cross(cur), "gsq1", fid)
+	uassert.True(t, FolderRetired("gsq1", fid))
+
+	// THE BINDING SURVIVES, both ways, and the row is still there to carry it.
+	uassert.Equal(t, fid, ClaimSet("gsq1", id))
+	uassert.Equal(t, id, SetBornOf("gsq1", fid))
+
+	// SO THE SECOND CARRY IS STILL REFUSED — by anyone, not just the moderator
+	// who retired it, since AffirmSet is permissionless and the pump would be too.
+	bob := testutils.TestAddress("gsq-bob")
+	testing.SetRealm(testing.NewUserRealm(bob))
+	uassert.AbortsContains(t, cur, "already carries set", func() {
+		AffirmSet(cross(cur), "gsq1", id)
+	})
+	uassert.Equal(t, 1, FolderCount("gsq1"))
+
+	// THE NAME, MEANWHILE, IS FREE — folderNameTaken skips retired rows, so a
+	// DIFFERENT claim may ask for the same heading. Asserted here because it is
+	// the other side of the asymmetry above: if this ever starts refusing, the
+	// two functions have been made symmetric in the wrong direction.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id2 := OpenClaim(cross(cur), "gsq1", tD010+" Reading room")
+	matureOI(cur, "gsq1", id2, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "gsq1", id2, sideYES)
+	testing.SkipHeights(settleDelay)
+	SettleUndisputed(cross(cur), "gsq1", id2)
+	fid2 := AffirmSet(cross(cur), "gsq1", id2)
+	uassert.True(t, fid2 != fid)
+	uassert.Equal(t, "Reading room", FolderName("gsq1", fid2))
 }
