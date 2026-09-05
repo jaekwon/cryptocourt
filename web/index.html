@@ -12484,7 +12484,12 @@ async function fillSetAffirm(slug, id){
       one(`ClaimFolders(${gstr(slug)},${id})`).catch(()=>null),
     ]);
     if(carried && String(carried).trim() !== "0"){ box.remove(); return; }
-    const ids = String(folders||"").match(/\d+/g) || [];
+    /* uint64List, NOT a hand-rolled \d+ match. qeval renders the slice as
+       `slice[(1 uint64)]`, and "uint64" ENDS IN 64 — so a bare digit match reads
+       one filing as two and the note then told the reader their claim was filed
+       in more than one set, which was false and which contradicted the button
+       sitting right above it. The helper was already in this file. */
+    const ids = uint64List(folders);
     const note = box.querySelector(".small");
     if(!note) return;
     if(ids.length === 1){
