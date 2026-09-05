@@ -3494,8 +3494,12 @@ async function listClaims(slug){
     const outD = [...c.claims].sort((a,b)=>b-a)
       .filter(id=>!(DEMO.claims[slug+"/"+id]||{}).hidden) // the render omits hidden claims
       .map(id=>{ const d=DEMO.claims[slug+"/"+id];
+      // route and failedRounds ride along for the map's badge: which way a claim
+      // ENDED (a vote, or nobody ever asking) and how many rounds it took are two
+      // facts the status sentence does not carry — see mapMark.
       return {id, title:d.title, statusText:statusText(d), series:claimSeries(d),
-              inst:pctYes(d.yesStake,d.noStake), settleAt:d.settleAt, escrowUntil:d.escrowUntil}; });
+              inst:pctYes(d.yesStake,d.noStake), settleAt:d.settleAt, escrowUntil:d.escrowUntil,
+              route:d.route, failedRounds:d.failedRounds}; });
     const dsp = demoStrips(slug);
     outD.strip = dsp.strip; outD.pending = dsp.pending;
     return outD; }
@@ -10872,13 +10876,37 @@ on(/^\/c\/([a-z0-9-]+)\/map$/, async (slug)=>{
     return;
   }
   const claims = {};
-  parsed.forEach(cl=>{ claims[cl.id]={title:cl.title, statusText:cl.statusText}; });
+  /* WHAT THE BADGE NEEDS, BESIDES THE SENTENCE. mapMark reads three more facts off
+     a claim: the stake split it was answered against (`inst`), whether a vote ended
+     it (`route`), and how many dispute rounds it has already survived (`rounds`).
+     The demo carries all three in the page; a live court carries none of them in
+     the docket's rendered rows, so `inst` is filled below in ONE read and the other
+     two stay absent — and mapMark draws no mark rather than a wrong one when a fact
+     is missing. A settled claim on a live court therefore shows a bare oval whether
+     or not a vote ended it, which is the honest shape of what the chain has told
+     this page so far. */
+  parsed.forEach(cl=>{ claims[cl.id]={title:cl.title, statusText:cl.statusText,
+    inst:cl.inst, route:cl.route, rounds:cl.failedRounds}; });
   /* THE EVIDENCE FOR EVERY NODE, IN ONE READ. Asking per claim would be a round
      trip per node before a fifty-claim map could draw, and this map is built to
      paint before its bodies arrive — ClaimMediaPage exists so thumbnails cost a
      read for the page rather than a read for each node. Failure is silent and
      total: no thumbnails, same map. */
   if(isLive() && typeof mediaParse === "function") await fillMapMedia(slug, parsed, claims);
+  /* THE STAKE FOR EVERY NODE, ALSO IN ONE READ, and for the same reason the media
+     is: fifty claims must not cost fifty round trips before the map can draw.
+     DocketSeries walks the realm's claims once and answers up to sixty of them, and
+     the court page already pre-loads it the same way — so on a court a reader has
+     just come from, this is served out of DSERIES and costs nothing at all.
+     A realm without the entrypoint answers nothing and every badge simply has no
+     `!` to draw, which is the same shape as any other missing fact here. */
+  if(isLive()){
+    await docketSeriesPreload(gstr(slug), parsed.map(cl=>cl.id));
+    parsed.forEach(cl=>{
+      const row = DSERIES.get(dseriesKey(gstr(slug), String(cl.id)));
+      if(row) claims[cl.id].inst = pctYes(row.yesStake, row.noStake);
+    });
+  }
   /* The sample's evidence is already in the page, so demo mode needs no read at
      all — and must not make one. Same field, same shape, so every node and card
      below cannot tell which branch filled it. */
