@@ -653,3 +653,75 @@ func TestOneLineTruncatesByRunesSoTheColumnIsTheWidthItClaims(t *testing.T) {
 		t.Errorf("whitespace must collapse to single spaces, got %q", got)
 	}
 }
+
+// dur, whose own comment records a bug that happened and which nothing prevented
+// from happening again. It was at 0.0% of statements — measured — while
+// TestADurationReadsTheWayAPersonReadsOne, twenty lines up, tests humanDuration.
+// Two duration formatters, one tested.
+//
+// THE BUG IT RECORDS: Truncate(time.Minute) was used at every one of dur's call
+// sites, and it flattens every span under a minute to "0s". A grouped review row
+// read "5 over 0s" and a kick with forty seconds left read "0s left".
+//
+// WHY THAT IS THE WRONG THING TO ERASE, in the comment's own words: "Five
+// messages in ten seconds is MORE alarming than five over an hour, so the one
+// span worth reading precisely was the one being erased." The formatter's whole
+// reason for existing is the sub-minute case, and the sub-minute case was the
+// one with no test.
+func TestDurKeepsTheSecondsItUsedToRoundAway(t *testing.T) {
+	// The regression, stated as the property rather than as four literals: under
+	// Truncate(time.Minute) EVERY one of these was "0s", so what proves the fix
+	// is that they are all different from each other and none is "0s".
+	seen := map[string]time.Duration{}
+	for _, d := range []time.Duration{
+		time.Second, 10 * time.Second, 40 * time.Second, 59 * time.Second,
+	} {
+		got := dur(d)
+		if got == "0s" {
+			t.Errorf("dur(%s) = %q — this is the flattening the comment describes; "+
+				"a kick with %s left would read \"0s left\"", d, got, d)
+		}
+		if prev, dup := seen[got]; dup {
+			t.Errorf("dur(%s) and dur(%s) both render %q; spans under a minute must "+
+				"stay distinguishable", prev, d, got)
+		}
+		seen[got] = d
+	}
+	// And they say the number a person would say.
+	for _, c := range []struct {
+		in   time.Duration
+		want string
+	}{
+		{time.Second, "1s"},
+		{40 * time.Second, "40s"},
+		{59 * time.Second, "59s"},
+		// A minute and over rounds to the minute, where a second is noise.
+		{time.Minute, "1m0s"},
+		{90 * time.Second, "2m0s"}, // nearest, not truncated: 90s is not one minute
+		{time.Hour + 30*time.Minute, "1h30m0s"},
+	} {
+		if got := dur(c.in); got != c.want {
+			t.Errorf("dur(%s) = %q, want %q", c.in, got, c.want)
+		}
+	}
+
+	/* A CONSEQUENCE THAT HAS ALREADY EXPIRED IS "0s", NOT A NEGATIVE. Call site
+	   420 renders dur(ExpiresAt-now) + " left", and `list` shows rows whose
+	   expiry has passed — without the clamp an operator reads "-3m0s left",
+	   which states a fact backwards rather than merely oddly. */
+	for _, d := range []time.Duration{-time.Second, -3 * time.Minute, -time.Hour} {
+		if got := dur(d); got != "0s" {
+			t.Errorf("dur(%s) = %q, want %q — an elapsed consequence has no time left, "+
+				"it does not have negative time left", d, got, "0s")
+		}
+	}
+	if got := dur(0); got != "0s" {
+		t.Errorf("dur(0) = %q, want %q", got, "0s")
+	}
+
+	// NOT ASSERTED, and deliberately: 59.5s renders "60s" rather than "1m0s",
+	// because the sub-minute branch rounds to the second and 59.5 rounds up. It
+	// is harmless — "60s left" reads fine — and pinning it here would block
+	// anyone who later decides "1m0s" is tidier. Recorded so the next reader who
+	// meets "60s" in the UI finds it explained rather than surprising.
+}
