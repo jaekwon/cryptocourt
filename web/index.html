@@ -359,6 +359,19 @@ code,.mono{font-family:var(--mono)}
    SETTING THIS TO --gilt FLATTENED IT. Body and highlight became one colour and
    the throne lost its edges — a gold rectangle where there had been a lit one.
    The wordmark beside it stays --gilt; the throne is where the two-tone lives. */
+/* CRISP EDGES, because the gold is drawn in a 100-unit box and shown at 32px:
+   one unit is 0.32 of a pixel, so a 3.4-unit cap is 1.1px and the plinth's 2-unit
+   steps are 0.64. Anti-aliased, they land across two rows each and lose the
+   colour — measured on the live icon at 30x32, the seat back's edge came out as
+   rgb(151,133,99) over rgb(229,198,135) where the token is rgb(226,181,82), and
+   the two plinth steps washed to near-white. Five gold bands, three of them mud:
+   that is the "horizontal yellow lines like a grid" this fixes.
+   Snapped to the pixel grid every remaining band is EXACTLY the token — measured
+   again: rgb(226,181,82) on all three — and the two that cannot survive a
+   sub-pixel height disappear cleanly rather than smearing. The icon shows what
+   32px can show, and the same file still draws all five when it is large.
+   The map's phase dots already do this, for the same reason. */
+.brand .seat svg{shape-rendering:crispEdges}
 .brand .seat{display:flex; flex:none; color:var(--ink)}
 .brand .mark:hover .seat{color:var(--accent)}
 /* THE WORDMARK IN LEAF GOLD, with the seat beside it. --gilt rather than
