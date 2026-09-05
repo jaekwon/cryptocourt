@@ -60,7 +60,12 @@ function buildCode(patch){
   // the real body renderer: mapSelCard shows a claim's body now
   code += slice('function claimBody(', '/* ===');
   code += slice('function siteHost(', 'const store');
-  code += slice('const MAPK', '/* The join panel').replace('const MAPK','var MAPK');
+  /* var, not const, for the same reason MAPK gets it: a function declaration in a
+     direct eval hoists out to the enclosing scope, and a `const` beside it does
+     NOT — so mapWrapTitle escaped while the measurer it now closes over stayed
+     behind, and every call died on "MAPW is not defined". */
+  code += slice('const MAPK', '/* The join panel')
+    .replace('const MAPK','var MAPK').replace('const MAPW','var MAPW');
   if(patch) code = patch(code);
   return code;
 }
