@@ -1929,6 +1929,10 @@ tr.youare .mono{font-weight:600}
 /* The question beside a contested oval, in the muted ink the flat mark uses on
    every other surface: the oval is the statement and this only qualifies it. */
 .mvq{fill:var(--muted)}
+/* THE KEY'S OWN RING, in the ink of a label rather than in a side's hue: on the
+   map this mark rides whichever oval the side gave it, so a green key would say a
+   challenged NO is drawn in green. */
+.mvtag.q{stroke:var(--muted)}
 .mvt.y{fill:var(--yes)}  .mvtag.y{stroke:var(--yes)}
 .mvt.n{fill:var(--no)}   .mvtag.n{stroke:var(--no)}
 /* THE STRIKE IS THE COURT'S, in the losing side's hue and for the same reason
@@ -9755,10 +9759,17 @@ function mapSvg(L, data, slug){
      surface already uses. */
   const vbadge=(pc,n,fh)=>{
     const side=pc.side, contested=pc.short==="in dispute";
-    const fs=VTAG.fs, c=side==="NO"?"n":"y", w=est(side,fs,"mvt");
+    // INSIDE THE RING, at the owner's word. The `?` sat outside it — the oval being
+    // what the court decided and the mark what is asked about that, which is how
+    // the docket row and the page heading arrange it. On the map that reading costs
+    // more than it buys: at this size the mark is a 7px glyph adrift beside a ring,
+    // and a reader parses two marks where there is one fact. "(YES?)" is one mark.
+    // ONE TEXT RUN, so it is also one width: est measures what is drawn and the
+    // ring is sized from it, which is what keeps the `?` from hanging over the edge.
+    const label=side+(contested?"?":"");
+    const fs=VTAG.fs, c=side==="NO"?"n":"y", w=est(label,fs,"mvt");
     const h=fs+2*VTAG.py, cy=n.y+fh;                     // the frame's bottom edge
-    const qw=contested? fs*0.78 : 0, gap=contested? 3 : 0;
-    const right=n.x+n.w-K.tpad-qw-gap;                   // the oval's own right edge
+    const right=n.x+n.w-K.tpad;                          // the oval's own right edge
     const ovw=w+2*VTAG.px, left=right-ovw, owner="c"+n.id;
     // The baseline sits below the centre by the same cap-band offset vtag takes off
     // it, so the word rides the middle of the ring rather than its floor.
@@ -10846,7 +10857,7 @@ on(/^\/c\/([a-z0-9-]+)\/map$/, async (slug)=>{
      phase and no verdict, which is what the dot has always been for. */
   const legendDots = `<span><svg width="24" height="12"><rect x="1" y="1" width="22" height="10" rx="5" class="mvtag y"/></svg> settled YES</span>
       <span><svg width="24" height="12"><rect x="1" y="1" width="22" height="10" rx="5" class="mvtag n"/></svg> settled NO</span>
-      <span><svg width="10" height="12"><text class="mvq" x="5" y="10" font-size="11" text-anchor="middle">?</text></svg> side under challenge</span>
+      <span><svg width="24" height="12"><rect x="1" y="1" width="22" height="10" rx="5" class="mvtag q"/><text class="mvq" x="12" y="9.5" font-size="8" text-anchor="middle">?</text></svg> side under challenge</span>
       <span><svg width="12" height="12"><circle cx="6" cy="6" r="4" class="mdot e"/></svg> in dispute</span>
       <span><svg width="12" height="12"><circle cx="6" cy="6" r="4" class="mdot ed"/></svg> provisional</span>
       <span><svg width="12" height="12"><circle cx="6" cy="6" r="4" class="mdot o"/></svg> answered</span>

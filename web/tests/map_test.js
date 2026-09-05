@@ -1016,11 +1016,13 @@ const TILES = svg => [...svg.matchAll(
       const want = pc.side==="YES" ? "y" : "n";
       if(dot){ agree=false; console.log("  #"+id+" is decided and still carries a dot", dot); }
       if(ov!==want){ agree=false; console.log("  oval mismatch #"+id, ov, "want", want); }
-      // A side under challenge carries the mark; a settled one must not.
-      const q=new RegExp(`<text class="mtext mvq"[^>]*data-owner="c${id}"`).test(svgs.titles);
-      if(q!==(pc.short==="in dispute")){
-        agree=false; console.log("  #"+id+" question mark", q, "want", pc.short==="in dispute");
-      }
+      /* A side under challenge carries the mark INSIDE the ring; a settled one must
+         not carry it at all. Read off the oval's own text, which is where it lives
+         — one text run, so the ring is sized from what is drawn. */
+      const word=(new RegExp(`<text class="mtext mvt [yn]"[^>]*data-owner="c${id}"[^>]*>([^<]*)</text>`)
+        .exec(svgs.titles)||[])[1];
+      const wantWord = pc.side + (pc.short==="in dispute" ? "?" : "");
+      if(word!==wantWord){ agree=false; console.log("  #"+id+" oval reads", word, "want", wantWord); }
       continue;
     }
     const wantFamily = pc.short==="settled"
@@ -1188,19 +1190,28 @@ ok("controls present", ["mt-titles","mt-ids","mz-in","mz-out","mz-fit","mz-slide
      THE `?` IS OUTSIDE THE RING. What the court decided goes in the oval; what is
      being asked about it does not. Asserted by position rather than by presence,
      because a `?` inside the ring would satisfy "there is a question mark". */
-  ok("a disputed claim wears the oval with a question after it", (()=>{
+  /* AND A CONTESTED SIDE WEARS THE MARK INSIDE THE RING. It was drawn beside the
+     oval for a while, on the reading that the ring is what the court decided and
+     the mark is what is asked about it — the docket row's arrangement. At map size
+     that is a 7px glyph adrift next to a ring, so it moved in, and "(YES?)" is one
+     mark rather than two.
+     THE RING HAS TO GROW WITH IT, which is the half worth pinning: the width comes
+     from est() over the text that is actually drawn, so a `?` that did not widen
+     the oval would hang over the frame's edge. */
+  ok("a disputed claim wears the question inside its oval", (()=>{
      const u = JSON.parse(JSON.stringify(d));
      // The realm's own sentence, from statusText: a wording phaseClass cannot
      // parse yields an empty side, which is not badged, and the assertion would
      // then be measuring the open-claim path while claiming to measure this one.
      u.claims[3].statusText = "disputed YES — a sealed vote is deciding; principal is never withheld";
      const s = mapSvg(mapLayout(u,"titles"), u, "covid");
-     const oval=/<rect class="mvtag y"[^>]*x="([\d.]+)"[^>]*width="([\d.]+)"[^>]*data-owner="c3"/.exec(s)
-       || /<rect class="mvtag y" x="([\d.]+)" y="[\d.]+" width="([\d.]+)"[^>]*data-owner="c3"/.exec(s);
-     const q=textsOf(s).find(t=>t.id===3 && t.cls==="mvq");
-     if(!oval||!q) return false;
-     return q.x > +oval[1] + +oval[2] - 0.51     // right of the ring, not inside it
-       && !/in dispute: /.test(s);               // and the words are gone
+     const word=(/<text class="mtext mvt y"[^>]*data-owner="c3"[^>]*>([^<]*)<\/text>/.exec(s)||[])[1];
+     const wide=(/<rect class="mvtag y"[^>]*width="([\d.]+)"[^>]*data-owner="c3"/.exec(s)||[])[1];
+     const settled=(/<rect class="mvtag y"[^>]*width="([\d.]+)"[^>]*data-owner="c2"/.exec(svgT)||[])[1];
+     return word==="YES?"                       // inside the ring, as one run
+       && !/class="mtext mvq"/.test(s)          // and not beside it any more
+       && +wide > +settled                      // the ring grew to hold it
+       && !/in dispute: /.test(s);              // and the words are gone
   })());
   ok("the court strikes the sentence it ruled against", strikesOf(svgT,1)>=1);
   ok("...and never a YES it agreed with", strikesOf(svgT,2)===0);
