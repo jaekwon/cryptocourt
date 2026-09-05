@@ -36,8 +36,12 @@ const PAGE = 'file://' + path.join(__dirname, '..', '..', 'index.html');
     const shown = [...document.querySelectorAll(".docket a.crow.claimrow")]
       .filter(e => !e.classList.contains("fhide") && !e.classList.contains("qhide"));
     const c = k => { const e = document.querySelector(`[data-count="${k}"]`); return e ? +e.textContent.trim() : null; };
+    const chip = k => { const e = document.querySelector(`.gchips [data-show="${k}"] .n`); return e ? +e.textContent.trim() : null; };
+    const head = document.querySelector("[data-qcount]");
     const rows = [...document.querySelectorAll(".foldsel")];
     return {rows: shown.length, open: c("open"), settled: c("settled"),
+            chipOpen: chip("open"), chipAll: chip("all"),
+            head: head ? head.textContent.trim() : null,
             folders: rows.length,
             ticked: rows.filter(r => r.getAttribute("aria-checked") === "true").length,
             tint: rows[0] ? getComputedStyle(rows[0]).backgroundColor : null,
@@ -53,6 +57,36 @@ const PAGE = 'file://' + path.join(__dirname, '..', '..', 'index.html');
   ok("...so every claim is shown", a.rows > 0 && a.open > 0, JSON.stringify(a));
   ok("...and no folder is tinted", a.tint === "rgba(0, 0, 0, 0)", String(a.tint));
 
+  /* THE ROW STILL HAS TO LOOK LIKE A ROW. Every docket rule was written as
+     `.docket a` — display, grid, padding, the rule between rows — so turning the
+     folder row into a div for the checkbox left it with no layout at all: five
+     stacked blocks per folder, three folders filling the screen. The behaviour
+     tests all passed on that page, because none of them looked at it. */
+  const layout = await page.evaluate(() => {
+    const g = e => { const s = getComputedStyle(e);
+      return {display: s.display, cols: s.gridTemplateColumns.split(/\s+/).filter(Boolean).length,
+              h: Math.round(e.getBoundingClientRect().height)}; };
+    const f = document.querySelector(".foldsel");
+    const kids = [...f.children].map(e => Math.round(e.getBoundingClientRect().height));
+    const l = f.querySelector(".foldopen");
+    return {folder: g(f), kids, tallest: Math.max(...kids),
+            link: {display: getComputedStyle(l).display,
+                   wFrac: +(l.getBoundingClientRect().width / f.getBoundingClientRect().width).toFixed(2)}};
+  });
+  ok("the folder row is laid out as a docket row",
+     layout.folder.display === "grid" && layout.folder.cols >= 3, JSON.stringify(layout));
+  /* Measured against its own children rather than against a claim row: the row
+     is one line of columns, so its height is the tallest column plus padding.
+     Stacked, it is their sum — which is what the div was doing. */
+  ok("...on one line, not stacked",
+     layout.folder.h <= layout.tallest + 40, JSON.stringify(layout));
+  /* AND THE LINK INSIDE IT IS NOT ITSELF A ROW. The docket styles rows by
+     selecting anchors; the row now contains one, and as a descendant selector
+     that rule turned the "open →" link into a full-width bordered block of its
+     own. It is a pill in the last column. */
+  ok("...and its link is a pill, not a row of its own",
+     layout.link.display !== "grid" && layout.link.wFrac < 0.4, JSON.stringify(layout.link));
+
   const label = await page.evaluate(() => {
     const r = document.querySelector(".foldsel"); r.click(); return r.querySelector(".t").textContent.trim();
   });
@@ -62,6 +96,15 @@ const PAGE = 'file://' + path.join(__dirname, '..', '..', 'index.html');
   ok("...Open counts down with it", b2.open < a.open, `${a.open} -> ${b2.open}`);
   ok("...and Recently settled too", b2.settled < a.settled, `${a.settled} -> ${b2.settled}`);
   ok("...the row reads as checked", b2.ticked === 1, JSON.stringify(b2));
+  /* THE CHIP AND THE HEADING NAME THE SAME LIST, so they cannot hold different
+     numbers. Both of these were rendered once from the window totals and never
+     touched again: the chip sat at OPEN 8 over a section headed OPEN 2. */
+  ok("...the SHOW chip agrees with the section it names",
+     b2.chipOpen === b2.open, `chip ${b2.chipOpen} vs heading ${b2.open}`);
+  ok("...and ALL counts the two sections it covers",
+     b2.chipAll === b2.open + b2.settled, JSON.stringify(b2));
+  ok("...the figure over the search box comes down too",
+     b2.head !== a.head && /^all \d+ /.test(b2.head || ""), `${a.head} -> ${b2.head}`);
   /* LIGHT PURPLE, asked for by name. Asserted as "some tint, not transparent"
      rather than as a hex: the exact colour is the accent mixed at 14% and is a
      design value, but "the ticked row is visibly lit" is the requirement. */
@@ -116,6 +159,9 @@ const PAGE = 'file://' + path.join(__dirname, '..', '..', 'index.html');
   ok("unticking it puts every row and count back",
      c3.rows === a.rows && c3.open === a.open && c3.settled === a.settled && c3.ticked === 0,
      JSON.stringify(c3));
+  ok("...the chips and the figure with them",
+     c3.chipOpen === a.chipOpen && c3.chipAll === a.chipAll && c3.head === a.head,
+     `${JSON.stringify(c3)} vs ${JSON.stringify(a)}`);
 
   const openLink = await page.evaluate(() => {
     const l = document.querySelector(".foldsel .foldopen");

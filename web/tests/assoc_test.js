@@ -489,12 +489,15 @@ ok("no second renderer for the same figure survives",
    percentage onto the meta line changed the title cell by 12px and the total
    height by nothing, because at 390px that cell is already 160px on its own
    line. The absence is deliberate. */
+/* THE SELECTOR LOST ITS TAG. These read `.docket a.crow` until the folder row
+   became a checkbox and stopped being a link; the row layout is keyed on the
+   row now, not on the element it happens to be. */
 ok("the claim row's id track is sized for a claim id", 
-   src.includes(".docket a.crow.claimrow{grid-template-columns:44px minmax(0,1fr) 64px}"));
+   src.includes(".docket .crow.claimrow{grid-template-columns:44px minmax(0,1fr) 64px}"));
 ok("...and no narrow-width override was left behind for it",
-   !/@media[^{]*\{[^}]*\.docket a\.crow\.claimrow\{/.test(src));
-ok("chip cluster is right-aligned in its own column", src.includes(".docket a.crow.assocrow{grid-template-columns:52px minmax(0,1fr) 268px"));
-ok("specificity matches .docket a.crow (which sets the docket grid)", !src.includes("\n.crow.assocrow{grid-template-columns"));
+   !/@media[^{]*\{[^}]*\.docket \.crow\.claimrow\{/.test(src));
+ok("chip cluster is right-aligned in its own column", src.includes(".docket .crow.assocrow{grid-template-columns:52px minmax(0,1fr) 268px"));
+ok("specificity matches .docket .crow (which sets the docket grid)", !src.includes("\n.crow.assocrow{grid-template-columns"));
 ok("both pills ride one .rt cluster", src.includes('<span class="rt"><span class="pill ${/contradict/.test(chip)?"contra":"void"}">'));
 ok("contradiction family wears .contra", (()=>{
   const r=assocRow("orem",11,"contradicts",()=>({title:"t",statusText:"open"}));
@@ -504,7 +507,7 @@ ok("contradiction family wears .contra", (()=>{
 })());
 ok("--contra token defined for both themes", (src.match(/--contra:/g)||[]).length===4);
 ok("the map's contradicts edge speaks the same colour", src.includes(".medge.bears.no{stroke:var(--contra)"));
-ok("narrow screens stack the chip under the title", src.includes(".docket a.crow.assocrow .rt{grid-column:2"));
+ok("narrow screens stack the chip under the title", src.includes(".docket .crow.assocrow .rt{grid-column:2"));
 
 /* A CHAIN-SOURCED ROW ARRIVES WITH ITS SENTENCE, and for a while it did not.
    The titles lookup was gated on "local curation has relations", which was the
