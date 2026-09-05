@@ -159,3 +159,65 @@ func TestTheFolderRouteRefusesWhatIsNotOne(cur realm, t *testing.T) {
 		t.Fatal("a real folder must still render")
 	}
 }
+
+/* A GOVERNED SET'S PAGE SAYS THE COURT MADE IT, AND LINKS THE CLAIM.
+ *
+ * THE CHAIN KNEW AND WOULD NOT SAY. bornOf is stored on the folder row, and this
+ * page — the realm's OWN, the one gnoweb serves and the one anybody reading the
+ * realm directly gets — rendered a governed set and a moderator's folder as the
+ * same object.
+ *
+ * IT WAS A BARE TITLE, WHICH MAKES IT WORSE THAN AN OMISSION. AffirmSet leaves
+ * the description empty on purpose: "this set has a whole claim, with a body, a
+ * stake history and a verdict, sitting behind it, and that is a better
+ * description than a line anybody could have written." Right — and the
+ * consequence was a page that went heading, breadcrumb, claim list, with no words
+ * at all and no link to the better description it was deferring to.
+ *
+ * BOTH DIRECTIONS ASSERTED. A moderator's folder must NOT grow the line: bornOf
+ * is 0 there, and a guard that fired on every folder would tell readers the court
+ * voted for headings nobody ever put to it. That is the failure a one-sided test
+ * cannot see, and it is the likelier one — the condition is the easy thing to
+ * drop.
+ */
+func TestABornSetsPageNamesTheClaimThatMadeIt(cur realm, t *testing.T) {
+	mod := testutils.TestAddress("fr5-mod")
+	poster := testutils.TestAddress("fr5-poster")
+	modFixture(cur, "fr5", mod, poster)
+
+	// A moderator's folder, for the other half of the assertion.
+	testing.SetRealm(testing.NewUserRealm(mod))
+	declared := CreateFolder(cross(cur), "fr5", "Declared", "a moderator said so")
+
+	// And one the court is asked for.
+	testing.SetRealm(testing.NewUserRealm(poster))
+	id := OpenClaim(cross(cur), "fr5", "\U00013080 Voted")
+	matureOI(cur, "fr5", id, poster, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(poster))
+	PostAnswer(cross(cur), "fr5", id, sideYES)
+	testing.SkipHeights(settleDelay)
+	SettleUndisputed(cross(cur), "fr5", id)
+	born := AffirmSet(cross(cur), "fr5", id)
+
+	page := Render("fr5/folder/" + strconv.FormatUint(born, 10))
+	if !strings.Contains(page, "The court voted this heading into existence") {
+		t.Fatal("a governed set's page must say the court made it")
+	}
+	// THE LINK IS THE POINT, not the sentence: the claim carries the body, the
+	// stakes, the bond and the verdict, which is the description this page was
+	// deliberately not writing.
+	want := "(/r/kourt/kourtv2:fr5/" + strconv.FormatUint(id, 10) + ")"
+	if !strings.Contains(page, want) {
+		t.Fatalf("a governed set's page must link the claim that made it: want %s", want)
+	}
+
+	// AND A DECLARED FOLDER IS UNCHANGED. bornOf is 0, so nothing is claimed on
+	// the court's behalf.
+	other := Render("fr5/folder/" + strconv.FormatUint(declared, 10))
+	if strings.Contains(other, "The court voted this heading into existence") {
+		t.Fatal("a moderator's folder must not claim the court voted for it")
+	}
+	if !strings.Contains(other, "a moderator said so") {
+		t.Fatal("a moderator's folder must still show its description")
+	}
+}

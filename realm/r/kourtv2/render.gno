@@ -841,6 +841,31 @@ func renderFolderPage(slug string, fid uint64) string {
 		b.WriteString("> This heading was retired by a moderator. It is kept so " +
 			"links to it still resolve.\n\n")
 	}
+	/* WHO MADE THIS HEADING, which the chain knew and would not say.
+	 *
+	 * A GOVERNED SET RENDERED AS A BARE TITLE. AffirmSet deliberately leaves the
+	 * description empty — "this set has a whole claim, with a body, a stake history
+	 * and a verdict, sitting behind it, and that is a better description than a line
+	 * anybody could have written" — so the page went heading, breadcrumb, and
+	 * straight into the claim list with no words at all. The reasoning is right and
+	 * the consequence was that the better description was never linked to.
+	 *
+	 * AND THIS IS THE SURFACE THAT MATTERS MOST for the distinction, because it is
+	 * the chain's own. The overlay says it three ways now; gnoweb, and anyone
+	 * reading the realm directly, saw a folder and a governed set as the same
+	 * object. bornOf is stored right here on the row.
+	 *
+	 * BEFORE THE DESCRIPTION, not after: on a moderator's folder the desc is the
+	 * first thing said about it, and on a born set there is no desc, so this takes
+	 * that place rather than trailing the claim list. 0 means declared, so a
+	 * moderator's folder reads exactly as it always did.
+	 */
+	if f.bornOf != 0 {
+		b.WriteString("> The court voted this heading into existence: [claim #" +
+			strconv.FormatUint(f.bornOf, 10) + "](" + base + "/" +
+			strconv.FormatUint(f.bornOf, 10) + ") settled YES, and carrying it was " +
+			"a second act anyone could take.\n\n")
+	}
 	if f.desc != "" {
 		b.WriteString(sanitize.Block(f.desc) + "\n")
 	}
