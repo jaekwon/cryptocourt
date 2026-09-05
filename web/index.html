@@ -5886,6 +5886,171 @@ async function acctFill(){
 
    Collapsed until asked for. Most people reading a court are not filing, and a
    drop zone open on every court page would be furniture. */
+/* THE THREE STEPS BETWEEN A FILE AND A CHAIN ARGUMENT, shared by every surface
+   that files a picture. They were local to mountCompose until the curate page
+   needed them too, and copying them would have put the WebP policy, the archive
+   base and the court thread in two places each. */
+/* Resize and re-encode. THE PERSON IS TOLD NOTHING ABOUT THIS: a 12-megapixel
+   photo becomes a small WebP and the cap it would have violated is never
+   mentioned. createImageBitmap and canvas are both old enough to rely on, and
+   a browser without them fails this one file rather than the page. */
+async function mediaPrepareFile(file){
+  const bmp = await createImageBitmap(file);
+  const fit = mediaFitWithin(bmp.width, bmp.height, MEDIA_MAX_EDGE);
+  const canvas = document.createElement("canvas");
+  canvas.width = fit.w; canvas.height = fit.h;
+  canvas.getContext("2d").drawImage(bmp, 0, 0, fit.w, fit.h);
+  // The policy lives in media.js so a harness can exercise it; only toBlob
+  // itself is browser-only, which is the point of passing it in.
+  const {blob} = await mediaEncodeUnder(
+    q => new Promise(r => canvas.toBlob(r, "image/webp", q)), MEDIA_MAX_BYTES);
+  return {mime:"image/webp", w:fit.w, h:fit.h,
+          bytes:new Uint8Array(await blob.arrayBuffer())};
+}
+
+function archiveBase(){
+  // Same origin as the page. The archive is served from /m by the same nginx
+  // that serves this file, so there is nothing to configure and nothing to
+  // get wrong in a second place.
+  //
+  // IT HAS TO BE ABSOLUTE, and returning "" made it relative. The archive
+  // answers an upload with {"url": "/m/<sha256>"}, mediaUpload prefixes it
+  // with this base, and the result becomes the exhibit's mirror — which then
+  // has to pass mediaMirrorFault, which refuses anything that is not https.
+  // So every uploaded image failed with "a link starts with https://" and the
+  // claim could not be signed at all. The realm would have refused the same
+  // line for the same reason.
+  return siteHost() ? location.origin : "";
+}
+
+async function mediaUploadFor(court, bytes, mime, sha256){
+  // `court` is what lets the archive keep these bytes if this tab closes
+  // before the claim is broadcast — nothing would call /m/claimed then, and
+  // the court is the only thread back to them.
+  return mediaUpload(bytes, mime, {base: archiveBase(), sha256, court});
+}
+
+/* A COURT'S OR A SET'S PICTURE — the other half of the Clear buttons above it.
+ *
+ * WHY IT IS NOT THE CLAIM COMPOSER'S TRAY. mediaNewComposer holds up to
+ * MEDIA_MAX_ITEMS exhibits, orders them, captions them and says "Drop images
+ * here … the first one is what the map shows". A heading takes EXACTLY ONE
+ * image — the realm panics with "a court carries exactly one image" — and every
+ * one of those affordances would be a way to build something it will refuse.
+ * So this reuses the three steps that matter (prepare, upload, argument line)
+ * and none of the ones that do not.
+ *
+ * AN IMAGE, NEVER A LINK. Both realm verbs refuse mediaKindVideo, and the
+ * reason is written where they are declared: "a video is a link the court
+ * cannot vouch for … an unreasonable thing to make the face of a venue". There
+ * is no paste-a-link path here for the same reason.
+ *
+ * THE BUTTON APPEARS ONLY WHEN THE ARGUMENT IS REAL. Until the bytes are
+ * uploaded there is no mirror, and a media line with no mirror is one the realm
+ * refuses — so an always-present button would be a control that fails after the
+ * work rather than before it. */
+function mountPicture(host, slug){
+  if(!host || typeof mediaArgLine !== "function") return;
+  host.innerHTML = "";
+  for(const spec of [
+    {verb:"SetCourtImage",  head:"Set this court's picture", folder:false,
+     hint:"one image, shown as the venue's face"},
+    {verb:"SetFolderImage", head:"Set a set's picture", folder:true,
+     hint:"one image, shown at the head of that set"},
+  ]) host.appendChild(pictureControl(slug, spec));
+}
+
+function pictureControl(slug, spec){
+  const panel = document.createElement("div");
+  panel.className = "panel"; panel.style.marginTop = "14px";
+  const h = document.createElement("h2"); h.textContent = spec.head;
+  const hint = document.createElement("p");
+  hint.className = "small muted"; hint.style.margin = "0 0 8px";
+  hint.textContent = spec.hint;
+  panel.appendChild(h); panel.appendChild(hint);
+
+  const row = document.createElement("div"); row.className = "actions";
+  let fid = null;
+  if(spec.folder){
+    fid = document.createElement("input");
+    fid.type = "number"; fid.min = "1"; fid.value = "1"; fid.className = "mono";
+    fid.style.width = "5em";
+    fid.setAttribute("aria-label", "Set id");
+    row.appendChild(fid);
+  }
+  const pick = document.createElement("input");
+  pick.type = "file"; pick.className = "mediapick";
+  pick.accept = (typeof MEDIA_TYPES !== "undefined" ? MEDIA_TYPES : ["image/*"]).join(",");
+  pick.setAttribute("aria-label", spec.head);
+  row.appendChild(pick);
+
+  const cap = document.createElement("input");
+  cap.type = "text"; cap.placeholder = "Caption (optional)";
+  cap.setAttribute("aria-label", "Caption");
+  row.appendChild(cap);
+  panel.appendChild(row);
+
+  /* textContent, not innerHTML: the only strings that reach here are a caption
+     somebody typed and a fault naming it back to them. */
+  const note = document.createElement("p");
+  note.className = "medianote"; note.setAttribute("role", "status");
+  const act = document.createElement("div"); act.className = "actions";
+  panel.appendChild(note); panel.appendChild(act);
+
+  let item = null;
+  const say = t => { note.textContent = t; };
+
+  function refresh(){
+    act.innerHTML = "";
+    if(!item) return;
+    item.caption = cap.value || "";
+    const fault = typeof mediaItemFault === "function"
+      ? mediaItemFault(item, typeof siteHost === "function" ? siteHost() : "") : "";
+    if(fault){ say(fault); return; }
+    say("Copied. Sign to file it.");
+    const line = mediaArgLine(item);
+    /* SPELLED OUT, not built from spec.verb, so check-curation-reachable can
+       read them. That guard matches a btn call whose label, entrypoint and
+       argument object are all literals, and compares the object's keys against
+       the realm's parameter names in order — a call assembled from variables is
+       invisible to it, and these two would have been the only buttons on the
+       page outside the check that catches a renamed argument.
+       (Written in prose rather than as an example call: the guard scans this
+       file, and a sample in a comment reads to it as a real button. It did.) */
+    act.innerHTML = spec.folder
+      ? btn("Set this set's picture", "SetFolderImage",
+            {courtSlug: slug, folderID: Number(fid && fid.value) || 1, media: line}, "primary")
+      : btn("Set this court's picture", "SetCourtImage",
+            {courtSlug: slug, media: line}, "primary");
+  }
+
+  cap.addEventListener("input", refresh);
+  if(fid) fid.addEventListener("input", refresh);
+
+  pick.addEventListener("change", async () => {
+    const file = pick.files && pick.files[0];
+    if(!file) return;
+    item = null; act.innerHTML = "";
+    say("Shrinking…");
+    try {
+      const prepared = await mediaPrepareFile(file);
+      say("Copying to the archive…");
+      const sha = await mediaDigest(prepared.bytes);
+      const up = await mediaUploadFor(slug, prepared.bytes, prepared.mime, sha);
+      item = {kind:"img", sha256:sha, mime:prepared.mime, w:prepared.w, h:prepared.h,
+              bytes:prepared.bytes.length, caption:cap.value || "", mirrors:[up.url]};
+      refresh();
+    } catch(_) {
+      /* The same failure the composer names, and the same remedy: the bytes
+         never reached the archive, so there is no link to file this under. */
+      item = null; act.innerHTML = "";
+      say("the copy did not go through, so there is no link to file this under — try again");
+    }
+  });
+
+  return panel;
+}
+
 function mountCompose(host, slug){
   if(!host) return;
   /* THE REALM'S CURRENT ALLOWLIST, not the one this file shipped with. It is an
@@ -5918,45 +6083,12 @@ function mountCompose(host, slug){
     build(panel);
   });
 
-  /* Resize and re-encode. THE PERSON IS TOLD NOTHING ABOUT THIS: a 12-megapixel
-     photo becomes a small WebP and the cap it would have violated is never
-     mentioned. createImageBitmap and canvas are both old enough to rely on, and
-     a browser without them fails this one file rather than the page. */
-  async function prepare(file){
-    const bmp = await createImageBitmap(file);
-    const fit = mediaFitWithin(bmp.width, bmp.height, MEDIA_MAX_EDGE);
-    const canvas = document.createElement("canvas");
-    canvas.width = fit.w; canvas.height = fit.h;
-    canvas.getContext("2d").drawImage(bmp, 0, 0, fit.w, fit.h);
-    // The policy lives in media.js so a harness can exercise it; only toBlob
-    // itself is browser-only, which is the point of passing it in.
-    const {blob} = await mediaEncodeUnder(
-      q => new Promise(r => canvas.toBlob(r, "image/webp", q)), MEDIA_MAX_BYTES);
-    return {mime:"image/webp", w:fit.w, h:fit.h,
-            bytes:new Uint8Array(await blob.arrayBuffer())};
-  }
-
-  function archiveBase(){
-    // Same origin as the page. The archive is served from /m by the same nginx
-    // that serves this file, so there is nothing to configure and nothing to
-    // get wrong in a second place.
-    //
-    // IT HAS TO BE ABSOLUTE, and returning "" made it relative. The archive
-    // answers an upload with {"url": "/m/<sha256>"}, mediaUpload prefixes it
-    // with this base, and the result becomes the exhibit's mirror — which then
-    // has to pass mediaMirrorFault, which refuses anything that is not https.
-    // So every uploaded image failed with "a link starts with https://" and the
-    // claim could not be signed at all. The realm would have refused the same
-    // line for the same reason.
-    return siteHost() ? location.origin : "";
-  }
-
-  async function upload(bytes, mime, sha256){
-    // `court` is what lets the archive keep these bytes if this tab closes
-    // before the claim is broadcast — nothing would call /m/claimed then, and
-    // the court is the only thread back to them.
-    return mediaUpload(bytes, mime, {base: archiveBase(), sha256, court: slug});
-  }
+  // prepare, archiveBase and upload were declared here and are now shared —
+  // the curate page's picture control needs the same three. `upload` stays a
+  // local closure because it is the only one that knows which court these bytes
+  // belong to.
+  const prepare = mediaPrepareFile;
+  const upload = (bytes, mime, sha256) => mediaUploadFor(slug, bytes, mime, sha256);
 
   function build(el){
     const title = document.createElement("input");
@@ -11159,7 +11291,7 @@ on(/^\/c\/([a-z0-9-]+)\/curate$/, async (slug)=>{
          ${btn("Create set","CreateFolder",{courtSlug:slug,name:"Set name",desc:"One line on what belongs here"})}
          ${btn("Create subset","CreateFolderIn",{courtSlug:slug,parentID:1,name:"Set name",desc:"One line on what belongs here"},"","inside another set, four deep")}
          ${btn("Rename set","RenameFolder",{courtSlug:slug,folderID:1,name:"New name",desc:"New one-liner"})}
-         ${btn("Remove set's picture","ClearFolderImage",{courtSlug:slug,folderID:1},"","taking one off needs no upload; putting one on does, so it is not here yet")}
+         ${btn("Remove set's picture","ClearFolderImage",{courtSlug:slug,folderID:1},"","the picture itself is set at the foot of this page")}
          ${btn("Move set","MoveFolder",{courtSlug:slug,folderID:2,newParent:1},"","0 is the root")}
          ${btn("Retire set","RetireFolder",{courtSlug:slug,folderID:1},"","struck from the tree, row kept")}
          ${btn("Restore set","RestoreFolder",{courtSlug:slug,folderID:1})}
@@ -11186,7 +11318,8 @@ on(/^\/c\/([a-z0-9-]+)\/curate$/, async (slug)=>{
        <div class="panel" style="margin-top:14px"><h2>Court</h2><div class="actions">
          ${btn("Appoint moderators","AppointMods",{courtSlug:slug,m:1,mods:"g1address1,g1address2"},"","creator only, free")}
          ${btn("Describe this court","SetCourtDesc",{courtSlug:slug,desc:"One line on what this court is for"},"","one line, no newlines")}
-         ${btn("Remove this court's picture","ClearCourtImage",{courtSlug:slug},"","taking one off needs no upload; putting one on does, so it is not here yet")}</div></div>
+         ${btn("Remove this court's picture","ClearCourtImage",{courtSlug:slug},"","the picture itself is set below")}</div></div>
+       <div id="curatepic"></div>
       </section>`
     /* PROPOSING IS NOT A MODERATOR ACT, and the realm says so where the verb is
        declared: "ANY HOLDER MAY PROPOSE, because proposing is the interactive
@@ -11223,6 +11356,12 @@ on(/^\/c\/([a-z0-9-]+)\/curate$/, async (slug)=>{
          <p class="small muted" style="margin:0 0 8px">${CFG.mode==="demo"? "Clearing local curation restores the built-in sample." : "Clearing removes your local curation; live courts then show the flat docket."}</p>
          <div class="actions"><button class="btn" id="cur-clear">Clear local curation</button></div></div>
       </section>`;
+  /* Guarded on typeof for mountCompose's reason: a missing media.js must leave
+     the curate page whole rather than throw halfway through a paint and take
+     every other control with it. Without it the Clear buttons still work. */
+  if(typeof mediaArgLine === "function"){
+    mountPicture(document.getElementById("curatepic"), slug);
+  }
   const exportObj = ()=>{
     if(cur) return {kourtCuration:CURATION_V, court:slug, chain:(CFG.mode==="demo"?"demo":(CFG.chainid||"dev")),
       note:"local curation — held in a browser, recorded on no chain", desc:cur.desc||"", folders:cur.folders, relations:cur.relations};
