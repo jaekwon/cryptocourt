@@ -1225,10 +1225,29 @@ func short(h string) string {
 	return h
 }
 
+// oneLine flattens a body to a single line and caps it at n RUNES, spending the
+// last one on an ellipsis when it has to cut.
+//
+// RUNES, NOT BYTES, and this counted bytes until it was measured. The failure is
+// the one evidenceLine's test names in as many words — "truncating a multibyte
+// body by BYTES severs a character" — and this is the second truncator in this
+// file, which got it wrong while the first got it right and was tested.
+//
+// Two things went wrong at once, and the quieter one is worse. A byte cut lands
+// mid-character and puts INVALID UTF-8 in the operator's terminal: measured, a
+// Cyrillic body came back "...налич\xd0…". And the column is not the width it
+// claims — at n=44 the caller asks for 44 characters and a byte cut gives 23 of
+// Cyrillic, 16 of CJK, 14 of emoji. An operator judging a flagged message was
+// shown a third of it, with no sign that the rest had been cut for a reason
+// that has nothing to do with the message.
+//
+// evidenceLine has the same rule on a different budget (72 kept, 73 with the
+// ellipsis) rather than sharing this one — the two contracts differ by design,
+// and its is pinned by a test.
 func oneLine(s string, n int) string {
 	s = strings.Join(strings.Fields(s), " ")
-	if len(s) > n {
-		return s[:n-1] + "…"
+	if r := []rune(s); len(r) > n {
+		return string(r[:n-1]) + "…"
 	}
 	return s
 }

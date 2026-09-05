@@ -588,3 +588,68 @@ func TestTheByFlagDefaultsToNoNameRatherThanAPlaceholder(t *testing.T) {
 		t.Error(`the "operator" placeholder default is back`)
 	}
 }
+
+// oneLine is THE OTHER TRUNCATOR, and it counted bytes while evidenceLine counted
+// runes — a rule this file already knew, wrote down, and tested one of its two
+// implementations against.
+//
+// It reaches an operator through `why`, which prints oneLine(r.Evidence, 44): the
+// message a consequence was issued over. So the body being clipped is chat text
+// from whoever was moderated, which is exactly the input least likely to be ASCII
+// and most likely to be worth reading precisely.
+//
+// The invalid-UTF-8 half is the visible failure. The WIDTH half is the quiet one:
+// with a byte cut, "44" means 44 bytes, so a Cyrillic message is shown 23
+// characters and an emoji one 14 — the operator sees a third of the evidence and
+// nothing says the cut had anything to do with the alphabet it was written in.
+func TestOneLineTruncatesByRunesSoTheColumnIsTheWidthItClaims(t *testing.T) {
+	// Every one of these is longer than the budget in runes, so every one is cut.
+	for _, tc := range []struct{ name, body string }{
+		{"cyrillic", strings.Repeat("наличные", 12)},
+		{"cjk", strings.Repeat("転載禁止", 12)},
+		{"emoji", strings.Repeat("🔥", 50)},
+		{"mixed", strings.Repeat("aф🔥", 30)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := oneLine(tc.body, 44)
+			// A severed character. Before this was fixed all four ended in a
+			// partial rune — "\xd0", "\xe7", "\xf0\x9f\x94".
+			if !utf8.ValidString(got) {
+				t.Errorf("truncation severed a character, leaving invalid UTF-8: %q", got)
+			}
+			// And the column is the width it advertises, in the unit a reader
+			// counts in. Byte-cutting gave 23, 16 and 14 here.
+			if n := utf8.RuneCountInString(got); n != 44 {
+				t.Errorf("asked for 44 runes, got %d: %q", n, got)
+			}
+			if !strings.HasSuffix(got, "…") {
+				t.Errorf("a truncated body must say it was cut, got %q", got)
+			}
+		})
+	}
+
+	// THE PAIRED POSITIVE, so this is not a formatter that mangles everything: a
+	// body inside the budget comes back whole and unmarked, multibyte or not.
+	for _, body := range []string{"is the settle window still open", "наличные", "🔥🔥🔥"} {
+		if got := oneLine(body, 44); got != body {
+			t.Errorf("a short body must pass through untouched: %q -> %q", body, got)
+		}
+	}
+
+	// Exactly the budget is NOT too long — the boundary, where an off-by-one
+	// would cut a body that fits and claim it was abridged.
+	exact := strings.Repeat("ф", 44)
+	if got := oneLine(exact, 44); got != exact {
+		t.Errorf("a body of exactly n runes must not be truncated, got %q", got)
+	}
+	if got := oneLine(strings.Repeat("ф", 45), 44); utf8.RuneCountInString(got) != 44 {
+		t.Errorf("one rune over the budget must cut to exactly the budget, got %q", got)
+	}
+
+	// The other half of the job, unchanged and still asserted: newlines and runs
+	// of spaces collapse, because this is what keeps a pasted multi-line message
+	// from breaking the table it is printed in.
+	if got := oneLine("two\nlines   and\t\tgaps", 44); got != "two lines and gaps" {
+		t.Errorf("whitespace must collapse to single spaces, got %q", got)
+	}
+}
