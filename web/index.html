@@ -4277,11 +4277,17 @@ function docketSignal(ser, inst){
      is not one: it is the share of STAKE sitting on YES. Reported on #19, where
      the row said YES? on one line and "YES now" on the next about different
      things.
-     "no trend", not "no trend yet": the yet promises one is coming, and on a
-     claim that never moves again none is. */
+     AND A MISSING SPARKLINE SAYS NOTHING. This used to append "· no trend", which
+     spent half the caption on the absence of a decoration: a reader who has never
+     seen the line on another row cannot miss it, and one who has can see that this
+     row has no line by looking at the row. The figure is the statement either way,
+     so the two branches now differ only by whether a line is drawn — which is
+     exactly the difference between them.
+     (Before that it said "no trend yet", and the note is worth keeping: the `yet`
+     promised one was coming, and on a claim that never moves again none is. Both
+     versions were answering a question nobody asked.) */
   if(ser) return `${sparkSvg(ser)}<b>${ser[2].toFixed(1)}%</b><small>staked YES</small>`;
-  if(Number.isFinite(inst))
-    return `<b>${inst.toFixed(1)}%</b><small>staked YES · no trend</small>`;
+  if(Number.isFinite(inst)) return `<b>${inst.toFixed(1)}%</b><small>staked YES</small>`;
   return `<small class="muted">not staked yet</small>`;
 }
 function esc(s){ return String(s).replace(/[&<>"'`]/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;","`":"&#96;"}[c])); }

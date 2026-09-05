@@ -460,13 +460,22 @@ const run = async (rows, v, mode) => {
     const t = docketSignal(null, 53.14);
     return t.includes("53.1%") && t.includes("staked YES") && !t.includes("YES now");
   })());
-  ok("...and does not promise a trend that may never come", (()=>{
-    return docketSignal(null, 53.14).includes("no trend")
-        && !docketSignal(null, 53.14).includes("no trend yet");
+  /* A MISSING SPARKLINE IS NOT NEWS. This asserted the caption SAID "no trend" (and
+     did not say "no trend yet"). Both spent half the caption on the absence of a
+     decoration — a reader who has never seen the line cannot miss it, and one who has
+     can see the row has none by looking at it. The rule is now the stronger one: the
+     absence is never narrated, in any wording. */
+  ok("...and says nothing at all about the missing line", (()=>{
+    const t = docketSignal(null, 53.14);
+    return !/trend/i.test(t) && !/no history|not enough/i.test(t);
   })());
-  ok("...with the same words once there IS a trend", (()=>{
-    const t = docketSignal([10, 20, 53.14], 53.14);
-    return t.includes("staked YES") && !t.includes("YES now") && !t.includes("no trend");
+  ok("...so both captions read identically, with or without a line", (()=>{
+    const withLine = docketSignal([10, 20, 53.14], 53.14);
+    const without = docketSignal(null, 53.14);
+    // The same words; the only difference is the line in front of them. sparkSvg is
+    // stubbed to "<svg/>" at the top of this file, so the strip matches that shape
+    // as well as a real one — the assertion is about the WORDS either side of it.
+    return withLine.replace(/<svg[\s\S]*?(?:<\/svg>|\/>)/, "") === without;
   })());
   ok("...and nothing at all before anyone stakes", (()=>{
     return docketSignal(null, null).includes("not staked yet");
