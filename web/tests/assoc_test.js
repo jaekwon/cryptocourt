@@ -230,10 +230,15 @@ ok("the contested mark is coloured outside any one surface's scope",
    the click lands on the anchor, and the tab stop activates the link. Asserted
    on the row builders rather than on one sample, because every one of them
    renders inside an anchor. */
+/* contestedMark IS verdictMark NOW. The mark stopped being a yes/no about one
+   state the moment there were three of them — contested, pending, reopenable —
+   so the argument is the mark's NAME and the builder looks its sentence and its
+   glyph up. What this asserts is unchanged: a row draws the flat mark, and only
+   a caller that opts in gets the real control. */
 ok("a row's mark is flat, and the asking control is opt-in",
-   /function contestedMark\(ask\)/.test(src)
-   && /ask\s*\?\s*secHelp\(/.test(src)
-   && !/verdictSentence\([^)]*,\s*true,\s*true\)[\s\S]{0,80}class="crow/.test(src));
+   /function verdictMark\(kind, ask\)/.test(src)
+   && /ask\s*\n?\s*\?\s*secHelp\(/.test(src)
+   && !/verdictSentence\([^)]*,\s*"[a-z]+",\s*true\)[\s\S]{0,80}class="crow/.test(src));
 
 /* NOT STRUCK, even on a NO: the strike says "no longer accurate", which is a
    verdict, and a dispute has not reached one. */
@@ -719,7 +724,11 @@ ok("every statusPill call is gated on there being no side to show", (()=>{
   // AND for every claim its node badges, which now explains itself in a sentence
   // instead — see mapMarkWords. Still a "no side to show" guard; the set of sides
   // it knows about grew.
-  const guarded = l => /!sd\?|!side\?|dSide\?|side \? ""|side \|\| marked \? ""|rowVerdict\(/.test(l)
+  // `dSide || overShort ?` is the docket row's: a claim that died drops the pill
+  // too, and says "never answered" in the meta line's own voice instead — it is
+  // not a state anybody chose or can act on, so it is not in the vocabulary of
+  // OPEN and PROPOSED. Still a "no side to show" guard; the set of reasons grew.
+  const guarded = l => /!sd\?|!side\?|dSide\s*(\|\|[^?]*)?\?|side \? ""|side \|\| marked \? ""|rowVerdict\(/.test(l)
                     || l.includes('statusPill("disputed")');
   const bad = calls.filter(l => !guarded(l));
   if(bad.length) console.log("   unguarded:", bad);
@@ -755,10 +764,17 @@ ok("a disputed row wears the side, questioned", (()=>{
   const d = rowVerdict("disputed YES — a sealed vote is deciding");
   return d.side === "YES" && d.contested === true;
 })());
-ok("...and nothing else wears one", (()=>{
+/* A PROVISIONAL VERDICT WEARS ONE NOW, and so does a posted answer. Both have an
+   answer on the table and both were losing the side here — computed, then thrown
+   away — so the docket alone fell back to a phase pill while the map drew the
+   oval. Only a claim with NO answer has no side to show. */
+ok("...as does a provisional verdict, marked reopenable", (()=>{
   const p = rowVerdict("provisional verdict YES — reopenable");
+  return p.side === "YES" && p.mark === "reopenable" && !p.contested;
+})());
+ok("...and a claim nobody has answered wears nothing", (()=>{
   const o = rowVerdict("open — stake YES or NO");
-  return p.side === "" && !p.contested && o.side === "" && !o.contested;
+  return o.side === "" && o.mark === "" && !o.contested;
 })());
 ok("...so a disputed row shows the oval with its mark, not a pill", (()=>{
   const r = assocRow("orem", 4, "x",

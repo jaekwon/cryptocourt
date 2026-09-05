@@ -181,6 +181,39 @@ const run = async (rows, v, mode) => {
   ok("a YES rings the side and leaves the sentence standing",
      verdictSentence("It is so.", "YES")
        === 'It is so. <span class="vunit"><span class="sidetag vtag y">YES</span></span>');
+  /* AN ANSWER ON THE TABLE IS AN ANSWER, WHICHEVER CLOCK IS RUNNING. A posted
+     answer whose settle window is still open used to lose its side here — it was
+     computed and discarded — so the docket alone fell back to a "PROPOSED YES"
+     pill while the map drew the oval and `…`. Same complaint as the disputed row
+     before it. Reported. */
+  ok("a posted answer keeps its side, marked with the clock", (()=>{
+    const r = rowVerdict("answered YES — staking frozen; disputable until the settle window closes");
+    return r.side === "YES" && r.mark === "pending" && r.contested === false;
+  })());
+  ok("...a disputed one is marked as contested", (()=>{
+    const r = rowVerdict("disputed NO — a sealed vote is deciding");
+    return r.side === "NO" && r.mark === "contested" && r.contested === true;
+  })());
+  ok("...a provisional one is marked as reopenable", (()=>{
+    const r = rowVerdict("provisional verdict NO — a new dispute can reopen it");
+    return r.side === "NO" && r.mark === "reopenable";
+  })());
+  ok("...and a settled one wears no mark at all", (()=>{
+    const r = rowVerdict("settled NO — every stake withdraws 1×");
+    return r.side === "NO" && r.mark === "" && r.contested === false;
+  })());
+  ok("the clock mark is the map's own glyph and carries its own sentence", (()=>{
+    const h = verdictSentence("It is so.", "YES", "pending");
+    return h.includes("\u2026") && /title="[^"]*settle clock is running/.test(h) && !h.includes(">?<");
+  })());
+  /* THE STRIKE IS THE COURT'S LAST WORD. It read `!contested` when contested was
+     the only mark there was, so the day a second one arrived a pending NO would
+     have been struck — asserting "no longer accurate" about an answer with a
+     clock still running on it. */
+  ok("a settled NO is struck", /^<s>/.test(verdictSentence("It is so.", "NO", "")));
+  ok("...a pending NO is not", !/<s>/.test(verdictSentence("It is so.", "NO", "pending")));
+  ok("...and neither is a contested one", !/<s>/.test(verdictSentence("It is so.", "NO", "contested")));
+
   ok("...and what trails the verdict is inside that unit, not after it", (()=>{
     const h = verdictSentence("It is so.", "NO", false, false, "<i>TAIL</i>");
     return h.includes('<span class="vunit">') && /TAIL<\/i><\/span>$/.test(h);
@@ -575,8 +608,8 @@ const run = async (rows, v, mode) => {
      claim's answer on its sentence with a mark after it; the docket kept a pill.
      Source-asserted: no harness loads docketRow — they all slice up TO it — so
      this pins that the flag reaches the builder rather than the pixels. */
-  ok("the docket row passes the contested flag to the sentence, and the figure with it",
-     src.includes("${verdictSentence(c.title, dSide, dv.contested, false, px)}"));
+  ok("the docket row passes the verdict's mark to the sentence, and the figure with it",
+     src.includes("${verdictSentence(c.title, dSide, dv.mark, false, px)}"));
   ok("...taking both halves from one answer, not re-deriving one",
      src.includes("const dv = rowVerdict(c.statusText);"));
 

@@ -118,9 +118,18 @@ const ROUTES = ["#/c/orem", "#/c/orem/f/0", "#/c/orem/f/1", "#/c/orem/11", "#/c/
     });
     ok(`${r}: the set page offers a way to file a claim`, !act.none && /Open a claim/.test(act.label || ""),
        JSON.stringify(act));
-    ok(`${r}: ...and says the claim opens in the court, not in the set`,
-       /opens in \w+; a moderator files it here/.test(act.label || ""), JSON.stringify(act.label));
-    ok(`${r}: ...and it does not claim to file into the set`,
+    /* THE RULE, NOT THE PROSE. Where a claim lands depends on the set: a
+       chain-backed one takes a folderID and the claim opens filed in it, while a
+       locally curated one cannot, and the claim opens in the court for a
+       moderator to file. Both are honest and the wording is still moving, so what
+       is pinned is that the note SAYS where it lands — an earlier version pinned
+       one sentence and failed the moment the better branch arrived. */
+    ok(`${r}: ...and says where the claim will land`,
+       /opens (filed )?in \S+/.test(act.label || ""), JSON.stringify(act.label));
+    /* AND NEVER PROMISES THE SET IT CANNOT DELIVER. A local set has no folderID
+       to file into; a button saying otherwise names an outcome the chain will not
+       produce, and the reader finds out after paying for the claim. */
+    ok(`${r}: ...without promising a filing it cannot make`,
        !/(file|filed) (a claim )?(in|into) this set/i.test(act.label || ""), JSON.stringify(act.label));
     ok(`${r}: ...sitting under the list it belongs to`, act.belowList === true, JSON.stringify(act));
   }
@@ -208,6 +217,57 @@ const ROUTES = ["#/c/orem", "#/c/orem/f/0", "#/c/orem/f/1", "#/c/orem/11", "#/c/
      it belongs to. */
   ok("...the line trails the figure rather than leading it",
      sig.sparked > 0 && sig.figFirst === sig.sparked, JSON.stringify(sig));
+
+  /* THE DOCKET SAYS "ANSWERED" ONE WAY. A posted answer whose settle window is
+     still open wore a "PROPOSED YES" pill on the meta line while a disputed one
+     an inch above wore the oval — the same fact, two vocabularies, in the list a
+     reader meets a court in. The map has always drawn oval + `…` for it.
+     ON orem, which has both a pending row and a settled one. */
+  await page.goto(PAGE + "#/c/orem", {waitUntil: 'networkidle0'});
+  await new Promise(z => setTimeout(z, 1500));
+  const marks = await page.evaluate(() => {
+    const rows = [...document.querySelectorAll(".docket .crow.claimrow")];
+    const read = r => ({oval: (r.querySelector(".sidetag") || {}).textContent || "",
+                        mark: (r.querySelector(".vqm") || {}).textContent || "",
+                        pill: (r.querySelector(".rowpill") || {}).textContent || "",
+                        struck: !!r.querySelector("s")});
+    const all = rows.map(read);
+    return {n: all.length,
+            pending: all.filter(x => x.mark === "\u2026").length,
+            // a row that knows its side never falls back to a phase pill
+            both: all.filter(x => x.oval && x.pill).length,
+            // and a pill that names a side is the fallback this replaced
+            sidedPill: all.filter(x => !x.oval && /\b(YES|NO)\b/.test(x.pill)).length,
+            struckUnmarked: all.filter(x => x.struck && x.mark).length,
+            sample: all.filter(x => x.oval).slice(0, 3)};
+  });
+  ok("a posted answer wears the oval and the clock, as the map draws it",
+     marks.pending > 0, JSON.stringify(marks));
+  ok("...and never a phase pill beside it", marks.both === 0, JSON.stringify(marks));
+  ok("...so no row states its side in a pill instead", marks.sidedPill === 0, JSON.stringify(marks));
+  /* A MARKED NO IS NOT STRUCK: the strike says "no longer accurate", which is the
+     court's last word, and a clock still running is not one. */
+  ok("...and a marked answer is never struck through", marks.struckUnmarked === 0, JSON.stringify(marks));
+
+  /* A CLAIM THAT DIED IS NOT A CHIP. "never answered" is not a state anybody
+     chose and not one you can act on — it is how the row ends — so it reads as
+     the sentence the rest of the meta line is written in, not as a pill in the
+     vocabulary of OPEN and PROPOSED, which are things happening. Asked for.
+     THE WORDS STAY. They are the only thing on the row saying the claim is over:
+     without them a dead claim in Recently settled is an open one with no clock,
+     which reads as settled-somehow when it was never answered at all. */
+  const dead = await page.evaluate(() => {
+    const rows = [...document.querySelectorAll(".docket .crow.claimrow")]
+      .filter(r => /never answered|no decision/.test(r.textContent));
+    return {n: rows.length,
+            chipped: rows.filter(r => r.querySelector(".rowpill")).length,
+            worded: rows.filter(r => [...r.querySelectorAll(".m")]
+              .some(m => !m.classList.contains("rowpill")
+                      && /^(never answered|no decision)$/.test(m.textContent.trim()))).length};
+  });
+  ok("a claim that died says so in words, not in a chip",
+     dead.n > 0 && dead.chipped === 0, JSON.stringify(dead));
+  ok("...and still says it", dead.worded === dead.n, JSON.stringify(dead));
 
   console.log(fail ? "\n" + fail + " FAILURES" : "\nALL PASS");
   await browser.close();

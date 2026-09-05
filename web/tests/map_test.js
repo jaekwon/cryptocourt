@@ -260,6 +260,13 @@ ok("A-I pass on live 50-claim ring (both modes)", livepass);
   global.SET_MARK = "\u{13080}";
   global.ICN_EYE_OPEN = '<svg class="eye eyeopen"></svg>';   // drawn form; the harness needs it to exist, not to render
   eval(fn('setMarkHtml'));
+  /* sideOval delegates the mark to verdictMark, which reads two tables. `var`,
+     not `const`: a const declared inside eval() is block-scoped to that eval and
+     never reaches the caller, while a function declaration leaks — which is why
+     the fn() lines below work and a straight slice of the table did not. */
+  eval(src.slice(src.indexOf("const CONTESTED_SAYS"), src.indexOf("function verdictMark"))
+          .replace(/^const /gm, "var "));
+  eval(fn('verdictMark'));
   eval(fn('sideOval'));   // verdictSentence delegates the oval to it
   eval(fn('verdictSentence'));
   eval(slice('function mapSelCard(', 'function mapDotClass'));

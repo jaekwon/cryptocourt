@@ -8203,10 +8203,10 @@ function assocRow(slug, rid, chip, lookup){
      What the pill was carrying that the oval does not is the phase, and the
      question mark is that. */
   const rv = d? rowVerdict(d.statusText) : {side:"", contested:false};
-  const contested = rv.contested, side = rv.side;
+  const mark = rv.mark, side = rv.side;
   return `<a class="crow assocrow" href="#/c/${esc(slug)}/${rid}">
     <span class="id">#${rid}</span>
-    <span><span class="t"${d? "" : ` data-needtitle="${rid}"`}>${d? verdictSentence(d.title, side, contested) : ""}</span></span>
+    <span><span class="t"${d? "" : ` data-needtitle="${rid}"`}>${d? verdictSentence(d.title, side, mark) : ""}</span></span>
     <span class="rt"><span class="pill ${/contradict/.test(chip)?"contra":"void"}">${esc(chip)}</span>
     ${d && !side? statusPill(d.statusText) : ""}</span></a>`;
 }
@@ -10886,7 +10886,7 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
         const fk = foldOf[r.id];
         return `<a class="crow claimrow" data-fold="${esc(fk && fk.length? fk.join(" ") : "~none")}" href="#/c/${esc(slug)}/${r.id}">
         <span class="id">#${r.id}</span>
-        <span><span class="t">${c? verdictSentence(r.title, sd, rv.contested, false, px) : safeInline(r.title)+px}</span>${metaLine}${c && !sd? `<span class="m rowpill">${statusPill(c.statusText)}</span>` : ""}</span>
+        <span><span class="t">${c? verdictSentence(r.title, sd, rv.mark, false, px) : safeInline(r.title)+px}</span>${metaLine}${c && !sd? `<span class="m rowpill">${statusPill(c.statusText)}</span>` : ""}</span>
         </a>`; };
       /* A DEADLINE IS A WHEN, NOT A HEIGHT. This printed the realm's own wording —
          "settles at block 168,480" — which is the machinery rather than the
@@ -11995,10 +11995,20 @@ function docketRow(slug,c,meta,foldKeys){
      by that attribute; only where the run sits has changed. */
   const px = `<span class="sig" data-pct="${esc(slug)}-${c.id}"${dSide?` data-side="${dSide}"`:""}>${
     (c.series || Number.isFinite(c.inst))? docketSignal(c.series, c.inst, dSide) : ""}</span>`;
+  /* NO CHIP ON A CLAIM THAT DIED. "never answered" is not a state anybody chose
+     and not one you can act on — it is how the row ends — so it reads as the
+     sentence the rest of the meta line is written in rather than as a pill in the
+     vocabulary of OPEN and PROPOSED, which are things happening. Asked for.
+     THE WORDS STAY, because they are the only thing on the row saying the claim
+     is over: without them a dead claim in Recently settled is an open one with no
+     clock, which reads as settled-somehow when it was never answered at all. The
+     map states it the same way, in plain text beside the node. */
+  const pcShort = phaseClass(c.statusText).short;
+  const overShort = (pcShort === "never answered" || pcShort === "no decision")? pcShort : "";
   const sortKey = c.series ? c.series[2] : (Number.isFinite(c.inst) ? c.inst : null);
   return `<a class="crow claimrow${c.offp?" offp":""}" data-id="${c.id}" data-fold="${esc(foldKeys && foldKeys.length? foldKeys.join(" ") : "~none")}"${sortKey!=null?` data-yes="${sortKey}"`:""}${stakeSortAttrs(c.yesStake, c.noStake, phaseClass(c.statusText).side)} data-q="${esc("#"+c.id+" "+c.title)}" href="#/c/${esc(slug)}/${c.id}">
     <span class="id">#${c.id}</span>
-    <span><span class="t">${verdictSentence(c.title, dSide, dv.contested, false, px)}</span>${meta?`<span class="m" style="display:block">${safeInline(meta.label)}</span>`:""}<span class="m" style="display:block" id="clk-${esc(slug)}-${c.id}">${(()=>{ const t=clockLine(isLive()? null:NOW, phaseClass(c.statusText).short, c.settleAt, c.escrowUntil); return t? esc(t):""; })()}</span>${dSide? "" : `<span class="m rowpill">${statusPill(c.statusText)}</span>`}</span>
+    <span><span class="t">${verdictSentence(c.title, dSide, dv.mark, false, px)}</span>${meta?`<span class="m" style="display:block">${safeInline(meta.label)}</span>`:""}<span class="m" style="display:block" id="clk-${esc(slug)}-${c.id}">${(()=>{ const t=clockLine(isLive()? null:NOW, phaseClass(c.statusText).short, c.settleAt, c.escrowUntil); return t? esc(t):""; })()}</span>${overShort? `<span class="m" style="display:block">${esc(overShort)}</span>` : ""}${dSide || overShort? "" : `<span class="m rowpill">${statusPill(c.statusText)}</span>`}</span>
     </a>`;
 }
 
@@ -13753,7 +13763,7 @@ function setMarkHtml(escaped){
    title's left margin where it read as a new item rather than the oval's share.
    Bound here rather than by a wrapper at the call site, because the oval is
    emitted from inside this function and nothing outside can reach it. */
-function verdictSentence(title, side, contested, ask, tail){
+function verdictSentence(title, side, mark, ask, tail){
   const t = setMarkHtml(safeInline(title));
   if(side !== "YES" && side !== "NO") return t + (tail || "");
   /* CONTESTED IS THE SAME SENTENCE, QUESTIONED. The claim heading built this
@@ -13766,8 +13776,13 @@ function verdictSentence(title, side, contested, ask, tail){
   // <s>, not a class on the caller's element: the element means "no longer
   // accurate", which is the claim about the sentence — and it keeps the oval
   // outside the strike, since the verdict is not itself struck.
-  return ((side === "NO" && !contested) ? `<s>${t}</s>` : t)
-    + ` <span class="vunit">` + sideOval(side, contested, ask) + (tail || "") + `</span>`;
+  /* THE STRIKE IS THE COURT'S LAST WORD, so only an unmarked NO gets it. A
+     disputed NO is being argued about and a pending one has a clock running —
+     neither is "no longer accurate", which is what the strike asserts. It read
+     `!contested` when contested was the only mark there was; a pending NO would
+     have been struck the day the second one arrived. */
+  return ((side === "NO" && !mark) ? `<s>${t}</s>` : t)
+    + ` <span class="vunit">` + sideOval(side, mark, ask) + (tail || "") + `</span>`;
 }
 /* THE OVAL ALONE, for the surfaces that have no sentence to hang it on. Every
    caller used to reach it through verdictSentence, which is right where there is
@@ -13791,13 +13806,31 @@ function verdictSentence(title, side, contested, ask, tail){
    heading is not a link, so that is where the real control goes, and that is the
    surface where a reader who wants the explanation has come to look for it. */
 const CONTESTED_SAYS = "Under dispute — this answer is being contested. The court is voting on whether to overturn it.";
-function contestedMark(ask){
+/* THE OTHER THING AN ANSWER CAN BE. A posted answer whose settle window is still
+   open is not a verdict either, and the map has always said so with `…` — the
+   clock is running. The docket did not: it dropped the side entirely and put a
+   "PROPOSED YES" pill on the meta line, so a claim wore an oval on the map and a
+   pill in the list a reader meets it in. The same complaint as the disputed row
+   before it, and the same fix. Reported. */
+const PENDING_SAYS = "Answered — the settle clock is running, and nobody has disputed it yet.";
+/* AND THE THIRD THING. A provisional verdict IS a decision — a vote reached it —
+   but a new dispute can reopen it, which is why the map draws it with a period in
+   a DASHED ring rather than a bare oval. The docket had the same gap here as it
+   had for a posted answer: it knew the side and showed a "provisional NO" pill. */
+const REOPENABLE_SAYS = "A vote decided it, provisionally — a new dispute can reopen it.";
+const MARK_SAYS = {contested: CONTESTED_SAYS, pending: PENDING_SAYS, reopenable: REOPENABLE_SAYS};
+const MARK_GLYPH = {contested: "?", pending: "\u2026", reopenable: "."};
+/* `kind` IS A NAME, NOT A FLAG. It was a boolean called `contested`, which could
+   only ever answer one question — and the moment a second mark existed the answer
+   had to become which one, not whether. */
+function verdictMark(kind, ask){
+  const says = MARK_SAYS[kind]; if(!says) return "";
   return ask
-    ? secHelp(CONTESTED_SAYS)
-    : `<span class="vqm" title="${esc(CONTESTED_SAYS)}" aria-hidden="true">?</span>`
-      + `<span class="sr-only">${esc(CONTESTED_SAYS)}</span>`;
+    ? secHelp(says)
+    : `<span class="vqm" title="${esc(says)}" aria-hidden="true">${MARK_GLYPH[kind]}</span>`
+      + `<span class="sr-only">${esc(says)}</span>`;
 }
-function sideOval(side, contested, ask){
+function sideOval(side, mark, ask){
   if(side !== "YES" && side !== "NO") return "";
   return `<span class="sidetag vtag ${side === "NO" ? "n" : "y"}">${side}</span>`
     /* THE SAME `?` AS EVERY OTHER `?`. This one was a span carrying a title, so
@@ -13809,7 +13842,7 @@ function sideOval(side, contested, ask){
        secHelp is that control: a real button, the sentence as its accessible
        name, a panel on hover OR focus OR tap. Reusing it rather than teaching a
        second `?` the same lesson is the point. */
-    + (contested ? contestedMark(ask) : "");
+    + verdictMark(mark, ask);
 }
 /* WHAT A ROW SHOWS INSTEAD OF A PHASE PILL. Four surfaces answered this question
    separately — the docket, the map card, the related rows and the claim page —
@@ -13828,10 +13861,15 @@ function rowVerdict(statusText){
      a reader meets it in. Reported on #19.
      Answered here rather than at each row: three builders asked this question
      and two of them got a different answer. */
-  const contested = pc.short === "in dispute" && !!side;
-  if(pc.short === "settled" && side) return {side, contested: false};
-  if(contested) return {side, contested: true};
-  return {side: "", contested: false};
+  /* PENDING IS A SIDE TOO, for the same reason contested is: an answer is on the
+     table and every other surface says which way it went. The side was computed
+     here and thrown away, so the docket alone fell back to a phase pill. */
+  const mark = pc.short === "in dispute"  ? "contested"
+             : pc.short === "proposed"    ? "pending"
+             : pc.short === "provisional" ? "reopenable" : "";
+  if(pc.short === "settled" && side) return {side, mark: "", contested: false};
+  if(mark && side) return {side, mark, contested: mark === "contested"};
+  return {side: "", mark: "", contested: false};
 }
 function claimTitleHtml(d){
   const t = safeInline(d && d.title);
@@ -13845,7 +13883,7 @@ function claimTitleHtml(d){
   if(d && d.phase === "disputed"){
     const a = d.answer;
     if(a !== 0 && a !== 1) return `<h1 class="page-h">${t}</h1>`;
-    return `<h1 class="page-h">${verdictSentence(d && d.title, sideName(a), true, true)}</h1>`;
+    return `<h1 class="page-h">${verdictSentence(d && d.title, sideName(a), "contested", true)}</h1>`;
   }
   if(!d || d.phase !== "settled") return `<h1 class="page-h">${t}</h1>`;
   const v = (d.verdict != null ? d.verdict : d.answer);
@@ -14272,7 +14310,7 @@ function aboutTour(){
         const d = DEMO.claims["orem/"+i];
         return `<a class="crow" href="#/c/orem/${i}">
       <span class="id">#${i}</span>
-      <span><span class="t">${verdictSentence(d.title, rowVerdict(statusText(d)).side, rowVerdict(statusText(d)).contested)}</span><span class="m" style="display:block">${esc(cap)}</span></span>
+      <span><span class="t">${verdictSentence(d.title, rowVerdict(statusText(d)).side, rowVerdict(statusText(d)).mark)}</span><span class="m" style="display:block">${esc(cap)}</span></span>
       ${rowVerdict(statusText(d)).side? "" : statusPill(statusText(d))}</a>`;
       }).join("")}</div>
       <h2>Moderation specimens</h2>
@@ -14285,7 +14323,7 @@ function aboutTour(){
         const d = DEMO.claims["annex/"+i];
         return `<a class="crow" href="#/c/annex/${i}">
       <span class="id">#${i}</span>
-      <span><span class="t">${verdictSentence(d.title, rowVerdict(statusText(d)).side, rowVerdict(statusText(d)).contested)}</span><span class="m" style="display:block">${esc(cap)}</span></span>
+      <span><span class="t">${verdictSentence(d.title, rowVerdict(statusText(d)).side, rowVerdict(statusText(d)).mark)}</span><span class="m" style="display:block">${esc(cap)}</span></span>
       ${rowVerdict(statusText(d)).side? "" : statusPill(statusText(d))}</a>`;
       }).join("")}</div>`;
 }
@@ -14632,7 +14670,7 @@ async function meHoldings(addr,courts){
                   if(d.phase==="provisional" && d.escrowUntil && nowH!=null && d.escrowUntil>nowH) personal += ` · reopenable until ≈block ${fmtN(d.escrowUntil)} — in ${wall(nowH,d.escrowUntil)}`;
                 }
                 return `<tr><td><a href="#/c/${esc(slug)}/${cl.id}" style="color:var(--accent-2);text-decoration:none">${safeInline(cl.title)}</a>${personal?`<span class="m" style="display:block">${esc(personal)}</span>`:""}</td>
-                <td>${!d? "" : rowVerdict(d.statusText).side? sideOval(rowVerdict(d.statusText).side, rowVerdict(d.statusText).contested) : statusPill(d.statusText)}</td>
+                <td>${!d? "" : rowVerdict(d.statusText).side? sideOval(rowVerdict(d.statusText).side, rowVerdict(d.statusText).mark) : statusPill(d.statusText)}</td>
                 <td class="num">${cc(p.yes,slug)}</td><td class="num">${cc(p.no,slug)}</td><td class="num">${cc((p.cy||0)+(p.cn||0),slug)}</td></tr>`;
               }).join("")
             + `</tbody></table></div>`
