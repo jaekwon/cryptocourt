@@ -70,6 +70,12 @@ func TestSetNameIsTheTitleVerbatim(cur realm, t *testing.T) {
        it split on any space)     TestAnUnmarkedClaimIsNeverASet, which is the
                                   pair that matters: one proves near-misses are
                                   refused, the other that ordinary claims are.
+     - the provClose HALF of   -> NOTHING FAILED, until TestAProvClosedYesCarries-
+       the final-YES check         NoSet. Removing the whole `if` is caught (see
+                                   below); removing only `|| cs.provClose` was
+                                   not, and the two are different mutations. A
+                                   guard ablated only as part of a larger
+                                   expression is not measured.
      - the final-YES check     -> the suite goes red at rc=2, but as an UNCAUGHT
                                   ABORT with a VM state dump inside this test,
                                   not a clean "--- FAIL" line. Without the check,
@@ -382,4 +388,123 @@ func TestOpenClaimInGivesNoPowerOverOtherClaims(cur realm, t *testing.T) {
 	})
 	uassert.Equal(t, 1, len(FolderItems("ocl1", fid)))
 	uassert.Equal(t, mine, FolderItems("ocl1", fid)[0])
+}
+
+/* A CLAIM CLOSED WITHOUT A DECISION CARRIES NOTHING, and this is the one guard
+ * of AffirmSet's five that reads as redundant and is not.
+ *
+ * THE PAIR IS LOAD-BEARING BECAUSE OF ONE CONSTANT: sideYES = 0. provCloseClaim
+ * STAMPS verdictAt — the claim really is over — and leaves `provisional` holding
+ * the answer that never got a vote behind it. So a claim answered YES and then
+ * closed after three failed rounds has verdictAt != 0 AND provisional == 0, which
+ * is byte-for-byte the state a settled YES leaves. Neither of AffirmSet's other
+ * two verdict checks can tell them apart; only `cs.provClose` can, and the court
+ * in this story never decided anything — three rounds tried and three failed.
+ *
+ * MEASURED, NOT ASSUMED. With `|| cs.provClose` deleted the whole realm suite
+ * still passed, which is what sent this test in: every other governed-set test
+ * settles or refuses through a path that guard never touches.
+ *
+ * THE REAL PATH, NOT A HAND-SET FIELD. Two tests in this repo reach provClose by
+ * writing cs.provClose = true, and either would pass against a realm where
+ * provCloseClaim had stopped stamping verdictAt — the exact overlap this test is
+ * about would go unmodelled. So it disputes three times and lets each round time
+ * out, and asserts the overlap it depends on before asserting the refusal.
+ */
+func TestAProvClosedYesCarriesNoSet(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("gsp-alice")
+	bob := testutils.TestAddress("gsp-bob")
+	c := testCourt(cur, "gsx1", alice, 50_000_000_000)
+	c.coin.Mint(bob, 10_000_000_000)
+	// Three rounds have to FIT inside the escrow window, or the claim finalizes
+	// on the way rather than failing its way to a close.
+	c.params.escrowMinBlocks = 450_000
+	c.params.escrowMaxBlocks = 450_000
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "gsx1", tD010+" Never actually decided")
+	matureOI(cur, "gsx1", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "gsx1", id, sideYES)
+
+	for round := 0; round < maxFailedRounds; round++ {
+		testing.SetRealm(testing.NewUserRealm(bob))
+		OpenDispute(cross(cur), "gsx1", id)
+		testing.SkipHeights(c.params.votingBlocks + 1)
+		ResolveDispute(cross(cur), "gsx1", id)
+	}
+
+	cs := mustClaim(c, id)
+	if !cs.provClose {
+		t.Fatalf("setup: three failed rounds must close the claim: failedRounds=%d",
+			cs.failedRounds)
+	}
+	// THE OVERLAP ITSELF, asserted so this test still means something if either
+	// half of it ever moves. If provCloseClaim stops stamping verdictAt, or if
+	// sideYES stops being 0, the guard is no longer the only thing standing
+	// between a court that never decided and a set — and a reader deserves to
+	// find that out here rather than by deleting the guard and seeing green.
+	uassert.True(t, cs.verdictAt != 0)
+	uassert.Equal(t, int8(sideYES), cs.provisional)
+
+	uassert.AbortsContains(t, cur, "no final verdict", func() {
+		AffirmSet(cross(cur), "gsx1", id)
+	})
+	uassert.Equal(t, 0, FolderCount("gsx1"))
+	uassert.Equal(t, uint64(0), ClaimSet("gsx1", id))
+}
+
+/* THE LONGEST HEADING A COURT CAN ACTUALLY FILE, carried end to end.
+ *
+ * TWO CAPS THAT HAVE NEVER MET. A claim title is 1..200 runes (claim.gno) and a
+ * folder name is 1..maxFolderTextLen, which is also 200 — and parseSetTitle
+ * spends two runes of the title on the mark and its space. So the longest title
+ * a court can file yields a 198-rune name, and folderTextOK has never once
+ * refused one. The over-long branch that TestSetNameIsTheTitleVerbatim exercises
+ * is real, but it is reachable only by calling parseSetTitle DIRECTLY; nothing
+ * that can be opened as a claim gets there.
+ *
+ * WHICH IS WHY THE HEADROOM IS PINNED RATHER THAN LEFT AS ARITHMETIC. It is a
+ * coincidence of two independent constants, not an invariant anything enforces.
+ * Raise the title cap alone and a long marked title opens fine, stakes fine and
+ * settles YES — and then IsSetClaim quietly answers false, so the overlay draws
+ * no eye and no affirm button, and AffirmSet refuses with "not a set heading" on
+ * a title that visibly begins with the mark. A silent no is the worst available
+ * shape for that failure. Better a red line here.
+ *
+ * AND IT IS CARRIED, not merely parsed, because the length has to survive the
+ * whole route: parseSetTitle at open, parseSetTitle AGAIN inside AffirmSet, and
+ * folderTextOK inside newFolderCore. Asserting the parse alone would leave the
+ * two later reads unmeasured.
+ */
+func TestTheLongestFilableHeadingCanBeCarried(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("gsl-alice")
+	testCourt(cur, "gsl1", alice, 50_000_000_000)
+
+	// The longest title claim.gno accepts, spelled as mark + space + the rest,
+	// so the arithmetic is the realm's rather than a number copied into a test.
+	name := ""
+	for runeLen(tD010+" "+name) < 200 {
+		name += "x"
+	}
+	title := tD010 + " " + name
+	uassert.Equal(t, 200, runeLen(title))
+	uassert.Equal(t, 198, runeLen(name))
+
+	testing.SetRealm(testing.NewUserRealm(alice))
+	id := OpenClaim(cross(cur), "gsl1", title)
+	uassert.True(t, IsSetClaim("gsl1", id))
+
+	matureOI(cur, "gsl1", id, alice, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostAnswer(cross(cur), "gsl1", id, sideYES)
+	testing.SkipHeights(settleDelay)
+	SettleUndisputed(cross(cur), "gsl1", id)
+
+	fid := AffirmSet(cross(cur), "gsl1", id)
+	uassert.True(t, fid != 0)
+	// VERBATIM, at the cap. The name the folder carries is the title's own tail
+	// and not a truncation of it — a silent trim here would make the set's name
+	// and the claim's title disagree at exactly the length nobody tests by hand.
+	uassert.Equal(t, name, FolderName("gsl1", fid))
 }
