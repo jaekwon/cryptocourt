@@ -728,15 +728,18 @@ a.card:hover{border-color:var(--line-2)}
    compose — a row taken by the search and a row taken by a folder are different
    facts, and one class could not say which. */
 .fhide{display:none !important}
-/* THE TOP KNOB. Chips read as pressed by default because everything is shown by
-   default; an unticked one dims rather than vanishing, so the filter never hides
-   its own control. */
-.foldbar{display:flex; flex-wrap:wrap; gap:6px; align-items:center; margin:0 0 10px}
-.foldbar>.small{margin-right:4px}
-.foldbar .foldchip{cursor:pointer; border:1px solid var(--line-2); background:none}
-.foldbar .foldchip .count{margin-left:6px; opacity:.7}
-.foldbar .foldchip[aria-pressed="false"]{opacity:.42; text-decoration:line-through}
-.foldbar .foldchip:hover{border-color:var(--accent)}
+/* A TICKED FOLDER IS LIT, NOT MOVED. The row stays where it is and where the
+   reader clicked; the tint and the filled box are the whole of the state, so
+   the control never reorders itself under the hand that is using it. */
+.foldsel{cursor:pointer}
+.foldsel .foldbox{display:inline-block; width:11px; height:11px; margin-right:7px;
+  border:1px solid var(--line-2); border-radius:3px; vertical-align:-1px}
+.foldsel[aria-checked="true"]{background:color-mix(in srgb, var(--accent) 14%, transparent)}
+.foldsel[aria-checked="true"] .foldbox{background:var(--accent); border-color:var(--accent)}
+.foldsel:hover{background:color-mix(in srgb, var(--accent) 7%, transparent)}
+.foldsel:focus-visible{outline:2px solid var(--accent); outline-offset:-2px}
+.foldsel .foldopen{text-decoration:none}
+
 .docket .m.rowpill .pill{font-size:10px; padding:3px 6px}
 .docket a.crow .px{justify-self:end}
 .docket a.crow .pill{justify-self:end}
@@ -6499,45 +6502,55 @@ function qBarHtml(placeholder, cap){
     <span id="qcap" class="mono small muted" role="status">${esc(cap)}</span></div>`;
 }
 let QCTX = null; // {kind, demo, loaded, total, orderTail, slug, totalClaims}
-/* THE FOLDER FILTER — the page's top knob, above the search box.
-   IT COMPOSES WITH THE SEARCH RATHER THAN COMPETING WITH IT. Both hide rows, so
-   each owns its own class — .fhide here, .qhide there — and a row is visible
-   only when neither claims it. Sharing one class would make whichever ran last
-   silently undo the other.
-   applyQ does the counting for both, because the counts, the empty state and the
-   section collapse all have to agree about one set of visible rows; this sets
-   the classes and then asks applyQ to recount with the query still in the box.
-   ALL TICKED IS THE DEFAULT and means "no filter at all" rather than "every
-   folder selected": a claim in no folder is visible under it, which is what a
-   reader expects of a court that has never filed anything. */
-let FOLD_OFF = new Set();   // the unticked ones; empty means everything shows
+/* THE FOLDER FILTER. The Folders section above the search box is the control:
+   each row is a checkbox, and what is below it — the search, Open, Recently
+   settled — narrows to what is inside the folders that are ticked.
+   NOTHING TICKED MEANS EVERYTHING SHOWN, which is the default and is not the
+   same as "every folder ticked". A court's claims are not all filed, so an
+   all-ticked default would have to answer what happens to the unfiled ones;
+   an empty selection has nothing to answer. It also means the control reads as
+   OFF when it is doing nothing.
+   IT COMPOSES WITH THE SEARCH rather than competing. Both hide rows, so each
+   owns a class — .fhide here, .qhide there — and a row shows only when neither
+   claims it; sharing one would let whichever ran last undo the other. applyQ
+   does the counting for both, because the counts, the empty state and the
+   section collapse all have to agree about one visible set. */
+let FOLD_ON = new Set();   // ticked folders; empty means no filter at all
 function applyFolders(){
-  const bar = document.getElementById("foldbar");
-  if(!bar) return;
-  bar.querySelectorAll("[data-fold-key]").forEach(b=>{
-    const off = FOLD_OFF.has(b.getAttribute("data-fold-key"));
-    b.setAttribute("aria-pressed", off? "false" : "true");
-    b.classList.toggle("off", off);
+  const rows = document.querySelectorAll("#qscope .foldsel");
+  if(!rows.length) return;
+  rows.forEach(r=>{
+    const keys = (r.getAttribute("data-fold-keys")||"").split(" ").filter(Boolean);
+    const on = keys.length>0 && keys.every(k=>FOLD_ON.has(k));
+    r.setAttribute("aria-checked", on? "true":"false");
   });
   document.querySelectorAll("#qscope [data-fold]").forEach(row=>{
     const keys = (row.getAttribute("data-fold")||"~none").split(" ");
-    // A row survives if ANY folder it is in is still ticked. Cross-filed claims
-    // therefore need every one of their folders unticked to disappear, which is
-    // the only reading under which the counts add up.
-    row.classList.toggle("fhide", FOLD_OFF.size>0 && keys.every(k=>FOLD_OFF.has(k)));
+    // A claim shows if it is in ANY ticked folder. With nothing ticked the
+    // filter is inert, which is the default the page loads in.
+    row.classList.toggle("fhide", FOLD_ON.size>0 && !keys.some(k=>FOLD_ON.has(k)));
   });
   applyQ(QP.q || "");
 }
+function toggleFolderRow(row){
+  const keys = (row.getAttribute("data-fold-keys")||"").split(" ").filter(Boolean);
+  if(!keys.length) return;
+  // The row owns its whole subtree, so ticking Fauci ticks the drawers inside it
+  // and the claims filed in them come with it.
+  const on = keys.every(k=>FOLD_ON.has(k));
+  keys.forEach(k=> on? FOLD_ON.delete(k) : FOLD_ON.add(k));
+  applyFolders();
+}
 document.addEventListener("click", ev=>{
-  const chip = ev.target.closest("#foldbar [data-fold-key]");
-  if(chip){
-    const k = chip.getAttribute("data-fold-key");
-    if(FOLD_OFF.has(k)) FOLD_OFF.delete(k); else FOLD_OFF.add(k);
-    applyFolders(); return;
-  }
-  // "all" puts the page back to its default rather than making the reader
-  // re-tick each chip to undo one exploratory click.
-  if(ev.target.closest("#foldall")){ FOLD_OFF = new Set(); applyFolders(); }
+  // the row's own link out is not a toggle — it is the way to the folder page
+  if(ev.target.closest(".foldopen")) return;
+  const row = ev.target.closest("#qscope .foldsel");
+  if(row){ ev.preventDefault(); toggleFolderRow(row); }
+});
+document.addEventListener("keydown", ev=>{
+  if(ev.key!==" " && ev.key!=="Enter") return;
+  const row = ev.target.closest && ev.target.closest("#qscope .foldsel");
+  if(row){ ev.preventDefault(); toggleFolderRow(row); }
 });
 function applyQ(qRaw){
   const box = document.getElementById("qscope"); if(!box || !QCTX) return;
@@ -6559,7 +6572,7 @@ function applyQ(qRaw){
   // sections with nothing visible collapse while a query is active
   box.querySelectorAll("section[data-qsec]").forEach(sec=>{
     const any = [...sec.querySelectorAll("[data-q]")].some(r=>!r.classList.contains("qhide") && !folded(r) && (active || !r.classList.contains("offp")));
-    sec.classList.toggle("qhide", (active || FOLD_OFF.size>0) && !any);
+    sec.classList.toggle("qhide", (active || FOLD_ON.size>0) && !any);
   });
   /* THE SECTION COUNTS FOLLOW THE FILTER. They are rendered from the data and
      would otherwise keep announcing a docket the page is no longer showing —
@@ -7161,28 +7174,6 @@ function folderKeys(folders, map, ppath){
   });
   return map;
 }
-/* THE CHIP ROW — the page's top knob. Every folder starts ticked, so the default
-   view is everything and the control is discoverable without changing what a
-   first-time reader sees. UNFILED IS A CHIP TOO: a court's claims are not all in
-   folders, and without it unticking one folder would leave the unfiled ones on
-   screen with no way to say whether that was intended. */
-function folderChipRow(slug, cur, foldOf, claims){
-  const fs = [];
-  const walk = (folders, prefix, ppath) => (folders||[]).forEach((f,i)=>{
-    const path = f.path!=null? String(f.path) : (ppath!=null? ppath+"."+i : String(i));
-    fs.push({path, label: prefix? prefix+" · "+f.name : f.name});
-    walk(f.folders, prefix? prefix+" · "+f.name : f.name, path);
-  });
-  walk(cur.folders, "", null);
-  const unfiled = claims.filter(cl=>!(foldOf[cl.id]||[]).length).length;
-  if(!fs.length) return "";
-  const chip = (key,label,n) => `<button type="button" class="pill void foldchip" aria-pressed="true" data-fold-key="${esc(key)}">${safeInline(label)}<span class="count">${n}</span></button>`;
-  return `<div class="foldbar" id="foldbar" role="group" aria-label="filter by folder">`
-    + `<span class="small muted">Folders</span>`
-    + fs.map(f=>chip(f.path, f.label, claims.filter(cl=>(foldOf[cl.id]||[]).includes(f.path)).length)).join("")
-    + (unfiled? chip("~none","unfiled",unfiled) : "")
-    + `<button type="button" class="helplink" id="foldall">all</button></div>`;
-}
 function folderMeta(folders, prefix, map, ppath){
   (folders||[]).forEach((f,i)=>{
     const label = prefix? prefix+" · "+f.name : f.name;
@@ -7200,14 +7191,39 @@ function folderMeta(folders, prefix, map, ppath){
    searching what is written and searching what is shown were the same thing until now.
    No prefix. Claims carry "#id" and courts "/slug" because both are ADDRESSES you can
    type instead of a word; a folder's id is not something a reader knows or jumps to. */
-function folderRowHtml(slug,f,path){
+/* EVERY PATH A FOLDER COVERS, its own and its whole subtree's. Selecting Fauci
+   has to bring the claims in its subfolders with it — "everything in that
+   folder" is what a reader means — and a chain subfolder's path is its own fid,
+   not "parent.child", so there is no prefix to test. The subtree is enumerated
+   instead and travels on the row. */
+function folderSubtree(f, path, out){
+  out.push(String(path));
+  (f.folders||[]).forEach((sf,i)=>folderSubtree(sf, sf.path!=null? String(sf.path) : path+"."+i, out));
+  return out;
+}
+/* THE FOLDER ROW IS THE COURT PAGE'S FILTER, and the same row is a plain link on
+   the folder page, so the toggle is a parameter rather than a second builder.
+   NOTHING SELECTED MEANS EVERYTHING SHOWN. The default is no filter at all — not
+   "every folder ticked" — so a reader who never touches this sees the whole
+   docket and the control still reads as off.
+   THE ROW STOPS BEING A LINK when it is a toggle: a control that navigates on
+   click cannot also select. The folder page keeps its own way in, on the right,
+   so the row loses nothing it had. */
+function folderRowHtml(slug,f,path,toggle){
   const n = folderCount(f), subs = (f.folders||[]).length;
-  return `<a class="crow folderrow" data-q="${esc(f.name + " " + (f.desc||""))}"
+  const meta = `<span><span class="t">${safeInline(f.name)}</span><span class="m" style="display:block">${n} claim${n===1?"":"s"}${subs?` · ${subs} subfolder${subs===1?"":"s"}`:""}</span></span>
+    <span class="px"><b>${n}</b><small>claims</small></span>`;
+  if(!toggle) return `<a class="crow folderrow" data-q="${esc(f.name + " " + (f.desc||""))}"
     href="#/c/${esc(slug)}/f/${path}">
     <span class="id">${ICN_FOLDER}</span>
-    <span><span class="t">${safeInline(f.name)}</span><span class="m" style="display:block">${n} claim${n===1?"":"s"}${subs?` · ${subs} subfolder${subs===1?"":"s"}`:""}</span></span>
-    <span class="px"><b>${n}</b><small>claims</small></span>
+    ${meta}
     <span class="pill void">folder</span></a>`;
+  const keys = folderSubtree(f, path, []).join(" ");
+  return `<div class="crow folderrow foldsel" role="checkbox" aria-checked="false" tabindex="0"
+    data-q="${esc(f.name + " " + (f.desc||""))}" data-fold-keys="${esc(keys)}">
+    <span class="id"><span class="foldbox" aria-hidden="true"></span>${ICN_FOLDER}</span>
+    ${meta}
+    <a class="pill void foldopen" href="#/c/${esc(slug)}/f/${path}">open →</a></div>`;
 }
 function isDone(c){ const st=(c.statusText||"").toLowerCase(); return /^closed|provclose|settled/.test(st); }
 /* ---------------- the one-way curve, quoted client-side ----------------
@@ -10217,7 +10233,7 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
   // when you asked.
   const foldersSec = (pageOf()===1 && cur && cur.folders.length)
     ? `<section data-qsec><h2 class="sec-h">Folders <span class="count">${cur.folders.length}${srcLabel}</span></h2>
-       <div class="docket">${cur.folders.map((f,i)=>folderRowHtml(slug,f,f.path!=null? String(f.path):String(i))).join("")}</div></section>` : "";
+       <div class="docket">${cur.folders.map((f,i)=>folderRowHtml(slug,f,f.path!=null? String(f.path):String(i),true)).join("")}</div></section>` : "";
   const foldOf = cur && cur.folders.length? folderKeys(cur.folders, {}, null) : {};
   const rows = list => list.map(cl=>docketRow(slug,cl,fmeta[cl.id],foldOf[cl.id])).join("");
   /* THE COUNT IS OF WHAT THE BOX SEARCHES, which is now rows and not just titles.
@@ -10290,7 +10306,6 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
     + courtStatsHtml(slug, s)
     + foldersSec
     + searchHead
-    + (pageOf()===1 && cur && cur.folders.length? folderChipRow(slug, cur, foldOf, rowsAll) : "")
     + qBarHtml("title, folder or #id", idleCap)
     + showChips
     + (pager||"")
