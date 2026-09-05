@@ -382,8 +382,26 @@ code,.mono{font-family:var(--mono)}
    on a FILLED block reads as light coming off a slab, and on an unfilled one it
    reads as a glowing rectangle hanging in space around nothing. The inset rule
    still says "selected", and it is the only thing that needs to. */
+/* A BEAM, NOT A BRACKET. The marker was one inset 2px rule, and an inset shadow
+   FOLLOWS THE BORDER RADIUS — .nav a is 3px — so the bar bent at both ends and
+   read as a parenthesis beside the label. Reported as "there's a ( next to
+   COVID".
+   border-radius:0 straightens the source. The two shadows after it are the
+   beam: a wide blur pulled back by a larger negative spread, so nothing is drawn
+   at the edge itself and the light only spills to the RIGHT, falling off across
+   the row the way a searchlight does. Two stops rather than one because a single
+   blur ends in a visible lip; the second is wider, fainter, and carries the tail
+   out past where the first has finished.
+   EVERY LAYER IS --edge, and that is what keeps this honest in daylight: the
+   token resolves transparent in the light theme, which is how one value switches
+   the whole glow system off. A hardcoded rgba here would have left a pale blue
+   wash on a white sidebar. It also means the beam is exactly as bright as the
+   source, which is the only relationship between them that is not arbitrary. */
 .nav a.on{background:transparent; color:var(--accent-2); font-weight:600;
-  box-shadow:inset 2px 0 0 var(--edge)}
+  border-radius:0;
+  box-shadow:inset 2px 0 0 var(--edge),
+             inset 24px 0 20px -20px var(--edge),
+             inset 64px 0 44px -48px var(--edge)}
 .nav .sec{padding:14px 12px 5px; font-size:11px; text-transform:uppercase; letter-spacing:.09em; color:var(--muted)}
 /* THE TRAIL UNDER DIRECTORY (navTrail). Indented to 40px, which is not a round
    number picked by eye: the parent row is 12px of padding plus an 18px glyph
