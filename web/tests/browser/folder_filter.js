@@ -258,6 +258,43 @@ const PAGE = 'file://' + path.join(__dirname, '..', '..', 'index.html');
      annex.otherFolder && annex.otherFolder.chipGone === true && !annex.inFolder.chipGone,
      JSON.stringify([annex.inFolder, annex.otherFolder]));
 
+  /* THE CONTROL IS A WEDJAT, AND EXACTLY ONE EYE SHOWS. Both are in the markup
+     and the swap is pure CSS off the row's own aria-checked, which is the same
+     attribute the filter reads — so this asserts the two cannot drift: a row
+     that filters as ticked but paints the shut eye, or paints both, is the whole
+     failure mode of driving a visual from a duplicate of the state.
+     DISPLAY, NOT PRESENCE. Both elements exist in either state; querySelector
+     finds them either way, so only a computed style can tell which one a reader
+     actually sees. Asserted in BOTH directions and on BOTH rows, because "the
+     open eye is showing" alone would pass on a control stuck open.
+     Ablated: dropping the [aria-checked="true"] .eyeopen rule fails the ticked
+     arm alone (both eyes report none — the row loses its control entirely, which
+     is a louder signature than the shut eye showing); deleting the
+     .foldsel .eyeopen{display:none} default fails the "exactly one" arm on the
+     unticked row with two visible eyes, and leaves the ticked arm passing. */
+  const eyes = await page.evaluate(() => {
+    const rows = [...document.querySelectorAll("#qscope .foldsel")];
+    if (rows.length < 2) return {few: rows.length};
+    const look = r => {
+      const o = r.querySelector(".eyeopen"), sh = r.querySelector(".eyeshut");
+      return {checked: r.getAttribute("aria-checked"),
+              both: !!(o && sh),
+              open: o ? getComputedStyle(o).display : "absent",
+              shut: sh ? getComputedStyle(sh).display : "absent"};
+    };
+    rows.forEach(r => { if (r.getAttribute("aria-checked") === "true") r.click(); });
+    rows[0].click();                                   // tick exactly the first
+    return {on: look(rows[0]), off: look(rows[1])};
+  });
+  ok("both eyes ship in every folder row",
+     !eyes.few && eyes.on.both && eyes.off.both, JSON.stringify(eyes));
+  ok("a ticked folder shows the open eye and only that",
+     !eyes.few && eyes.on.checked === "true"
+       && eyes.on.open !== "none" && eyes.on.shut === "none", JSON.stringify(eyes.on));
+  ok("an unticked folder shows the shut eye and only that",
+     !eyes.few && eyes.off.checked === "false"
+       && eyes.off.shut !== "none" && eyes.off.open === "none", JSON.stringify(eyes.off));
+
   ok("no page errors from the filter", errs.length === 0, errs.slice(0, 2).join(" | "));
   console.log(fail ? "\n" + fail + " FAILURES" : "\nALL PASS");
   await browser.close();
