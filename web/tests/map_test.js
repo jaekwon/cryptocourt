@@ -1016,13 +1016,17 @@ const TILES = svg => [...svg.matchAll(
       const want = pc.side==="YES" ? "y" : "n";
       if(dot){ agree=false; console.log("  #"+id+" is decided and still carries a dot", dot); }
       if(ov!==want){ agree=false; console.log("  oval mismatch #"+id, ov, "want", want); }
-      /* A side under challenge carries the mark INSIDE the ring; a settled one must
-         not carry it at all. Read off the oval's own text, which is where it lives
-         — one text run, so the ring is sized from what is drawn. */
+      /* THE SIDE RING SAYS THE SIDE AND NOTHING ELSE; the state rides a second ring
+         beside it. Both are read here — the hue check above would pass on a badge
+         that had lost its mark entirely, and the mark is the half that says whether
+         the answer is final, contested or surprising. */
       const word=(new RegExp(`<text class="mtext mvt [yn]"[^>]*data-owner="c${id}"[^>]*>([^<]*)</text>`)
         .exec(svgs.titles)||[])[1];
-      const wantWord = pc.side + (pc.short==="in dispute" ? "?" : "");
-      if(word!==wantWord){ agree=false; console.log("  #"+id+" oval reads", word, "want", wantWord); }
+      if(word!==pc.side){ agree=false; console.log("  #"+id+" side ring reads", word, "want", pc.side); }
+      const state=(new RegExp(`<text class="mtext mvs"[^>]*data-owner="c${id}"[^>]*>([^<]*)</text>`)
+        .exec(svgs.titles)||[])[1] || "";
+      const wantMark = mapMark(pc, claimsMap[id]).t;
+      if(state!==wantMark){ agree=false; console.log("  #"+id+" state ring reads", state, "want", wantMark); }
       continue;
     }
     const wantFamily = pc.short==="settled"
@@ -1190,29 +1194,63 @@ ok("controls present", ["mt-titles","mt-ids","mz-in","mz-out","mz-fit","mz-slide
      THE `?` IS OUTSIDE THE RING. What the court decided goes in the oval; what is
      being asked about it does not. Asserted by position rather than by presence,
      because a `?` inside the ring would satisfy "there is a question mark". */
-  /* AND A CONTESTED SIDE WEARS THE MARK INSIDE THE RING. It was drawn beside the
-     oval for a while, on the reading that the ring is what the court decided and
-     the mark is what is asked about it — the docket row's arrangement. At map size
-     that is a 7px glyph adrift next to a ring, so it moved in, and "(YES?)" is one
-     mark rather than two.
-     THE RING HAS TO GROW WITH IT, which is the half worth pinning: the width comes
-     from est() over the text that is actually drawn, so a `?` that did not widen
-     the oval would hang over the frame's edge. */
-  ok("a disputed claim wears the question inside its oval", (()=>{
-     const u = JSON.parse(JSON.stringify(d));
-     // The realm's own sentence, from statusText: a wording phaseClass cannot
-     // parse yields an empty side, which is not badged, and the assertion would
-     // then be measuring the open-claim path while claiming to measure this one.
-     u.claims[3].statusText = "disputed YES — a sealed vote is deciding; principal is never withheld";
-     const s = mapSvg(mapLayout(u,"titles"), u, "covid");
-     const word=(/<text class="mtext mvt y"[^>]*data-owner="c3"[^>]*>([^<]*)<\/text>/.exec(s)||[])[1];
-     const wide=(/<rect class="mvtag y"[^>]*width="([\d.]+)"[^>]*data-owner="c3"/.exec(s)||[])[1];
-     const settled=(/<rect class="mvtag y"[^>]*width="([\d.]+)"[^>]*data-owner="c2"/.exec(svgT)||[])[1];
-     return word==="YES?"                       // inside the ring, as one run
-       && !/class="mtext mvq"/.test(s)          // and not beside it any more
-       && +wide > +settled                      // the ring grew to hold it
-       && !/in dispute: /.test(s);              // and the words are gone
-  })());
+  /* THE STATE RING, AND THE WHOLE VOCABULARY IT SPEAKS. The mark started beside the
+     oval, moved inside it, and is a ring of its own now — the side keeps its hue and
+     the state rides a neutral ring next to it, because a state is not a side.
+     A TABLE, NOT ONE CASE, because the value of a compositional vocabulary is that
+     the combinations are not special cases: if `!` and `?` each work and `!?` does
+     not, the composition is a lie. Each row is built from the realm's own sentence
+     so phaseClass reads it the way the page will.
+     THE STAKE SPLIT IS THE FIXTURE'S, since `inst` is what the map is handed: 90
+     means 90% of the stake sat on YES when it froze. */
+  {
+    const line = {
+      settledUndisputed: "settled YES — every stake withdraws 1×",
+      settledVote:       "settled YES — every stake withdraws 1×",
+      disputed:          "disputed YES — a sealed vote is deciding; principal is never withheld",
+      answered:          "answered YES — staking frozen; disputable, then it settles undisputed",
+      provisional:       "provisional YES — reopenable by a new dispute; the losing side may withdraw 1× now",
+    };
+    const mark = (statusText, extra) => {
+      const u = JSON.parse(JSON.stringify(d));
+      u.claims[3] = Object.assign({title:"A claim of fact.", statusText}, extra||{});
+      const s2 = mapSvg(mapLayout(u,"titles"), u, "covid");
+      return {mark:(/<text class="mtext mvs"[^>]*data-owner="c3"[^>]*>([^<]*)<\/text>/.exec(s2)||[])[1]||"",
+              side:(/<text class="mtext mvt [yn]"[^>]*data-owner="c3"[^>]*>([^<]*)<\/text>/.exec(s2)||[])[1]||"",
+              svg:s2};
+    };
+    const cases = [
+      ["settled undisputed says nothing more",      line.settledUndisputed, {},                       "YES", ""],
+      ["settled by a vote stops the clock",         line.settledVote,       {route:"vote"},           "YES", "."],
+      ["an answer with time on it runs a clock",    line.answered,          {inst:90},                "YES", "…"],
+      ["a dispute asks",                            line.disputed,          {inst:90},                "YES", "?"],
+      // The reopenable half rides the RING, not a second glyph — ".…" draws as
+      // "...." at this size. Asserted below, on the class.
+      ["a provisional verdict says a vote made it",  line.provisional,       {inst:90},                "YES", "."],
+      ["an answer against the stake is surprising", line.answered,          {inst:20},                "YES", "!…"],
+      ["...and surprising under dispute keeps both",line.disputed,          {inst:20},                "YES", "!?"],
+      ["a second dispute is counted, not repeated", line.disputed,          {inst:90, rounds:1},      "YES", "?×2"],
+      ["stake at the line is not a surprise",       line.answered,          {inst:50},                "YES", "…"],
+      ["no stake at all is not a disagreement",     line.answered,          {},                       "YES", "…"],
+    ];
+    for(const [name, st, extra, side, want] of cases){
+      const got = mark(st, extra);
+      ok(name, got.side===side && got.mark===want, `side=${got.side} mark="${got.mark}" want "${want}"`);
+    }
+    // The provisional case is the one that used to keep its words; the words must be
+    // gone now that a mark says the same thing in the badge.
+    ok("...and provisional drops its row of words",
+       !/provisional: /.test(mark(line.provisional, {inst:90}).svg));
+    /* AND ITS RING IS BROKEN, which is where "reopenable" lives. Two arms, because
+       either alone passes on the wrong drawing: a settled-by-vote claim must NOT be
+       dashed — it is over — and the provisional one must be, or the two draw
+       identically and the map says a reopenable verdict is final. */
+    ok("...and wears a broken ring, because a new dispute can reopen it",
+       /<rect class="mvtag s re"[^>]*data-owner="c3"/.test(mark(line.provisional,{inst:90}).svg));
+    ok("...while a vote that ended it draws a solid one",
+       /<rect class="mvtag s"[^>]*data-owner="c3"/.test(mark(line.settledVote,{route:"vote"}).svg)
+       && !/mvtag s re/.test(mark(line.settledVote,{route:"vote"}).svg));
+  }
   ok("the court strikes the sentence it ruled against", strikesOf(svgT,1)>=1);
   ok("...and never a YES it agreed with", strikesOf(svgT,2)===0);
   ok("...nor a claim it has not decided", strikesOf(svgT,3)===0);
