@@ -23,6 +23,7 @@ func TestMetaParser(cur realm, t *testing.T) {
 		{"mod:clear:foo-bar/1", verbClear, "foo-bar", 1},
 		{"mod:hide:x9/42", verbHide, "x9", 42},
 		{"mod:setmods:foo/3", verbSetmods, "foo", 3},
+		{"mod:newfolder:foo/5", verbNewfolder, "foo", 5},
 		{"mod:suspend:foo", verbSuspend, "foo", 0},
 		{"mod:unsuspend:foo", verbUnsuspend, "foo", 0},
 	}
@@ -36,6 +37,10 @@ func TestMetaParser(cur realm, t *testing.T) {
 		"xmod:hide:foo/1", "mod:hide:foo", "mod:hide:foo/", "mod:hide:/1",
 		"mod:hide:foo/0", "mod:hide:FOO/1", "mod:bogus:foo/1", "mod:suspend:foo/1",
 		"mod:hide:foo/abc", "ordinary claim title", "mod:",
+		// newfolder takes the same target shape as the other id verbs, so the
+		// same near-misses have to fail for it: no id, a zero id, a bad slug.
+		"mod:newfolder:foo", "mod:newfolder:foo/", "mod:newfolder:foo/0",
+		"mod:newfolder:FOO/1", "mod:newfolder:foo/abc",
 		// The `mod:` prefix gate, which every other entry above fails to reach:
 		// each of them dies one line later on the missing verb separator, so
 		// deleting the prefix check leaves them all still invalid. The verb only
@@ -60,6 +65,23 @@ func TestMetaParser(cur realm, t *testing.T) {
 	if latchKey(modParse{verb: verbUnhide, court: "foo", target: 1}) ==
 		latchKey(modParse{verb: verbUnhide, court: "foo", target: 2}) {
 		t.Fatal("item verbs latch per target")
+	}
+	// newfolder shares setmods' reasoning and must share its shape: keyed per
+	// COURT, or an attacker banks parallel folder installs and discharges them
+	// one after another.
+	if latchKey(modParse{verb: verbNewfolder, court: "foo", target: 1}) !=
+		latchKey(modParse{verb: verbNewfolder, court: "foo", target: 2}) {
+		t.Fatal("newfolder must share one latch per court")
+	}
+	if latchKey(modParse{verb: verbNewfolder, court: "foo", target: 1}) ==
+		latchKey(modParse{verb: verbNewfolder, court: "bar", target: 1}) {
+		t.Fatal("...but not across courts")
+	}
+	/* RESTORATIVE, and asserted because the classification IS the design. If
+	   newfolder ever joins the aggressive set it stops executing from silence,
+	   and an uncontested folder proposal — the ordinary case — can never carry. */
+	if verbIsAggressive(verbNewfolder) {
+		t.Fatal("newfolder must be restorative, or an uncontested proposal can never carry")
 	}
 }
 
@@ -867,6 +889,76 @@ func TestMetaLifecycleGuards(cur realm, t *testing.T) {
 	if !IsCourtMod("mtx20", newMod20) {
 		t.Fatal("a global CLEAR after the appeal opened refused a legitimate " +
 			"setmods install — the guard has lost its direction scope")
+	}
+
+	// ---- 21. `mod:newfolder` — the court creates its own folder -------------
+	/* THE EXECUTION HALF of the verb. The proposal half is folders_test's, which
+	   proves registering creates nothing; this proves a carried verdict does,
+	   and that everything the moderator path checks is re-checked here. */
+	testCourt(cur, "mtxf", alice, 10_000_000_000)
+	// bob is not a moderator of mtxf. That is the point: the court adopts a
+	// folder proposed by somebody with no authority to file one.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	fprop := RegisterFolderProposal(cross(cur), "mtxf", "Origins", "where it began", 0)
+	if FolderCount("mtxf") != 0 {
+		t.Fatal("fixture: a proposal must not have created anything yet")
+	}
+
+	apf := appeal("mod:newfolder:mtxf/" + strconv.FormatUint(fprop, 10))
+	testing.SetRealm(testing.NewUserRealm(alice))
+	ExecuteMetaVerdict(cross(cur), apf)
+	if FolderCount("mtxf") != 1 {
+		t.Fatal("a carried newfolder verdict should create the folder")
+	}
+	if nm := FolderName("mtxf", 1); nm != "Origins" {
+		t.Fatalf("the folder should carry the proposal's name, got %q", nm)
+	}
+	if d := FolderDesc("mtxf", 1); d != "where it began" {
+		t.Fatalf("...and its description, got %q", d)
+	}
+	// RESTORATIVE: it executed from silence, with no dispute and no vote. If the
+	// verb is ever reclassified aggressive this is the assertion that fails.
+	if !AppealExecuted(apf) {
+		t.Fatal("newfolder should carry on the undisputed route")
+	}
+	// Exactly once, like every other verb.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "already executed", func() {
+		ExecuteMetaVerdict(cross(cur), apf)
+	})
+
+	/* A PROPOSAL REGISTERED AFTER ITS APPEAL IS REFUSED. Registration is
+	   permissionless with a predictable per-court counter, so without this an
+	   attacker opens an appeal against an unallocated id, wins a vote on a
+	   folder nobody could read, and registers the real payload afterwards —
+	   the same attack the setmods candidate guard names. */
+	apf2 := appeal("mod:newfolder:mtxf/2")
+	testing.SetRealm(testing.NewUserRealm(bob))
+	RegisterFolderProposal(cross(cur), "mtxf", "Late", "registered after the appeal", 0)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "does not predate this appeal", func() {
+		ExecuteMetaVerdict(cross(cur), apf2)
+	})
+
+	/* AND IT PAYS ITS AUTHOR, NOT ITS STAKERS. The accuracy slice is zeroed for
+	   a newfolder appeal — paying stakers by conviction for agreeing with a
+	   proposal is a vote bought out of the reward pool. The author slice is
+	   untouched: proposing a folder the court adopts is the work being paid for.
+	   Asserted as the PAIR, because "winners == 0" alone would also pass on a
+	   claim that pays nobody anything. */
+	{
+		mcf := mustCourt(metaSlug)
+		csf := mustClaim(mcf, apf)
+		if !csf.noAccuracy {
+			t.Fatal("a newfolder appeal must be flagged to pay no accuracy slice")
+		}
+		w, a, _ := drawSplit(csf, 1_000_000)
+		if w != 0 {
+			t.Fatalf("newfolder should pay no accuracy slice, got %d", w)
+		}
+		if a == 0 {
+			t.Fatal("...but it must still pay its author — that is the reward being offered")
+		}
 	}
 }
 

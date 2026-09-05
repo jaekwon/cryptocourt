@@ -245,6 +245,14 @@ type courtMod struct {
 	folders   *bptree.BPTree // folderID (be64) -> *folder (folders.gno)
 	folderSeq uint64
 
+	// Folders PROPOSED but not created: the payload of a `mod:newfolder` appeal.
+	// Registered separately from the appeal for the reason RegisterModCandidate
+	// exists — a name and a description do not fit in a claim title, and the
+	// meta court's predate guard needs something with a height on it to compare.
+	// A proposal creates nothing; only a carried verdict does.
+	folderProps   *bptree.BPTree // proposalID (be64) -> *folderProposal
+	folderPropSeq uint64
+
 	// The replacement election (modvote.gno) and the candidate registry it and
 	// the meta court's `mod:setmods` peer path share.
 	candidates            *bptree.BPTree // candidateID (be64) -> *modCandidate

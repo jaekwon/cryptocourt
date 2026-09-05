@@ -73,6 +73,15 @@ type claimState struct {
 	deposit  int64 // refundable anti-spam deposit (escrowed)
 	fee      int64 // 10% of deposit: burned on dead/conclusive-low, else refunded
 	seeded   bool  // moderator-seeded (deposit/fee waived; author draw = 0, I5)
+	// noAccuracy: this claim pays no ACCURACY slice — drawWinners is zeroed and
+	// the points stay unminted, exactly as `seeded` does for the author slice.
+	// Set at open for a `mod:newfolder` appeal, whose question ("should this
+	// court have a folder called X") is a proposal rather than a matter of fact:
+	// paying stakers by conviction for agreeing with a proposal is a vote bought
+	// with the reward pool, and this product's rule is stakes, never ballots. The
+	// AUTHOR slice is untouched on purpose — proposing a folder the court adopts
+	// is work worth paying for, and that lane already exists.
+	noAccuracy bool
 	openedAt int64
 	// Wall-clock stamps for the published deadlines (clock.gno). Heights above
 	// and below stay as reference; these decide. Zero on pre-upgrade claims,

@@ -540,6 +540,15 @@ func drawSplit(cs *claimState, d int64) (winners, author, answerer int64) {
 	if cs.seeded {
 		author = 0
 	}
+	// A PROPOSAL PAYS ITS AUTHOR AND NOBODY ELSE. See claimState.noAccuracy: the
+	// accuracy slice pays stakers by conviction for backing the right side of a
+	// question of FACT, and a `mod:newfolder` appeal is not one. The author slice
+	// stays, because writing a proposal the court adopts is the work being
+	// rewarded. Unclaimed points stay unminted, like every other zeroed slice
+	// here — conservative, under the ceiling.
+	if cs.noAccuracy {
+		winners = 0
+	}
 	return winners, author, answerer
 }
 

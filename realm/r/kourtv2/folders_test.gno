@@ -554,3 +554,59 @@ func TestPurgingAFolderTakesItsImage(cur realm, t *testing.T) {
 		SetFolderImage(cross(cur), "fpim", f, clientImageLine)
 	})
 }
+
+/* THE PROPOSAL HALF OF `mod:newfolder`, tested here rather than in meta_test
+   because none of it needs the meta court: registering is an ordinary call any
+   holder may make, and what it must NOT do is create anything.
+
+   The execution half — a carried verdict turning a proposal into a folder —
+   lives in meta_test's single sequential scenario, for the reason stated there:
+   the meta court is a singleton and gno resets the block height between test
+   functions, so every test that drives its lifecycle has to share one. */
+func TestFolderProposalCreatesNothing(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("fp-alice")
+	testCourt(cur, "fp", alice, 10_000_000_000)
+
+	// ANY HOLDER MAY PROPOSE. This is the whole point of the verb: the filing
+	// system stops being the moderators' alone. bob is not a moderator.
+	bob := testutils.TestAddress("fp-bob")
+	testing.SetRealm(testing.NewUserRealm(bob))
+	pid := RegisterFolderProposal(cross(cur), "fp", "Origins", "where it began", 0)
+	if pid == 0 {
+		t.Fatal("a proposal should get an id")
+	}
+	// ...AND IT CREATES NOTHING. A proposal that quietly made a folder would
+	// hand every holder the moderator power the appeal exists to gate.
+	if FolderCount("fp") != 0 {
+		t.Fatal("registering a proposal must not create a folder")
+	}
+
+	// The rules are checked HERE, where the caller can be told, rather than
+	// weeks later inside an execution nobody is watching.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	uassert.AbortsContains(t, cur, "1..200", func() {
+		RegisterFolderProposal(cross(cur), "fp", "", "empty name", 0)
+	})
+	testing.SetRealm(testing.NewUserRealm(bob))
+	uassert.AbortsContains(t, cur, "no such folder", func() {
+		RegisterFolderProposal(cross(cur), "fp", "Nested", "", 99)
+	})
+
+	// A name already taken by an ordinary moderator folder is refused at
+	// registration too — the cheap place to find out.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	CreateFolder(cross(cur), "fp", "Taken", "")
+	testing.SetRealm(testing.NewUserRealm(bob))
+	uassert.AbortsContains(t, cur, "already has a folder by that name", func() {
+		RegisterFolderProposal(cross(cur), "fp", "Taken", "", 0)
+	})
+
+	// A RETIRED name is free again: the row survives so ids stay contiguous,
+	// but the heading is gone from the tree and the word is available.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	RetireFolder(cross(cur), "fp", 1)
+	testing.SetRealm(testing.NewUserRealm(bob))
+	if RegisterFolderProposal(cross(cur), "fp", "Taken", "", 0) == 0 {
+		t.Fatal("a retired folder's name should be proposable again")
+	}
+}

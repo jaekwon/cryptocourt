@@ -17,6 +17,8 @@ package kourtv2
 import (
 	"strconv"
 	"strings"
+
+	bptree "gno.land/p/nt/bptree/v0"
 )
 
 const maxFolderTextLen = 200
@@ -247,6 +249,121 @@ func requireFolderMod(c *Court, who address) *courtMod {
 	return cm
 }
 
+// ---- the shared body, and who is allowed to call it ----------------------
+
+/* ONE PLACE A FOLDER COMES INTO BEING, and it checks no authority.
+   Three callers now reach it: CreateFolder and CreateFolderIn, which gate on
+   requireFolderMod, and the meta court's `mod:newfolder` execution, whose
+   authority is a carried verdict rather than an address. Putting the gate inside
+   would make the verdict path need a moderator to exist; leaving it out and
+   naming the rule here is the shape installModSet already uses for the same
+   reason.
+   THE CALLER CHECKS AUTHORITY. The body checks that the FOLDER is legal — the
+   cap, the text lengths, the nesting — because those are true of a folder no
+   matter who asked for it, and the verdict path has to re-check them at
+   execution anyway: weeks pass between a proposal and the verdict that carries
+   it, and a court can fill up in between. */
+func folderTextOK(name, desc string) bool {
+	return runeLen(name) > 0 && runeLen(name) <= maxFolderTextLen && runeLen(desc) <= maxFolderTextLen
+}
+
+// folderNameTaken reports whether a LIVE folder already carries this name. A
+// retired one does not count: the row survives so ids stay contiguous, but the
+// name is free again.
+func folderNameTaken(cm *courtMod, name string) bool {
+	taken := false
+	if cm.folders == nil {
+		return false
+	}
+	cm.folders.Iterate("", "", func(_ string, v any) bool {
+		f := v.(*folder)
+		if !f.retired && f.name == name {
+			taken = true
+			return true
+		}
+		return false
+	})
+	return taken
+}
+
+func newFolderCore(cm *courtMod, name, desc string, parent uint64) uint64 {
+	if cm.folders.Size() >= maxFolders {
+		panic("kourtv2: this court already has " + strconv.Itoa(maxFolders) + " folders")
+	}
+	if !folderTextOK(name, desc) {
+		panic("kourtv2: a folder name is 1..200 and a description at most 200 characters")
+	}
+	if parent != 0 {
+		// height 1: a folder being created has no subtree yet.
+		cm.mustNestable(0, parent, 1)
+	}
+	cm.folderSeq++
+	id := cm.folderSeq
+	cm.folders.Set(beClaimKey(id), &folder{id: id, name: name, desc: desc, parent: parent})
+	return id
+}
+
+// ---- a folder the court has not agreed to yet ----------------------------
+
+/* A PROPOSAL IS NOT A FOLDER. It records what somebody wants filed and nothing
+   else: no entry in cm.folders, no id in the contiguous folder range, nothing
+   the overlay enumerates. Only a carried `mod:newfolder` verdict turns one into
+   a folder, and it re-checks every rule at that moment. */
+type folderProposal struct {
+	id     uint64
+	name   string
+	desc   string
+	parent uint64
+	by     address
+	at     int64
+}
+
+/* ANY HOLDER MAY PROPOSE, because proposing is the interactive half — the point
+   of the verb is that the filing system stops being the moderators' alone. It
+   creates nothing and costs gas, so an abusive proposer buys themselves an
+   unreferenced row; the appeal that would ACT on it still has to carry a bonded
+   answer and survive 72h of anyone's dispute, and the latch in meta.gno lets one
+   court host only one live folder appeal at a time.
+   VALIDATED HERE, where the caller can be told what is wrong. The alternative is
+   failing inside an execution weeks later, which nobody is watching. */
+func RegisterFolderProposal(cur realm, courtSlug, name, desc string, parentID uint64) uint64 {
+	if !cur.IsCurrent() {
+		panic(errStaleRealm)
+	}
+	who := cur.Previous().Address()
+	c := mustCourt(courtSlug)
+	cm := ensureMod(c)
+	if !folderTextOK(name, desc) {
+		panic("kourtv2: a folder name is 1..200 and a description at most 200 characters")
+	}
+	if parentID != 0 {
+		cm.mustNestable(0, parentID, 1)
+	}
+	if folderNameTaken(cm, name) {
+		panic("kourtv2: this court already has a folder by that name")
+	}
+	if cm.folderProps == nil {
+		cm.folderProps = bptree.NewBPTree32()
+	}
+	cm.folderPropSeq++
+	id := cm.folderPropSeq
+	cm.folderProps.Set(beClaimKey(id), &folderProposal{
+		id: id, name: name, desc: desc, parent: parentID, by: who, at: heightNow(),
+	})
+	return id
+}
+
+func (cm *courtMod) mustFolderProposal(id uint64) *folderProposal {
+	if cm.folderProps == nil {
+		panic("kourtv2: no such folder proposal")
+	}
+	v := cm.folderProps.Get(beClaimKey(id))
+	if v == nil {
+		panic("kourtv2: no such folder proposal")
+	}
+	return v.(*folderProposal)
+}
+
 // CreateFolder makes a new empty folder and returns its id.
 func CreateFolder(cur realm, courtSlug, name, desc string) uint64 {
 	if !cur.IsCurrent() {
@@ -255,15 +372,7 @@ func CreateFolder(cur realm, courtSlug, name, desc string) uint64 {
 	who := cur.Previous().Address()
 	c := mustCourt(courtSlug)
 	cm := requireFolderMod(c, who)
-	if cm.folders.Size() >= maxFolders {
-		panic("kourtv2: this court already has " + strconv.Itoa(maxFolders) + " folders")
-	}
-	if runeLen(name) == 0 || runeLen(name) > maxFolderTextLen || runeLen(desc) > maxFolderTextLen {
-		panic("kourtv2: a folder name is 1..200 and a description at most 200 characters")
-	}
-	cm.folderSeq++
-	id := cm.folderSeq
-	cm.folders.Set(beClaimKey(id), &folder{id: id, name: name, desc: desc})
+	id := newFolderCore(cm, name, desc, 0)
 	emitModAct(c.id, 0, "folder-create", who)
 	return id
 }
@@ -279,17 +388,7 @@ func CreateFolderIn(cur realm, courtSlug string, parentID uint64, name, desc str
 	who := cur.Previous().Address()
 	c := mustCourt(courtSlug)
 	cm := requireFolderMod(c, who)
-	if runeLen(name) == 0 || runeLen(name) > maxFolderTextLen || runeLen(desc) > maxFolderTextLen {
-		panic("kourtv2: a folder name is 1..200 and a description at most 200 characters")
-	}
-	if cm.folders.Size() >= maxFolders {
-		panic("kourtv2: this court already has " + strconv.Itoa(maxFolders) + " folders")
-	}
-	// height 1: a folder being created has no subtree yet.
-	cm.mustNestable(0, parentID, 1)
-	cm.folderSeq++
-	id := cm.folderSeq
-	cm.folders.Set(beClaimKey(id), &folder{id: id, name: name, desc: desc, parent: parentID})
+	id := newFolderCore(cm, name, desc, parentID)
 	emitModAct(c.id, 0, "folder-create", who)
 	return id
 }
