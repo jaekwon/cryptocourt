@@ -8,13 +8,13 @@
   {
    "name": "Origins",
    "claims": [
-    12,
+    18,
+    15,
+    7,
+    8,
     9,
-    1,
-    2,
-    3,
-    10,
-    13
+    16,
+    19
    ],
    "folders": []
   },
@@ -25,27 +25,27 @@
     {
      "name": "Gain-of-function funding",
      "claims": [
-      4,
-      16,
-      18
+      10,
+      22,
+      24
      ],
      "folders": []
     },
     {
      "name": "Proximal Origin",
      "claims": [
+      23,
       17,
-      11,
-      7
+      13
      ],
      "folders": []
     },
     {
      "name": "The iPhone texts",
      "claims": [
-      14,
-      15,
-      19
+      20,
+      21,
+      25
      ],
      "folders": []
     }
@@ -54,113 +54,113 @@
   {
    "name": "Vaccine safety claims",
    "claims": [
-    5,
-    6,
-    8
+    11,
+    12,
+    14
    ],
    "folders": []
   }
  ],
  "relations": [
   {
-   "from": 3,
-   "to": 2,
-   "type": "bears",
-   "stance": "contradicts"
-  },
-  {
-   "from": 13,
-   "to": 10,
-   "type": "bears",
-   "stance": "contradicts"
-  },
-  {
-   "from": 19,
-   "to": 15,
-   "type": "bears",
-   "stance": "contradicts"
-  },
-  {
-   "from": 6,
-   "to": 5,
-   "type": "bears",
-   "stance": "contradicts"
-  },
-  {
    "from": 9,
-   "to": 1,
-   "type": "bears",
-   "stance": "supports"
-  },
-  {
-   "from": 9,
-   "to": 12,
-   "type": "bears",
-   "stance": "supports"
-  },
-  {
-   "from": 4,
-   "to": 16,
-   "type": "bears",
-   "stance": "supports"
-  },
-  {
-   "from": 4,
-   "to": 12,
-   "type": "bears",
-   "stance": "supports"
-  },
-  {
-   "from": 11,
-   "to": 17,
-   "type": "bears",
-   "stance": "supports"
-  },
-  {
-   "from": 7,
-   "to": 17,
-   "type": "bears",
-   "stance": "supports"
-  },
-  {
-   "from": 14,
-   "to": 15,
-   "type": "bears",
-   "stance": "supports"
-  },
-  {
-   "from": 11,
-   "to": 18,
-   "type": "bears",
-   "stance": "supports"
-  },
-  {
-   "from": 13,
-   "to": 17,
-   "type": "bears",
-   "stance": "supports"
-  },
-  {
-   "from": 8,
-   "to": 15,
-   "type": "bears",
-   "stance": "contradicts"
-  },
-  {
-   "from": 6,
    "to": 8,
    "type": "bears",
    "stance": "contradicts"
   },
   {
-   "from": 1,
-   "to": 2,
+   "from": 19,
+   "to": 16,
+   "type": "bears",
+   "stance": "contradicts"
+  },
+  {
+   "from": 25,
+   "to": 21,
+   "type": "bears",
+   "stance": "contradicts"
+  },
+  {
+   "from": 12,
+   "to": 11,
+   "type": "bears",
+   "stance": "contradicts"
+  },
+  {
+   "from": 15,
+   "to": 7,
    "type": "bears",
    "stance": "supports"
   },
   {
+   "from": 15,
+   "to": 18,
+   "type": "bears",
+   "stance": "supports"
+  },
+  {
+   "from": 10,
+   "to": 22,
+   "type": "bears",
+   "stance": "supports"
+  },
+  {
+   "from": 10,
+   "to": 18,
+   "type": "bears",
+   "stance": "supports"
+  },
+  {
+   "from": 17,
+   "to": 23,
+   "type": "bears",
+   "stance": "supports"
+  },
+  {
+   "from": 13,
+   "to": 23,
+   "type": "bears",
+   "stance": "supports"
+  },
+  {
+   "from": 20,
+   "to": 21,
+   "type": "bears",
+   "stance": "supports"
+  },
+  {
+   "from": 17,
+   "to": 24,
+   "type": "bears",
+   "stance": "supports"
+  },
+  {
+   "from": 19,
+   "to": 23,
+   "type": "bears",
+   "stance": "supports"
+  },
+  {
+   "from": 14,
+   "to": 21,
+   "type": "bears",
+   "stance": "contradicts"
+  },
+  {
    "from": 12,
-   "to": 1,
+   "to": 14,
+   "type": "bears",
+   "stance": "contradicts"
+  },
+  {
+   "from": 7,
+   "to": 8,
+   "type": "bears",
+   "stance": "supports"
+  },
+  {
+   "from": 18,
+   "to": 7,
    "type": "bears",
    "stance": "supports"
   }

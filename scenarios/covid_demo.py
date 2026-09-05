@@ -810,38 +810,69 @@ for _c in D:
 SET_PATHS.sort(key=len)
 
 SET_CID = {}      # path -> the claim that asks for it
+SET_FILER = {}    # path -> which actor filed and staked it
 FOLDER_ID = {}    # path -> the set it became
-STAKER = "foia"   # takes no side beyond the documents; a fitting filer of headings
+# THREE FILERS, NOT ONE, and a stake sized against the realm's own floor.
+#
+# THE BUG THIS REPLACES BRICKED THE CHAIN. One actor staked 40 CC on each of six
+# headings, three rounds each — 720 CC committed at once, more than the account
+# holds — so Stake panicked with "not enough unstaked CC". Because these
+# transactions run INSIDE GENESIS, that is not a failed seed: the node cannot
+# replay its own genesis and will not start at all. It crashlooped 18 times and
+# took kourt.xyz down until the previous scenario was restored.
+#
+# SIZED AGAINST effMinAnswerX, which is what actually gates an answer:
+# max(0.10% of the court's supply, 1 CC dust arm). Measured on the seeded chain
+# — supply 5,102.8 CC, so the floor is 5.10 CC. The old 40 CC was 8x that per
+# round and nobody had picked the number for a reason. 8 CC clears it with a
+# ~1.6x margin, which survives the supply drifting as the seed's buys land.
+#
+# AND SPREAD, so no single balance carries the whole filing system: three actors
+# rotate, giving each ~2 headings x 3 rounds x 8 CC = 48 CC rather than 720.
+# Rotating also makes the headings look filed by the court rather than by one
+# enthusiast, which is what they are.
+STAKERS = ["foia", "oversight", "journo"]   # the three who take no side on origin
 # unit() is defined further down, with the docket it serves; spelled out here
 # rather than moved, because moving a definition the whole file already reads
 # from is a bigger change than one multiplication.
-SET_STAKE = 40 * 1_000_000   # whole coin, in the realm's smallest unit
+SET_STAKE = 8 * 1_000_000    # 8 CC, against a 5.10 CC answerability floor
 
 # Phase 1 — file every heading as a claim, and open its position.
 for _n, _path in enumerate(SET_PATHS, start=1):
     SET_CID[_path] = _n
-    s.claim(accounts[STAKER], SLUG, SET_MARK + " " + _path[-1],
+    who = STAKERS[(_n - 1) % len(STAKERS)]
+    SET_FILER[_path] = who
+    s.claim(accounts[who], SLUG, SET_MARK + " " + _path[-1],
             FOLDER_DESC.get(_path, "") or None)
-    s.stake(accounts[STAKER], SLUG, _n, YES, SET_STAKE)
+    s.stake(accounts[who], SLUG, _n, YES, SET_STAKE)
 
 # Phase 2 — two more rounds across two epochs, which is what matures the
 # trailing average an answer is sized against. Shared by every set at once.
 for _round in range(2):
     s.advance_height(EPOCH_BLOCKS, why="an epoch, so the headings' open interest matures")
     for _path in SET_PATHS:
-        s.stake(accounts[STAKER], SLUG, SET_CID[_path], YES, SET_STAKE)
+        s.stake(accounts[SET_FILER[_path]], SLUG, SET_CID[_path], YES, SET_STAKE)
 
 # Phase 3 — answered YES, then ONE settle delay for all of them.
 for _path in SET_PATHS:
     s.answer(accounts["arbiter"], SLUG, SET_CID[_path], YES)
-s.advance_height(int(51_840), why="the 72h undisputed window, once, for every heading")
+# BOTH CLOCKS, and this is what the local node caught. The settle gate reads
+# `pastDeadline(cs.answeredAtTime, settleSecs)` — WALL-CLOCK SECONDS — and only
+# falls back to block arithmetic for claims answered before the date stamps
+# existed. Advancing 51,840 blocks alone left every heading un-settleable and
+# failed 35 transactions with "the answer has not aged the 72h settlement
+# minimum". The height still moves too: the chart and the trailing average are
+# block-denominated, and a settle with no blocks behind it would leave the
+# headings with no series at all.
+s.advance(72 * 3600 + 60, why="the 72h undisputed window in WALL CLOCK, once, for every heading")
+s.advance_height(int(51_840), why="...and the same window in blocks, for the series")
 
 # Phase 4 — settled, then carried. AffirmSet is permissionless: the verdict is
 # the authority, so the staker calls it rather than a moderator.
 _folder_seq = 0
 for _path in SET_PATHS:
     s.settle(accounts["arbiter"], SLUG, SET_CID[_path])
-    s.call(accounts[STAKER], "AffirmSet", [SLUG, str(SET_CID[_path])])
+    s.call(accounts[SET_FILER[_path]], "AffirmSet", [SLUG, str(SET_CID[_path])])
     _folder_seq += 1
     FOLDER_ID[_path] = _folder_seq
 
@@ -1312,13 +1343,36 @@ s.expect("BoardNewest", [SLUG, P3, 0, 25], r"[|]h[|]", final=True)
 # UNANCHORED, and it has to be: an expect greps the whole `gnokey query` output
 # line, which begins `data: ("`, so a pattern anchored with ^ can never match.
 # The full comma sequence pins the shape without needing them.
-s.expect("FolderTree", [SLUG], r"1:0:-,2:0:-,3:2:-,4:2:-,5:2:-,6:0:-", final=True)
+# DERIVED, NOT WRITTEN OUT. This was the literal "1:0:-,2:0:-,3:2:-,4:2:-,5:2:-,
+# 6:0:-", which encoded the order CreateFolder/CreateFolderIn happened to file
+# them in. Making the sets born changed that order — SET_PATHS sorts roots first
+# so every parent exists before its children — and the literal then described a
+# tree nobody builds: it wanted 3 nested and 6 at the root, the run produced 3 at
+# the root and 6 nested. Both are the same SHAPE, three roots and three children
+# under Fauci; only the numbering moved.
+# So the expectation is now built from FOLDER_ID and the paths themselves, which
+# is the same source the seed files them from. A literal here would have to be
+# re-derived by hand every time the tree changes, and the failure mode is this
+# one: a check that looks precise and is actually pinning an accident.
+_tree = ",".join(f"{FOLDER_ID[_p]}:{FOLDER_ID[_p[:-1]] if len(_p) > 1 else 0}:-"
+                 for _p in sorted(SET_PATHS, key=lambda q: FOLDER_ID[q]))
+s.expect("FolderTree", [SLUG], _tree.replace("|", "[|]"), final=True)
 s.expect("FolderCount", [SLUG], r"6", final=True)
 s.expect("FolderName", [SLUG, FOLDER_ID[FAUCI]], r"Fauci", final=True)
-# The description, and it is asserted on a phrase from its END: a folder desc is
-# capped at 200 characters, so a check on the first few words would pass on a
-# string the realm had silently truncated.
-s.expect("FolderDesc", [SLUG, FOLDER_ID[FAUCI]], r"kind of record each claim settles on", final=True)
+# THE DESCRIPTION MOVED TO THE CLAIM, so the check follows it. AffirmSet creates
+# a set with an EMPTY desc on purpose — the claim that carried it has a body, a
+# stake history and a verdict, which says more about what belongs in the set than
+# a line anybody could have written, and it keeps the text in one place. The old
+# assertion read FolderDesc and would now pass only on "", which is the shape of
+# a check that has quietly stopped checking.
+# STILL ASSERTED ON A PHRASE FROM ITS END, for the reason the old comment gave:
+# the text is length-capped, so a check on the first few words would pass on a
+# string that had been silently truncated.
+s.expect("ClaimBody", [SLUG, SET_CID[FAUCI]], r"kind of record each claim settles on", final=True)
+# ...and the binding that replaced the desc: this set knows the claim it was born
+# of, and that claim knows its set. Neither direction alone proves the pair.
+s.expect("SetBornOf", [SLUG, FOLDER_ID[FAUCI]], str(SET_CID[FAUCI]), final=True)
+s.expect("ClaimSet", [SLUG, SET_CID[FAUCI]], str(FOLDER_ID[FAUCI]), final=True)
 s.expect("ClaimAssociations", [SLUG, ids["lab23"]], r"in:", final=True)
 s.expect("AssociationBond", [SLUG], r"1000000", final=True)
 
