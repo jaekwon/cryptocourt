@@ -85,7 +85,7 @@ func TestRenderModLogRoute(cur realm, t *testing.T) {
 	}
 }
 
-// An answered claim appears under "Needs review" even while hidden.
+// An answered claim appears under the flaggable strip even while hidden.
 func TestRenderStripSectionIgnoresHiding(cur realm, t *testing.T) {
 	alice := testutils.TestAddress("rr4-alice")
 	testCourt(cur, "mdr4", alice, 50_000_000_000)
@@ -98,11 +98,11 @@ func TestRenderStripSectionIgnoresHiding(cur realm, t *testing.T) {
 	HideItem(cross(cur), "mdr4", id, "trying to bury it")
 
 	page := Render("mdr4")
-	if !strings.Contains(page, "Needs review") {
+	if !strings.Contains(page, stripHeading) {
 		t.Fatal("the strip section should render")
 	}
 	// The strip lists it even though the ordinary listing dropped it.
-	idx := strings.Index(page, "Needs review")
+	idx := strings.Index(page, stripHeading)
 	if !strings.Contains(page[idx:], "policeable claim") {
 		t.Fatal("a hidden but policeable claim must appear on the strip")
 	}

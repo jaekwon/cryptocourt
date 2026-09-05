@@ -3416,7 +3416,7 @@ async function listClaims(slug){
   for(const line of md.split("\n")){
     if(/^##\s/.test(line)){
       sec = /^##\s+Claims/.test(line)? "claims"
-          : /^##\s+Needs review/.test(line)? "strip"
+          : /^##\\s+Still flaggable/.test(line)? "strip"
           : /^##\s+Awaiting an answer/.test(line)? "pending" : null;
       continue;
     }
@@ -10070,8 +10070,8 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
       const prow = r => polrow(r, r.seeded? `<span class="m" style="display:block">seeded by a moderator</span>` : "");
       let g = "";
       if(stripQ && stripQ.rows && stripQ.rows.length){
-        g += `<section data-qfold data-group="review" style="margin-top:22px"><h2 class="sec-h">Needs review <span class="count">${stripQ.more? `first ${stripQ.rows.length} of ${fmtN(stripQ.rows.length+stripQ.more)}` : stripQ.rows.length} · the chain's own list</span></h2>
-        <p class="small muted" style="margin:0 0 8px">answered and not yet settled — nearest deadline first. This list ignores moderation: a claim hidden from the docket above still appears here while it can still be flagged.</p>
+        g += `<section data-qfold data-group="review" style="margin-top:22px"><h2 class="sec-h">Still flaggable <span class="count">${stripQ.more? `first ${stripQ.rows.length} of ${fmtN(stripQ.rows.length+stripQ.more)}` : stripQ.rows.length} · the chain's own list</span></h2>
+        <p class="small muted" style="margin:0 0 8px">answered claims that can still be flagged as spam — nearest deadline first. A claim leaves this list when its rewards are opened, not when it settles, so a settled claim stays here while it can still be flagged. This list ignores moderation: a claim hidden from the docket above still appears here while it can still be flagged.</p>
         <div class="docket">${stripQ.rows.map(srow).join("")}</div>
         ${stripQ.more? `<p class="small muted" style="margin:6px 0 0">…and ${fmtN(stripQ.more)} more — the chain's page shows the nearest 50; <a href="#/raw/${esc(slug)}" style="color:var(--accent-2)">the full queue is on the chain's own page →</a></p>`:""}</section>`;
       }
@@ -14623,7 +14623,7 @@ function demoRender(path){
     if(ids.length>50) o+=`\n…and ${ids.length-50} older; open any by id\n`;
     const dsp = demoStrips(parts[0]);
     if(dsp.strip.length){
-      o+=`\n## Needs review\n\nClaims that are answered and not yet settled — nearest deadline first. This list ignores moderation: a claim hidden from the lists above still appears here while it can still be flagged.\n\n`;
+      o+=`\n## Still flaggable\n\nAnswered claims that can still be flagged as spam — nearest deadline first. A claim leaves this list when its rewards are opened, not when it settles, so a settled claim stays here while it can still be flagged. This list ignores moderation: a claim hidden from the lists above still appears here.\n\n`;
       for(const r of dsp.strip) o+=`- [${r.title}](/r/kourt/kourtv2:${parts[0]}/${r.id})${r.deadline!=null?` — settles at block ${r.deadline}`:""}\n`;
     }
     if(dsp.pending.length){

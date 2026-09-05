@@ -94,12 +94,25 @@ ok("open/settled rows get no clock", clockLine(100,"open",null,null)==="" && clo
 ok("annex exists, tier 0, five claims", DEMO.courts.annex && DEMO.courts.annex.tier===0 && DEMO.courts.annex.claims.length===5);
 // D6-3: the chain's policing lists
 ok("annex/5 hidden AND answered (strip specimen)", DEMO.claims["annex/5"].hidden===true && DEMO.claims["annex/5"].phase==="answered");
-ok("live parser reads all three sections", src.includes('"Needs review/.test(line)? "strip"') || src.includes('Needs review/.test(line)? "strip"'));
-ok("strip rows outside data-sortable, folded in search", src.includes('<section data-qfold data-group="review" style="margin-top:22px"><h2 class="sec-h">Needs review'));
-ok("strip caption keeps the chain sentence", src.includes("a claim hidden from the docket above still appears here while it can still be flagged."));
+/* THE PARSER MUST TRACK THE REALM'S HEADING. The strip section is recognised by
+   the words the realm prints above it, so renaming one without the other leaves
+   the overlay reading a section that no longer announces itself — the rows would
+   vanish silently rather than fail loudly. Pinned to the current name so the two
+   can only move together. */
+ok("live parser reads all three sections", src.includes('Still flaggable/.test(line)? "strip"'));
+ok("strip rows outside data-sortable, folded in search", src.includes('<section data-qfold data-group="review" style="margin-top:22px"><h2 class="sec-h">Still flaggable'));
+/* THE CAPTION IS THE CHAIN'S SENTENCE, and the sentence changed with the realm:
+   it used to say "answered and not yet settled", which was false of most rows —
+   a claim leaves the strip when its rewards are opened, not when it settles. The
+   part pinned here is the half that did not change and is the reason the list
+   exists at all: it shows what the ordinary listing hides. */
+ok("strip caption says when a claim leaves the list",
+   src.includes("when its rewards are opened, not when it settles"));
+ok("...and still says it ignores moderation",
+   src.includes("a claim hidden from the docket above still appears here"));
 ok("pending caption verbatim", src.includes("Seeded and appeal claims that no one has answered yet"));
 ok("overflow never labeled as the total", src.includes("the chain's page shows the nearest 50"));
-ok("demoRender emits the strip sections", src.includes("## Needs review") && src.includes("## Awaiting an answer"));
+ok("demoRender emits the strip sections", src.includes("## Still flaggable") && src.includes("## Awaiting an answer"));
 // D6-2 moderation specimens
 ok("annex/2 seeded specimen", DEMO.claims["annex/2"].seeded===true && !DEMO.claims["annex/2"].hidden);
 ok("annex/3 hidden specimen", DEMO.claims["annex/3"].hidden===true && !DEMO.claims["annex/3"].redacted);

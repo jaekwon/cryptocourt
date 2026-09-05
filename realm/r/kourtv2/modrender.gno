@@ -293,13 +293,36 @@ func hideBanner(c *Court, cs *claimState) string {
 
 // ---- the policing strip + pending list pages ------------------------------
 
+// One copy of each, so the heading the page prints and the heading its own test
+// looks for cannot drift apart.
+const (
+	stripHeading = "Still flaggable"
+	stripBlurb   = "Answered claims that can still be flagged as spam — nearest deadline first. A claim leaves this list when its rewards are opened, not when it settles, so a settled claim stays here while it can still be flagged. This list ignores moderation: a claim hidden from the lists above still appears here."
+)
+
 func writeStrip(b *strings.Builder, slug string) {
 	c := mustCourt(slug)
 	n := StripSize(slug)
 	if n == 0 {
 		return
 	}
-	b.WriteString("## Needs review\n\nClaims that are answered and not yet settled — nearest deadline first. This list ignores moderation: a claim hidden from the lists above still appears here while it can still be flagged.\n\n")
+	// WHAT THIS LIST IS, said in the words of the rule that builds it. It used to
+	// call itself "Needs review — Claims that are answered and not yet settled",
+	// and both halves misled.
+	//
+	// NOTHING HERE NEEDS A MODERATOR. The name says a review is owed; the list is
+	// the flaggable window — claims anyone may still flag as spam. Asked directly:
+	// why does it need review?
+	//
+	// AND "NOT YET SETTLED" WAS FALSE, provably, off the realm's own reads. A claim
+	// enters when it is answered and leaves at stripExit, which fires on
+	// rewardsOpened / provClosed / dead-closed — settling is not one of them. On
+	// covid that made eleven of fourteen rows claims whose ClaimStatus reads
+	// "settled YES", listed under a sentence saying they were not settled, and
+	// duplicated against the court page's Recently settled. The duplication is
+	// correct: one list says decided, the other says still flaggable, and both are
+	// true at once. Only the sentence was wrong.
+	b.WriteString("## " + stripHeading + "\n\n" + stripBlurb + "\n\n")
 	ids := StripPage(slug, 0, renderPageSize)
 	for _, id := range ids {
 		cs := mustClaim(c, id)
