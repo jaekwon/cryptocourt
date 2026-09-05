@@ -24,17 +24,27 @@
 // The fixture goes inside #main so the page's own cascade applies to it exactly
 // as it does to the real one.
 //
-// ABLATED, four ways, each firing on the arm named and no other:
-//   - class back to `notice good` for both  -> the wash and border arms fail
-//     (measured green-on-NO, which is the shipped bug), the glyph arm passes.
-//   - glyph back to ✓ for both              -> only the glyph arm fails.
-//   - delete the .notice.ruled-no rule      -> the wash arm fails with the
-//     transparent/inherited background, NOT with the green — a different
-//     signature from the one above, which is the point of asserting the token
-//     rather than "not green".
-//   - swap ruled-no's var(--no) for var(--contra) -> the border arm fails alone;
-//     --contra is the adjacent red in this palette and a "reddish" assertion
-//     would have let it through.
+// ABLATED, four ways, against a CONTROL run of the unmodified copy that fires
+// nothing — without it "3 arms fired" is not evidence, since a copy that fails
+// for its own reasons would report the same. Counts are what actually fired, in
+// the dark theme; two of them are higher than the first version of this comment
+// predicted, and the guesses are corrected here rather than rounded off:
+//   - class back to `notice good` for both  -> 3: not-green, wash, and --no
+//     exactly. That is the shipped bug reproduced, and it is the only ablation
+//     that trips the not-green arm. The glyph arm passes, as predicted.
+//   - glyph back to ✓ for both              -> 1: the glyph arm alone.
+//   - delete the .notice.ruled-no rule      -> 3: wash (transparent, not green),
+//     --no exactly (the inherited page ink), and the 4px stripe (0px). The
+//     not-green arm PASSES here, which is the discrimination this file is built
+//     for: a missing rule and a green rule are different failures, and asserting
+//     the resolved token rather than "not green" is what separates them.
+//   - swap ruled-no's var(--no) for var(--contra) -> 1: the --no-exactly arm
+//     alone. --contra is the adjacent red in this palette, and an assertion
+//     phrased as "reddish" would have let it through.
+// The mutations run against a COPY of index.html outside the repo, because a
+// second session edits the shared file: an earlier pass mutated it in place,
+// died before restoring, and had the mutation written back from that session's
+// stale buffer after it was repaired. An isolated copy has no such window.
 const {PAGE, demoPage} = require('./harness');
 
 (async () => {
