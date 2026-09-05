@@ -62,6 +62,19 @@ EXEMPT = {
                  "entrypoint with a body — and a body is optional, so the P form "
                  "covers every call the plain one made. It stays in the realm "
                  "because every filetest, txtar and scenario in the tree uses it.",
+    "SetCourtImage": "needs an UPLOAD, which btn() cannot express. Its `media` "
+                 "argument is not a URL a curator can type — it is the pipe-"
+                 "delimited line kind|sha256|mime|w|h|bytes|caption|mirrors that "
+                 "media.js builds from bytes it has hashed, and the realm rejects "
+                 "anything else. A text field here would render a form nobody can "
+                 "fill, which is worse than the gap: it would satisfy this guard "
+                 "while shipping a dead control. The tray that does build it "
+                 "already exists — media.js's composer, with argument(), fault() "
+                 "and busy() — so the work is MOUNTING it on the curate page and "
+                 "passing argument() as `media`, not writing it. Until then the "
+                 "clear half ships and the set half does not.",
+    "SetFolderImage": "the same upload, one level down — see SetCourtImage. Both "
+                 "clears are on the page; both sets wait on the same tray.",
     "SetAssociationBondDefault": "a REALM-ADMIN act, not a curator's: it sets the "
                  "default every court inherits, and belongs with the global DAO "
                  "verbs this guard's header already calls a legitimate gap. It is "

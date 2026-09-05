@@ -11131,6 +11131,7 @@ on(/^\/c\/([a-z0-9-]+)\/curate$/, async (slug)=>{
          ${btn("Create set","CreateFolder",{courtSlug:slug,name:"Set name",desc:"One line on what belongs here"})}
          ${btn("Create subset","CreateFolderIn",{courtSlug:slug,parentID:1,name:"Set name",desc:"One line on what belongs here"},"","inside another set, four deep")}
          ${btn("Rename set","RenameFolder",{courtSlug:slug,folderID:1,name:"New name",desc:"New one-liner"})}
+         ${btn("Remove set's picture","ClearFolderImage",{courtSlug:slug,folderID:1},"","taking one off needs no upload; putting one on does, so it is not here yet")}
          ${btn("Move set","MoveFolder",{courtSlug:slug,folderID:2,newParent:1},"","0 is the root")}
          ${btn("Retire set","RetireFolder",{courtSlug:slug,folderID:1},"","struck from the tree, row kept")}
          ${btn("Restore set","RestoreFolder",{courtSlug:slug,folderID:1})}
@@ -11156,7 +11157,8 @@ on(/^\/c\/([a-z0-9-]+)\/curate$/, async (slug)=>{
          ${btn("Unhide","UnhideItem",{courtSlug:slug,claimID:1,reason:"Why this returns"},"","several moderators must agree")}</div></div>
        <div class="panel" style="margin-top:14px"><h2>Court</h2><div class="actions">
          ${btn("Appoint moderators","AppointMods",{courtSlug:slug,m:1,mods:"g1address1,g1address2"},"","creator only, free")}
-         ${btn("Describe this court","SetCourtDesc",{courtSlug:slug,desc:"One line on what this court is for"},"","one line, no newlines")}</div></div>
+         ${btn("Describe this court","SetCourtDesc",{courtSlug:slug,desc:"One line on what this court is for"},"","one line, no newlines")}
+         ${btn("Remove this court's picture","ClearCourtImage",{courtSlug:slug},"","taking one off needs no upload; putting one on does, so it is not here yet")}</div></div>
       </section>`
     /* PROPOSING IS NOT A MODERATOR ACT, and the realm says so where the verb is
        declared: "ANY HOLDER MAY PROPOSE, because proposing is the interactive
