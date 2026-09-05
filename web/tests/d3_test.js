@@ -168,7 +168,13 @@ ok("miss note tells the window size", src.includes('the map draws the newest ${p
 ok("demo miss note", src.includes('no claim #${mfocus} in the sample court'));
 ok("ring re-applied inside put()", src.includes('if(focusId!=null){ const a=box.querySelector(`.mnode-a[data-id="${focusId}"]`); if(a) a.classList.add("focused"); }'));
 ok("focused stroke distinct from hover", src.includes('.mnode-a.focused .mnode{stroke:var(--accent); stroke-width:3}'));
-ok("camera lands once after initial put", src.includes('cx=n.x+n.w/2; cy=n.y+n.h/2;'));
+/* PINNED AS THE CENTRE IT USES, not as the arithmetic. This read `cx=n.x+n.w/2;
+   cy=n.y+n.h/2;` — the RESERVED box's centre — and a claim whose oval hangs off
+   the corner reserves MAPK.vov below its frame, so that point sits below what is
+   drawn and the camera lands low on the node it was asked to show. mapCtr is the
+   one place that difference is resolved, and the edge clipper reads it too. */
+ok("camera lands once after initial put, on the centre of what is drawn",
+   /const c=mapCtr\(n\); cx=c\[0\]; cy=c\[1\];/.test(src));
 ok("zoom from the LOD line, clamped", src.includes('z=Math.min(MAPK.zMax, Math.max(1, MAPK.readPx*fit.w/(MAPK.fs.title*'));
 // THE SLIDER AND THE CLAMP ARE ONE RANGE. The control is log2 of the zoom, so a
 // slider that stops at 3 while the clamp allows 16 is a handle that hits its end

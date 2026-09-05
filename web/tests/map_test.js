@@ -140,9 +140,19 @@ function verify(svg, label){
   for(const s of P.spokes) for(const pt of [s.pts[0], s.pts[s.pts.length-1]])
     for(const b of boxes) if(pt[0]>=b.x-1&&pt[0]<=b.x+b.w+1&&pt[1]>=b.y-1&&pt[1]<=b.y+b.h+1) ends.add(b);
   for(const b of [...claims,...folders]) if(!ends.has(b)) fails.push(`E ${b.cls}${b.ref||""} unreached`);
+  /* F: a dot belongs to its claim, and "belongs" now has two shapes. A claim with
+     no verdict keeps its dot on a row INSIDE the frame. A decided one hangs the
+     dot and the oval off the bottom-right corner, straddling the frame's edge —
+     so the test is the reserved box, which is the frame plus MAPK.vov below it,
+     and NOT simply "anywhere near", because a mark that drifts out of the band
+     the layout reserved is a mark that can land on the neighbour.
+     The horizontal bound is unchanged: the badge is right-aligned inside the
+     frame's own width, it only hangs downward. */
+  const onBadge=(a,o)=>a.x>=o.x-0.51 && a.x+a.w<=o.x+o.w+0.51
+    && a.y>=o.y+o.h-a.h-0.51 && a.y+a.h<=o.y+o.h+MAPK.vov+0.51;
   for(const d of P.dots){
     const o=claims.find(r=>r.ref===d.owner.slice(1));
-    if(!o||!inside(d,o)) fails.push(`F dot ${d.owner}`);
+    if(!o||!(inside(d,o)||onBadge(d,o))) fails.push(`F dot ${d.owner}`);
     for(const t of P.texts) if(t.owner===d.owner && !disjoint(d,t)) fails.push(`F dot/text ${d.owner}`);
   }
   // G: spokes only. A spoke's endpoints sit on the two boxes it joins, so a box
@@ -1110,19 +1120,49 @@ ok("controls present", ["mt-titles","mt-ids","mz-in","mz-out","mz-fit","mz-slide
        return ovalOf(s,1)===undefined && strikesOf(s,1)===0
          && textsOf(s).filter(t=>t.id===1&&t.cls==="mverdict").map(t=>t.t).join("")==="settled";
      })());
-  /* THE OVAL SITS WHERE THE VERDICT LINE SAT: below the title, hard against the
-     node's right padding. Read off the rect rather than the text, because the
-     rect is the mark a reader sees the position of — and its right edge is the
-     one thing that ties it to the row it replaced. */
-  ok("the oval closes the node, right-adjusted below the title", (()=>{
+  /* THE OVAL HANGS OFF THE BOTTOM-RIGHT CORNER, straddling the frame's edge. It
+     used to sit on a row inside the box, right-adjusted under the title; that row
+     cost lineH on every decided node and the mark is not part of the sentence.
+     Read off the rect rather than the text, because the rect is the mark a reader
+     sees the position of.
+     CENTRED ON THE EDGE, not merely near it: half in and half out is what makes
+     it read as a mark ON this node rather than a chip between two, and it is also
+     the number the layout reserves against (MAPK.vov, half the badge's height).
+     A badge that drifted below that band would collide with the neighbour and no
+     other check would see it. */
+  ok("the oval hangs off the corner, straddling the frame's bottom edge", (()=>{
      const m=/<rect class="mvtag n" x="([\d.]+)" y="([\d.]+)" width="([\d.]+)" height="([\d.]+)" rx="([\d.]+)" data-owner="c1"/.exec(svgT);
      const id1=rowOf(1,"mid")[0], box=parseSVG(svgT).rects.find(r=>r.cls==="mnode"&&r.ref==="1");
      if(!m||!id1||!box) return false;
      const x=+m[1], y=+m[2], w=+m[3], h=+m[4], rx=+m[5];
-     return y > id1.y                            // below the id's line
+     const cy=y+h/2, edge=box.y+box.h;
+     return y > id1.y                            // still below the id's line
        && Math.abs((x+w)-(box.x+box.w-8))<0.15   // MAPK.tpad off the right edge
-       && x > box.x && y+h <= box.y+box.h+0.51   // and inside its own node
+       && x > box.x                              // and within the frame's width
+       && Math.abs(cy-edge)<0.51                 // centred ON the bottom edge
+       && h/2 <= MAPK.vov+0.51                   // so the overhang is what was reserved
        && Math.abs(rx-h/2)<0.06;                 // a pill, not a rounded box
+  })());
+  /* AND A CONTESTED SIDE WEARS THE SAME OVAL WITH A QUESTION AFTER IT. "in
+     dispute: YES" is the same fact in eleven more characters, and every other
+     surface — the docket row, the related row, the page heading — already draws
+     the oval-and-mark for a side under challenge.
+     THE `?` IS OUTSIDE THE RING. What the court decided goes in the oval; what is
+     being asked about it does not. Asserted by position rather than by presence,
+     because a `?` inside the ring would satisfy "there is a question mark". */
+  ok("a disputed claim wears the oval with a question after it", (()=>{
+     const u = JSON.parse(JSON.stringify(d));
+     // The realm's own sentence, from statusText: a wording phaseClass cannot
+     // parse yields an empty side, which is not badged, and the assertion would
+     // then be measuring the open-claim path while claiming to measure this one.
+     u.claims[3].statusText = "disputed YES — a sealed vote is deciding; principal is never withheld";
+     const s = mapSvg(mapLayout(u,"titles"), u, "covid");
+     const oval=/<rect class="mvtag y"[^>]*x="([\d.]+)"[^>]*width="([\d.]+)"[^>]*data-owner="c3"/.exec(s)
+       || /<rect class="mvtag y" x="([\d.]+)" y="[\d.]+" width="([\d.]+)"[^>]*data-owner="c3"/.exec(s);
+     const q=textsOf(s).find(t=>t.id===3 && t.cls==="mvq");
+     if(!oval||!q) return false;
+     return q.x > +oval[1] + +oval[2] - 0.51     // right of the ring, not inside it
+       && !/in dispute: /.test(s);               // and the words are gone
   })());
   ok("the court strikes the sentence it ruled against", strikesOf(svgT,1)>=1);
   ok("...and never a YES it agreed with", strikesOf(svgT,2)===0);

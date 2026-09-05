@@ -1913,7 +1913,14 @@ tr.youare .mono{font-weight:600}
    wider than the ring measured for it, which browser/map_type.js reads as
    deformed glyphs. The mark is 11px and bold; it does not need the tracking. */
 .mvt{font-weight:600}
-.mvtag{fill:none; stroke-width:1; vector-effect:non-scaling-stroke}
+/* FILLED, AND THAT IS STRUCTURAL. The oval straddles the frame's bottom edge, so
+   the node's own 1px border runs through the middle of it unless the ring paints
+   over it — an unfilled ring there reads as a chip dropped on a line. The node's
+   own fill, not a colour of its own, so the badge belongs to its box. */
+.mvtag{fill:var(--surface); stroke-width:1; vector-effect:non-scaling-stroke}
+/* The question beside a contested oval, in the muted ink the flat mark uses on
+   every other surface: the oval is the statement and this only qualifies it. */
+.mvq{fill:var(--muted)}
 .mvt.y{fill:var(--yes)}  .mvtag.y{stroke:var(--yes)}
 .mvt.n{fill:var(--no)}   .mvtag.n{stroke:var(--no)}
 /* THE STRIKE IS THE COURT'S, in the losing side's hue and for the same reason
@@ -8552,6 +8559,22 @@ const MAPK = {
   // measured from — see mapTileSize.
   node:  { titles:{w:230,h:52}, ids:{w:64,h:28} },  // w, and h as a floor
   head:22, lineH:14,   // the id line, and each title line under it
+  /* THE VERDICT HANGS OFF THE CORNER, so the box does not carry a row for it.
+     A decided claim used to close with a row of its own inside the frame — the
+     phase dot at the left, the oval at the right — and that row cost `lineH` plus
+     its padding on every settled and disputed node, on a map where a node costs
+     its ring w|sin t| + h|cos t|. The mark is not part of the sentence, so it does
+     not have to sit inside the sentence's box.
+     vrow is what the frame stops reserving when the mark leaves it; vov is what
+     the LAYOUT keeps clear below the frame instead, which is half the badge — it
+     straddles the bottom edge rather than floating under it, so it still reads as
+     a mark ON this node. Net: 16px less drawn and 7px less reserved per decided
+     node.
+     RESERVED IS NOT DRAWN, and that is the whole reason both numbers exist.
+     mapClaimSize returns the reserved box, mapSvg draws the frame inside it, and
+     `fh` carries the difference. Drawing outside a box the layout measured is the
+     collision the note over mapNodeTiles is about. */
+  vrow:14, vov:9,
   /* THE EXHIBITS A CLAIM CARRIES, UNDER ITS TITLE. They used to be one badge in
      the top-right corner, which said "there is evidence here" and nothing about
      what or how much. A strip under the title says both, and sits where a
@@ -8874,23 +8897,55 @@ function mapTileSize(w){
   const n = MAPK.tile.max;
   return Math.floor((w - 2*MAPK.tpad - (n-1)*MAPK.tile.gap) / n);
 }
-function mapClaimSize(title, mode, tiles){
+/* `badged`: this claim closes with an oval hung off its corner instead of a row
+   inside the frame, so the frame stops reserving that row and the layout reserves
+   the half of the badge that hangs below it. See MAPK.vrow.
+   TWO NUMBERS OUT, because mapSvg needs both — `h` is what the layout keeps clear,
+   `fh` is what gets drawn. Returning only the reserved box would leave mapSvg to
+   derive the frame by subtracting a constant it does not own, which is the second
+   implementation of one rule that the note over mapNodeTiles warns about. */
+function mapClaimSize(title, mode, tiles, badged){
   const base = MAPK.node[mode];
   if(mode!=="titles") return base;
   const lines = mapWrapTitle(String(title||""), base.w-2*MAPK.tpad, MAPK.fs.title, MAPK.maxTitleLines, "mtitle");
   // The strip is one row whatever it holds — mediaNodeTiles caps it — so a claim
   // with four exhibits is no taller than a claim with one.
   const strip = tiles? mapTileSize(base.w) + MAPK.tile.pad : 0;
-  return {w:base.w, h:Math.max(base.h, MAPK.head + lines.length*MAPK.lineH + MAPK.tpad + strip)};
+  const full = MAPK.head + lines.length*MAPK.lineH + MAPK.tpad + strip;
+  const fh = Math.max(base.h, badged? full - MAPK.vrow : full);
+  return {w:base.w, h: fh + (badged? MAPK.vov : 0), fh};
+}
+/* WHICH CLAIMS WEAR THE BADGE, in one place because two surfaces answer it: the
+   size function reserves for it and the draw function draws it.
+   A SIDE THE COURT HAS TAKEN, OR IS BEING ARGUED OVER. Settled is the decision;
+   in dispute is the same side with the question still open, and it wears the oval
+   with a `?` after it — the mark the docket rows, the related rows and the page
+   heading already use for that state.
+   PROVISIONAL IS DELIBERATELY NOT HERE. It has a side too, and an oval would read
+   as settled: the word is the only thing separating a verdict that can still be
+   reopened from one that cannot, so provisional keeps its row and says so. */
+function mapBadged(pc){
+  return (pc.short==="settled" || pc.short==="in dispute")
+      && (pc.side==="YES" || pc.side==="NO");
 }
 /* Where the centre-to-centre line leaves a's box: half-extent in each axis,
    whichever side it reaches first. Written out because a chord that starts at a
    centre is drawn under its own node and appears to start nowhere. */
+function mapCtr(n){
+  /* THE CENTRE OF WHAT IS DRAWN. A badged claim reserves MAPK.vov below its frame
+     for the half of the oval that hangs past the bottom edge, so its reserved box
+     is taller than the box on screen and its centre sits below the frame's. An
+     edge drawn from the reserved centre starts off-centre and stops in the gap
+     under the frame, which reads as a line that does not reach its node. */
+  const h = n.fh != null ? n.fh : n.h;
+  return [n.cx, n.fh != null ? n.y + h/2 : n.cy, h];
+}
 function mapClip(a, b){
-  const dx=b.cx-a.cx, dy=b.cy-a.cy;
-  if(!dx && !dy) return [a.cx, a.cy];
-  const t=Math.min(dx? (a.w/2)/Math.abs(dx) : Infinity, dy? (a.h/2)/Math.abs(dy) : Infinity);
-  return [Math.round((a.cx+dx*t)*10)/10, Math.round((a.cy+dy*t)*10)/10];
+  const [acx, acy, ah] = mapCtr(a), [bcx, bcy] = mapCtr(b);
+  const dx=bcx-acx, dy=bcy-acy;
+  if(!dx && !dy) return [acx, acy];
+  const t=Math.min(dx? (a.w/2)/Math.abs(dx) : Infinity, dy? (ah/2)/Math.abs(dy) : Infinity);
+  return [Math.round((acx+dx*t)*10)/10, Math.round((acy+dy*t)*10)/10];
 }
 /* One node per entity, one spoke per containment fact.
    FIRST-WINS ON A CLAIM, and the second folder gets a spoke rather than nothing.
@@ -8921,7 +8976,8 @@ function mapTree(data, mode){
       if(drawn.has(id)){ alsoIn.push({folder:node, id}); (node.also = node.also || []).push(id); }
       else { drawn.add(id); node.kids.push({kind:"claim", id, kids:[],
              size:mapClaimSize("#"+id+" "+((data.claims[id]||{}).title||""), mode,
-                               mapNodeTiles(data.claims[id]).length)}); }
+                               mapNodeTiles(data.claims[id]).length,
+                               mapBadged(phaseClass((data.claims[id]||{}).statusText||"")))}); }
     }
     /* A CHAIN SUBFOLDER IS ADDRESSED BY ITS OWN FID, exactly as a root one is.
        The root walk below already reads `f.path!=null? String(f.path) : String(i)`
@@ -8957,7 +9013,8 @@ function mapTree(data, mode){
       if(!data.claims[id] || drawn.has(id)) continue;
       drawn.add(id);
       tops.push({kind:"claim", id, kids:[], size:mapClaimSize("#"+id+" "+((data.claims[id]||{}).title||""), mode,
-                                                               mapNodeTiles(data.claims[id]).length)});
+                                                               mapNodeTiles(data.claims[id]).length,
+                                                               mapBadged(phaseClass((data.claims[id]||{}).statusText||"")))});
     }
   }
   const courtName = data.courtName||"this court";
@@ -9222,7 +9279,10 @@ function mapLayout(data, mode){
   (function place(n, a0, a1, d){
     const sz=mapSize(n), mid=n._mid;
     const cx=n._r*Math.cos(mid), cy=n._r*Math.sin(mid);
-    const box={x:cx-sz.w/2, y:cy-sz.h/2, w:sz.w, h:sz.h, cx, cy, depth:d, angle:mid};
+    // fh rides along for the one node kind that has one: the frame a claim draws
+    // inside the box the layout reserved. Undefined on a folder and on the court,
+    // and every reader falls back to h, so neither changes.
+    const box={x:cx-sz.w/2, y:cy-sz.h/2, w:sz.w, h:sz.h, fh:sz.fh, cx, cy, depth:d, angle:mid};
     n._box = box;
     /* A KEY PER BOX, so a spoke can say what it joins. The layout returns spokes
        as bare geometry — {kind, pts} — which was enough while selection dimmed
@@ -9604,6 +9664,40 @@ function mapSvg(L, data, slug){
       + `text-anchor="end" textLength="${w}" lengthAdjust="spacing" `
       + `data-owner="${owner}">${side}</text>`;
   };
+  /* THE SAME OVAL, HUNG OFF THE BOTTOM-RIGHT CORNER, with the phase dot travelling
+     with it. Inside the frame it cost a row; here it costs half its own height in
+     reserved space and gives the row back — see MAPK.vrow.
+     STRADDLING THE EDGE, NOT FLOATING UNDER IT. Centred ON the frame's bottom
+     line, so it reads as a mark on this node rather than a chip dropped between
+     two of them, and the layout only has to keep the lower half clear. The oval is
+     FILLED for that reason and not for decoration: the frame's own border runs
+     through the middle of it otherwise — see .mvtag in the stylesheet.
+     DOT, OVAL, MARK, right-aligned as a group. The dot keeps its place at the
+     verdict's left, where the legend says to look for it. The `?` goes OUTSIDE the
+     ring: the oval is what the court decided and the question mark is what is
+     being asked about that, which is the arrangement every other surface uses. */
+  const vbadge=(pc,n,fh)=>{
+    const side=pc.side, contested=pc.short==="in dispute";
+    const fs=VTAG.fs, c=side==="NO"?"n":"y", w=est(side,fs,"mvt");
+    const h=fs+2*VTAG.py, cy=n.y+fh;                     // the frame's bottom edge
+    const qw=contested? fs*0.78 : 0, gap=contested? 3 : 0;
+    const right=n.x+n.w-K.tpad-qw-gap;                   // the oval's own right edge
+    const ovw=w+2*VTAG.px, left=right-ovw, owner="c"+n.id;
+    // The baseline sits below the centre by the same cap-band offset vtag takes off
+    // it, so the word rides the middle of the ring rather than its floor.
+    const base=cy+0.36*fs;
+    return `<rect class="mdot ${mapDotClass(pc.short, pc.side)}" x="${(left-11).toFixed(1)}" `
+      + `y="${(cy-3).toFixed(1)}" width="6" height="6" data-owner="${owner}"/>`
+      + `<rect class="mvtag ${c}" x="${left.toFixed(1)}" y="${(cy-h/2).toFixed(1)}" `
+      + `width="${ovw.toFixed(1)}" height="${h.toFixed(1)}" rx="${(h/2).toFixed(1)}" `
+      + `data-owner="${owner}"/>`
+      + `<text class="mtext mvt ${c}" x="${(right-VTAG.px).toFixed(1)}" y="${base.toFixed(1)}" `
+      + `font-size="${fs}" text-anchor="end" textLength="${w}" lengthAdjust="spacing" `
+      + `data-owner="${owner}">${side}</text>`
+      + (contested? `<text class="mtext mvq" x="${(n.x+n.w-K.tpad).toFixed(1)}" `
+          + `y="${base.toFixed(1)}" font-size="${fs}" text-anchor="end" `
+          + `data-owner="${owner}">?</text>` : "");
+  };
   /* THE COURT'S STRIKE, drawn as GEOMETRY rather than as text-decoration. Every
      label on this map is laid out with textLength + lengthAdjust="spacing", so
      the rendered width of a line IS min(est, room) — the rule can be placed
@@ -9752,7 +9846,13 @@ function mapSvg(L, data, slug){
        key that lies. */
     const dot=(cx,cy)=>`<rect class="mdot ${mapDotClass(pc.short, pc.side)}" x="${(cx-3).toFixed(1)}" y="${(cy-3).toFixed(1)}" width="6" height="6" data-owner="c${n.id}"/>`;
     out.push(`<a href="#/c/${esc(slug)}/${n.id}" class="mnode-a" data-id="${n.id}">`);
-    out.push(`<rect class="mnode" x="${n.x}" y="${n.y}" width="${n.w}" height="${n.h}" data-id="${n.id}" rx="3"/>`);
+    // THE FRAME IS fh, THE RESERVED BOX IS h — they differ by MAPK.vov on a claim
+    // whose oval hangs off the corner. Everywhere else fh is undefined and this is
+    // the box the layout placed. Every measurement below reads fh for the same
+    // reason: a label positioned against the reserved height would sit in the gap
+    // the badge occupies.
+    const fh = n.fh != null ? n.fh : n.h;
+    out.push(`<rect class="mnode" x="${n.x}" y="${n.y}" width="${n.w}" height="${fh}" data-id="${n.id}" rx="3"/>`);
     /* THE EXHIBITS AS A STRIP UNDER THE TITLE, drawn below with the rest of the
        titles-mode label, because that is the only mode with room for it and the
        row's position depends on how many lines the title took.
@@ -9824,25 +9924,32 @@ function mapSvg(L, data, slug){
         });
         vy = ty + ts + K.lineH;
       }
-      /* The dot rides the verdict row rather than the top-right corner: it is the
-         verdict's colour now, so it belongs beside the verdict, and moving it
-         hands the whole first line back to the title instead of reserving 14px of
-         it for a mark that sat on a different subject. */
-      out.push(dot(n.x+K.tpad+4, vy-4));
-      /* A DECIDED CLAIM CLOSES WITH ITS OVAL; everything else still closes with
-         the phase in words. "settled: NO" said the phase twice — the dot at the
-         other end of this row is the phase channel — and said the side in the
-         secondary ink, on the one map surface that has a title beside it to
-         carry the mark instead. Where there is no verdict there is no oval and
-         the words are all there is: "open", "in dispute", "provisional: YES".
-         AN UNKNOWN SIDE KEEPS THE WORDS TOO. phaseClass hands back "settled"
-         with an empty side when the realm's sentence does not name one, and an
-         oval with nothing in it would be a mark asserting a decision it cannot
-         read. */
-      if(pc.short==="settled" && (pc.side==="YES"||pc.side==="NO"))
-        out.push(vtag(pc.side, n, vy, "c"+n.id));
-      else out.push(rlabel(pc.side? pc.short+": "+pc.side : pc.short,
-                           n, K.fs.id, vy, "mverdict", "c"+n.id));
+      /* A DECIDED CLAIM HANGS ITS OVAL OFF THE CORNER; everything else still closes
+         with a row inside the frame — the phase dot, and the phase in words.
+         "settled: NO" said the phase twice (the dot IS the phase channel) and said
+         the side in the secondary ink, on the one map surface with a title beside
+         it to carry a mark instead.
+         "in dispute: YES" is the same fact as (YES?) in eleven more characters, and
+         the oval-with-a-question-mark is what the docket rows, the related rows and
+         the page heading already draw for a side under challenge — so the map was
+         the surface spelling it out.
+         WHAT STAYS IN WORDS. "open" has no side to put in an oval. "provisional:
+         YES" has one and must not wear the oval anyway: the word is the only thing
+         separating a verdict that can still be reopened from one that cannot. And
+         phaseClass hands back "settled" with an EMPTY side when the realm's
+         sentence does not name one — an oval with nothing in it would be a mark
+         asserting a decision it cannot read. mapBadged is the one place that rule
+         is written, because mapClaimSize has to agree with it. */
+      if(mapBadged(pc)) out.push(vbadge(pc, n, fh));
+      else {
+        /* The dot rides the verdict row rather than the top-right corner: it is the
+           verdict's colour, so it belongs beside the verdict, and moving it hands
+           the whole first line back to the title instead of reserving 14px of it
+           for a mark on a different subject. */
+        out.push(dot(n.x+K.tpad+4, vy-4));
+        out.push(rlabel(pc.side? pc.short+": "+pc.side : pc.short,
+                        n, K.fs.id, vy, "mverdict", "c"+n.id));
+      }
     } else {
       /* IN IDS MODE THE ID IS THE WHOLE LABEL, and asking for the phase as well
          bought an ellipsis and nothing else. An ids box is 64 wide, less 14 for
@@ -11122,7 +11229,7 @@ function mountMap(slug, data, focusId, focusPath){
     if(fi >= 0){ select({kind:"folder", fid:fi}); return; }
   }
   if(focusId!=null){ const n = L.nodes.find(x=>x.id===focusId);
-    if(n){ cx=n.x+n.w/2; cy=n.y+n.h/2;
+    if(n){ const c=mapCtr(n); cx=c[0]; cy=c[1];
       // land zoomed so titles clear the LOD line (enter<7px, leave>8.5px)
       const el=svgEl();
       z=Math.min(MAPK.zMax, Math.max(1, MAPK.readPx*fit.w/(MAPK.fs.title*((el&&el.clientWidth)||960))));

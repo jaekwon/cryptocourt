@@ -34,6 +34,16 @@
 // outranks it. The rule was dead on arrival and the ablation is what said so.
 // So the arm below is aimed at the global rule, which is what actually runs.
 const {PAGE, demoPage} = require('./harness');
+// MAPK.vov, read out of the page rather than retyped: it is the overhang a badged
+// node reserves below its frame, and the transform-origin bound below is derived
+// from it. A number copied here would agree with the map on the day it was copied.
+const MAPKVOV = (() => {
+  const src = require('fs').readFileSync(
+    require('path').join(__dirname, '..', '..', 'index.html'), 'utf8');
+  const m = /vrow:\s*\d+,\s*vov:\s*(\d+)/.exec(src);
+  if (!m) throw new Error("map_boing: MAPK.vov not found in web/index.html");
+  return +m[1];
+})();
 
 (async () => {
   const {browser, page, errs} = await demoPage({width: 1440, height: 950});
@@ -161,10 +171,21 @@ const {PAGE, demoPage} = require('./harness');
   ok("it scales about itself, not about the map (transform-box:fill-box)",
      before.transformBox === "fill-box", before.transformBox);
   {
+    /* THE MIDDLE OF WHAT IT DRAWS, which is no longer the middle of the frame.
+       A decided claim hangs its oval off the bottom-right corner, straddling the
+       edge, and fill-box measures everything the anchor paints — so the origin
+       sits MAPK.vov/2 below the frame's centre and the node rises by about a
+       pixel and a half as it grows. That is the right pivot: the badge is part of
+       the node and scales with it, and a pivot on the frame alone would swing the
+       badge outward on selection, toward the neighbour.
+       The vertical bound is loosened to that overhang and no further — the check
+       is still that a node scales about ITSELF and not about the map, which is
+       hundreds of units away, so a real regression is nowhere near this margin. */
     const [ox, oy] = before.origin.split(/\s+/).map(parseFloat);
-    ok(`...with the origin at the node's own middle (${before.origin})`,
-       Math.abs(ox - before.boxW / 2) < 2 && Math.abs(oy - before.boxH / 2) < 2,
-       `box ${before.boxW}x${before.boxH}`);
+    const slack = 2 + MAPKVOV / 2;
+    ok(`...with the origin at the middle of what the node draws (${before.origin})`,
+       Math.abs(ox - before.boxW / 2) < 2 && Math.abs(oy - before.boxH / 2) < slack,
+       `box ${before.boxW}x${before.boxH} slack ${slack}`);
   }
 
   // -------------------------------------------------------------- every node

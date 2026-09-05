@@ -94,7 +94,11 @@ const {PAGE, demoPage} = require('./harness');
      colour, there is no line at all — and fails the hue arm; giving .mvtag a
      fill fails the hairline arm; adding .mvtag to the `far` rule fails the
      zoomed-out arm; striking from the node's padding instead of the title's
-     offset fails the crosses-the-sentence arm at x, 16px short. */
+     offset fails the crosses-the-sentence arm at x, 16px short.
+     THE FILL ABLATION MOVED. It used to be "giving .mvtag a fill fails the
+     hairline arm", which stopped being true when the oval left the frame: it is
+     filled now, with the node's own surface, so the border it straddles does not
+     run through the word. Giving it the SIDE's hue is the ablation that fires. */
   const v = await page.evaluate(() => {
     try {
       const st = t => t + " — every stake withdraws 1×";
@@ -116,7 +120,8 @@ const {PAGE, demoPage} = require('./harness');
         p.style.color = "var(" + t + ")"; document.body.appendChild(p);
         const c = getComputedStyle(p).color; p.remove(); return c; };
       const box = e => { const b = e.getBBox(); return {x: b.x, y: b.y, w: b.width, h: b.height}; };
-      const out = {no: probe("--no"), yes: probe("--yes"), found: !!(line && ring && word && ttl)};
+      const out = {no: probe("--no"), yes: probe("--yes"), surface: probe("--surface"),
+                   found: !!(line && ring && word && ttl)};
       if (out.found) {
         out.line = {stroke: getComputedStyle(line).stroke, display: getComputedStyle(line).display,
                     ...box(line)};
@@ -147,8 +152,19 @@ const {PAGE, demoPage} = require('./harness');
          && (l.x + l.w) >= t.x + t.w * 0.9          // and runs the length of it
          && l.y > t.y && l.y < t.y + t.h;           // through the glyphs, not under them
     })(), `strike ${v.line.x}+${v.line.w}@${v.line.y} title ${v.ttl.x}+${v.ttl.w}@${v.ttl.y}..${v.ttl.y + v.ttl.h}`);
+    /* A RING, NOT A CHIP — and that is a claim about the HUE, not about there
+       being no fill at all. It used to be fill:none, which was the same thing
+       while the oval sat inside the frame. It hangs off the bottom-right corner
+       now, straddling the border, and an unfilled ring lets that 1px line run
+       through the middle of the word — so it is filled with the NODE'S OWN
+       surface, which paints out the border and adds no colour of its own.
+       What must never happen is the side's hue as a fill: that is the chip this
+       check was written against, a solid red or green pill shouting the verdict
+       at the same weight as the sentence. */
     ok("the oval is a hairline ring, not a chip",
-       v.ring.fill === "none" && v.ring.stroke === v.no, `fill=${v.ring.fill} stroke=${v.ring.stroke}`);
+       v.ring.stroke === v.no && v.ring.fill !== v.no
+       && (v.ring.fill === "none" || v.ring.fill === v.surface),
+       `fill=${v.ring.fill} stroke=${v.ring.stroke} surface=${v.surface}`);
     ok("...with the side inside it, in the same hue",
        v.word.t === "NO" && v.word.fill === v.no, `"${v.word.t}" ${v.word.fill}`);
     ok("a settled YES rings in green and keeps its sentence",
