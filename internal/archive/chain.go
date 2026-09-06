@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -145,7 +146,76 @@ func (c *Chain) ClaimHashes(ctx context.Context, court string, claimID uint64) (
 	if err != nil {
 		return nil, err
 	}
-	// qeval answers `("<json>" string)`; the payload is one line by construction.
+	return mediaHashes(out, "claim media")
+}
+
+// FolderHashes returns the sha256s a FOLDER references — its one picture.
+//
+// A FOLDER IS A REFERENCE TOO, and until this existed it was not one. The realm
+// has always had SetFolderImage and the overlay has always drawn `.mfimg` from
+// it, but promotion ran over claims alone: `GetServable` serves `promoted = 1`
+// only, so a folder's picture was uploaded, staged, never promoted, swept an
+// hour later, and until then served as a 404. Every part worked and the picture
+// could not appear on any deployment. Found on kourt.xyz the first time a folder
+// was given one.
+//
+// FolderImage answers the same JSON as ClaimMedia — one item rather than a list,
+// but the same shape — so this reads it the same way, purge rule included.
+func (c *Chain) FolderHashes(ctx context.Context, court string, folderID uint64) ([]string, error) {
+	out, err := c.qeval(ctx, fmt.Sprintf("FolderImage(%q,%d)", court, folderID))
+	if err != nil {
+		return nil, err
+	}
+	return mediaHashes(out, "folder image")
+}
+
+// ImagedFolders lists the folders of a court that carry a picture, in one read.
+//
+// THE TREE ALREADY KNOWS. FolderTree answers "id:parent:flags:bornOf" for every
+// folder in the court, and `i` in the flags means this folder has an image — so
+// the folders worth asking about are named by a read the client already makes,
+// and a hundred FolderImage queries per pass become one plus the few that say
+// yes. A court with no pictures costs exactly one query.
+//
+// A FOLDER'S PICTURE CAN BE SET AT ANY TIME, which is why backfill cannot walk
+// folders behind a cursor the way it walks claims. A claim's evidence is fixed
+// when it is filed, so a forward-only cursor sees all of it; a moderator can
+// give folder 2 a picture years after folder 900 was made, and a cursor past it
+// would never look again. This lists them all, every pass, cheaply.
+func (c *Chain) ImagedFolders(ctx context.Context, court string) ([]uint64, error) {
+	out, err := c.qeval(ctx, fmt.Sprintf("FolderTree(%q)", court))
+	if err != nil {
+		return nil, err
+	}
+	return imagedFolders(out), nil
+}
+
+// imagedFolders parses FolderTree's rows. Split out so the format is tested
+// without a node, since this is the one place the archive reads that wire shape.
+func imagedFolders(out string) []uint64 {
+	body := unquoteQeval(out)
+	var ids []uint64
+	for _, row := range strings.Split(body, ",") {
+		f := strings.Split(strings.TrimSpace(row), ":")
+		if len(f) < 3 || !strings.Contains(f[2], "i") {
+			continue
+		}
+		// A purged or retired folder still has its bytes referenced by the chain
+		// until the image itself is cleared, and FolderImage is what says so —
+		// this only decides who to ASK.
+		id, err := strconv.ParseUint(f[0], 10, 64)
+		if err != nil || id == 0 {
+			continue
+		}
+		ids = append(ids, id)
+	}
+	return ids
+}
+
+// unquoteQeval strips the `("<json>" string)` wrapper qeval puts around a string
+// answer. One spelling, because two readers of the same wire format is how they
+// come to disagree about an escape.
+func unquoteQeval(out string) string {
 	body := out
 	if i, j := bytes.IndexByte([]byte(body), '"'), bytes.LastIndexByte([]byte(body), '"'); i >= 0 && j > i {
 		var unquoted string
@@ -153,9 +223,17 @@ func (c *Chain) ClaimHashes(ctx context.Context, court string, claimID uint64) (
 			body = unquoted
 		}
 	}
+	return body
+}
+
+// mediaHashes reads the JSON ClaimMedia and FolderImage both publish.
+//
+// A purged item yields nothing: the court has withdrawn its pointer to those
+// bytes, so nothing here should be buying them permanent storage.
+func mediaHashes(out, what string) ([]string, error) {
 	var items []mediaItem
-	if err := json.Unmarshal([]byte(body), &items); err != nil {
-		return nil, fmt.Errorf("claim media was not the expected JSON: %w", err)
+	if err := json.Unmarshal([]byte(unquoteQeval(out)), &items); err != nil {
+		return nil, fmt.Errorf("%s was not the expected JSON: %w", what, err)
 	}
 	hashes := make([]string, 0, len(items))
 	for _, it := range items {

@@ -1,6 +1,9 @@
 package archive
 
 import (
+	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -80,6 +83,78 @@ func TestClaimedIsMeteredBeforeItAsksTheNode(t *testing.T) {
 
 // A wrong method is refused before anything else happens, and says which methods
 // there are. Also previously uncovered.
+func TestClaimedPromotesAFolderPicture(t *testing.T) {
+	/* THE ENDPOINT HALF. Backfill catches a folder picture within the hour; this
+	   is what a client calls the moment SetFolderImage is broadcast, so the bytes
+	   stop being temporary immediately — the same courtesy a claim has always
+	   had, and the reason /m/claimed exists at all. */
+	st := testStore(t)
+	ctx := context.Background()
+	pic, _ := st.Put(ctx, "image/png", pngBody, "covid")
+
+	var asked string
+	node := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		var req struct {
+			Params struct{ Data string } `json:"params"`
+		}
+		_ = json.Unmarshal(body, &req)
+		q, _ := base64.StdEncoding.DecodeString(req.Params.Data)
+		asked = string(q)
+		// The wire shape, exactly: qeval answers `("<json>" string)` where the
+		// json is a QUOTED string literal, and Data is that, base64'd.
+		item := fmt.Sprintf(`[{"kind":"img","sha256":%q}]`, pic)
+		quoted, _ := json.Marshal(item)
+		raw := "(" + string(quoted) + " string)"
+		fmt.Fprintf(w, `{"result":{"response":{"ResponseBase":{"Data":%q}}}}`,
+			base64.StdEncoding.EncodeToString([]byte(raw)))
+	}))
+	defer node.Close()
+
+	srv := NewServer(st, log.New(io.Discard, "", 0),
+		func(r *http.Request) string { return "caller" }).
+		WithChain(&Chain{RPC: node.URL, PkgPath: "gno.land/r/kourt/kourtv2"})
+	mux := http.NewServeMux()
+	srv.Routes(mux)
+
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/m/claimed?court=covid&folder=2", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("folder promote answered %d: %s", rec.Code, rec.Body.String())
+	}
+	// It must have asked about the FOLDER, not a claim of the same number.
+	if !strings.Contains(asked, `FolderImage("covid",2)`) {
+		t.Fatalf("the node was asked %q, want FolderImage", asked)
+	}
+	if _, _, err := st.GetServable(ctx, pic); err != nil {
+		t.Fatal("the folder's picture must be servable after /m/claimed?folder=")
+	}
+}
+
+func TestClaimedRefusesBothOrNeither(t *testing.T) {
+	// A caller sending both has a bug, and answering with a count for whichever
+	// half this handler read first would hide it. Neither is the old "bad claim
+	// id" case and still has to fail.
+	st := testStore(t)
+	srv := NewServer(st, log.New(io.Discard, "", 0),
+		func(r *http.Request) string { return "caller" }).
+		WithChain(&Chain{RPC: "http://127.0.0.1:1", PkgPath: "p"})
+	mux := http.NewServeMux()
+	srv.Routes(mux)
+	for _, q := range []string{
+		"court=covid",                  // neither
+		"court=covid&claim=1&folder=2", // both
+		"court=covid&claim=0",          // the old zero case
+		"court=covid&folder=0",
+	} {
+		rec := httptest.NewRecorder()
+		mux.ServeHTTP(rec, httptest.NewRequest(http.MethodPost, "/m/claimed?"+q, nil))
+		if rec.Code != http.StatusBadRequest {
+			t.Fatalf("%q answered %d, want 400", q, rec.Code)
+		}
+	}
+}
+
 func TestClaimedRefusesAWrongMethod(t *testing.T) {
 	srv := NewServer(testStore(t), log.New(io.Discard, "", 0), nil)
 	mux := http.NewServeMux()

@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -429,11 +430,29 @@ func TestAMalformedClaimNeverReachesTheNode(t *testing.T) {
 }
 
 // fakeChain answers backfill without a node.
+// noFolders is the folder half of ClaimCounter for the fakes whose subject is
+// claims. Embedded rather than written out three times: a court with no pictures
+// is the ordinary case, and a test about claim backfill should not have to say
+// so to compile.
+type noFolders struct{}
+
+func (noFolders) ImagedFolders(ctx context.Context, court string) ([]uint64, error) {
+	return nil, nil
+}
+func (noFolders) FolderHashes(ctx context.Context, court string, id uint64) ([]string, error) {
+	return nil, nil
+}
+
 type fakeChain struct {
 	count   uint64
 	byID    map[uint64][]string
 	counts  int    // how many times ClaimCount was asked
 	unknown string // a court this chain refuses to answer for
+	// A folder's picture. byFolder is what FolderHashes answers; folderErr makes
+	// ImagedFolders fail the way an unreachable node does.
+	byFolder  map[uint64][]string
+	folderErr bool
+	folderQ   int // how many times FolderHashes was asked
 }
 
 func (f *fakeChain) ClaimCount(ctx context.Context, court string) (uint64, error) {
@@ -447,6 +466,133 @@ func (f *fakeChain) ClaimCount(ctx context.Context, court string) (uint64, error
 }
 func (f *fakeChain) ClaimHashes(ctx context.Context, court string, id uint64) ([]string, error) {
 	return f.byID[id], nil
+}
+func (f *fakeChain) ImagedFolders(ctx context.Context, court string) ([]uint64, error) {
+	if f.folderErr {
+		return nil, fmt.Errorf("qeval: node said no")
+	}
+	ids := make([]uint64, 0, len(f.byFolder))
+	for id := range f.byFolder {
+		ids = append(ids, id)
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	return ids, nil
+}
+func (f *fakeChain) FolderHashes(ctx context.Context, court string, id uint64) ([]string, error) {
+	f.folderQ++
+	return f.byFolder[id], nil
+}
+
+func TestFolderTreeSaysWhichFoldersHaveAPicture(t *testing.T) {
+	/* THE PARSER, AGAINST THE REAL WIRE STRING. The fakes above answer
+	   ImagedFolders directly, so they exercise the backfill loop and not one line
+	   of the format reading — verified by mutation: dropping the `i` test from
+	   imagedFolders left every one of them green. This is the only place that
+	   shape is read, and the string below is what rpc.kourt.xyz answered for
+	   FolderTree("covid") with folder 2 carrying the first picture on the chain.
+	   THE WRAPPER IS PART OF IT, AND IT ONLY EATS THE FIRST ROW. qeval hands back
+	   `("..." string)`, not bare rows. Forget to unquote and every row still
+	   parses except the first, whose id reads as `("1` — so the failure is not a
+	   court with no pictures, it is a court whose picture is on FOLDER 1, which
+	   is the likeliest folder in any court to have one. The `firstRow` case below
+	   is what notices; the case above passes either way, which is exactly how
+	   this was nearly shipped untested. */
+	const live = `("1:0:-:1,2:0:i:2,3:0:-:3,4:2:-:4,5:2:-:5,6:2:-:6,7:1:-:26" string)`
+	got := imagedFolders(live)
+	if len(got) != 1 || got[0] != 2 {
+		t.Fatalf("imagedFolders(live) = %v, want [2] — only the folder flagged i", got)
+	}
+	// Retired, purged and focused folders carry other letters in the same field;
+	// none of them means a picture, and `i` beside them still does.
+	multi := `("1:0:rp:0,2:0:fi:9,3:0:f:0,4:0:ri:0" string)`
+	got = imagedFolders(multi)
+	if len(got) != 2 || got[0] != 2 || got[1] != 4 {
+		t.Fatalf("imagedFolders(multi) = %v, want [2 4] — the two with i among their flags", got)
+	}
+	if n := len(imagedFolders(`("" string)`)); n != 0 {
+		t.Fatalf("a court with no folders yielded %d, want none", n)
+	}
+	firstRow := `("1:0:i:4,2:0:-:0" string)`
+	if got := imagedFolders(firstRow); len(got) != 1 || got[0] != 1 {
+		t.Fatalf("imagedFolders(firstRow) = %v, want [1] — the qeval wrapper must "+
+			"be stripped before the first row is read, or folder 1 alone is lost", got)
+	}
+}
+
+func TestAFolderPictureIsAReferenceToo(t *testing.T) {
+	/* WHAT THIS COST, MEASURED ON kourt.xyz. The realm has always had
+	   SetFolderImage; the overlay has always drawn a folder's picture from the
+	   archive and ONLY from the archive — mediaNodeThumb refuses filer-chosen
+	   mirrors on the map, because fifty nodes fanning out to hosts an attacker
+	   picked would carry fifty readers' addresses. But promotion ran over claims
+	   alone, and GetServable serves promoted rows only. So the first picture ever
+	   given to a folder was uploaded, staged, never promoted, served as a 404 and
+	   swept an hour later. Every part worked. The picture could not appear on any
+	   deployment, and nothing failed to say so. */
+	st := testStore(t)
+	ctx := context.Background()
+
+	pic, _ := st.Put(ctx, "image/png", pngBody, "covid")
+	orphan, _ := st.Put(ctx, "image/webp", webpWith("no folder points here"), "covid")
+
+	chain := &fakeChain{count: 0, byFolder: map[uint64][]string{2: {pic}}}
+	kept, err := st.Backfill(ctx, chain)
+	if err != nil {
+		t.Fatalf("backfill: %v", err)
+	}
+	if kept != 1 {
+		t.Fatalf("backfill kept %d, want the one picture folder 2 carries", kept)
+	}
+	if _, err := st.SweepStaged(ctx, time.Now().Add(StageTTL+time.Minute)); err != nil {
+		t.Fatalf("sweep: %v", err)
+	}
+	if _, _, err := st.GetServable(ctx, pic); err != nil {
+		t.Fatal("a folder's picture must survive the sweep AND be servable; " +
+			"unpromoted it is a 404 that looks like a missing file")
+	}
+	if _, _, err := st.Get(ctx, orphan); err != ErrNotFound {
+		t.Fatal("bytes nothing on chain points at must still expire")
+	}
+}
+
+func TestOnlyTheFoldersWithPicturesAreAskedAbout(t *testing.T) {
+	// A COURT WITH NO PICTURES COSTS ONE QUERY. FolderTree's flags already name
+	// the folders that have one, so the folder pass asks the node about those and
+	// no others — otherwise every backfill pass would be a hundred reads per
+	// court, forever, to learn nothing.
+	st := testStore(t)
+	ctx := context.Background()
+	pic, _ := st.Put(ctx, "image/png", pngBody, "covid")
+
+	chain := &fakeChain{byFolder: map[uint64][]string{7: {pic}}}
+	if _, err := st.Backfill(ctx, chain); err != nil {
+		t.Fatalf("backfill: %v", err)
+	}
+	if chain.folderQ != 1 {
+		t.Fatalf("FolderHashes asked %d times, want 1 — only the folder that has a picture", chain.folderQ)
+	}
+}
+
+func TestAFolderPassThatFailsDoesNotLoseTheClaims(t *testing.T) {
+	// The folder pass runs after the claim pass and asks a node of its own. A
+	// node that will not answer it must not throw away the promotions the claim
+	// pass already made — the same rule the court loop follows, and the reason
+	// that loop stopped returning on first error.
+	st := testStore(t)
+	ctx := context.Background()
+	filed, _ := st.Put(ctx, "image/png", pngBody, "covid")
+
+	chain := &fakeChain{count: 2, byID: map[uint64][]string{1: {filed}}, folderErr: true}
+	kept, err := st.Backfill(ctx, chain)
+	if err == nil {
+		t.Fatal("a folder read that fails must be reported, not swallowed")
+	}
+	if kept != 1 {
+		t.Fatalf("kept %d, want the claim's byte kept despite the folder failure", kept)
+	}
+	if _, _, err := st.GetServable(ctx, filed); err != nil {
+		t.Fatal("the claim's evidence was promoted before the folder pass failed")
+	}
 }
 
 func TestAClosedTabDoesNotCostSomebodyTheirEvidence(t *testing.T) {
@@ -1092,6 +1238,7 @@ func TestTheLimiterReclaimsIdleBucketsWithoutEvictingActiveOnes(t *testing.T) {
 // errChain fails ClaimCount after a set number of calls, and can fail one
 // specific claim's hashes.
 type errChain struct {
+	noFolders
 	count    uint64
 	byID     map[uint64][]string
 	failFrom int // ClaimCount fails on this call number onward (1-based); 0 = never
@@ -1194,6 +1341,7 @@ func TestOnePassWalksABoundedNumberOfClaims(t *testing.T) {
 }
 
 type countingChain struct {
+	noFolders
 	count uint64
 	asked map[uint64]bool
 }

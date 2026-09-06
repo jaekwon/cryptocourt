@@ -139,7 +139,7 @@ func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 // evidence permanent, which is what filing it already asked for.
 //
 // A court and claim that reference nothing promote nothing. There is no path
-// here that keeps bytes no claim points at.
+// here that keeps bytes nothing on chain points at.
 func (s *Server) claimed(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Access-Control-Allow-Origin", "*")
 	if r.Method == http.MethodOptions {
@@ -168,23 +168,48 @@ func (s *Server) claimed(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad court", http.StatusBadRequest)
 		return
 	}
-	claimID, err := strconv.ParseUint(r.URL.Query().Get("claim"), 10, 64)
-	if err != nil || claimID == 0 {
-		http.Error(w, "bad claim id", http.StatusBadRequest)
+	/* EITHER A CLAIM OR A FOLDER, because both are references and only one of
+	   them used to be. `?folder=N` promotes the picture SetFolderImage put on a
+	   folder; the chain still decides, exactly as it does for a claim, and the
+	   worst a stranger achieves by calling it for somebody else's folder is make
+	   that folder's picture permanent — which setting it already asked for.
+	   NOT BOTH IN ONE CALL, and refused rather than silently preferring one:
+	   a caller sending both has a bug, and answering it with a promotion count
+	   for the half this handler happened to read would hide it. */
+	claimID, cerr := strconv.ParseUint(r.URL.Query().Get("claim"), 10, 64)
+	folderID, ferr := strconv.ParseUint(r.URL.Query().Get("folder"), 10, 64)
+	hasClaim, hasFolder := cerr == nil && claimID > 0, ferr == nil && folderID > 0
+	if hasClaim == hasFolder {
+		http.Error(w, "send exactly one of claim or folder", http.StatusBadRequest)
 		return
 	}
 
-	hashes, err := s.chain.ClaimHashes(r.Context(), court, claimID)
+	var hashes []string
+	var err error
+	what, which := "claim", claimID
+	if hasFolder {
+		what, which = "folder", folderID
+		hashes, err = s.chain.FolderHashes(r.Context(), court, folderID)
+	} else {
+		hashes, err = s.chain.ClaimHashes(r.Context(), court, claimID)
+	}
 	if err != nil {
 		if s.log != nil {
-			s.log.Printf("archive: claim %s/%d: %v", court, claimID, err)
+			s.log.Printf("archive: %s %s/%d: %v", what, court, which, err)
 		}
-		http.Error(w, "could not read that claim", http.StatusBadGateway)
+		http.Error(w, "could not read that "+what, http.StatusBadGateway)
 		return
+	}
+	// A folder's picture is promoted with claim 0: there is no claim, and
+	// PromoteFor leaves filed_claim alone for a zero, so the origin recorded is
+	// the court — the truth for a picture a moderator set.
+	origin := claimID
+	if hasFolder {
+		origin = 0
 	}
 	promoted := 0
 	for _, h := range hashes {
-		if err := s.store.PromoteFor(r.Context(), h, court, claimID); err != nil {
+		if err := s.store.PromoteFor(r.Context(), h, court, origin); err != nil {
 			if s.log != nil {
 				s.log.Printf("archive: promoting %s: %v", h, err)
 			}

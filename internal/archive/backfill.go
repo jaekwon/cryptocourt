@@ -58,9 +58,18 @@ func ensureColumn(db *sql.DB, table, col, decl string) error {
 
 // ClaimCounter is what backfill needs from a chain, named as an interface so the
 // sweep is testable without a node.
+//
+// FOLDERS ARE IN HERE TOO NOW, and the name has stayed. It is the archive's
+// whole view of a chain and has never counted only claims — it reads media as
+// well — so renaming it to something broader would touch every fake in the
+// tests to say nothing new.
 type ClaimCounter interface {
 	ClaimCount(ctx context.Context, court string) (uint64, error)
 	ClaimHashes(ctx context.Context, court string, claimID uint64) ([]string, error)
+	// ImagedFolders names the folders worth asking about; FolderHashes reads
+	// one. Split so a court with no pictures costs a single query.
+	ImagedFolders(ctx context.Context, court string) ([]uint64, error)
+	FolderHashes(ctx context.Context, court string, folderID uint64) ([]string, error)
 }
 
 // StagedCourts lists the courts that have unpromoted bytes waiting. Empty is the
@@ -175,6 +184,33 @@ func (s *Store) Backfill(ctx context.Context, chain ClaimCounter) (int, error) {
 		}
 		if err := s.setCursor(ctx, court, last); err != nil {
 			return kept, err
+		}
+		/* AND THE FOLDERS, WITHOUT A CURSOR. A claim's evidence is fixed when it
+		   is filed, so walking claims forward once is enough; a folder's picture
+		   can be set at any time, so a cursor past folder 2 would never see the
+		   picture given to it afterwards. The whole list is re-read every pass
+		   instead, which FolderTree makes cheap: one query names the folders that
+		   have one, and a court with none stops there.
+		   PROMOTED WITH claim 0, because there is no claim. PromoteFor already
+		   leaves filed_claim alone for a zero, so the origin recorded is the
+		   court — which is the truth for a picture a moderator set. */
+		folders, ferr := chain.ImagedFolders(ctx, court)
+		if ferr != nil {
+			// Same rule as a claim that will not read: recorded, and every other
+			// court still gets its bytes promoted.
+			failed = fmt.Errorf("archive backfill folders %s: %w", court, ferr)
+			continue
+		}
+		for _, fid := range folders {
+			hashes, err := chain.FolderHashes(ctx, court, fid)
+			if err != nil {
+				continue
+			}
+			for _, h := range hashes {
+				if err := s.PromoteFor(ctx, h, court, 0); err == nil {
+					kept++
+				}
+			}
 		}
 	}
 	// Stamped only on a COMPLETE pass. Every early return above is an error, and
