@@ -883,17 +883,19 @@ function mkDoc() {
        READ OUT OF THE SOURCE, the way DEFAULTNAME is read above and for the same
        reason: eval'd `const` is not visible here, only the functions are. Reading it
        rather than repeating it means the test moves when the cap moves. */
-    const CAP = Number((PANELSRC.match(/setname: *(\d+)/) || [])[1]);
-    ok("the panel's set-name cap is the realm's 200", CAP === 200, String(CAP));
-    /* ASSERTED ON THE READER, NOT ON THE RENDER, and the first attempt at this got
-       it wrong in a way worth keeping: once the propose control was cut, "not a
-       heading" and "a heading for a set that does not exist" BOTH render as plain
-       text. The cap is invisible from the outside, so a render-level test of it
-       passes for the wrong reason. chatSetHeading is where the boundary lives. */
-    ok("a name past that cap is not a heading",
-       chatSetHeading(M + " " + "x".repeat(CAP + 1)) === null);
-    ok("...and one at the cap still is",
-       (chatSetHeading(M + " " + "x".repeat(CAP)) || {}).name === "x".repeat(CAP));
+    /* NO LENGTH CAP TO ASSERT ANY MORE, and its going is the assertion. The panel
+       carried the realm's 1..200 folder-name limit and it changed nothing: a name
+       is only useful here if it is in the court's live set names, and that map can
+       only hold names the realm accepted. Measured before removing it — a 250-rune
+       name yields no link with the cap or without. What is left is the lower bound,
+       which is real: "𓂀 " with nothing after it is a body somebody can type. */
+    /* MATCHED AS THE FIELD, not as the word. `setname` is a substring of the
+       `.chatsetname` CSS class this panel still uses, so a bare test for the name
+       fails against a file that no longer declares the constant at all. */
+    ok("no upper bound is restated from the realm",
+       !/setname\s*:/.test(PANELSRC) && !/CHATLIMITS\.setname/.test(PANELSRC));
+    ok("a 250-rune name still yields no link",
+       !/chatset/.test(line(M + " " + "x".repeat(250), "covid")));
     ok("...and an empty name is not one either",
        chatSetHeading(M + " ") === null);
     /* NO COURT, NO LINK. The panel renders without one and an href built from an

@@ -42,7 +42,7 @@
 // happily take, too large accepts text the server then rejects with a 400 the user cannot act
 // on. `maxlength` is included because it physically stops typing, so a stale value there is a
 // capability quietly removed rather than a message shown.
-const CHATLIMITS = {body: 400, moniker: 24, bytes: 4096, setname: 200};
+const CHATLIMITS = {body: 400, moniker: 24, bytes: 4096};
 
 // CHATDEFAULTNAME is who you are when you have not said. It is the server's
 // DefaultMoniker and paneldrift_test.go pins the two together: a panel promising one
@@ -251,11 +251,15 @@ function chatValidate(moniker, body) {
    no `word` field to keep beside a `mark` field and no way for the pair to drift
    apart, because they are not a pair. Reading it is `CHATSETMARKS[mark]`, which is
    the same lookup a reader does in their head.
-   AND THE NAME CAP LIVES WITH THE OTHER CAPS, in CHATLIMITS, rather than standing
-   alone: it is one more limit this panel enforces, and a constant on its own is a
-   constant nobody looks for. It is the REALM's number, not the panel's — a body may
-   run to 400 characters and a folder name is 1..200 runes, so a longer heading is
-   not a heading here either. Counted in code points, which is what runeLen counts. */
+   AND THERE IS NO LENGTH CAP HERE, which is a deletion rather than an omission.
+   This carried the realm's 1..200 folder-name limit, mirrored into CHATLIMITS and
+   pinned to governedset.gno by check-web-constants — and it changed nothing. The
+   only consumer is a lookup in the court's live set names, and that map can only
+   HOLD names the realm accepted, so a longer one misses whether it is rejected
+   here or not. Measured: a 250-rune name yields no link either way.
+   THE DATA ALREADY CARRIES THE RULE, which is why the cap could go and the guard
+   entry with it — a pin on a number nothing reads is one more thing to keep true
+   for no benefit. */
 const CHATSETMARKS = {
   "\u{13080}": "shown",      // 𓂀 D010
   "\u{1307C}": "concealed",  // 𓁼 D007
@@ -269,8 +273,12 @@ function chatSetHeading(body) {
   for (const mark in CHATSETMARKS) {
     if (!b.startsWith(mark + " ")) continue;
     const name = b.slice(mark.length + 1);
-    const runes = [...name].length;
-    if (runes < 1 || runes > CHATLIMITS.setname) return null;
+    // The lower bound stays: "𓂀 " with nothing after it is a body somebody can
+    // type, and an empty name is not a heading to the realm either. The UPPER
+    // bound is gone — see the note on CHATSETMARKS: the map this name is looked
+    // up in can only hold names the realm accepted, so a longer one misses
+    // whether it is rejected here or not.
+    if (!name) return null;
     // NO `word` BESIDE `mark`. It was CHATSETMARKS[mark] cached in a field one
     // line from the map it came out of — the gas-fee shape again, a derivation
     // stored next to its source. The caller reads the map.

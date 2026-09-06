@@ -33,47 +33,19 @@ import sys
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WEB = os.path.join(REPO, "web", "index.html")
 
-# AND ONE THE CHAT PANEL RESTATES, which lives in a different file and a different
-# SHAPE — so it gets its own map rather than loosening the one above. MIRRORS reads
-# `const NAME = <int>;` in web/index.html; this is a FIELD inside CHATLIMITS in
-# web/chat.js, and a pattern wide enough to see both would be wide enough to match
-# a number in a comment.
+# THE CHAT PANEL RESTATES NO REALM NUMBER TODAY, and CHAT_MIRRORS is kept empty
+# rather than deleted because the next one is likely: chat.js cannot import a Go or
+# a gno constant — web/README.md promises "no build, no dependencies" — so anything
+# it learns about the realm arrives as a copy.
 #
-# WHY IT IS HERE AT ALL. chat.js decides whether a `𓂀 name` typed in chat is a
-# heading worth linking, and it refuses a name longer than the realm's folder cap —
-# because a link to a set the realm would refuse to create is a link to nothing.
-# The number is the REALM's, restated in a file that cannot ask the chain: exactly
-# the drift this guard exists for. It is not internal/chat's to check either, and
-# paneldrift_test.go says so in as many words — that test owns the caps the SERVER
-# owns, and this is not one of them.
-# THE TWO SET MARKS, WRITTEN IN THREE PLACES AND THREE SPELLINGS. The realm decides
-# what a set heading is; the overlay and the chat panel each restate the codepoints
-# so they can recognise one without asking the chain.
-#
-#   realm        setMark  = "\U00013080"      shutMark = "\U0001307C"
-#   overlay      SET_MARK = "\u{13080}"       SHUT_MARK = "\u{1307C}"
-#   chat panel   CHATSETMARKS keys
-#
-# AND THEY HAVE ALREADY MOVED. Two commits in this repo relocated the mark — to
-# D007, then back to D010 — and the second mark was added to the realm while the
-# overlay still knew one, which left isSetHead gating the New panel on half the
-# marks: a court could settle a 𓁼 heading YES and the page offered no way to carry
-# it. That is what an unheld codepoint costs, and it is invisible until somebody
-# files a heading with the mark the surface forgot.
-#
-# COMPARED AS CODEPOINTS, not as text, because the three spellings differ by
-# language: Go writes \U00013080 and JS writes \u{13080} for the same character.
-#
-# AND THE REALM IS THE AUTHORITY, not a list kept here. A pair written into this
-# guard would be a FOURTH copy — one more thing to keep true, and the one that
-# would fail on the day somebody deliberately moves a mark, pointing at the realm
-# as if the realm were the mistake. Read from governedset.gno, so a deliberate
-# move flags exactly the two surfaces that have not followed it.
-
+# IT HELD ONE: a 1..200 folder-name cap, used to decide whether a name typed in
+# chat was worth offering to file. It was removed when the OFFER was, and what was
+# left could not be observed: the only consumer is a lookup in the court's live set
+# names, and that map can only hold names the realm accepted, so a longer one
+# misses whether the panel rejects it or not. A pin on a number nothing reads is
+# the "second thing to keep true" this file exists to argue against.
 CHATJS = os.path.join(REPO, "web", "chat.js")
-CHAT_MIRRORS = {
-    "setname": ("realm/r/kourtv2/folders.gno", "maxFolderTextLen"),
-}
+CHAT_MIRRORS = {}
 
 # web symbol -> (realm file, the constant's name there)
 MIRRORS = {
@@ -496,8 +468,9 @@ def main():
           f"across the boundary.")
     print(f"check-web-constants: the two set marks agree across the realm, the "
           f"overlay and the chat panel ({', '.join('U+' + m for m in realm_marks)}).")
-    print(f"check-web-constants: {len(CHAT_MIRRORS)} chat-panel constant(s) match "
-          f"the realm's.")
+    if CHAT_MIRRORS:
+        print(f"check-web-constants: {len(CHAT_MIRRORS)} chat-panel constant(s) match "
+              f"the realm's.")
     print(f"check-web-constants: {len(MIRRORS)} mirrored constant(s) match the "
           f"realm — " + ", ".join(f"{s}={realm_value(*v)}"
                                   for s, v in sorted(MIRRORS.items())) + ".")
