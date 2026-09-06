@@ -359,6 +359,42 @@ def main():
                           file=sys.stderr)
                     bad += 1
 
+                # AND THE FLAG LETTERS IN THAT ROW, which the count above cannot
+                # see: `flags` is ONE field however many letters it carries, so a
+                # letter added, renamed or dropped moves nothing this guard was
+                # already watching.
+                #
+                # THE DRIFT IS SILENT IN BOTH DIRECTIONS, and neither shows as an
+                # error. A letter the realm stops writing leaves the overlay's
+                # `includes()` answering false forever: retired folders come back
+                # into the tree, or pictures stop being fetched, or a set opens on
+                # the wrong default — all of them looking like ordinary state. A
+                # letter the realm ADDS that the overlay does not read is a fact
+                # paid for on every row and consumed by nobody, which is the same
+                # silent direction the minimum-length parse opened above.
+                #
+                # Read off `flags += "x"` realm-side and `includes("x")` in the
+                # overlay's shape parser, so this pins the SET rather than any one
+                # letter and needs no list of its own to keep true.
+                realm_flags = set(re.findall(r'flags \+= "([a-z])"', fol))
+                shape = re.search(r"shape\.set\(id, \{(.{0,400}?)\}\);", web, re.S)
+                web_flags = set(re.findall(r'bits\[2\]\.includes\("([a-z])"\)',
+                                           shape.group(1) if shape else ""))
+                if not realm_flags or not web_flags:
+                    print("check-web-constants: cannot see the FolderTree flag "
+                          "letters on one side — realm %r, overlay %r. The wire "
+                          "format they share is unchecked."
+                          % (sorted(realm_flags), sorted(web_flags)), file=sys.stderr)
+                    bad += 1
+                elif realm_flags != web_flags:
+                    print("check-web-constants: FolderTree writes flag letter(s) %r "
+                          "and the overlay reads %r. Missing realm-side, an "
+                          "includes() answers false forever and the state it stood "
+                          "for silently stops existing; missing overlay-side, the "
+                          "realm pays for a fact nobody consumes."
+                          % (sorted(realm_flags), sorted(web_flags)), file=sys.stderr)
+                    bad += 1
+
     # THE ROUNDING, WHICH IS THE ONE PIECE OF ARITHMETIC BOTH SIDES COMPUTE.
     #
     # The overlay quotes what a buyer will receive before they sign, and the realm
