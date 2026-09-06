@@ -69,7 +69,7 @@ type folder struct {
 	// so a retired folder still counts and every id still resolves.
 	retired bool
 	/* bornOf: the claim that carried this set into existence, or 0 for one a
-	   moderator simply created. See governedset.gno — a 𓁼 claim that settles
+	   moderator simply created. See governedset.gno — a 𓂀 claim that settles
 	   YES gets a set bound to it, and this is the binding. Kept on the folder
 	   rather than in a second index because the folder is the thing that can be
 	   retired, purged and moved, and a separate map would be a second place to

@@ -87,7 +87,7 @@ code += slice('const CURATION_V', '/* ------').replace('const CURATION_V','var C
 code += slice('const CHAIN_FOLDER_CAP', '/* ======').replace('const CHAIN_FOLDER_CAP','var CHAIN_FOLDER_CAP');
 code += slice('function resolveFolderPath(', 'function folderMeta(');
 code += 'const ICN_EYE_OPEN="<svg/>", ICN_EYE_SHUT="<svg/>";\n';   // the row needs the marks to exist, not to be drawn
-global.EYE_CHAR = '<span class="wedjat">\u{1307c}</span>';   // the character, in the embedded face
+global.EYE_CHAR = '<span class="wedjat">\u{13080}</span>';   // the character, in the embedded face
 code += slice('function folderCount(', 'function folderRowHtml');
 code += slice('function folderRowHtml(', 'function isDone');
 code += 'function safeInline(x){ return esc(String(x)); }\n';
@@ -514,7 +514,7 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
     ok("...and the title it prefills is the mark and ONE space",
        /const title = SET_MARK \+ " Name of the set";/.test(fnSrc));
     ok("...built from the constant, never a typed hieroglyph",
-       !/\u{1307c}/u.test(fnSrc));
+       !/\u{13080}/u.test(fnSrc));
     /* THE NAME IS A PLACEHOLDER, so the signing dialog has to say so — `edit` is
        the flag StartCourt uses for exactly this, and without it the claim goes as
        written, titled "Name of the set". */

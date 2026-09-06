@@ -773,7 +773,7 @@ for _pth, _dsc in FOLDER_DESC.items():
 
 # EVERY SET IS BORN OF A CLAIM. Not one CreateFolder in the docket's filing
 # system: each heading is filed as an ordinary claim whose title opens with the
-# painted eye, staked and answered and settled like any other, and only then carried
+# wedjat, staked and answered and settled like any other, and only then carried
 # into a set by New. That is the whole point of the mark — the court
 # decides its own filing system rather than being handed one.
 #
@@ -795,10 +795,10 @@ for _pth, _dsc in FOLDER_DESC.items():
 # behind it has a body, a stake history and a verdict, which is a better account
 # of what belongs in the set than a line anybody could have written, and it means
 # the text lives in exactly one place.
-s.note("the filing system on chain: every set is BORN — a painted-eye claim, staked, "
+s.note("the filing system on chain: every set is BORN — a wedjat claim, staked, "
        "answered and settled, then carried by New. No CreateFolder here.")
 
-SET_MARK = "\U0001307C"   # U+1307C EGYPTIAN HIEROGLYPH D007, the exact codepoint
+SET_MARK = "\U00013080"   # U+13080 EGYPTIAN HIEROGLYPH D010, the exact codepoint
 
 # Parents before children: a child is MoveFolder'd under its parent after both
 # exist, so the parent's id has to be known first.

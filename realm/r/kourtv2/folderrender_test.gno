@@ -191,7 +191,7 @@ func TestABornSetsPageNamesTheClaimThatMadeIt(cur realm, t *testing.T) {
 
 	// And one the court is asked for.
 	testing.SetRealm(testing.NewUserRealm(poster))
-	id := OpenClaim(cross(cur), "fr5", "\U0001307C Voted")
+	id := OpenClaim(cross(cur), "fr5", "\U00013080 Voted")
 	matureOI(cur, "fr5", id, poster, 200_000_000)
 	testing.SetRealm(testing.NewUserRealm(poster))
 	PostAnswer(cross(cur), "fr5", id, sideYES)

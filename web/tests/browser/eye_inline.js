@@ -8,7 +8,7 @@
 //
 // THE MARK IS A CHARACTER NOW, and this check follows it rather than the SVG it
 // used to be. Where a set's mark is a statement — a title, a row, a heading — it
-// prints U+1307C in an embedded face (.wedjat) so a reader can select and paste
+// prints U+13080 in an embedded face (.wedjat) so a reader can select and paste
 // it; only the filter's two-state control is still drawn (.eye), because its
 // shut half has no codepoint and both halves must be one drawing. Both selectors
 // are accepted here: what this file measures is that the mark sits IN the line

@@ -775,12 +775,12 @@ a.card:hover{border-color:var(--line-2)}
    reader clicked; the tint and the filled box are the whole of the state, so
    the control never reorders itself under the hand that is using it. */
 /* THE MARK IS THE CHARACTER, and this is what makes that affordable.
-   U+1307C is a real codepoint a reader can select, copy and paste into a claim
+   U+13080 is a real codepoint a reader can select, copy and paste into a claim
    title — which is the point of using it rather than an icon: the mark a court
    files with is the mark you can type. What stopped it was coverage. Egyptian
    Hieroglyphs is a Supplementary-Plane block, present on macOS and absent on
    most other machines, so the character alone showed a tofu box to a stranger.
-   ONE GLYPH, 940 BYTES. Noto Sans Egyptian Hieroglyphs subset to U+1307C and
+   ONE GLYPH, 940 BYTES. Noto Sans Egyptian Hieroglyphs subset to U+13080 and
    inlined — the whole font is 600KB, the single glyph is under a kilobyte, and
    it ships in the file rather than fetched, because this page is one file served
    from anywhere and a CDN would be a second point of failure for a mark that has
@@ -800,7 +800,7 @@ a.card:hover{border-color:var(--line-2)}
    unicode-range holds it to that one codepoint, so it can never shadow a
    reader's own fonts for anything else. */
 @font-face{font-family:"wedjat-font"; src:url(data:font/woff2;base64,d09GMgABAAAAAATgAAoAAAAACswAAASWAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAABmAAMAqDZINHATYCJAMICwYABCAFjX4HIBv2CRGVnDEpfiTYOFq9lySMovvO+dB72ZvZpEQKCkd6e/AXoEu7VDU7X1MVwPKwwSHxIwCu1lQnLAEt7fgTMlE2RgFviPfJJSmSQ/AVCjQAO/QRtjC+Qpt62Wds+dUXpcizG2NovwAM7wyZBAvQYZoIICS6k6TDmngDVJSlDMvQ+zAAoDAMAiIiAojn/x5s8d9B4NWP+AMg4NYr8noBaAIAKAAGgBx4EAEgBzEAgCoAACAglp1vESC44M0uAGCz8SWgYs4T0A2WkpKUTOEWzRid6MidO6/Izzlw4YC84tyDFw9yc6/yjV5k+LauaCmfNSbnTBat0tjLH8TNXi/HHes9NuzAHTvFtReNZ/eQbPMWHChJ10jXyT/0OKyov2jboZztBjqv9ziqnC/CpHeInbpEr15G3j6OzhN3Es7NmDsUnA/y+fEH7qDzduxG/qcy43Lb6Bzn3Dk3TZQnsni54uz9utiQ/Os8Nr/6Mg8qiO4KnmMR7VKjWmycYLZ77tqF4hvWTK5ZoHZo39yeWJMCoyoVp4hp87aA3Cg//y+L3LgSzQL9qBi1N81Pp6R7SqSruXz5AKnpP/W+jzY2p05EzrcKTl9o2xkWeyTMnLOpFdoe5S2TrVSlUio3O+XqiXI1bWc99SwtDSUbbU3fQBUjM33zL8Z6pz4Hd4k0p2f4rcLAsOKboYGnfoUbrbh8uJ1VqFUqU43iPg8fzfdosPYX0TUONDUx9L8p99XA39jk+vmZYIkRn+rwilvh0iUKNfJDWgL/RLnZnw73fRP00YvQyOEKAQAgACgw1bi2KUPS9asQ4b0AgNtb2/kAMPP+uei/tf8OCu5gTQEIgAIACDClMoLPIdr/s9YAgbmE0kSkM09hhTqdzE/YAz+xeU4KZ8EDYYQBpAMZIDBEOlBIoB94SMVsYBCKD8AinbiCAPzJQhCEL3kKQjCmuiAMQxoOIvCm9SAKd7ofxOBKv4E4ncuzBgnYsud/hhRc2T/WY6m+hlPmoF6tdWAuJc0QliIqwzDL4IRF+2k9WjQvjMs76SScA2FhSr/KLTgGJb5JfQbtb+rlqrUP5ntxPiAMXyPXPM9HKP2sA+2bMFuqMB1eQbqlwM0T4A14NJZLAexV4rmSld5E2NeaurXof9Xrky5pdDpV0Qy3EFSdOdhjzI/OpCDJqPNbKYX/qnY/fuspFxROE9RJQfe5YJC3/RbGEH6BxD1WuWaZOWtX/YriXS9TEb6cLLLnFSq6yngspUIxL+cwnoa1zsecvzBFcYZqd3BWkdxb1TRqThkfc15YseSFMDSSiCFF/+UG9rXnC/r5GxpZccK5J6v5vZUDfhhHemc6Q+9YBomDa6G9MDyPcf9zAUZZ/1VWvPy+vCz218uBHZ5Owx0tpwSX708w3u8mOFxmggDZzI/q/4T1EuivwCPXCE3O/lEGrQCUbXqe8xnfcXY+nBHV3QhEjgxaZHvECRxhVaFYX3xAR0ShMP+ExyVpVUzGs8APWe8Cd2un8kWQFisp+d0jePDMeEmu0xnbiVcF2Wh8Ue3PWGZIWVko0Yr+q7fZEfP/xtv/xXUA) format("woff2");
-  font-display:block; unicode-range:U+1307C}
+  font-display:block; unicode-range:U+13080}
 /* Anything that prints the mark asks for that face first, then falls through to
    the reader's own — which still works on a machine that has one. */
 .wedjat{font-family:"wedjat-font",system-ui,sans-serif; font-feature-settings:normal;
@@ -827,7 +827,7 @@ a.card:hover{border-color:var(--line-2)}
 /* THE OPEN HALF IS THE CHARACTER TOO. It was drawn so both halves of this
    two-state control would be one object; the owner's rule is narrower than that
    — the CLOSED eye is the exception, because no codepoint means "not seeing",
-   and everything else is the real mark. So shown is U+1307C and hidden is the
+   and everything else is the real mark. So shown is U+13080 and hidden is the
    drawing, which also means the state a reader is most likely to want — the set
    they are looking AT — is the one they can select and paste.
    SIZED TO MATCH ACROSS THE SWAP: a 1.6em SVG and a 1.35em glyph land on the
@@ -839,9 +839,15 @@ a.card:hover{border-color:var(--line-2)}
    not do while you are reading down a list of them. */
 .foldsel .foldbox{display:inline-flex; align-items:center; justify-content:center;
   margin-right:8px; color:var(--accent); min-width:1.5em; height:1.6em; line-height:1}
-.foldsel .eye{height:1.6em; vertical-align:-.45em}
+/* THE PAIR THE FILTER ACTUALLY SHOWS is EYE_CHAR (.wedjat, D010, open) and
+   ICN_EYE_SHUT (.eyeshut, D007, closed) — ICN_EYE_OPEN is for the map's rows,
+   not for this control. Both are characters in the same face now, so the shut
+   half needs the family without taking .wedjat, which is what the toggle keys
+   on. Exactly one shows, unchanged. */
+.foldsel .eyeshut{font-family:"wedjat-font",system-ui,sans-serif}
+.foldsel .eye{font-size:1.35em; line-height:1; vertical-align:-.18em}
 .foldsel .wedjat{font-size:1.35em; display:none}
-.foldsel .eyeshut{display:block}
+.foldsel .eyeshut{display:inline}
 .foldsel[aria-checked="true"] .wedjat{display:inline}
 .foldsel[aria-checked="true"] .eyeshut{display:none}
 .foldsel[aria-checked="true"]{background:color-mix(in srgb, var(--accent) 14%, transparent)}
@@ -883,12 +889,13 @@ a.card:hover{border-color:var(--line-2)}
 /* THE STATIC EYE, outside the filter chips: the set page's own heading, the
    map's row, and the subset rows on a set page. No shown/hidden state there, so
    the open form is the only honest one and it just needs a size. */
-.eye{height:1.15em; width:auto; overflow:visible; vertical-align:-.22em}
+/* A CHARACTER, so it takes font-size — height and width did nothing to a span. */
+.eye{font-size:1.15em; line-height:1; vertical-align:-.12em}
 /* The mark drawn in place of the codepoint, in a claim title. Sized to the text
    it opens rather than to a control, and tinted so it reads as a mark on the
    sentence rather than as the first letter of it. */
 .setmark{display:inline-flex; color:var(--accent); margin-right:.35em; vertical-align:-.1em}
-.setmark .eye{height:1em}
+.setmark .eye{font-size:1em}
 /* THE SUBSET ROWS on a set page are still rows, and still need their own grid:
    .docket .crow reserves four columns and these have three, so the unused 124px
    squeezed the title into a second line. Same fix as the chips replaced. */
@@ -3459,7 +3466,7 @@ const DEMO_CHAIN = {
        ANNEX, because it is already the sample's moderation exhibit and the court
        the folder-filter checks run against. Settled YES, because an affirmation
        that did not carry would not have made the set. */
-    "annex/6":{ title:"\u{1307c} Reading room",
+    "annex/6":{ title:"\u{13080} Reading room",
       yesStake:260_000, noStake:70_000, convYes:41_000, convNo:6_000, trailYes:79,
       answer:0, answerer:"g1annexanswerer0000000000000000000000000", answerBond:40_000,
       // rewardsOpened, so it leaves the chain's flaggable list. A claim stays
@@ -5078,7 +5085,7 @@ function btn(label, func, args, cls, sub, send, gate, edit, blocked, glyph, amt)
   const face = label && typeof label === "object" && label.html ? label.html : esc(label);
   /* A BUTTON MAY DECLINE THE GLYPH. The pen says "this signs something", which
      is true of nearly every button here and is why it is the default. It is
-     noise on one whose face already carries a mark of its own: "Open 𓁼 Furin
+     noise on one whose face already carries a mark of its own: "Open 𓂀 Furin
      cleavage site" is a verb, a mark and a name, and a pen in front of that is
      a second symbol competing with the one that means something.
      ON THE LABEL, not an eleventh positional argument — the label is already an
@@ -7749,7 +7756,7 @@ function secHelp(text){
 }
 /* THE WEDJAT, OPEN AND SHUT — the folder filter's control. It replaces an 11px
    square checkbox, and it is DRAWN rather than typed for two measured reasons.
-   U+1307C, the Eye of Horus, renders on this Mac because macOS ships a
+   U+13080, the Eye of Horus, renders on this Mac because macOS ships a
    hieroglyph font; a visitor without one gets tofu, and Egyptian Hieroglyphs is
    a Supplementary-Plane block with thin coverage off Apple platforms. Worse, the
    glyph is unreadable at control size whatever the font: the brow, the pupil and
@@ -7766,19 +7773,20 @@ function secHelp(text){
    currentColor throughout, so the accent tint on a ticked row and the muted ink
    on an unticked one both come from the row, and neither theme needs its own
    copy. */
-const EYE_BROW = `<path d="M1.6 4C4.2 1.3 9.6 1 12.8 2.9" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.25"/>`;
-const EYE_TAIL = `<path d="M5.4 10.1 4.1 13.3" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.25"/><path d="M9.8 10.1c.25 2.1 1.7 2.7 2.7 2.2 .95-.45.8-1.7-.3-1.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.25"/>`;
 /* THE MARK, AS THE CHARACTER IT IS. Everything below that shows a set's mark
-   now prints U+1307C in the embedded face rather than drawing paths, so a reader
+   now prints U+13080 in the embedded face rather than drawing paths, so a reader
    can select it, copy it and paste it into a claim title — which is the whole
    argument for a codepoint over an icon: the mark a court files with is the mark
    you can type. The @font-face note above is what makes that safe to rely on.
-   ICN_EYE_OPEN survives for exactly one job — the OPEN half of the filter's
-   two-state control, where the shut half has no codepoint to pair with and both
-   halves must be one drawing or they stop reading as one object in two states. */
-const EYE_CHAR = `<span class="wedjat" role="img" aria-label="set">\u{1307c}</span>`;
-const ICN_EYE_OPEN = `<svg class="eye eyeopen" viewBox="0 0 15 14" aria-hidden="true">${EYE_BROW}<path d="M1.8 7.9C4.3 4.8 9.9 4.6 12.4 7.9 9.9 10.8 4.5 10.9 1.8 7.9Z" fill="none" stroke="currentColor" stroke-width="1.2"/><circle cx="7.1" cy="7.8" r="1.55" fill="currentColor"/>${EYE_TAIL}</svg>`;
-const ICN_EYE_SHUT = `<svg class="eye eyeshut" viewBox="0 0 15 14" aria-hidden="true">${EYE_BROW}<path d="M1.8 7.1C4.4 10.2 9.9 10.3 12.4 7.1" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.35"/>${EYE_TAIL}</svg>`;
+   THE SHUT HALF HAS A CODEPOINT TOO, and this file said it did not. D007 𓁼 is
+   the eye with cosmetic lines along the lids; Unicode does not gloss it as "not
+   seeing", and it is used here as though it does. That is a convention this
+   product is choosing, not a fact about the script — but a pair of real glyphs
+   in one face reads as one object in two states, which is the property the two
+   drawings existed to buy, and now nothing has to be drawn to buy it. */
+const EYE_CHAR = `<span class="wedjat" role="img" aria-label="set">\u{13080}</span>`;
+const ICN_EYE_OPEN = `<span class="eye eyeopen wedjat" aria-hidden="true">\u{13080}</span>`;
+const ICN_EYE_SHUT = `<span class="eye eyeshut" aria-hidden="true">\u{1307c}</span>`;
 /* "Open the rewards" is the one button on this page that is not about signing a
    statement, it is about collecting — so it gets the object, not the pen. */
 const ICN_CHEST = `<svg class="icn" viewBox="0 0 14 12" aria-hidden="true"><path d="M1.3 1h11.4a.6.6 0 0 1 .6.6v2.1H.7V1.6A.6.6 0 0 1 1.3 1zM.7 4.7h5.1v1.1h2.4V4.7h5.1v5.7a.6.6 0 0 1-.6.6H1.3a.6.6 0 0 1-.6-.6zM6.3 2.2h1.4v2.4H6.3z" fill="currentColor"/></svg>`;
@@ -10903,7 +10911,7 @@ function mapSvg(L, data, slug){
     /* ON THE CORNER, NOT IN THE BOX. Inside it collided with the name: a folder
        label is left-aligned and vertically centred, so the top-left is exactly
        where line one begins — the mark landed on the first letter and read as
-       part of the word ("𓁼Vaccine safety claims"). There is no free corner
+       part of the word ("𓂀Vaccine safety claims"). There is no free corner
        either, since the subject watermark holds the right edge and a two-line
        name fills the height.
        So it straddles the boundary, the way a badge does. Outside the fill it
@@ -10918,7 +10926,7 @@ function mapSvg(L, data, slug){
           // transform, because type is sized in px and geometry in user units.
           return `<text class="mset wedjat" data-fid="${i}" x="${(f.x - es*0.2).toFixed(1)}" `
             + `y="${(f.y + es*0.3).toFixed(1)}" font-size="${es.toFixed(1)}" `
-            + `text-anchor="middle">\u{1307c}</text>`; })()
+            + `text-anchor="middle">\u{13080}</text>`; })()
       : "";
     const tag=`<rect class="mfold${f.pseudo?" pseudo":""}" x="${f.x}" y="${f.y}" width="${f.w}" height="${f.h}" rx="4" data-fid="${i}"/>`
       + face + bornMark + wrapFit(f.name, f.count, f, K.fs.header, "mhdr-t", "h"+i);
@@ -10978,7 +10986,7 @@ function mapSvg(L, data, slug){
          and no word is lost between the two elements. */
       const idTxt=`#${n.id}`;
       /* THE SET MARK IS DRAWN, NOT WRITTEN — the map's half of what setMarkHtml
-         does in HTML. A set-heading's title carries U+1307C, and an SVG <text>
+         does in HTML. A set-heading's title carries U+13080, and an SVG <text>
          has no span to swap it into, so it reached the drawing as a raw
          codepoint: a tofu box in front of the sentence for any reader without a
          hieroglyph font, on the one surface that is hardest to zoom into.
@@ -11000,7 +11008,7 @@ function mapSvg(L, data, slug){
       if(setHead){
         const es = K.fs.title * 1.15, ex = n.x + K.tpad + tdx, ey = n.y + 16;
         out.push(`<text class="mset wedjat" data-owner="c${n.id}" x="${ex.toFixed(1)}" `
-          + `y="${ey.toFixed(1)}" font-size="${es.toFixed(1)}">\u{1307c}</text>`);
+          + `y="${ey.toFixed(1)}" font-size="${es.toFixed(1)}">\u{13080}</text>`);
       }
       lines.slice(1).forEach((ln,i)=>
         out.push(label(ln, n, K.fs.title, n.y+16+(i+1)*K.lineH, "mtitle", "c"+n.id)));
@@ -14567,7 +14575,7 @@ function focusStakeSide(side){
    AN UNKNOWN SIDE RETURNS THE BARE SENTENCE rather than an empty oval — a ring
    with nothing in it would assert a decision nobody can read. */
 /* THE MARK IS THE DATA; THE EYE IS THE PRESENTATION.
-   A governed set is an ordinary claim whose title begins with U+1307C, and that
+   A governed set is an ordinary claim whose title begins with U+13080, and that
    codepoint is what the chain stores — it is how the realm decides the claim is
    a set heading, so it cannot be anything else. But a reader on a machine with
    no hieroglyph font sees an empty box where the mark should be, and unlike the
@@ -14578,7 +14586,7 @@ function focusStakeSide(side){
    parseSetTitle matches on. A looser test here would draw the eye beside a claim
    the chain does not consider a set — which is the more dangerous direction of
    the two, because it is the one a reader would believe. */
-const SET_MARK = "\u{1307c}";
+const SET_MARK = "\u{13080}";
 /* THE MAP CANNOT DRAW HTML, so a set-heading's title reached the SVG with the
    codepoint still in it — and that is the one place the raw character actually
    hurts. In HTML setMarkHtml swaps it for the drawn eye; in an SVG <text> there

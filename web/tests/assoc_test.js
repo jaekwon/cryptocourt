@@ -32,9 +32,9 @@ code += slice('const CURATION_V', '/* ======').replace('const CURATION_V','var C
 // verdictSentence dresses the related row's title now — the side rides the
 // sentence here as it does on the claim page and the map, so the builder has to
 // be in scope alongside the row that calls it.
-global.SET_MARK = "\u{1307c}";
+global.SET_MARK = "\u{13080}";
 global.ICN_EYE_OPEN = '<svg class="eye eyeopen"></svg>';   // drawn form; the harness needs it to exist, not to render
-global.EYE_CHAR = '<span class="wedjat">\u{1307c}</span>';   // the character, in the embedded face
+global.EYE_CHAR = '<span class="wedjat">\u{13080}</span>';   // the character, in the embedded face
 code += fn('setMarkHtml');
 code += fn('verdictSentence');
 // verdictSentence delegates the oval to sideOval now, and the row builders ask
