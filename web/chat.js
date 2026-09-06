@@ -609,7 +609,12 @@ const CHATCSS = `
    fallback, which is a hieroglyph font on this desk and a tofu box on most.
    NOT A FONT RULE OF ITS OWN, because there is nothing to add: the class exists,
    the font is loaded, and a second declaration here would be a second thing to
-   keep true. This file styles the CHIP; the page styles the GLYPH.
+   keep true. This file styles the MARK'S PLACE IN THE LINE — the cursor and the
+   gap before the name; the page styles the GLYPH.
+   (It said "this file styles the CHIP", which is wrong twice over: the mark has
+   not been a chip since the propose control went, and this file HAS a chip —
+   .chatnamebtn, the name resting in the send button's clothes, forty lines down.
+   One word for two things in one file is how the wrong one gets edited.)
    THE ONE COST IS STATED: chat.js is otherwise self-contained, and this is the
    single class it borrows. Rendered outside the overlay the mark falls back
    exactly as it does today, so nothing breaks that was working. */
