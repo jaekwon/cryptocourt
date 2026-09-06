@@ -13092,8 +13092,21 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
        a link appear; it cannot make a wrong one.
        MERGED WHEN THE COURT MATCHES, replaced when it does not, so arriving here
        from the court page keeps the complete list rather than shrinking it to this
-       claim's few. Nothing retired can enter: RetireFolder clears a folder's item
-       list, so a struck set is not in ClaimFolders to begin with. */
+       claim's few.
+       A RETIRED SET USUALLY CANNOT ENTER, and the exception is worth naming rather
+       than claiming it cannot. RetireFolder clears a folder's item list, so a
+       struck set drops out of ClaimFolders — but ClaimFolders skips only PURGED
+       rows, and AddToFolder has no retired guard, so a moderator can re-file a
+       claim into a struck folder afterwards. Measured on kourt.xyz: AddToFolder
+       into a retired folder returns OK and ClaimFolders then reports it.
+       WHICH IS CONSISTENT WITH THE PAGE IT SITS ON, and that is why it stands. The
+       same list drives the claim's "filed in" row, so the page is already showing
+       that folder as a filing; a name from it linking in chat says nothing the
+       page does not. The set's own page opens and states it was retired, so the
+       link lands somewhere that explains itself.
+       The WHOLESALE path still drops them — chainFolders skips retired rows — so
+       the moment a court page or the map is read, the complete list replaces this
+       one and the retired name goes. */
     if(claimFolders.length) rememberSets(slug, claimFolders.map(f => [f.name, f.fid]), false);
   }
   /* TITLES FOR THE ASSOCIATION ROWS, and the gate on them was left behind when
