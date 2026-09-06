@@ -4342,8 +4342,18 @@ function ccSym(slug){ return slug? "KOURT:"+String(slug).toUpperCase() : "court 
    PLAIN TEXT IS UNCHANGED. ccSym still returns "KOURT:SLUG" for aria-labels and
    anything that cannot take markup — a screen reader wants the symbol, not a
    description of two boxes. */
-function ccSymHtml(slug){
+function ccSymHtml(slug, micro){
+  /* THE µ GOES INSIDE THE BAR, not in front of the chip. cc() used to emit
+     `fig + " " + "µ" + ccSymHtml(slug)`, which put a 1em micro sign next to a
+     .72em bar with the chip's flex gap between them — a different size, a
+     different baseline, and a space where a unit prefix must not have one.
+     Inside the bar it inherits the bar's size, letter-spacing and box, and
+     "µKourt" reads as one unit because it is one unit.
+     U+00B5 MICRO SIGN, the same character the other forty sites in this file
+     use — not U+03BC GREEK SMALL LETTER MU, which is a letter, sorts as one,
+     and renders from a different face in most stacks. */
   const nm = slug? String(slug).toUpperCase() : "";
+  const mu = micro ? "\u00b5" : "";
   return nm
     /* THE COLON IS STILL IN THE TEXT, just not on the screen. The bar and the
        name are a PRESENTATION of a symbol whose canonical spelling is the
@@ -4351,14 +4361,23 @@ function ccSymHtml(slug){
        the character that joins them has to survive copy-paste and any reader
        that strips tags. Without it "0.00 Kourt COVID" copies as
        "0.00 KourtCOVID", because the gap between bar and name is CSS. */
-    ? `<span class="ccsym"><span class="ccbar">Kourt</span><span class="ccsep">:</span><span class="ccname">${esc(nm)}</span></span>`
-    : `<span class="ccsym">${esc(ccSym(slug))}</span>`;
+    ? `<span class="ccsym"><span class="ccbar">${mu}Kourt</span><span class="ccsep">:</span><span class="ccname">${esc(nm)}</span></span>`
+    : `<span class="ccsym">${mu}${esc(ccSym(slug))}</span>`;
 }
 function ccFigure(n){ const u=n||0, v=u/1e6;
   if(u!==0 && Math.abs(v)<0.01) return {fig:fmtN(u), micro:true};
   return {fig:(v>=1000? fmtN(v): v.toFixed(v<10?2:1)), micro:false}; }
+/* REWARDS ARE COUNTED IN µ, and it is the emission curve that decides that, not
+   a preference. A whole draw on a young court is 700 µCC; in CC that is 0.0007,
+   which ccPlain would render with enough decimals to be exact and none of them
+   readable, and whose slices — 602, 60, 37 — are integers in µ and a smear of
+   zeroes in CC. The realm counts in µ, so the reward line does too.
+   ONE SYMBOL, said once. The bug this replaces printed "596 µKourt:COVID
+   KOURT:COVID": a micro prefix, the chip, and then the plain spelling of the
+   same symbol after it. */
+function ccReward(n, slug){ return fmtN(n||0)+" "+ccSymHtml(slug, true); }
 function cc(n, slug){ const {fig,micro}=ccFigure(n);
-  return fig+" "+(micro?"µ":"")+ccSymHtml(slug); }
+  return fig+" "+ccSymHtml(slug, micro); }
 /* THE AMOUNT ALONE, IN CC, for a surface that has already said which court.
    cc() names the coin because most of its callers need it to: the account
    popover and the wallet list balances across courts, and "0.74" there is a
@@ -11143,7 +11162,7 @@ function joinPanel(slug, s){
      Filled after the paint, because it needs the chain and the panel must not
      wait on it. Hidden until it has an answer: a row reading "—" where a balance
      should be is worse than no row. */
-  return `<div class="panel" id="join" tabindex="-1"><h2>Join this court</h2>
+  return `<div class="panel" id="join" tabindex="-1"><h2>Burn your conviction</h2>
         <div class="kv oneline" id="joinheld" hidden><div class="k">You have</div><div class="v tnum" id="joinheldv"></div></div>
         ${body}
        </div>`;   /* the worst-case paragraph moved into #help-buy too */
@@ -14438,7 +14457,7 @@ function stakeTicket(slug,id,d){
                  spelling of the same symbol. ccPlain says it once, in CC, with
                  decimals rather than a micro prefix. */
               ? `<div class="line"><span class="l">Reward to open</span><span class="r tnum">`
-                + ccPlain(d.quote.w + d.quote.a + d.quote.ans, slug)
+                + ccReward(d.quote.w + d.quote.a + d.quote.ans, slug)
                 + `</span></div>`
                 /* THE CLAIM'S FIGURE, NOT THE READER'S. Whoever presses this pays
                    the gas and opens the draw for everyone; the slices then go to

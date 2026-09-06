@@ -284,7 +284,9 @@ function chatPanelHtml(slug, moniker, note, heading) {
     + '<ol class="chatlog" aria-live="polite"></ol>'
     + '<div class="chatstate"></div>'
     + '<form class="chatform" autocomplete="off">'
-    +   '<input class="chatmoniker" maxlength="' + CHATMONIKERUNITS
+    +   '<button class="chatnamebtn" type="button" aria-label="your name — click to change">'
+    +     chatEsc(moniker || CHATDEFAULTNAME) + "</button>"
+    +   '<input class="chatmoniker" hidden maxlength="' + CHATMONIKERUNITS
     +     '" placeholder="' + chatEsc(CHATDEFAULTNAME) + '"'
     +     ' aria-label="your name" value="' + chatEsc(moniker) + '">'
     +   '<input class="chatinput" maxlength="' + CHATLIMITS.body + '" placeholder="say something"'
@@ -527,14 +529,25 @@ const CHATCSS = `
    :focus, NOT :focus-visible -- a tap focuses without matching focus-visible, so
    on a touch screen the chip would never become a field and the name could not
    be changed at all. The same lesson .sq learned in index.html. */
-.chatmoniker{text-align:center;cursor:pointer;
-  border-color:rgba(128,128,128,.45);background:rgba(128,128,128,.18)}
-.chatmoniker:hover{background:rgba(128,128,128,.32);border-color:rgba(128,128,128,.7)}
+/* THE STONE. A real button element, so the pointer, the focus ring and the press
+   are the browser's rather than a costume painted onto a text field. Same flex
+   slot the field takes when it opens, so nothing moves in the row when they
+   swap. (No angle brackets in here: chat_test scans this stylesheet for them,
+   on the reasoning that a stylesheet is as good a place to smuggle markup as
+   any, and it caught this comment saying so.) */
+.chatnamebtn{flex:0 1 4rem;min-width:3rem;font:inherit;color:inherit;
+  padding:.35rem .5rem;border-radius:6px;cursor:pointer;
+  border:1px solid rgba(128,128,128,.45);background:rgba(128,128,128,.18);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chatnamebtn:hover{background:rgba(128,128,128,.34);border-color:rgba(128,128,128,.8)}
+.chatnamebtn:active{transform:translateY(1px)}
+/* The field it becomes: an ordinary text box, left-aligned, with a caret — no
+   chip styling at all, because while it is open it is not a chip. */
+.chatmoniker{text-align:left;cursor:text}
 /* AND THE PLACEHOLDER STOPS WHISPERING. "anon" is not a prompt here, it is the
    name the message will carry, so it reads at the weight of a name and not at
    the .4 opacity of a hint. */
 .chatmoniker::placeholder{color:inherit;opacity:.85}
-.chatmoniker:focus{text-align:left;cursor:text;background:transparent}
 .chatmoniker:focus::placeholder{opacity:.4}
 /* SEND IS A BUTTON AND SHOULD LOOK LIKE ONE. It carried no styling at all, so
    a browser drew its own — flat and grey beside two inputs that had just been
@@ -610,6 +623,47 @@ function mountChat(el, opts) {
   const noteEl = el.querySelector(".chatnote");
   const formEl = el.querySelector(".chatform");
   const nameEl = el.querySelector(".chatmoniker");
+  /* THE NAME IS A BUTTON UNTIL YOU PRESS IT.
+   *
+   * It was an <input> dressed as a chip, and the costume was the whole problem:
+   * a text field with cursor:pointer promises a button and then hands you a
+   * caret, and on focus the chip lost its background — so the one visible result
+   * of a successful click was the target disappearing.
+   *
+   * Worse, it was not the "anon" people were clicking. Every message in the log
+   * carries the sender's name, so the panel shows six of them and only the last
+   * is editable. A <button> is the one shape that says "this one does something"
+   * without a legend, and the field now exists only while it is being typed in.
+   *
+   * PREFILLED WITH "anon", NOT PLACEHELD BY IT: you open it and the name is
+   * already there to edit, which is what makes it a rename rather than a blank.
+   * The submit path still treats a literal "anon" as no choice at all — see the
+   * note there about storing a default the reader never made. */
+  const nameBtn = el.querySelector(".chatnamebtn");
+  const nameShown = () => (nameEl.value.trim() || CHATDEFAULTNAME);
+  const closeName = () => {
+    nameBtn.textContent = nameShown();
+    nameEl.hidden = true; nameBtn.hidden = false;
+  };
+  const openName = () => {
+    nameBtn.hidden = true; nameEl.hidden = false;
+    if (!nameEl.value) nameEl.value = CHATDEFAULTNAME;
+    nameEl.focus(); nameEl.select();
+  };
+  /* Guarded, as every other lookup in this file is: a panel rendered by an older
+     shell has no button, and the name field must keep working rather than the
+     whole mount throwing on line one. */
+  if (nameBtn) {
+    nameBtn.addEventListener("click", openName);
+    nameEl.addEventListener("blur", closeName);
+  } else { nameEl.hidden = false; }
+  nameEl.addEventListener("keydown", ev => {
+    /* Enter COMMITS THE NAME, it does not send. The field is inside the form, so
+       without this a rename would post whatever half-written message was beside
+       it. Escape puts back what was there and closes. */
+    if (ev.key === "Enter") { ev.preventDefault(); closeName(); bodyEl.focus(); }
+    else if (ev.key === "Escape") { ev.preventDefault(); nameEl.blur(); }
+  });
   const bodyEl = el.querySelector(".chatinput");
   const sendEl = el.querySelector(".chatsend");
 
@@ -795,7 +849,12 @@ function mountChat(el, opts) {
     const bad = chatValidate(m, b);
     if (bad) { note(bad); return; }
     sendEl.disabled = true;
-    if (typed) { try { window.localStorage.setItem("kourt.chat.moniker", typed); } catch (e) {} }
+    // ...and neither is the prefilled default typed back at us: the button opens
+    // the field already reading "anon", so a reader who opens it and changes
+    // nothing must land exactly where a blank field lands.
+    if (typed && typed !== CHATDEFAULTNAME) {
+      try { window.localStorage.setItem("kourt.chat.moniker", typed); } catch (e) {}
+    }
     const r = await chatPost(base, chain, court, m, b.trim());
     if (!live()) return;
     sendEl.disabled = false;

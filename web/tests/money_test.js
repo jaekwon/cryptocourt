@@ -100,8 +100,22 @@ ok("...and without a court it is still the bare word",
    call site that appends ccSym() to it prints the symbol twice. */
 ok("no call site appends the symbol to a formatter that already carries it",
    !/cc\([^)]*\)\s*\+\s*ccSym\(/.test(src));
-ok("the reward row uses the plain formatter",
-   /Reward to open[\s\S]{0,400}ccPlain\(d\.quote\.w \+ d\.quote\.a \+ d\.quote\.ans, slug\)/.test(src));
+/* THE REWARD ROW IS COUNTED IN µ, which the emission curve decides and not a
+   preference: a whole draw on a young court is 700 µCC, and in CC that is 0.0007
+   — exact, unreadable, and with slices (602, 60, 37) that are integers in µ and a
+   smear of zeroes in CC. What this pins is unchanged from when it named ccPlain:
+   the symbol is said ONCE. The bug behind it printed "596 µKourt:COVID
+   KOURT:COVID" — prefix, chip, and then the plain spelling after it. */
+ok("the reward row uses the micro formatter",
+   /Reward to open[\s\S]{0,400}ccReward\(d\.quote\.w \+ d\.quote\.a \+ d\.quote\.ans, slug\)/.test(src));
+ok("...which says the court's symbol exactly once",
+   (ccReward(700, "covid").match(/ccsym/g) || []).length === 1);
+ok("...and carries the micro sign INSIDE the bar, at the bar's own size",
+   /<span class="ccbar">\u00b5Kourt<\/span>/.test(ccReward(700, "covid")));
+ok("...as U+00B5, not the Greek letter",
+   ccReward(700,"covid").includes("\u00b5") && !ccReward(700,"covid").includes("\u03bc"));
+ok("...and the figure is the whole micro count, not a decimal",
+   /^700 /.test(ccReward(700, "covid")));
 
 // ---- a row of figures shares one unit ------------------------------------
 /* THE REWARD POOLS. ccRow had a mixed-scale fallback: when some figures were

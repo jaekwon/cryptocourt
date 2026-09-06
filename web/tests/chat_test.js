@@ -272,7 +272,7 @@ function mkEl() {
 function mkRoot() {
   const kids = {};
   for (const c of [".chatlog", ".chatstate", ".chatnote", ".chatdry", ".chatform",
-                   ".chatmoniker", ".chatinput", ".chatsend"]) kids[c] = mkEl();
+                   ".chatmoniker", ".chatnamebtn", ".chatinput", ".chatsend"]) kids[c] = mkEl();
   // Modelling the shell's own markup: chatPanelHtml emits `<div class="chatdry" hidden>`, so
   // the stub must start hidden or a test of "says nothing" passes on a stub default instead of
   // on the code. The real attribute is checked in web/tests/browser/chat_page.js.
