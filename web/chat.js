@@ -271,7 +271,10 @@ function chatSetHeading(body) {
     const name = b.slice(mark.length + 1);
     const runes = [...name].length;
     if (runes < 1 || runes > CHATLIMITS.setname) return null;
-    return {mark: mark, word: CHATSETMARKS[mark], name: name};
+    // NO `word` BESIDE `mark`. It was CHATSETMARKS[mark] cached in a field one
+    // line from the map it came out of — the gas-fee shape again, a derivation
+    // stored next to its source. The caller reads the map.
+    return {mark: mark, name: name};
   }
   return null;
 }
@@ -305,7 +308,7 @@ function chatLineHtml(m, nowSec, court) {
      from the CSS that styles it. */
   const said = fid == null ? chatEsc(m.body)
     : '<a class="chatset" href="#/c/' + chatEsc(court) + "/f/" + chatEsc(String(fid))
-      + '"><span class="chatmark" title="' + chatEsc(hit.word) + '">' + hit.mark
+      + '"><span class="chatmark" title="' + chatEsc(CHATSETMARKS[hit.mark]) + '">' + hit.mark
       + '</span><span class="chatsetname">' + chatEsc(hit.name) + "</span></a>";
   const body = '<span class="chatbody">' + said + "</span>";
   return '<li class="chatmsg">'
@@ -563,11 +566,30 @@ const CHATCSS = `
 .chatsuf{opacity:.45;font-size:.8em;font-family:ui-monospace,monospace}
 .chatflag{margin-right:.25rem}
 .chatbody{overflow-wrap:anywhere;white-space:pre-wrap}
-/* THE SET CHIP. A button that has to sit inside a line of chat without looking
-   like a form control: no background, no border, the body's own type, and the
-   hand cursor plus an underline on hover to say it goes somewhere. */
-.chatset{font:inherit;color:inherit;background:none;border:0;padding:0;margin:0;
-  cursor:pointer;text-align:left;display:inline;overflow-wrap:anywhere}
+/* THE SET LINK. Two declarations, and every one that used to sit here was
+   resetting a BUTTON that this stopped being: font, background, border, padding
+   and margin are user-agent button styling an anchor never had, and
+   cursor:pointer, display:inline and text-align:left are an anchor's own
+   defaults. overflow-wrap came free too — .chatbody sets it one level up and it
+   inherits.
+   NO ANGLE BRACKETS IN THIS COMMENT EITHER, for the reason below and one more:
+   chat_test asserts the stylesheet carries no markup characters at all, because a
+   style block is as good a place to smuggle markup as any. Naming the two tags
+   the ordinary way is what turned this note red.
+   WHAT IS LEFT IS WHAT AN ANCHOR ACTUALLY NEEDS: keep the body's colour, since
+   the accent belongs on the name and not on the mark, and drop the underline it
+   would otherwise wear at rest — hovering is what puts one on.
+   MEASURED, NOT READ. Computed style comes out identical for every property this
+   rule used to name except one: text-align resolves to "start" now instead of
+   "left". That is inert here — the element is inline, so text-align aligns nothing
+   of its own — and the rendered geometry is byte-identical in BOTH directions,
+   checked with dir=rtl as well as ltr, which is the only case where those two
+   words could differ. "start" is also the right default for a panel that renders
+   whatever script somebody types.
+   NO BACKTICKS IN THIS COMMENT, and that is not style: every line here lives
+   inside the CHATCSS template literal, so one backtick ends the string and the
+   file stops parsing. It cost a red suite writing this very note. */
+.chatset{color:inherit;text-decoration:none}
 /* HOVER THE EYE, UNDERLINE THE WORD — the sibling selector, because the mark is
    what a reader points at to ask "is that a real set?" and the NAME is the answer
    they want marked. Hovering the name underlines it too, since a link that does
@@ -577,7 +599,6 @@ const CHATCSS = `
   text-decoration:underline;text-underline-offset:2px}
 /* A SET READS AS A DESTINATION. The accent is on the NAME, not the mark: the mark
    is punctuation that says which kind, the name is the thing you are going to. */
-.chatset{text-decoration:none}
 .chatsetname{font-weight:600;color:var(--accent,inherit)}
 /* THE MARK CARRIES THE ONE DIFFERENCE between the two eyes, so it gets the
    help cursor that says "there is something to read here" — the title is the
