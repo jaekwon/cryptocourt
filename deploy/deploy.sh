@@ -96,6 +96,15 @@ if [ -z "$SKIP_CHECKS" ]; then
 	python3 scripts/check-web-constants.py >/dev/null
 	echo "    the overlay's realm constants still match the realm"
 
+	# AND EVERY SET MARK STILL WEARS THE FACE THAT CAN DRAW IT. 0.04s, no
+	# toolchain, and the strongest case in this block for gating at ship time:
+	# the failure is INVISIBLE TO WHOEVER SHIPS IT. macOS has a hieroglyph font,
+	# so a mark that lost its class renders perfectly here and is a tofu box for
+	# everyone else — on the one control this feature exists to offer. Nothing
+	# about the page looks wrong to the person deploying it.
+	python3 scripts/check-mark-font.py >/dev/null
+	echo "    every set mark still wears the embedded face"
+
 	# node --check on the overlay's script block. If node is absent, say so
 	# rather than skipping quietly: a check that silently does not run is worse
 	# than no check.
