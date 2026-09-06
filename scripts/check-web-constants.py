@@ -72,6 +72,26 @@ MIRRORS = {
     # a window. It was unregistered until now, and invisible to boot: MIRRORS
     # demanded a bare integer ending in `;` and this is a BigInt sharing its
     # statement with CURVE_CAP, so no entry could have worked (see main()).
+    # The width of ClaimHead's packed row, and the drift here costs SPEED rather
+    # than correctness — which is why it could sit unheld while everything looked
+    # fine. claimHeadOf demands the count EXACTLY and returns null on anything
+    # else, and the caller then "reads every field the old way": if the realm
+    # appended a fortieth column and bumped its own claimHeadFields, the overlay's
+    # 39 would stop matching, the packed read would be discarded, and every claim
+    # page would go back to a round trip PER FIELD. The page keeps working and
+    # keeps looking right; it just gets slow, which is the one symptom nobody
+    # files a bug about.
+    #
+    # THE EXACT COUNT IS DELIBERATE, unlike FolderTree's rows below, which take a
+    # minimum: a positional format read short is fine only if fields are appended
+    # and never inserted, and ClaimHead has no marker that would tell the
+    # difference. So the overlay refuses rather than guesses — and this guard is
+    # what makes the refusal cheap to notice.
+    #
+    # The realm side is already held: claimhead_test.gno asserts the real output
+    # is claimHeadFields wide, on an answered claim and an unanswered one. Only
+    # the overlay's copy floated.
+    "CLAIM_HEAD_FIELDS": ("realm/r/kourtv2/claimhead.gno", "claimHeadFields"),
     # How many folders the overlay will read for a court, and it is the realm's cap
     # rather than a page-size choice: `const F = Math.min(n, CHAIN_FOLDER_CAP)`
     # decides how many names are FETCHED, and `capped: n > CHAIN_FOLDER_CAP`
@@ -195,10 +215,20 @@ def main():
                   f"MIRRORS rather than deleting the check.", file=sys.stderr)
             bad += 1
         elif got != want:
+            # ONE SENTENCE THAT IS TRUE OF ALL OF THEM. This used to say "the
+            # overlay passes {sym} into realm reads, so a page that disagrees
+            # queries the wrong window" — true of the three window constants and
+            # misleading for the rest: MAX_COMMENT_CHARS is shown to somebody
+            # typing, CURVE_D divides, CHAIN_FOLDER_CAP bounds a fetch,
+            # CLAIM_HEAD_FIELDS is a parse width. What every entry here shares is
+            # the SHAPE of the failure, not its mechanism, so that is what the
+            # message names. The mechanism is in the entry's own comment in
+            # MIRRORS, which is where a reader who hits this goes next.
             print(f"check-web-constants: the overlay's {sym} is {got} and "
-                  f"{name} is {want}. The overlay passes {sym} into realm reads, "
-                  f"so a page that disagrees queries the wrong window and still "
-                  f"looks right.", file=sys.stderr)
+                  f"{name} is {want}. The overlay restates this number and cannot "
+                  f"ask the chain for it, so while they disagree the page keeps "
+                  f"working and keeps looking right. See {sym} in MIRRORS for what "
+                  f"this one costs.", file=sys.stderr)
             bad += 1
     chatsrc = open(CHATJS, encoding="utf-8").read() if os.path.exists(CHATJS) else ""
     for sym, (relpath, name) in sorted(CHAT_MIRRORS.items()):
