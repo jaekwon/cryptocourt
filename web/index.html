@@ -9204,6 +9204,14 @@ async function chainHolders(slug, n){
    chain itself. Filled by chainFolders below, and EMPTY until the court page or
    the map has read once — which is the honest state, because an unknown name and
    a name that is not a set are the same answer here and both mean "no link".
+   SO THE /raw/ ROUTE SHOWS NO LINKS, and that is measured rather than assumed:
+   railChatFor mounts the panel on /c/ AND /raw/, but only /c/ reads folders, so
+   on /raw/covid setFidByName("covid","Origins") answers null and a real set name
+   stays text. Left that way on purpose. /raw/ is "what the realm itself serves,
+   unstyled" — a checking view, where the chat is incidental and a second folder
+   read would be a round trip spent on a surface nobody browses. The slug guard is
+   what makes the degradation SAFE rather than wrong: it answers null instead of
+   handing back the last court's fid for a name that court also has.
    ONE COURT, THE LAST READ, not a map per court kept forever. The only caller is
    the chat panel, and a chat panel is open on ONE court: the page being read. A
    Map keyed by slug carried a dimension with exactly one live value, grew a
