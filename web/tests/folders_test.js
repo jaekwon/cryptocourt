@@ -87,6 +87,7 @@ code += slice('const CURATION_V', '/* ------').replace('const CURATION_V','var C
 code += slice('const CHAIN_FOLDER_CAP', '/* ======').replace('const CHAIN_FOLDER_CAP','var CHAIN_FOLDER_CAP');
 code += slice('function resolveFolderPath(', 'function folderMeta(');
 code += 'const ICN_EYE_OPEN="<svg/>", ICN_EYE_SHUT="<svg/>";\n';   // the row needs the marks to exist, not to be drawn
+global.EYE_CHAR = '<span class="wedjat">\u{13080}</span>';   // the character, in the embedded face
 code += slice('function folderCount(', 'function folderRowHtml');
 code += slice('function folderRowHtml(', 'function isDone');
 code += 'function safeInline(x){ return esc(String(x)); }\n';

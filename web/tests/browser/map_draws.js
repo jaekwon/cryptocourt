@@ -354,8 +354,15 @@ const {PAGE, demoPage} = require('./harness');
       return out;
     } catch (e) { return {err: String(e).slice(0, 160)}; }
   });
-  ok("the set mark is drawn, and the codepoint is not in the text",
-     setmark.marks === 2 && setmark.raw === false, JSON.stringify(setmark));
+  /* THE CODEPOINT IS THE MARK, INCLUDING HERE. This asserted the opposite — the
+     mark drawn as paths and the character gone from the text — because coverage
+     was the problem: U+13080 is Supplementary-Plane and a machine with no
+     hieroglyph font drew a tofu box. Embedding the single glyph removed that
+     reason, and the mark is now the thing a reader can select out of the map and
+     paste into a claim title. So the map prints it too, in a <text> that names
+     the embedded face. Inverted deliberately: the codepoint MUST be present. */
+  ok("the set mark is the character, present in the map's own text",
+     setmark.marks === 2 && setmark.raw === true, JSON.stringify(setmark));
   ok("...on the node of a heading the court has not carried yet",
      setmark.onClaim === 1, JSON.stringify(setmark));
   ok("...and on the box of the set a claim became",

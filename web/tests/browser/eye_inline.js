@@ -6,6 +6,14 @@
 // takes a line of its own: the set page's heading rendered the eye above the
 // name, two lines where there is one thing. Reported on a live set page.
 //
+// THE MARK IS A CHARACTER NOW, and this check follows it rather than the SVG it
+// used to be. Where a set's mark is a statement — a title, a row, a heading — it
+// prints U+13080 in an embedded face (.wedjat) so a reader can select and paste
+// it; only the filter's two-state control is still drawn (.eye), because its
+// shut half has no codepoint and both halves must be one drawing. Both selectors
+// are accepted here: what this file measures is that the mark sits IN the line
+// rather than taking one, which is true of either form and is the defect it was
+// written for.
 // Every other surface wraps it — .setmark in a title, .id in a row, .foldbox in
 // the selector — so the bug was invisible until the one unwrapped case shipped.
 // That makes it a CLASS, not an incident, so this checks every eye a page draws
@@ -54,7 +62,7 @@ const ROUTES = ["#/c/orem", "#/c/orem/f/0", "#/c/orem/f/1", "#/c/orem/11", "#/c/
         }
         return {er, tr: best};
       };
-      return [...document.querySelectorAll(".eye")]
+      return [...document.querySelectorAll(".wedjat, .eye")]
         .filter(e => !e.closest("svg.mapsvg"))
         .map(e => {
           const p = e.parentElement;
@@ -79,7 +87,7 @@ const ROUTES = ["#/c/orem", "#/c/orem/f/0", "#/c/orem/f/1", "#/c/orem/11", "#/c/
   await page.goto(PAGE + "#/c/orem/f/0", {waitUntil: 'networkidle0'});
   await new Promise(z => setTimeout(z, 800));
   const head = await page.evaluate(() => {
-    const h = document.querySelector("h1.page-h"), eye = h.querySelector(".eye");
+    const h = document.querySelector("h1.page-h"), eye = h.querySelector(".wedjat, .eye");
     const er = eye.getBoundingClientRect();
     const rg = document.createRange();
     const tn = [...h.childNodes].find(n => n.nodeType === 3 && n.nodeValue.trim());
@@ -87,12 +95,24 @@ const ROUTES = ["#/c/orem", "#/c/orem/f/0", "#/c/orem/f/1", "#/c/orem/11", "#/c/
     const tr = rg.getBoundingClientRect();
     return {h: Math.round(h.getBoundingClientRect().height),
             wrapped: !!eye.closest(".setmark"),
-            gap: Math.round(Math.abs(er.y - tr.y)), eyeH: Math.round(er.height)};
+            gap: Math.round(Math.abs(er.y - tr.y)), eyeH: Math.round(er.height),
+            // which form is on this page: the character, or the drawing
+            isChar: eye.classList.contains("wedjat")};
   });
   ok("the set page's eye and its name share a line",
      head.gap < head.eyeH * 0.6, JSON.stringify(head));
   ok("...so the heading is one line tall", head.h < 60, JSON.stringify(head));
-  ok("...and the eye is wrapped, like every other one", head.wrapped, JSON.stringify(head));
+  /* THE WRAPPER WAS FOR AN <svg>, and there is no longer one here. This asserted
+     the mark sits inside .setmark, because the CSS reset made a bare <svg>
+     display:block and it needed an inline-flex span to stay on the line. The
+     mark is a CHARACTER in the heading now — text flows inline by definition, so
+     a wrapper would be scaffolding holding up nothing.
+     WHAT THE ARM WAS PROTECTING is kept by the two above it: the mark shares the
+     line, and the heading is one line tall. Those are the defect. So this checks
+     the property the wrapper existed to produce, on whichever form is present —
+     a drawing must still be wrapped, a character must not need it. */
+  ok("...and the mark needs no scaffolding to stay in the line",
+     head.isChar ? head.wrapped === false : head.wrapped === true, JSON.stringify(head));
 
   /* A SET PAGE OFFERS A WAY TO ACT. It listed a set's claims and stopped, so a
      reader who had just read three claims on one subject and wanted to file a

@@ -46,6 +46,7 @@ eval(slice('function safeInline(', '\n'));
 eval(fn('secHelp'));
 global.SET_MARK = "\u{13080}";
 global.ICN_EYE_OPEN = '<svg class="eye eyeopen"></svg>';   // drawn form; the harness needs it to exist, not to render
+global.EYE_CHAR = '<span class="wedjat">\u{13080}</span>';   // the character, in the embedded face
 eval(fn('setMarkHtml'));
 eval(slice('function verdictSentence(', '\nfunction verdictBanner('));
 eval(fn('verdictBanner'));   // fn takes the closing brace with it
@@ -635,9 +636,17 @@ const run = async (rows, v, mode) => {
   {
     const M = "\u{13080}", NEAR = "\u{13079}";
     const marked = verdictSentence(M + " Lab leak evidence", "YES");
-    ok("the mark is replaced by a drawn eye",
-       /class="setmark"/.test(marked) && /<svg/.test(marked));
-    ok("...and the codepoint itself is gone from the output", !marked.includes(M));
+    /* THE MARK IS THE CHARACTER NOW, not a drawing of it. This used to assert
+       the opposite — "replaced by a drawn eye", with the codepoint gone from the
+       output — because coverage was the problem: U+13080 is Supplementary-Plane
+       and a machine without a hieroglyph font showed a tofu box. Embedding the
+       one glyph (940 bytes of Noto, OFL) removed that reason, and the owner's
+       call is that the mark should be the thing a reader can select and paste
+       into a title. So the assertion is inverted deliberately: the codepoint
+       SURVIVES, in a span that names the face which can always render it. */
+    ok("the mark is the character, in the face that renders it",
+       marked.includes(M) && /class="wedjat"/.test(marked));
+    ok("...and it is not silently swapped for a drawing", !/<svg/.test(marked));
     ok("...while the name it prefixed survives intact", marked.includes("Lab leak evidence"));
     ok("an unmarked title gets no mark",
        !/class="setmark"/.test(verdictSentence("An ordinary claim", "YES")));
