@@ -117,20 +117,46 @@ MIRRORS = {
 # is prose on both sides of a chain boundary, which is the most silent coupling
 # in this repo: reword whyWeighed and the dialog does not break, it starts
 # offering to sell coin to somebody it cannot help. So the clause is pinned.
+# phrase -> (the file that must keep saying it, what breaks when it stops)
+#
+# THE SECOND HALF IS NEW AND IT IS THE POINT. This was a phrase -> path map, and
+# the failure message was ONE HARDCODED SENTENCE about a coin dialog — printed
+# for all four entries, so three of the four told the reader the consequence of
+# somebody else's pairing. The reason each phrase is pinned was already written,
+# at length, in the comment above it; it just could not reach the person who
+# sees the failure. So the comment IS the value now. Nothing new to keep true —
+# the prose moved from a place only a reader of this file sees to the place it
+# is printed.
 PHRASES = {
-    "you had none when this vote started": "realm/r/kourtv2/voteweight.gno",
-    # The platform's own line. It is the first thing on the realm's Render and
-    # the first thing in the overlay's rail, and until this entry existed there
-    # was nothing to notice when one of them was rewritten — which is how a
-    # chain page and the site over it end up introducing the same product with
-    # two different sentences.
-    "Let Truth be told.": "realm/r/kourtv2/render.gno",
-    # The leaderboard's caveat. TopHolders ranks coin HELD, and staked coin is in
-    # the court's custody rather than the holder's balance — so a committed
-    # staker can rank below somebody who never staked, and nothing in the number
-    # says why. The realm carries the sentence in TopHoldersNote so every client
-    # says the same thing; this is what notices when one of them is rewritten.
-    "Coin staked on a claim sits in the court's custody until the claim resolves": "realm/r/kourtv2/holders.gno",
+    "you had none when this vote started": (
+        "realm/r/kourtv2/voteweight.gno",
+        "the buy dialog can no longer tell a refusal a purchase can fix from one "
+        "it cannot, and offers to sell coin to somebody it cannot help"),
+    # The court page's RECORD census reads ClaimStatus for the last twenty claims
+    # and classifies each by matching the realm's English:
+    #
+    #     if(t.includes("never answered"))   -> never answered
+    #     else if(t.startsWith("closed"))    -> closed without a decision
+    #     else if(t.startsWith("settled"))   -> settled, then routed
+    #
+    # AND THE FIRST TWO OVERLAP. The realm's line for an unanswered claim is
+    # "closed \u2014 never answered; every stake exited 1x, the deposit refunded",
+    # which satisfies BOTH tests; only the else-if ordering keeps them apart. The
+    # prefixes are too generic to pin; this substring is not.
+    "never answered": (
+        "realm/r/kourtv2/render.gno",
+        "every unanswered claim is silently tallied as a closed-without-a-decision "
+        "in the court page's record census, which classifies the last twenty "
+        "claims by matching this substring in ClaimStatus"),
+    "Let Truth be told.": (
+        "realm/r/kourtv2/render.gno",
+        "the chain page and the site over it introduce the same product with two "
+        "different sentences, in the first line of each"),
+    "Coin staked on a claim sits in the court's custody until the claim resolves": (
+        "realm/r/kourtv2/holders.gno",
+        "the leaderboard silently drops a committed staker below somebody who "
+        "never staked \u2014 TopHolders ranks coin HELD, and staked coin is in the "
+        "court's custody \u2014 with nothing on the page saying why"),
 }
 
 # web symbol -> (the call the realm counts it with, the call the overlay does)
@@ -292,22 +318,20 @@ def main():
                   f"stopped short of, or past, the cap the chain applies.",
                   file=sys.stderr)
             bad += 1
-    for phrase, relpath in sorted(PHRASES.items()):
+    for phrase, (relpath, breaks) in sorted(PHRASES.items()):
         src = open(os.path.join(REPO, relpath), encoding="utf-8").read()
         in_realm = phrase in src
         in_web = phrase in web
         if not in_realm:
             print(f"check-web-constants: {relpath} no longer contains the phrase "
-                  f"{phrase!r}. The overlay matches on it to tell a fixable "
-                  f"refusal from one no purchase can fix; reworded on one side "
-                  f"only, the dialog offers to sell coin to somebody it cannot "
-                  f"help — and nothing else fails. Reword both, or drop the "
-                  f"pairing from PHRASES.", file=sys.stderr)
+                  f"{phrase!r}, which the overlay still matches on \u2014 so "
+                  f"{breaks}, and nothing else fails. Reword both sides, or drop "
+                  f"the pairing from PHRASES.", file=sys.stderr)
             bad += 1
         if not in_web:
             print(f"check-web-constants: the overlay no longer matches on "
-                  f"{phrase!r}, which {relpath} still produces. Half a rename is "
-                  f"worse than none.", file=sys.stderr)
+                  f"{phrase!r}, which {relpath} still produces \u2014 so "
+                  f"{breaks}. Half a rename is worse than none.", file=sys.stderr)
             bad += 1
     # THE FOLDERTREE WIRE FORMAT, both sides of it.
     #
