@@ -25,7 +25,7 @@ code += 'function safeInline(x){ return esc(String(x)); }\n';
 code += slice('function statusPill(','function docketRow(');
 // docketRow renders the verdict as a sentence now, so the harness needs the
 // builders that make one.
-global.SET_MARK = "\u{13080}";
+global.SET_MARK = "\u{1307c}";
 global.ICN_EYE_OPEN = '<svg class="eye eyeopen"></svg>';   // drawn form; the harness needs it to exist, not to render
 code += fn('setMarkHtml');
 code += fn('verdictSentence');

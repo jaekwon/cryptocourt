@@ -8,16 +8,16 @@ import (
 	uassert "gno.land/p/nt/uassert/v0"
 )
 
-// The wedjat, and the two eyes nearest it in the block. Written as escapes for
+// The painted eye, and the two eyes nearest it in the block. Written as escapes for
 // the same reason the constant is: at this size they are one picture.
 const (
-	tD010 = "\U00013080" // 𓂀 the mark
+	tD007 = "\U0001307C" // 𓁼 the mark
 	tD004 = "\U00013079" // 𓁹 an ordinary eye — NOT the mark
 	tD006 = "\U0001307B" // another one
 )
 
 func TestSetTitleParsesOnlyTheExactMark(cur realm, t *testing.T) {
-	name, ok := parseSetTitle(tD010 + " Lab leak evidence")
+	name, ok := parseSetTitle(tD007 + " Lab leak evidence")
 	uassert.True(t, ok)
 	uassert.Equal(t, "Lab leak evidence", name)
 
@@ -29,12 +29,12 @@ func TestSetTitleParsesOnlyTheExactMark(cur realm, t *testing.T) {
 	for _, bad := range []string{
 		tD004 + " Lab leak",  // a different eye
 		tD006 + " Lab leak",  // and another
-		tD010 + "Lab leak",   // no delimiter: the mark is a prefix, not a first letter
-		" " + tD010 + " Lab", // not at the start
+		tD007 + "Lab leak",   // no delimiter: the mark is a prefix, not a first letter
+		" " + tD007 + " Lab", // not at the start
 		"mod:newset:x/1",  // the other prefix entirely
-		"Lab leak " + tD010,  // the mark as decoration at the end
-		tD010,                // the mark alone: no name
-		tD010 + " ",          // ...and with an empty name
+		"Lab leak " + tD007,  // the mark as decoration at the end
+		tD007,                // the mark alone: no name
+		tD007 + " ",          // ...and with an empty name
 	} {
 		if _, ok := parseSetTitle(bad); ok {
 			t.Fatalf("a near-miss parsed as a set heading: %q", bad)
@@ -46,7 +46,7 @@ func TestSetTitleParsesOnlyTheExactMark(cur realm, t *testing.T) {
 // set's name and the claim's title stop matching, which is the one thing the
 // feature promises.
 func TestSetNameIsTheTitleVerbatim(cur realm, t *testing.T) {
-	name, ok := parseSetTitle(tD010 + "  two leading spaces")
+	name, ok := parseSetTitle(tD007 + "  two leading spaces")
 	uassert.True(t, ok)
 	uassert.Equal(t, " two leading spaces", name)
 
@@ -56,7 +56,7 @@ func TestSetNameIsTheTitleVerbatim(cur realm, t *testing.T) {
 	for i := 0; i < maxFolderTextLen+1; i++ {
 		long += "x"
 	}
-	if _, ok := parseSetTitle(tD010 + " " + long); ok {
+	if _, ok := parseSetTitle(tD007 + " " + long); ok {
 		t.Fatal("an over-long name must not parse as a set heading")
 	}
 }
@@ -110,7 +110,7 @@ func TestASettledMarkedClaimBecomesASet(cur realm, t *testing.T) {
 	testCourt(cur, "gs1", alice, 50_000_000_000)
 
 	testing.SetRealm(testing.NewUserRealm(alice))
-	id := OpenClaim(cross(cur), "gs1", tD010+" Lab leak evidence")
+	id := OpenClaim(cross(cur), "gs1", tD007+" Lab leak evidence")
 
 	// NOTHING YET. The mark is a request, not an authority: a claim that made a
 	// set at open would hand every holder the moderator power this is gated by.
@@ -164,7 +164,7 @@ func TestASettledNoCarriesNoSet(cur realm, t *testing.T) {
 	testCourt(cur, "gsn1", alice, 50_000_000_000)
 
 	testing.SetRealm(testing.NewUserRealm(alice))
-	id := OpenClaim(cross(cur), "gsn1", tD010+" Rejected heading")
+	id := OpenClaim(cross(cur), "gsn1", tD007+" Rejected heading")
 	matureOI(cur, "gsn1", id, alice, 200_000_000)
 	testing.SetRealm(testing.NewUserRealm(alice))
 	PostAnswer(cross(cur), "gsn1", id, sideNO)
@@ -208,7 +208,7 @@ func TestAffirmRefusesANameTakenSinceTheClaimOpened(cur realm, t *testing.T) {
 	testCourt(cur, "gst1", alice, 50_000_000_000)
 
 	testing.SetRealm(testing.NewUserRealm(alice))
-	id := OpenClaim(cross(cur), "gst1", tD010+" Contested name")
+	id := OpenClaim(cross(cur), "gst1", tD007+" Contested name")
 	matureOI(cur, "gst1", id, alice, 200_000_000)
 	testing.SetRealm(testing.NewUserRealm(alice))
 	PostAnswer(cross(cur), "gst1", id, sideYES)
@@ -243,7 +243,7 @@ func TestABornSetNestsWhereItsClaimIsFiled(cur realm, t *testing.T) {
 	parent := CreateFolder(cross(cur), "gsp1", "Origins", "where it began")
 
 	testing.SetRealm(testing.NewUserRealm(alice))
-	id := OpenClaim(cross(cur), "gsp1", tD010+" Furin cleavage site")
+	id := OpenClaim(cross(cur), "gsp1", tD007+" Furin cleavage site")
 	// FILED FIRST, and that filing is what declares the parent.
 	testing.SetRealm(testing.NewUserRealm(alice))
 	AddToFolder(cross(cur), "gsp1", parent, id)
@@ -266,7 +266,7 @@ func TestAnUnfiledSetClaimIsBornAtTheRoot(cur realm, t *testing.T) {
 	alice := testutils.TestAddress("gsr-alice")
 	testCourt(cur, "gsr1", alice, 50_000_000_000)
 	testing.SetRealm(testing.NewUserRealm(alice))
-	id := OpenClaim(cross(cur), "gsr1", tD010+" A root heading")
+	id := OpenClaim(cross(cur), "gsr1", tD007+" A root heading")
 	matureOI(cur, "gsr1", id, alice, 200_000_000)
 	testing.SetRealm(testing.NewUserRealm(alice))
 	PostAnswer(cross(cur), "gsr1", id, sideYES)
@@ -290,7 +290,7 @@ func TestASetClaimFiledTwiceRefusesToBeBorn(cur realm, t *testing.T) {
 	b := CreateFolder(cross(cur), "gsa1", "Fauci", "two")
 
 	testing.SetRealm(testing.NewUserRealm(alice))
-	id := OpenClaim(cross(cur), "gsa1", tD010+" Ambiguous parent")
+	id := OpenClaim(cross(cur), "gsa1", tD007+" Ambiguous parent")
 	testing.SetRealm(testing.NewUserRealm(alice))
 	AddToFolder(cross(cur), "gsa1", a, id)
 	testing.SetRealm(testing.NewUserRealm(alice))
@@ -438,7 +438,7 @@ func TestAProvClosedYesCarriesNoSet(cur realm, t *testing.T) {
 	c.params.escrowMaxBlocks = 450_000
 
 	testing.SetRealm(testing.NewUserRealm(alice))
-	id := OpenClaim(cross(cur), "gsx1", tD010+" Never actually decided")
+	id := OpenClaim(cross(cur), "gsx1", tD007+" Never actually decided")
 	matureOI(cur, "gsx1", id, alice, 200_000_000)
 	testing.SetRealm(testing.NewUserRealm(alice))
 	PostAnswer(cross(cur), "gsx1", id, sideYES)
@@ -500,10 +500,10 @@ func TestTheLongestFilableHeadingCanBeCarried(cur realm, t *testing.T) {
 	// The longest title claim.gno accepts, spelled as mark + space + the rest,
 	// so the arithmetic is the realm's rather than a number copied into a test.
 	name := ""
-	for runeLen(tD010+" "+name) < 200 {
+	for runeLen(tD007+" "+name) < 200 {
 		name += "x"
 	}
-	title := tD010 + " " + name
+	title := tD007 + " " + name
 	uassert.Equal(t, 200, runeLen(title))
 	uassert.Equal(t, 198, runeLen(name))
 
@@ -554,7 +554,7 @@ func TestRetiringABornSetDoesNotFreeTheClaim(cur realm, t *testing.T) {
 	AppointMods(cross(cur), "gsq1", 1, alice)
 
 	testing.SetRealm(testing.NewUserRealm(alice))
-	id := OpenClaim(cross(cur), "gsq1", tD010+" Reading room")
+	id := OpenClaim(cross(cur), "gsq1", tD007+" Reading room")
 	matureOI(cur, "gsq1", id, alice, 200_000_000)
 	testing.SetRealm(testing.NewUserRealm(alice))
 	PostAnswer(cross(cur), "gsq1", id, sideYES)
@@ -585,7 +585,7 @@ func TestRetiringABornSetDoesNotFreeTheClaim(cur realm, t *testing.T) {
 	// the other side of the asymmetry above: if this ever starts refusing, the
 	// two functions have been made symmetric in the wrong direction.
 	testing.SetRealm(testing.NewUserRealm(alice))
-	id2 := OpenClaim(cross(cur), "gsq1", tD010+" Reading room")
+	id2 := OpenClaim(cross(cur), "gsq1", tD007+" Reading room")
 	matureOI(cur, "gsq1", id2, alice, 200_000_000)
 	testing.SetRealm(testing.NewUserRealm(alice))
 	PostAnswer(cross(cur), "gsq1", id2, sideYES)
@@ -631,7 +631,7 @@ func TestASetIsNotBornUnderARetiredParent(cur realm, t *testing.T) {
 	testing.SetRealm(testing.NewUserRealm(alice))
 	parent := CreateFolder(cross(cur), "gsv1", "Origins", "where it began")
 	testing.SetRealm(testing.NewUserRealm(alice))
-	id := OpenClaim(cross(cur), "gsv1", tD010+" Furin cleavage site")
+	id := OpenClaim(cross(cur), "gsv1", tD007+" Furin cleavage site")
 	testing.SetRealm(testing.NewUserRealm(alice))
 	AddToFolder(cross(cur), "gsv1", parent, id)
 

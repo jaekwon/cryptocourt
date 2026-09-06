@@ -6,10 +6,10 @@
 // UTF-16 CODE UNITS, and an astral character is a surrogate PAIR of two units —
 // so a cut landing between the halves leaves a lone surrogate, which the browser
 // draws as U+FFFD. Measured before the fix: a title of 🔥 came back ending
-// "\ud83d…", and one of 𓂀 ending "\ud80c…".
+// "\ud83d…", and one of 𓁼 ending "\ud80c…".
 //
-// 𓂀 IS NOT A HYPOTHETICAL HERE. The demo data in this repo names a folder
-// "\u{13080} Reading room", so the overlay already carries astral text in its own
+// 𓁼 IS NOT A HYPOTHETICAL HERE. The demo data in this repo names a folder
+// "\u{1307c} Reading room", so the overlay already carries astral text in its own
 // fixtures — and a claim title is arbitrary text from whoever filed it.
 //
 // THE WIDTH IS THE SECOND HALF, and the quieter one. `.length` counts units, so a
@@ -38,7 +38,7 @@ const cps = s => Array.from(s).length;
 // Every one of these is longer than the budget in CHARACTERS, so every one is cut.
 for (const [name, body] of [
   ["emoji", "\u{1F525}".repeat(60)],
-  ["hieroglyph (the demo folder's own glyph)", "\u{13080}".repeat(60)],
+  ["hieroglyph (the demo folder's own glyph)", "\u{1307c}".repeat(60)],
   ["astral + latin", ("a\u{1F525}").repeat(40)],
   ["cyrillic (BMP — was already correct)", "ф".repeat(60)],
   ["cjk (BMP — was already correct)", "転".repeat(60)],
@@ -51,7 +51,7 @@ for (const [name, body] of [
 
 // THE PAIRED POSITIVE: inside the budget, the string comes back untouched — so
 // this is not a formatter that mangles everything it is handed.
-for (const body of ["a short claim title", "\u{1F525}\u{1F525}", "\u{13080} Reading room"]) {
+for (const body of ["a short claim title", "\u{1F525}\u{1F525}", "\u{1307c} Reading room"]) {
   ok(`a short body must pass through whole: ${JSON.stringify(body)}`, clip(body, 44) === body);
 }
 
@@ -85,7 +85,7 @@ const mclip = eval(
 for (const [name, body, px] of [
   ["emoji", "\u{1F525}".repeat(60), 20],
   ["astral + latin", ("a\u{1F525}").repeat(40), 21],
-  ["hieroglyph", "\u{13080}".repeat(60), 20],
+  ["hieroglyph", "\u{1307c}".repeat(60), 20],
 ]) {
   const got = mclip(body, px, 12, "");
   ok(`mapClipW ${name}: left a lone surrogate: ${JSON.stringify(got.slice(-4))}`, !LONE.test(got));

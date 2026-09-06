@@ -2,7 +2,7 @@ package kourtv2
 
 /* GOVERNED SETS — §6's deferred half, un-deferred.
  *
- * A claim whose title begins with the wedjat, U+13080 𓂀, is asking to become a
+ * A claim whose title begins with the painted eye, U+1307C 𓁼, is asking to become a
  * set. It is a claim in every other respect: it is staked on, answered under
  * bond, disputable for 72 hours, and it settles YES or NO like any other. What
  * the mark buys is what happens AFTER a YES — the court has agreed that this
@@ -41,12 +41,12 @@ import (
 	"chain"
 )
 
-/* THE MARK IS ONE EXACT CODEPOINT, U+13080 EGYPTIAN HIEROGLYPH D010.
+/* THE MARK IS ONE EXACT CODEPOINT, U+1307C EGYPTIAN HIEROGLYPH D007.
  *
  * SPELLED AS AN ESCAPE, NOT AS THE GLYPH, so that what this constant is cannot
  * depend on an editor, a terminal font or a copy-paste. The Egyptian block holds
  * several eyes that are indistinguishable at title size — D004 𓁹, D006, D007,
- * D010 𓂀 — and a source file that shows the reader a picture instead of a
+ * D007 𓁼 — and a source file that shows the reader a picture instead of a
  * number is a file where the wrong one can be pasted in and nobody will see it.
  *
  * AND THE MATCH IS EXACT. parseModTitle's comment makes the same promise for
@@ -56,14 +56,14 @@ import (
  * character; it is NOT a set, and it must not become one by looking like it.
  */
 const (
-	setMark   = "\U00013080" // 𓂀 U+13080, and nothing else
+	setMark   = "\U0001307C" // 𓁼 U+1307C, and nothing else
 	setPrefix = setMark + " "
 )
 
 /* parseSetTitle reads a governed-set title. The mark, one space, then the name.
  *
  * THE SPACE IS REQUIRED, so that the mark is a prefix and not merely a first
- * character: without it "𓂀Lab leak" and "𓂀 Lab leak" would be two spellings of
+ * character: without it "𓁼Lab leak" and "𓁼 Lab leak" would be two spellings of
  * one thing, and a court would eventually hold both.
  *
  * THE NAME IS THE REST, VERBATIM — no trimming beyond the single delimiter
@@ -136,7 +136,7 @@ func SetBornOf(courtSlug string, folderID uint64) uint64 {
 	return c.mod.mustFolder(folderID).bornOf
 }
 
-/* New carries a settled 𓂀 claim into the set it asked to be.
+/* New carries a settled 𓁼 claim into the set it asked to be.
  *
  * THE VERB IS "NEW" — you new a set. It was AffirmSet, which named the mechanism
  * (a verdict being affirmed) rather than the act, and read as bookkeeping for

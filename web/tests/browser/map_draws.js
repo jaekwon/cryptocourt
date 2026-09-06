@@ -296,7 +296,7 @@ const {PAGE, demoPage} = require('./harness');
   ok("...while the court's other claims still do", setborn.ids.length > 0, JSON.stringify(setborn.ids));
 
   /* THE SET MARK IS GEOMETRY ON THE MAP, not a character in the text. In HTML
-     setMarkHtml swaps U+13080 for the drawn eye; an SVG <text> has no span to
+     setMarkHtml swaps U+1307C for the drawn eye; an SVG <text> has no span to
      swap into, so the codepoint reached the drawing raw — a tofu box in front of
      the sentence for a reader with no hieroglyph font, on the surface hardest to
      zoom into. Asserted as: no codepoint anywhere in the SVG, and a .mset drawn
@@ -312,7 +312,7 @@ const {PAGE, demoPage} = require('./harness');
      that looks fine in a screenshot and is a tofu on a stranger's machine. */
   const setmark = await page.evaluate(() => {
     try {
-      const M = "\u{13080}", st = t => t + " — every stake withdraws 1×";
+      const M = "\u{1307c}", st = t => t + " — every stake withdraws 1×";
       const d = {folders: [{name: "Origins", claims: [1, 2], folders: [], path: "0", born: 3}],
                  all: [1, 2, 3],
                  claims: {1: {title: "An ordinary claim.", statusText: st("settled YES")},
@@ -356,7 +356,7 @@ const {PAGE, demoPage} = require('./harness');
   });
   /* THE CODEPOINT IS THE MARK, INCLUDING HERE. This asserted the opposite — the
      mark drawn as paths and the character gone from the text — because coverage
-     was the problem: U+13080 is Supplementary-Plane and a machine with no
+     was the problem: U+1307C is Supplementary-Plane and a machine with no
      hieroglyph font drew a tofu box. Embedding the single glyph removed that
      reason, and the mark is now the thing a reader can select out of the map and
      paste into a claim title. So the map prints it too, in a <text> that names

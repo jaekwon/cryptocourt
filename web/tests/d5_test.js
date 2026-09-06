@@ -100,7 +100,7 @@ ok("annex exists, tier 0, six claims", DEMO.courts.annex && DEMO.courts.annex.ti
    demo has none. */
 ok("annex/6 is the claim that made a set", (()=>{
   const c = DEMO.claims["annex/6"];
-  return c && c.title.startsWith("\u{13080} ") && c.phase === "settled" && c.answer === 0
+  return c && c.title.startsWith("\u{1307c} ") && c.phase === "settled" && c.answer === 0
       && DEMO_OVERLAY.courts.annex.folders.some(f => f.born === 6);
 })());
 // D6-3: the chain's policing lists

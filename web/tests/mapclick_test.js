@@ -126,7 +126,7 @@ eval(slice('function statusPill(', 'function docketRow('));
 eval(slice('function claimBody(', '/* ==='));
 // ...and the shared verdict-sentence builder, which mapSelCard's title goes
 // through: a decided claim's card strikes the sentence and rings the side.
-global.SET_MARK = "\u{13080}";
+global.SET_MARK = "\u{1307c}";
 global.ICN_EYE_OPEN = '<svg class="eye eyeopen"></svg>';   // drawn form; the harness needs it to exist, not to render
 eval(fn('setMarkHtml'));
 // The map draws the mark instead of writing it, so it needs the two
