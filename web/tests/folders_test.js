@@ -682,8 +682,16 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
   /* AND THE LABEL SAYS WHICH, because a screen reader gets no glyph. `shown` is
      derived from the mark rather than stored beside it, so there is no second
      lookup and nothing to keep in step. */
+  /* SAID ONCE, IN WORDS, FOR THE THREE SURFACES THAT NAME IT. The dresser's
+     aria-label and a <title> on each of the map's two marks all built the same
+     sentence from the same ternary; three copies is three places to reword and two
+     to forget. The chat panel deliberately says just the state word — asked for
+     that way, and right: a hover there has the message beside it. */
   ok("...and its label names which state it opens in",
-     /aria-label="set that opens \$\{p\.shown \? "shown" : "concealed"\}"/.test(src));
+     /aria-label="\$\{setOpensWords\(p\.shown\)\}"/.test(src));
+  ok("...through the one place that phrase lives",
+     /function setOpensWords\(shown\)\{ return "set that opens " \+ \(shown \? "shown" : "concealed"\); \}/.test(src)
+     && (src.match(/setOpensWords\(/g) || []).length === 4);
 
   console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");
   process.exit(fail?1:0);
