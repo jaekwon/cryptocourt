@@ -21,7 +21,14 @@ Anthony S. Fauci, M.D., Director of NIAID — the agency's own 2020 portrait.
   source   https://commons.wikimedia.org/wiki/File:Anthony_S._Fauci_(2020).jpg
   origin   NIAID, https://www.flickr.com/photos/niaid/50719588208/
   licence  Public domain (a work of the United States federal government)
-  changes  resized to 480x640; not cropped or retouched
+  changes  cropped to head and shoulders, resized to 800x514; not retouched
+
+CROPPED BECAUSE THE NODE SLICES, NOT FITS. A folder's picture is drawn into its
+map box with `preserveAspectRatio="xMidYMid slice"` — the box is 116x44 and the
+portrait was 480x640, so the centred band the node kept was his tie. The face has
+to BE the middle of the file for the middle of the file to show a face. Checked
+by cutting the same band this crop yields at the node's own aspect before filing
+it, rather than by filing it and looking.
 
 PUBLIC DOMAIN ON PURPOSE, and it took three tries. NIAID's own Flickr stream is
 CC BY 2.0, and the obvious portrait there carries that licence — which requires
