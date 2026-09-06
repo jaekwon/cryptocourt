@@ -14768,9 +14768,19 @@ function proposeSetBtn(slug, fid, into){
 function setMarkHtml(escaped){
   const p = setTitleParts(escaped);
   if(!p) return escaped;
-  // The character itself, wrapped in the face that can always render it — not
-  // stripped and redrawn. A reader who selects the title takes the mark with it.
-  return EYE_CHAR + " " + p.name;
+  /* The character itself, wrapped in the face that can always render it — not
+     stripped and redrawn. A reader who selects the title takes the mark with it.
+     THE TITLE'S OWN MARK, not a constant. This returned EYE_CHAR, which is D010
+     spelled into it, so the moment the parser learned the second mark every 𓁼
+     heading started rendering as 𓂀 — a set that opens CONCEALED, drawn with the
+     glyph for one that opens shown, on every surface that dresses a title. The
+     mark is the only thing that distinguishes them, so swapping it for the other
+     one is not a cosmetic slip; it is the page stating the opposite.
+     AND THE LABEL SAYS WHICH, because a screen reader gets no glyph at all. `p`
+     already carries `shown` — derived from the mark rather than stored beside it
+     — so this needs no second lookup and no second constant to keep in step. */
+  return `<span class="wedjat" role="img" aria-label="set that opens ${p.shown ? "shown" : "concealed"}">`
+    + p.mark + "</span> " + p.name;
 }
 /* `tail` IS WHATEVER TRAILS THE VERDICT, and it rides INSIDE the oval's own
    unbreakable unit. The docket's figure was appended after this sentence and

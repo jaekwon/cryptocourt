@@ -669,6 +669,22 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
   ok("...declaring it PARTIAL, which is what makes it merge",
      /claimFolders\.map\(f => \[f\.name, f\.fid\]\), false\)/.test(src));
 
+  /* A TITLE IS DRESSED WITH ITS OWN MARK, not with a constant. setMarkHtml
+     returned EYE_CHAR — D010 spelled into it — so the moment the parser learned
+     the second mark, every 𓁼 heading began rendering as 𓂀: a set that opens
+     CONCEALED, drawn with the glyph for one that opens shown, on every surface
+     that dresses a title. The mark is the only thing distinguishing them, so this
+     is not a cosmetic slip; it is the page stating the opposite.
+     Measured before and after: 𓁼 Origins rendered U+13080, and now U+1307C. */
+  ok("a title keeps the mark it was filed with",
+     /\+ p\.mark \+ "<\/span> " \+ p\.name;/.test(src)
+     && !/return EYE_CHAR \+ " " \+ p\.name;/.test(src));
+  /* AND THE LABEL SAYS WHICH, because a screen reader gets no glyph. `shown` is
+     derived from the mark rather than stored beside it, so there is no second
+     lookup and nothing to keep in step. */
+  ok("...and its label names which state it opens in",
+     /aria-label="set that opens \$\{p\.shown \? "shown" : "concealed"\}"/.test(src));
+
   console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");
   process.exit(fail?1:0);
 })();
