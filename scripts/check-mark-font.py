@@ -86,6 +86,26 @@ MARK = re.compile("|".join(INSIDE))
 OPEN = re.compile(r"<(span|text)\b([^>]*)>", re.S)
 
 
+def in_comment(src, i):
+    r"""Is offset i inside a // or /* */ comment?
+
+    THE DOCSTRING ABOVE PROMISED COMMENTS WERE FINE and they were only fine by
+    accident: prose mentioning a codepoint had no tag near enough to walk back to,
+    until a comment explaining this very rule mentioned BOTH — "a <text> in the
+    embedded face" three lines above "this was \u{13080} spelled into it" — and the
+    scanner read the pair as markup drawing an unfonted glyph.
+
+    Cheap and sufficient: a line comment wins if // precedes the offset on its own
+    line; a block comment wins if the nearest /* before it is nearer than the
+    nearest */. Neither is a JS parser, and neither needs to be — the question is
+    only whether a matched GLYPH is code or prose.
+    """
+    line_start = src.rfind("\n", 0, i) + 1
+    if "//" in src[line_start:i]:
+        return True
+    return src.rfind("/*", 0, i) > src.rfind("*/", 0, i)
+
+
 def classes(attrs):
     m = re.search(r'class="([^"]*)"', attrs)
     return set((m.group(1) if m else "").split())
@@ -100,6 +120,8 @@ def main():
             continue
         src = io.open(path, encoding="utf-8").read()
         for m in MARK.finditer(src):
+            if in_comment(src, m.start()):
+                continue
             # The nearest opening tag before it. 400 chars is generous for a tag
             # plus an intervening <title>, and short enough that an unrelated span
             # a page away cannot answer for this glyph.

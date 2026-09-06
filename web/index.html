@@ -10074,7 +10074,10 @@ function mapTree(data, mode){
     // page's folder row prints as "affirmed by #N" and the set page now prints as
     // a sentence; this was the third surface and the only silent one.
     const node = {kind:"folder", name:f.name, pseudo:!!f.pseudo, path, kids:[], fid:f.fid,
-      img:f.img, born:f.born,
+      // `focus` rides along beside `born` and for the same reason: the mark drawn
+      // on a born set says WHICH mark, and that is the only thing the two eyes
+      // differ on. Nothing about the drawing's shape or size depends on it.
+      img:f.img, born:f.born, focus:f.focus,
       count, size:mapFolderSize(f.name, count, mode)};
     for(const id of (f.claims||[])){
       if(!data.claims[id] || bornIds.has(id)) continue;
@@ -10402,6 +10405,7 @@ function mapLayout(data, mode){
     if(n.kind==="court"){ box._key="court"; court={...box, name:n.name}; }
     else if(n.kind==="folder"){ box._key="f"+folders.length; folders.push(Object.assign(box, {kind:"folder", name:n.name,
       count:n.count, pseudo:n.pseudo, path:n.path, fid:n.fid, img:n.img, born:n.born,
+      focus:n.focus,
       claims:n.kids.filter(k=>k.kind==="claim").map(k=>k.id),
       also:n.also||[],
       subs:n.kids.filter(k=>k.kind==="folder").length})); }
@@ -11016,9 +11020,26 @@ function mapSvg(L, data, slug){
           // rest of the page prints, so a reader selecting the map's text takes
           // the mark with it. Positioned by its own x/y rather than a scale
           // transform, because type is sized in px and geometry in user units.
+          /* WHICH MARK, from the row rather than written in. This was \u{13080}
+             spelled into it, so a set the court voted to open CONCEALED wore the
+             glyph for one that opens shown — and on this surface the mark is the
+             only thing said about the set's state at all.
+             `focus` IS THE REALM'S OWN BIT, the "f" in the tree row, set from the
+             mark the claim carried. So the map redraws the character the author
+             chose rather than deciding for itself. A set the realm never gave one
+             to has born = 0 and reaches none of this. */
+          /* NAMED `mark`, and the name is load-bearing. check-mark-font finds a
+             glyph by matching a hole that IS one — `${...mark}` — and a local
+             called `mk` was invisible to it, so this site could lose its `wedjat`
+             class and the guard would stay green. Widening the pattern to any
+             short name would flag the verdict marks again; naming the thing what
+             it is costs nothing and reads better. */
+          const mark = f.focus ? SET_MARK : SHUT_MARK;
           return `<text class="mset wedjat" data-fid="${i}" x="${(f.x - es*0.2).toFixed(1)}" `
             + `y="${(f.y + es*0.3).toFixed(1)}" font-size="${es.toFixed(1)}" `
-            + `text-anchor="middle">\u{13080}</text>`; })()
+            + `text-anchor="middle">`
+            + `<title>set that opens ${f.focus ? "shown" : "concealed"}</title>`
+            + `${mark}</text>`; })()
       : "";
     const tag=`<rect class="mfold${f.pseudo?" pseudo":""}" x="${f.x}" y="${f.y}" width="${f.w}" height="${f.h}" rx="4" data-fid="${i}"/>`
       + face + bornMark + wrapFit(f.name, f.count, f, K.fs.header, "mhdr-t", "h"+i);
