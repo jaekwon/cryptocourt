@@ -38,10 +38,22 @@ func TestThePanelsLimitsMatchTheServers(t *testing.T) {
 	}
 
 	// One declaration in the panel, so this reads one place rather than hunting five.
+	//
+	// THE THREE THIS TEST OWNS COME FIRST, and the pattern is anchored on them
+	// rather than on the whole literal, because CHATLIMITS holds caps of two
+	// KINDS. body, moniker and bytes mirror THIS server and drift against it
+	// silently — that is what everything below is about. Others mirror something
+	// else entirely: `setname` is the REALM's folder-name cap, which internal/chat
+	// has never heard of and must not be asserted against here.
+	//
+	// So a trailing `[^}]*` lets the object grow without this test either failing
+	// or quietly claiming authority over a number that is not the server's. It
+	// still fails if one of the three is renamed, reordered or removed, which is
+	// the drift it exists to catch.
 	decl := regexp.MustCompile(
-		`const CHATLIMITS = \{body: (\d+), moniker: (\d+), bytes: (\d+)\}`).FindSubmatch(src)
+		`const CHATLIMITS = \{body: (\d+), moniker: (\d+), bytes: (\d+)[^}]*\}`).FindSubmatch(src)
 	if decl == nil {
-		t.Fatal("web/chat.js must declare CHATLIMITS = {body, moniker, bytes} in one place; " +
+		t.Fatal("web/chat.js must declare CHATLIMITS starting {body, moniker, bytes} in one place; " +
 			"if it was reshaped, reshape this test with it rather than deleting it")
 	}
 	num := func(b []byte) int {
