@@ -105,6 +105,19 @@ if [ -z "$SKIP_CHECKS" ]; then
 	python3 scripts/check-mark-font.py >/dev/null
 	echo "    every set mark still wears the embedded face"
 
+	# AND THE OTHER HALF OF THE FILE. `node --check` above parses the <script>
+	# block; the <style> block beside it is 2,581 lines that NOTHING here reads.
+	# An unclosed comment or a stray brace in CSS does not fail to parse — the
+	# browser DISCARDS rules from that point and renders what is left, so the page
+	# still loads, still works, and is wrong somewhere the deployer did not open.
+	#
+	# Not hypothetical in this file: a comment quoting a selector with backticks
+	# once closed a template literal, and a stray `*/` once left ten lines of prose
+	# being parsed as code. Both were caught by node --check because they landed in
+	# the script; the same mistakes in the stylesheet would have shipped. 0.07s.
+	python3 scripts/check-web-css.py >/dev/null
+	echo "    the stylesheet balances"
+
 	# node --check on the overlay's script block. If node is absent, say so
 	# rather than skipping quietly: a check that silently does not run is worse
 	# than no check.
