@@ -507,7 +507,7 @@ dict(key="p3co", on=before_end(28), arc="dispute", shape=grind_at((6, 3, 3, 2, 1
   dict(key="misc82", on="2021-06-01", arc="no", shape=grind_at((9, 4, 4, 3, 2, 2), (3, 2, 1, 1, 1)),
        path=("Vaccine safety claims",),
        cast=("vaxsafety", "clinician", "skeptic", "statistician"),
-       body='Settles on the arithmetic in the source table.\n\nOne of the most-repeated numbers of the pandemic and one of the easiest to check, which is why it is here: a docket that cannot dispose of a checkable false number is not worth running.',
+       body='Settles on the arithmetic in the source table: the 82% comes from dividing the losses by only those pregnancies that had already ended, when most women vaccinated early were still pregnant at the cutoff.\n\nOne of the most-repeated numbers of the pandemic, and one of the easiest to check. That is why it is here: a court that cannot settle a false number this plain cannot settle anything.',
        title="Vaccination in the first or second trimester was followed by miscarriage in 82% of completed pregnancies."),
   dict(key="denom", on="2021-06-15", arc="yes", shape=sparse_at(2, 10, 2, 3),
        path=("Vaccine safety claims",),
