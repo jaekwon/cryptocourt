@@ -122,10 +122,47 @@ def main():
 
     # The archive is served from 'self'; without the route nothing answers the
     # address gnoweb's markdown points every reader at.
-    if "location /m " not in nginx and "location /m\n" not in nginx and "location /m{" not in nginx:
+    #
+    # AND THE ROUTE HAS TO BE SPLIT, which is the part this learned the hard way.
+    # `location /m` is a PREFIX in nginx and matches any URI beginning with those
+    # two characters — including /media.js, which the overlay ships beside
+    # index.html. Written that way it proxies the page's own script to the
+    # archive, which does not serve it: MEASURED on kourt.xyz, the map came up
+    # with no media at all. So the upload takes an EXACT match and the blobs take
+    # a prefix with the slash, and a bare `location /m` is now a failure here
+    # rather than the fix it looks like.
+    exact, under = "location = /m ", "location /m/ "
+    if exact not in nginx or under not in nginx:
         problems.append(
-            "  no /m location in nginx.conf: the archive is unreachable and every "
-            "exhibit on every claim page is a broken image")
+            "  nginx.conf needs both `location = /m` (the upload) and "
+            "`location /m/` (the blobs). Without them the archive is unreachable "
+            "and every exhibit on every claim page is a broken image — served as "
+            "200 and index.html, so a miss looks exactly like a hit.")
+    for bare in ("location /m {", "location /m{", "location /m\n"):
+        if bare in nginx:
+            problems.append(
+                "  nginx.conf has a bare `location /m`, which is a PREFIX match: "
+                "it swallows /media.js and proxies the overlay's own script to "
+                "the archive. Split it into `= /m` and `/m/`.")
+            break
+
+    # A ROUTE WITH NOTHING BEHIND IT KEEPS NOTHING. The archive only serves bytes
+    # it has promoted, and it can only promote by asking a node whether the chain
+    # really references them — so without --archive-rpc the flag's own help says
+    # what happens: "empty disables promotion, so every upload expires". The unit
+    # shipped without it and every filed picture was swept an hour later.
+    #
+    # THE DIRECTIVES ONLY, NOT THE COMMENTS. The unit explains at length why this
+    # flag matters, so a search of the whole file finds the WORD "--archive-rpc"
+    # in the paragraph about it and passes with the flag itself deleted. Caught by
+    # mutation, one edit after the check was written.
+    unit = open(os.path.join(ROOT, "deploy/kourtchat.service")).read()
+    unit = "\n".join(ln for ln in unit.splitlines() if not ln.lstrip().startswith("#"))
+    if "--archive-rpc" not in unit:
+        problems.append(
+            "  deploy/kourtchat.service does not pass --archive-rpc: the archive "
+            "cannot ask a chain what is referenced, so it promotes nothing and "
+            "every uploaded image expires an hour after it is filed.")
 
     # THE WIRE FORMAT HAS A FIFTH IMPLEMENTATION. scenario.py builds the same
     # eight fields web/media.js builds and realm/r/kourtv2 parses, so a demo can
