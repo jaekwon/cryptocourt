@@ -13030,6 +13030,28 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
       ]);
       return nm? {fid, name:nm, count: itemsRaw==null? null : uint64List(itemsRaw).length} : null;
     }))).filter(Boolean);
+    /* AND THE NAMES THIS PAGE ALREADY PAID FOR GO TO THE CHAT PANEL. Measured
+       across the six routes that mount the panel: the court page, the map and a
+       set page fill SETFID and a set named in chat becomes a link; the CLAIM page
+       did not, so the same message was a link one click away and plain text here —
+       on the surface where a reader is most likely to be talking about the claim's
+       own sets.
+       NOT A NEW READ. These are the folder names the "filed in" row above just
+       fetched. The alternative was chainFolders() again, on a page that has no
+       other use for the whole tree.
+       PARTIAL, AND SAFE BECAUSE ABSENT IS THE FAILING STATE. This knows only the
+       sets THIS claim is filed in, not the court's whole list — and a name it has
+       not got answers null, which is exactly what it answered before. It can make
+       a link appear; it cannot make a wrong one.
+       MERGED WHEN THE COURT MATCHES, replaced when it does not, so arriving here
+       from the court page keeps the complete list rather than shrinking it to this
+       claim's few. Nothing retired can enter: RetireFolder clears a folder's item
+       list, so a struck set is not in ClaimFolders to begin with. */
+    if(claimFolders.length){
+      const names = SETFID.slug === String(slug) ? SETFID.names : new Map();
+      for(const f of claimFolders) names.set(String(f.name), f.fid);
+      SETFID = {slug: String(slug), names};
+    }
   }
   /* TITLES FOR THE ASSOCIATION ROWS, and the gate on them was left behind when
      the chain learned to store relations.

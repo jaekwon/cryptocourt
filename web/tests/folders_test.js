@@ -639,6 +639,17 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
   ok("...and replaced whole by the read that fills it",
      /SETFID = \{slug: String\(slug\), names: live\};/.test(src));
 
+  /* THE CLAIM PAGE FEEDS THE REGISTRY FROM NAMES IT ALREADY FETCHED. Measured
+     across the six routes that mount the chat panel: the court page, the map and a
+     set page filled it; the claim page did not, so a set named in chat was a link
+     one click away and plain text there.
+     MERGED, NOT REPLACED, when the court matches — arriving from the court page
+     must keep the complete list rather than shrinking it to this claim's few. */
+  ok("the claim page hands its folder names to the chat registry",
+     /for\(const f of claimFolders\) names\.set\(String\(f\.name\), f\.fid\);/.test(src));
+  ok("...merging when the court matches, replacing when it does not",
+     /const names = SETFID\.slug === String\(slug\) \? SETFID\.names : new Map\(\);/.test(src));
+
   console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");
   process.exit(fail?1:0);
 })();
