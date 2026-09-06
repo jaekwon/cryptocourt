@@ -546,9 +546,16 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
      && /This claim asks the court for a set called/.test(src));
   ok("...and it says a YES alone does not create it",
      /A YES does not create it by itself/.test(src));
-  ok("...naming the set from the title's own tail, not a second read",
-     /setName = String\(d\.title\|\|""\)\.startsWith\(SET_MARK \+ " "\)/.test(src)
-     && /\.slice\(SET_MARK\.length \+ 1\)/.test(src));
+  /* NAMED BY THE ONE PARSER, not by a prefix test of its own. Five sites tested
+     `startsWith(SET_MARK + " ")` and every one was blind to 𓁼 — including the gate
+     on the New panel, so a court could settle a concealed heading YES and the page
+     would offer no way to carry it. */
+  ok("...naming the set through the parser that knows both marks",
+     /const setName = \(setTitleParts\(d\.title\) \|\| \{\}\)\.name \|\| "";/.test(src));
+  ok("...and the New panel is gated by it too",
+     /const isSetHead = isSetTitle\(d\.title\);/.test(src));
+  ok("...with the parser taking either mark and answering which",
+     /for\(const \[mark, shown\] of \[\[SET_MARK, true\], \[SHUT_MARK, false\]\]\)/.test(src));
 
   /* AND THE AFFIRM PANEL WAITS FOR THE CHAIN BEFORE IT CLAIMS ANYTHING. Measured
      on kourt.xyz against an already-carried heading: the button appeared at

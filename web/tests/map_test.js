@@ -62,7 +62,9 @@ function buildCode(patch){
   // and the geometry itself, stubbed: what matters here is that the mark is
   // emitted for the right titles, not what its paths look like.
   code += "var SET_MARK = '\\u{13080}';\n";
-  code += fn('isSetTitle') + '\n' + fn('stripSetMark') + '\n';
+  code += "var SHUT_MARK = '\\u{1307C}';\n";   // 𓁼 — the second mark, opens concealed
+  code += fn('setTitleParts');   // the real one — a stub could know one mark
+code += fn('isSetTitle') + '\n' + fn('stripSetMark') + '\n';
   code += "var EYE_MARK_PATHS = '<path/>';\n";
   // the real body renderer: mapSelCard shows a claim's body now
   code += slice('function claimBody(', '/* ===');
@@ -273,6 +275,7 @@ ok("A-I pass on live 50-claim ring (both modes)", livepass);
   // The card dresses its title with the shared builder now — the same one the
   // claim page's heading uses — so it has to be in scope here too.
   global.SET_MARK = "\u{13080}";
+global.SHUT_MARK = "\u{1307C}";   // 𓁼 — the second mark, opens concealed
   global.ICN_EYE_OPEN = '<svg class="eye eyeopen"></svg>';   // drawn form; the harness needs it to exist, not to render
   eval(fn('setMarkHtml'));
   // The map draws the mark instead of writing it, so it needs the two

@@ -14697,6 +14697,31 @@ function focusStakeSide(side){
    the chain does not consider a set — which is the more dangerous direction of
    the two, because it is the one a reader would believe. */
 const SET_MARK = "\u{13080}";
+/* AND THE SECOND MARK, which this file did not have. The realm takes BOTH — 𓂀
+   D010 opens the set shown, 𓁼 D007 opens it concealed, and parseSetTitle returns
+   which — while every test here was `startsWith(SET_MARK + " ")`, five of them,
+   each blind to the other half.
+   WHAT THAT COST, and the worst one is not cosmetic: isSetHead gates the New
+   panel, so a court could settle a 𓁼 heading YES and the page would offer no way
+   to carry it. The realm would have taken the call; nothing on the page made it.
+   The claim page's "this asks the court for a set called X" line was absent for
+   the same reason, and the map kept the raw glyph in the words instead of drawing
+   it as geometry.
+   ONE PARSER, FIVE CALLERS, mirroring parseSetTitle rather than restating its
+   rule: the mark, ONE space, then the name. Five copies of a prefix test is five
+   places for a second mark to be forgotten again, which is exactly what happened.
+   `shown` COMES OUT OF THE MARK, not a field beside it — the same trade the realm
+   makes. A caller that only needs the name ignores it. */
+const SHUT_MARK = "\u{1307C}";
+function setTitleParts(t){
+  const s = String(t == null ? "" : t);
+  for(const [mark, shown] of [[SET_MARK, true], [SHUT_MARK, false]]){
+    if(s.startsWith(mark + " ") && s.length > mark.length + 1){
+      return {mark, shown, name: s.slice(mark.length + 1)};
+    }
+  }
+  return null;
+}
 /* THE MAP CANNOT DRAW HTML, so a set-heading's title reached the SVG with the
    codepoint still in it — and that is the one place the raw character actually
    hurts. In HTML setMarkHtml swaps it for the drawn eye; in an SVG <text> there
@@ -14706,10 +14731,10 @@ const SET_MARK = "\u{13080}";
    Same codepoint, same delimiter as parseSetTitle on chain — a looser test here
    would strip the first character off an ordinary claim. */
 function stripSetMark(t){
-  const s = String(t == null ? "" : t);
-  return s.startsWith(SET_MARK + " ") ? s.slice(SET_MARK.length + 1) : s;
+  const p = setTitleParts(t);
+  return p ? p.name : String(t == null ? "" : t);
 }
-function isSetTitle(t){ return String(t == null ? "" : t).startsWith(SET_MARK + " "); }
+function isSetTitle(t){ return !!setTitleParts(t); }
 /* THE DOOR TO A GOVERNED SET, and it was the one thing this feature never had.
    Everything else existed — the realm parses the heading, the page draws the eye,
    the affirm button carries a settled YES into a real set — and the only way to
@@ -14741,10 +14766,11 @@ function proposeSetBtn(slug, fid, into){
           null, false, true);
 }
 function setMarkHtml(escaped){
-  if(!escaped.startsWith(SET_MARK + " ")) return escaped;
+  const p = setTitleParts(escaped);
+  if(!p) return escaped;
   // The character itself, wrapped in the face that can always render it — not
   // stripped and redrawn. A reader who selects the title takes the mark with it.
-  return EYE_CHAR + " " + escaped.slice(SET_MARK.length + 1);
+  return EYE_CHAR + " " + p.name;
 }
 /* `tail` IS WHATEVER TRAILS THE VERDICT, and it rides INSIDE the oval's own
    unbreakable unit. The docket's figure was appended after this sentence and
@@ -15218,7 +15244,7 @@ function resolutionSection(slug,id,d,nowH,tl){
        fillSetAffirm below removes it once ClaimSet answers non-zero; the realm
        refuses a second call regardless, so the worst case is a clear panic
        rather than a duplicate set. */
-    const isSetHead = String(d.title||"").startsWith(SET_MARK + " ");
+    const isSetHead = isSetTitle(d.title);
     inner = `<div class="notice ${ruledNo? "ruled-no" : "good"}"><span class="g">${ruledNo? "✕" : "✓"}</span><div><b>Settled ${sideName(v)}</b>${d.route?" — "+esc(d.route)+"":""}.
       Both sides withdraw principal 1×; the winning side also draws its accuracy reward once the rewards are opened.
       ${isSetHead && !ruledNo? `<div class="actions" id="setaffirm" hidden style="margin-top:10px">
@@ -15273,8 +15299,7 @@ function resolutionSection(slug,id,d,nowH,tl){
      an offer.
      THE NAME IS THE TITLE'S OWN TAIL, cut at the mark and its single space, so
      the sentence cannot disagree with the heading above it. */
-  const setName = String(d.title||"").startsWith(SET_MARK + " ")
-    ? String(d.title).slice(SET_MARK.length + 1) : "";
+  const setName = (setTitleParts(d.title) || {}).name || "";
   const pending = setName && d.phase!=="settled" && d.phase!=="provClose" && d.phase!=="closed";
   const ask = pending
     ? `<p class="small muted" style="margin:8px 0 0">This claim asks the court for a set called

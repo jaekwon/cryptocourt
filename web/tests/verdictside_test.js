@@ -45,6 +45,8 @@ eval(slice('function safeInline(', '\n'));
    assertions keep passing over a control that had stopped being a button. */
 eval(fn('secHelp'));
 global.SET_MARK = "\u{13080}";
+global.SHUT_MARK = "\u{1307C}";   // 𓁼 — the second mark, opens concealed
+eval(slice('function setTitleParts(', '\n}') + '}');   // the real parser
 global.ICN_EYE_OPEN = '<svg class="eye eyeopen"></svg>';   // drawn form; the harness needs it to exist, not to render
 global.EYE_CHAR = '<span class="wedjat">\u{13080}</span>';   // the character, in the embedded face
 eval(fn('setMarkHtml'));
