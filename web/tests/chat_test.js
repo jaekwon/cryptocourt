@@ -863,6 +863,13 @@ function mkDoc() {
        assertion would pass against a panel that had normalised them. */
     ok("...and so does the concealed mark",
        /href="#\/c\/covid\/f\/7"/.test(line(S + " set", "covid")));
+    /* THE MARK WEARS THE PAGE'S OWN GLYPH CLASS, which is where the shipped
+       wedjat-font is applied. Measured on kourt.xyz before this: the map's marks
+       computed wedjat-font and this panel's computed -apple-system, the system
+       fallback — a hieroglyph on a Mac and a tofu box on most machines, in the one
+       place a reader is being invited to click. */
+    ok("the mark borrows .wedjat, so the shipped font reaches it",
+       /class="chatmark wedjat"/.test(line(M + " set", "covid")));
     ok("𓂀 hovers as shown", /title="shown"/.test(line(M + " set", "covid")));
     ok("𓁼 hovers as concealed", /title="concealed"/.test(line(S + " set", "covid")));
     ok("a name the court does not have is left as text",

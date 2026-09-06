@@ -308,7 +308,7 @@ function chatLineHtml(m, nowSec, court) {
      from the CSS that styles it. */
   const said = fid == null ? chatEsc(m.body)
     : '<a class="chatset" href="#/c/' + chatEsc(court) + "/f/" + chatEsc(String(fid))
-      + '"><span class="chatmark" title="' + chatEsc(CHATSETMARKS[hit.mark]) + '">' + hit.mark
+      + '"><span class="chatmark wedjat" title="' + chatEsc(CHATSETMARKS[hit.mark]) + '">' + hit.mark
       + '</span><span class="chatsetname">' + chatEsc(hit.name) + "</span></a>";
   const body = '<span class="chatbody">' + said + "</span>";
   return '<li class="chatmsg">'
@@ -602,7 +602,18 @@ const CHATCSS = `
 .chatsetname{font-weight:600;color:var(--accent,inherit)}
 /* THE MARK CARRIES THE ONE DIFFERENCE between the two eyes, so it gets the
    help cursor that says "there is something to read here" — the title is the
-   whole of what distinguishes shown from concealed. */
+   whole of what distinguishes shown from concealed.
+   AND IT WEARS .wedjat AS WELL, which is the page's own class for this glyph and
+   already carries the subsetted font shipped for it. Measured on kourt.xyz before
+   this line existed: the map drew its marks as text.mset.wedjat and computed
+   wedjat-font, while a mark in this panel computed -apple-system — the system
+   fallback, which is a hieroglyph font on this desk and a tofu box on most.
+   NOT A FONT RULE OF ITS OWN, because there is nothing to add: the class exists,
+   the font is loaded, and a second declaration here would be a second thing to
+   keep true. This file styles the CHIP; the page styles the GLYPH.
+   THE ONE COST IS STATED: chat.js is otherwise self-contained, and this is the
+   single class it borrows. Rendered outside the overlay the mark falls back
+   exactly as it does today, so nothing breaks that was working. */
 .chatmark{cursor:help;margin-right:.35em}
 .chatage{flex:0 0 auto;opacity:.45;font-size:.85em}
 .chatempty{opacity:.55;padding:.3rem 0}
