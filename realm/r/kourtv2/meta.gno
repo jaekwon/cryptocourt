@@ -527,13 +527,38 @@ func applyMetaVerb(mc, tc *Court, cm *courtMod, p modParse, cs, target *claimSta
 	case verbNewset:
 		/* RE-CHECKED AT EXECUTION, because weeks pass between a proposal and the
 		   verdict that carries it: the court can fill up, the name can be taken
-		   by an ordinary CreateFolder, and the parent can be retired. Every rule
-		   newFolderCore enforces is re-run here — it is the same body the
-		   moderator path calls, which is what keeps the two from drifting.
-		   A name that has since been taken is a REFUSAL, not a duplicate. */
+		   by an ordinary CreateFolder, and the parent can be struck from the tree.
+		   A name that has since been taken is a REFUSAL, not a duplicate.
+		   THIS COMMENT USED TO SAY "every rule newFolderCore enforces is re-run
+		   here", and listed the retired parent among them. Two of the three are
+		   its rules — the cap and the depth. Liveness is NOT: newFolderCore and
+		   mustNestable contain no reference to `retired` or `purged` at all, so
+		   the case the sentence named as covered was the one thing nothing
+		   checked. */
 		prop := cm.mustFolderProposal(p.target)
 		if folderNameTaken(cm, prop.name) {
 			panic("kourtv2: a folder by that name already exists")
+		}
+		/* A PARENT THAT LEFT THE TREE IS A REFUSAL. Without this a carried verdict
+		   builds a LIVE folder under a struck one — the shape RetireFolder refuses
+		   to create ("retire the folders inside it first, so the tree cannot grow
+		   orphans"), reached from underneath instead of from above. Same hole
+		   AffirmSet had, and the same fix, one verb over.
+		   PURGED AS WELL AS RETIRED, which is where this differs from AffirmSet's
+		   guard. That one reads its parent from ClaimFolders, and ClaimFolders
+		   already skips purged rows, so a purged parent cannot reach it and a
+		   branch for one would be dead. This parent comes from a proposal STORED
+		   WEEKS AGO, which nothing revisits when the folder is purged — and a
+		   purged parent is the worse of the two, since PurgeFolder erases the name
+		   and leaves the children.
+		   NOT AT REGISTRATION INSTEAD: the folder is live when the proposal is
+		   written and struck later, which is exactly the drift the block above
+		   exists for. Refusing here costs a re-file; refusing there would not have
+		   seen it. */
+		if prop.parent != 0 {
+			if pf := cm.mustFolder(prop.parent); pf.retired || pf.purged {
+				panic("kourtv2: the parent heading is no longer in the tree")
+			}
 		}
 		fid := newFolderCore(cm, prop.name, prop.desc, prop.parent)
 		emitModAct(tc.id, 0, "folder-create", by)

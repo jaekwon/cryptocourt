@@ -960,6 +960,76 @@ func TestMetaLifecycleGuards(cur realm, t *testing.T) {
 			t.Fatal("...but it must still pay its author — that is the reward being offered")
 		}
 	}
+
+	// ---- 22. newset REFUSES A PARENT STRUCK FROM THE TREE -------------------
+	/* THE SAME HOLE AffirmSet HAD, one verb over. A folder proposal STORES its
+	   parent and the verdict that carries it lands weeks later; nothing revisits
+	   the proposal when that parent is retired or purged, and newFolderCore never
+	   asked — it and mustNestable contain no reference to either field. So a
+	   carried verdict built a LIVE folder under a struck one, which is the shape
+	   RetireFolder refuses to create from above ("retire the folders inside it
+	   first, so the tree cannot grow orphans").
+	   AND THE COMMENT SAID IT WAS COVERED: "the court can fill up, the name can be
+	   taken by an ordinary CreateFolder, and the parent can be retired. Every rule
+	   newFolderCore enforces is re-run here." Two of those three are its rules.
+	   The third was named as handled and was the one thing nothing checked, which
+	   is worse than silence — it answers the question a reader came to ask.
+	   A FRESH COURT, because latchKey is "fold:"+court for newset: two live newset
+	   appeals on one court collide on the review slot, by design, so the two arms
+	   below cannot share mtxf or each other.
+	   AND IN HERE RATHER THAN IN A TEST OF ITS OWN, which is this file's standing
+	   rule and not a preference: "every test that drives meta's lifecycle must
+	   live in one function, or a later test writes a coin checkpoint at a lower
+	   epoch than an earlier one." Written as a separate Test it failed exactly
+	   that way — "checkpoint: the clock went backwards", in 0.00s, on the first
+	   meta mint. */
+	testCourt(cur, "mtxg", alice, 10_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	AppointMods(cross(cur), "mtxg", 1, alice)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	gparent := CreateFolder(cross(cur), "mtxg", "Origins", "where it began")
+	// REGISTERED WHILE THE PARENT IS LIVE — this is drift, not a bad filing.
+	// Refusing at registration would have had nothing to refuse.
+	testing.SetRealm(testing.NewUserRealm(bob))
+	gprop := RegisterFolderProposal(cross(cur), "mtxg", "Struck child", "", gparent)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	RetireFolder(cross(cur), "mtxg", gparent)
+
+	gBefore := FolderCount("mtxg")
+	apg := appeal("mod:newset:mtxg/" + strconv.FormatUint(gprop, 10))
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, "no longer in the tree", func() {
+		ExecuteMetaVerdict(cross(cur), apg)
+	})
+	if FolderCount("mtxg") != gBefore {
+		t.Fatal("a refused newset must create nothing")
+	}
+
+	// AND A LIVE PARENT STILL CARRIES, so the guard is a "not yet" rather than a
+	// refusal of every newset with a parent. Its own court, for the latch.
+	testCourt(cur, "mtxh", alice, 10_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	AppointMods(cross(cur), "mtxh", 1, alice)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	hparent := CreateFolder(cross(cur), "mtxh", "Origins", "where it began")
+	testing.SetRealm(testing.NewUserRealm(bob))
+	hprop := RegisterFolderProposal(cross(cur), "mtxh", "Live child", "", hparent)
+	// Retired and RESTORED in the window: the guard reads the state at execution,
+	// so a parent that came back is a parent that works.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	RetireFolder(cross(cur), "mtxh", hparent)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	RestoreFolder(cross(cur), "mtxh", hparent)
+
+	aph := appeal("mod:newset:mtxh/" + strconv.FormatUint(hprop, 10))
+	testing.SetRealm(testing.NewUserRealm(alice))
+	ExecuteMetaVerdict(cross(cur), aph)
+	if FolderCount("mtxh") != 2 {
+		t.Fatalf("a restored parent must carry: FolderCount=%d", FolderCount("mtxh"))
+	}
+	if FolderParent("mtxh", 2) != hparent {
+		t.Fatal("...and the child must land under the parent the proposal named")
+	}
 }
 
 // metaRealmPath is a STRING CONSTANT, and meta's escrow is derived from it,
