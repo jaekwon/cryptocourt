@@ -12430,8 +12430,17 @@ function mountMap(slug, data, focusId, focusPath){
 
      Keys, not ids: "court", "f<i>", "c<id>". A folder and a claim both number
      from 1 and a court is neither, so one Set of ids could not hold all three. */
-  function dimTo(key){
-    const N=mapNeighbourhood(L, key);
+  /* THE UNION, not the newest. Holding two nodes and dimming to one of them would
+     grey out the other — the map would tell a reader they had not selected the
+     thing they had just selected. So each key contributes its own neighbourhood
+     and what survives is anything reachable from any of them. */
+  function dimTo(keys){
+    const ks = Array.isArray(keys) ? keys : [keys];
+    const N = {nodes:new Set(), spokes:new Set(), edges:new Set()};
+    ks.forEach(k=>{ const n = mapNeighbourhood(L, k);
+      n.nodes.forEach(v=>N.nodes.add(v));
+      n.spokes.forEach(v=>N.spokes.add(v));
+      n.edges.forEach(v=>N.edges.add(v)); });
     box.querySelectorAll(".mnode-a").forEach(a=>a.classList.toggle("dim", !N.nodes.has("c"+a.dataset.id)));
     box.querySelectorAll(".mfold-a").forEach(a=>a.classList.toggle("dim", !N.nodes.has("f"+a.dataset.fid)));
     box.querySelectorAll(".mcourt-a").forEach(a=>a.classList.toggle("dim", !N.nodes.has("court")));
@@ -12457,20 +12466,31 @@ function mountMap(slug, data, focusId, focusPath){
   // A selection is a KIND and a key, because a folder, a claim and the court are
   // all selectable and their ids are separate numbering. `{kind:"claim", id}`,
   // `{kind:"folder", fid}` or `{kind:"court"}`; null for nothing selected.
-  let sel = null;
+  /* A STACK, NOT A SLOT. Clicking a second node ADDS it — both stay marked and
+     both stay lit — and the card follows the newest, which is the behaviour a
+     single selection already had and the only part a reader had learned.
+     RE-CLICKING REMOVES. A node already held is deselected by clicking it again,
+     which is what makes the accumulation escapable without hunting for the ×:
+     the gesture that added it takes it away.
+     Last is focused: the card, the centring and the text fetch all read SEL[SEL
+     .length-1], so "most recent" has exactly one meaning across the three. */
+  let SEL = [];
   // The key a selection dims to. One string for three kinds, so paint() and the
   // hover handler ask neighbourhood() the same question.
   const selKey = x => !x ? null
     : x.kind==="claim" ? "c"+x.id : x.kind==="folder" ? "f"+x.fid : "court";
+  const focused = () => SEL.length ? SEL[SEL.length-1] : null;
   function paint(){
+    const sel = focused();
+    const held = new Set(SEL.map(selKey));      // every node held, not just the newest
     const selClaim = sel && sel.kind==="claim" ? sel.id : null;
     const selFold = sel && sel.kind==="folder" ? sel.fid : null;
     box.querySelectorAll(".mnode-a").forEach(a=>
-      a.classList.toggle("selected", parseInt(a.dataset.id,10)===selClaim));
+      a.classList.toggle("selected", held.has("c"+a.dataset.id)));
     box.querySelectorAll(".mfold-a").forEach(a=>
-      a.classList.toggle("selected", parseInt(a.dataset.fid,10)===selFold));
+      a.classList.toggle("selected", held.has("f"+a.dataset.fid)));
     box.querySelectorAll(".mcourt-a").forEach(a=>
-      a.classList.toggle("selected", !!sel && sel.kind==="court"));
+      a.classList.toggle("selected", held.has("court")));
     if(!sel){
       undim();
       // The empty state is an affordance, not a blank: the map gave no sign it
@@ -12482,7 +12502,7 @@ function mountMap(slug, data, focusId, focusPath){
       return;
     }
     // The dim is the same call whatever was picked; only the card differs.
-    dimTo(selKey(sel));
+    dimTo(SEL.map(selKey));
     if(!panel) return;
     if(sel.kind==="court") panel.innerHTML = mapCourtCard(data, slug, L);
     else if(selClaim!=null) panel.innerHTML = mapSelCard(selClaim, data, slug, L);
@@ -12533,8 +12553,11 @@ function mountMap(slug, data, focusId, focusPath){
     if(!isLive() || !next || next.kind==="court") return;   // a court's card is all layout
     const key = next.kind==="claim" ? "c"+next.id : "f"+next.fid;
     if(asked.has(key)) return;
-    const same = () => sel && ((sel.kind==="claim" && "c"+sel.id===key)
-                            || (sel.kind==="folder" && "f"+sel.fid===key));
+    /* STILL HELD, not still newest. The text arrives late, and by then the reader
+       may have picked a second node — the first is still on screen and still
+       wants its body. Asking whether it is the FOCUS would drop text for a card
+       the reader can see. */
+    const same = () => SEL.some(x=>selKey(x)===key);
     const sq = gstr(slug);
     if(next.kind==="claim"){
       const c = data.claims[next.id];
@@ -12552,7 +12575,26 @@ function mountMap(slug, data, focusId, focusPath){
       if(f.desc && same()) paint();
     }
   }
-  function select(next){ sel=next; paint(); fetchText(next); centreOn(next); }
+  /* select(null) clears everything — the × and a click on empty map both mean
+     "done", not "drop the newest".
+     A NODE ALREADY HELD IS RELEASED. Clicking it again removes it and the card
+     falls back to whatever is now newest, or to the hint when nothing is left.
+     Nothing is centred or re-fetched on a release: the reader is looking at the
+     node they just clicked, and yanking the viewport away from it would punish
+     the gesture. */
+  function select(next){
+    if(!next){ SEL = []; paint(); return; }
+    const k = selKey(next), at = SEL.findIndex(x=>selKey(x)===k);
+    if(at >= 0){
+      SEL.splice(at, 1);
+      paint();
+      const f = focused();
+      if(f) fetchText(f);
+      return;
+    }
+    SEL.push(next);
+    paint(); fetchText(next); centreOn(next);
+  }
   box.addEventListener("click", ev=>{
     if(ev.defaultPrevented) return;
     if(ev.metaKey||ev.ctrlKey||ev.shiftKey||ev.altKey||ev.button!==0) return; // let the link work

@@ -208,16 +208,39 @@ ok("clicking a claim from a clean map opens its card", /Open claim page/.test(pa
    && /#1/.test(panel.innerHTML));
 ok("and the node is marked selected", claimA(1).classList.contains("selected"));
 
-// folder then folder
+/* A SECOND PICK ADDS, IT DOES NOT REPLACE. The card follows the newest — which is
+   what a single selection already did and the only part a reader had learned —
+   but the first node STAYS marked and stays lit. Selecting two things and
+   watching one of them go out is the map disagreeing with the reader about what
+   they just did. */
 folderA().click();
-ok("a folder click after a claim swaps back", /Open set page/.test(panel.innerHTML));
-ok("and the claim is no longer marked", !claimA(1).classList.contains("selected"));
+ok("a folder click after a claim moves the card to the folder", /Open set page/.test(panel.innerHTML));
+ok("...and the claim is STILL marked", claimA(1).classList.contains("selected"));
+ok("...and so is the folder", folderA().classList.contains("selected"));
 
-// clearing
+/* RE-CLICKING RELEASES, which is what makes the accumulation escapable without
+   hunting for the ×: the gesture that added a node takes it away. And the card
+   falls back to whatever is newest AFTER the removal, not to nothing. */
+claimA(1).click();
+ok("re-clicking a held claim releases it", !claimA(1).classList.contains("selected"));
+ok("...the folder is untouched by that", folderA().classList.contains("selected"));
+ok("...and the card falls back to what is still held", /Open set page/.test(panel.innerHTML));
+
+// ...and releasing the last one leaves the empty state, not a stale card.
+folderA().click();
+ok("releasing the last selection returns the hint", /Click a claim/.test(panel.innerHTML));
+ok("...with nothing marked",
+   !claimA(1).classList.contains("selected") && !folderA().classList.contains("selected"));
+
+// clearing — the × still means "done", not "drop the newest"
+mount();
+claimA(1).click(); folderA().click();
 const x = panel.querySelector("#msel-x");
 ok("the card offers a close control", !!x);
 if(x) x.click();
 ok("closing returns the hint", /Click a claim/.test(panel.innerHTML));
+ok("...and drops EVERY selection, not just the newest",
+   !claimA(1).classList.contains("selected") && !folderA().classList.contains("selected"));
 
 // ---- the view follows the selection --------------------------------------
 {
