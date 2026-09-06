@@ -2122,6 +2122,10 @@ tr.youare .mono{font-weight:600}
 /* The legend's own ring, for the same reason: on the map this mark rides whichever
    oval the side gave it, so a green key would say a challenged NO is drawn green. */
 .mvtag.q{stroke:var(--muted)}
+/* The set mark's ring. Accent, because that is the colour every other surface
+   gives a set — the sidebar row, the title's mark, the folder page heading —
+   and the verdict ovals are already spoken for by yes/no/ink/muted. */
+.msetring{stroke:var(--accent)}
 .mvtag.q.re{stroke-dasharray:3 2}
 .mvt.y{fill:var(--yes)}  .mvtag.y{stroke:var(--yes)}
 .mvt.n{fill:var(--no)}   .mvtag.n{stroke:var(--no)}
@@ -9816,7 +9820,18 @@ function mapCourtSize(name, mode){
    rather than a mark, so nothing is drawn and nothing is reserved. */
 function mapSetMark(born, h){
   const es = born ? Math.min(MAPK.fs.header * 1.25, h) : 0;
-  return es >= 7 ? {es: es, lead: es + 4} : {es: 0, lead: 0};
+  if(es < 7) return {es: 0, r: 0, lead: 0};
+  /* A RING, THE WAY THE VERDICT OVALS ARE RINGS. Drawn inside the box the mark
+     was clear but read as a letter of the name; hung on the border bare it read
+     as a smudge on the edge. What makes (YES) legible in the same position is
+     not where it sits but that it is ENCLOSED and fills its own ground — so
+     this borrows the oval: `.mvtag` fill and stroke, centred ON the corner, a
+     quarter of it inside and the rest out over the background.
+     ONLY THAT QUARTER CAN REACH THE LABEL, and `tpad` already holds the text
+     clear of most of it. The lead is what is left over — about four units,
+     against the twenty a mark drawn wholly inside had to be given. */
+  const r = es * 0.66;
+  return {es: es, r: r, lead: Math.max(0, r + 2 - MAPK.tpad)};
 }
 function mapFolderSize(name, count, mode, born){
   const base = MAPK.fnode[mode];
@@ -11033,24 +11048,20 @@ function mapSvg(L, data, slug){
        the sidebar rows carry the eye, the set page names the claim, and the box
        drawn for the same set carried nothing. Top-left, small, clear of the
        subject watermark which is held to the right edge. */
-    /* IN THE BOX, AT THE LEFT, AND THE LABEL IS TOLD TO MAKE ROOM. This hung off
-       the top-left corner — centred 0.2em OUTSIDE the left edge, straddling the
-       boundary the way a badge does — and at map scale it read as a smudge on
-       the border rather than as anything the node was saying.
-       IT WENT OUT THERE BECAUSE INSIDE COLLIDED: a folder label is left-aligned
-       and vertically centred, so the mark landed on the first letter and read as
-       part of the word ("𓂀Vaccine safety claims"). The answer is not to put it
-       back on top of the text but to RESERVE the width — `label` has always
-       taken a `dx` for exactly this, to set a title after an id, and wrapFit now
-       passes one down. So the mark sits inside and the name begins after it.
-       CENTRED ON THE BOX, not on line one. The label block is vertically centred
-       too, so one number places the mark for a one-line name and a two-line one
-       alike, with no second layout to keep in step. */
-    /* THE SAME ANSWER THE LAYOUT SIZED THIS BOX WITH. mapFolderSize asked
-       mapSetMark for the width to keep clear and grew the box by it; this asks the
-       same function so the mark drawn is the mark the box was made for. */
-    const {es: bornEs, lead: bornLead} = mapSetMark(!f.pseudo && f.born, f.h);
-    const bornMark = bornLead
+    /* ON THE CORNER, IN A RING. This has been in three places now and the ring is
+       what settles it: inside the box the eye landed on the first letter of a
+       left-aligned, vertically centred label and read as part of the word; out
+       on the bare border it read as a smudge rather than as something the node
+       was saying. The verdict ovals sit in exactly this position on the other
+       corner and are perfectly legible, and what does that is the ENCLOSURE —
+       a stroked outline over its own fill, so the shape belongs to the box it
+       is attached to instead of dissolving into the edge it crosses.
+       CENTRED ON THE CORNER, so three quarters of it is out over the background
+       and cannot cover anything. mapSetMark says how much of the last quarter
+       the label still has to be moved for, and mapFolderSize grew the box by
+       exactly that — the same number, from the same answer. */
+    const {es: bornEs, r: bornR, lead: bornLead} = mapSetMark(!f.pseudo && f.born, f.h);
+    const bornMark = bornEs
       ? (()=>{ const es = bornEs;
           // A <text> in the embedded face, not paths: the same character the
           // rest of the page prints, so a reader selecting the map's text takes
@@ -11071,9 +11082,15 @@ function mapSvg(L, data, slug){
              short name would flag the verdict marks again; naming the thing what
              it is costs nothing and reads better. */
           const mark = f.focus ? SET_MARK : SHUT_MARK;
-          return `<text class="mset wedjat" data-fid="${i}" x="${(f.x + K.tpad).toFixed(1)}" `
-            + `y="${(f.y + f.h/2 + es*0.34).toFixed(1)}" font-size="${es.toFixed(1)}" `
-            + `text-anchor="start">`
+          /* The ring first, then the glyph over it. `.mvtag` is the verdict
+             oval's own class — the surface fill and the non-scaling stroke that
+             keep an outline one pixel wide at every zoom — so the two badges
+             thicken and thin together instead of drifting apart. */
+          return `<circle class="mvtag msetring" cx="${f.x.toFixed(1)}" `
+            + `cy="${f.y.toFixed(1)}" r="${bornR.toFixed(1)}" data-fid="${i}"/>`
+            + `<text class="mset wedjat" data-fid="${i}" x="${f.x.toFixed(1)}" `
+            + `y="${(f.y + es*0.35).toFixed(1)}" font-size="${es.toFixed(1)}" `
+            + `text-anchor="middle">`
             + `<title>${setOpensWords(f.focus)}</title>`
             + `${mark}</text>`; })()
       : "";

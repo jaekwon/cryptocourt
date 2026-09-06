@@ -360,8 +360,20 @@ const {PAGE, demoPage} = require('./harness');
           const q = t.getBoundingClientRect();
           return !(m.right < q.left || m.left > q.right || m.bottom < q.top || m.top > q.bottom);
         });
-        out.markInside = m.left >= r.left && m.right <= r.right
-                      && m.top >= r.top && m.bottom <= r.bottom;
+        // Crosses the corner: some of it out, some of it in. Both halves, or a
+        // mark drawn wholly outside satisfies "not inside" and a mark drawn
+        // wholly inside satisfies "not outside".
+        out.markStraddles = m.left < r.left && m.top < r.top
+                         && m.right > r.left && m.bottom > r.top;
+        const ring = svg.querySelector('.msetring');
+        out.ringed = !!ring;
+        // The ring must be centred on the same corner the glyph is, or the two
+        // drift apart at some zoom and the eye sits half out of its own badge.
+        if (ring) {
+          const c = ring.getBoundingClientRect();
+          out.ringHoldsMark = m.left >= c.left - 1 && m.right <= c.right + 1
+                           && m.top >= c.top - 1 && m.bottom <= c.bottom + 1;
+        }
       }
       svg.classList.add('far');
       const cm = svg.querySelector('.mset[data-owner]'), fm = svg.querySelector('.mset[data-fid]');
@@ -393,9 +405,16 @@ const {PAGE, demoPage} = require('./harness');
      /[…]/.test(setmark.folderLabel) === false
        && setmark.folderLabel.replace(/\s+/g, " ").includes("Vaccine safety claims"),
      JSON.stringify({label: setmark.folderLabel}));
-  ok("...and the set's mark is inside its box, clear of its name",
-     setmark.markOverlapsLabel === false && setmark.markInside === true,
-     JSON.stringify({overlap: setmark.markOverlapsLabel, inside: setmark.markInside}));
+  ok("...and the set's mark straddles its corner, clear of its name",
+     setmark.markOverlapsLabel === false && setmark.markStraddles === true,
+     JSON.stringify({overlap: setmark.markOverlapsLabel, straddles: setmark.markStraddles}));
+  /* THE RING IS WHAT MAKES THAT POSITION READABLE, so it is asserted rather than
+     left to a screenshot. A mark on a border without one reads as a smudge on
+     the edge — which is why it was moved off the border once already — and
+     nothing about the glyph's own rect can tell the difference. */
+  ok("...enclosed the way the verdict ovals are, and holding the glyph",
+     setmark.ringed === true && setmark.ringHoldsMark === true,
+     JSON.stringify({ringed: setmark.ringed, holds: setmark.ringHoldsMark}));
   ok("...the claim's mark leaves with the sentences, the set's stays",
      setmark.farClaim === "none" && setmark.farFolder !== "none",
      `claim ${setmark.farClaim}, folder ${setmark.farFolder}`);
