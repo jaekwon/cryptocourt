@@ -34,6 +34,8 @@ package kourtv2
 // is ever added, it belongs in that test too.
 
 import (
+	"strconv"
+
 	bptree "gno.land/p/nt/bptree/v0"
 )
 
@@ -108,6 +110,29 @@ func DisposableOf(courtSlug string, who address) int64 {
 // refuse it. Every other caller disposes of coin, and disposal is exactly what the
 // vote lock exists to prevent. The default here is the conservative one on purpose
 // — a new call site that nobody thinks about gets the stricter check.
+/* CC IN THE UNITS A HOLDER READS. Balances are µCC internally, so a refusal that
+   printed one raw would say "need 8000000" to somebody whose wallet says 8. Six
+   decimal places, trailing zeros trimmed, so a whole number stays whole and a
+   dusty one keeps only the digits it needs. */
+func ccAmt(n int64) string {
+	if n < 0 {
+		return "-" + ccAmt(-n)
+	}
+	whole := strconv.FormatInt(n/1_000_000, 10)
+	frac := n % 1_000_000
+	if frac == 0 {
+		return whole
+	}
+	f := strconv.FormatInt(frac, 10)
+	for len(f) < 6 {
+		f = "0" + f
+	}
+	for len(f) > 1 && f[len(f)-1] == '0' {
+		f = f[:len(f)-1]
+	}
+	return whole + "." + f
+}
+
 func mustSpendable(c *Court, who address, amount int64) {
 	if disposable(c, who) >= amount {
 		return
@@ -125,25 +150,29 @@ func mustSpendable(c *Court, who address, amount int64) {
 	// was told their stake was in the way when the plain fact is that the balance is
 	// short. Both were reachable: a transfer above the balance takes the second, and
 	// staking exactly one's own snapshot and then voting takes the first.
+	/* THE NUMBERS FIRST. These four read as a paragraph explaining the lock
+	   model, which is the right content for a doc and the wrong content for a
+	   refusal: a holder who is short needs to know HOW short, and every one of
+	   these made them work it out. Reported as too verbose, and it was.
+	   THE FOUR CASES STAY, because the comment above is still right — a merged
+	   message would tell somebody their stake is in the way when they have never
+	   staked. What changed is that each now leads with need-and-have and names
+	   the binding lock in a clause instead of a sentence. The four prefixes are
+	   unchanged, which is what the tests match on. */
 	vl, sl := voteLockedOf(c, who), lockedOf(c, who)
+	short := "need " + ccAmt(amount) + " CC, you have " + ccAmt(disposable(c, who))
 	switch {
 	case vl <= 0 && sl <= 0:
-		panic("kourtv2: not enough CC — none of your balance is staked or " +
-			"committed by voting, so this is simply more than you hold")
+		panic("kourtv2: not enough CC — " + short)
 	case vl > sl:
-		panic("kourtv2: not enough uncommitted CC — coin you voted with stays in " +
-			"your balance and keeps voting, but it is committed until that " +
-			"question resolves and cannot also back a deposit, a bond, or a " +
-			"transfer")
+		panic("kourtv2: not enough uncommitted CC — " + short +
+			" free; " + ccAmt(vl) + " is committed by voting")
 	case sl > vl:
-		panic("kourtv2: not enough unstaked CC — " +
-			"staked coins stay in your balance and keep voting, but they are " +
-			"committed and cannot also back a deposit, a bond, or another stake")
+		panic("kourtv2: not enough unstaked CC — " + short +
+			" free; " + ccAmt(sl) + " is staked")
 	default:
-		panic("kourtv2: not enough free CC — you have as much staked as you have " +
-			"committed by voting, and the two overlap, so releasing either one on " +
-			"its own frees nothing: the coin stays in your balance and keeps " +
-			"voting, but it cannot also back a deposit, a bond, or a transfer")
+		panic("kourtv2: not enough free CC — " + short +
+			" free; " + ccAmt(sl) + " is both staked and committed by voting")
 	}
 }
 
@@ -151,9 +180,15 @@ func mustSpendable(c *Court, who address, amount int64) {
 // ignores the vote lock. See mustSpendable for why the two differ.
 func mustStakable(c *Court, who address, amount int64) {
 	if s := spendable(c, who); s < amount {
-		panic("kourtv2: not enough unstaked CC — " +
-			"staked coins stay in your balance and keep voting, but they are " +
-			"committed and cannot also back a deposit, a bond, or another stake")
+		// The staked clause only when something IS staked: with no lock at all
+		// the plain fact is that the balance is short, and saying otherwise is
+		// the same falsehood the four-case switch above exists to avoid.
+		tail := ""
+		if l := lockedOf(c, who); l > 0 {
+			tail = "; " + ccAmt(l) + " is staked"
+		}
+		panic("kourtv2: not enough unstaked CC — need " + ccAmt(amount) +
+			" CC, you have " + ccAmt(s) + tail)
 	}
 }
 

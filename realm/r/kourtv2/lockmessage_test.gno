@@ -36,7 +36,10 @@ func TestARefusalNamesTheLockThatBinds(cur realm, t *testing.T) {
 		t.Fatal("setup: this arm needs a holder carrying no lock of either kind")
 	}
 	testing.SetRealm(testing.NewUserRealm(alice))
-	uassert.AbortsContains(t, cur, "none of your balance is staked or committed", func() {
+	// Neither lock binds, so the message names no lock at all — just the
+	// shortfall. Matched on the bare prefix plus "need", which no other arm
+	// produces: every other case appends a "; N is ..." clause.
+	uassert.AbortsContains(t, cur, "not enough CC — need", func() {
 		TransferCC(cross(cur), "lmsg", bob, 10_000_000_001)
 	})
 	// The ordinary transfer it must NOT refuse.
@@ -102,7 +105,9 @@ func TestARefusalNamesTheLockThatBinds(cur realm, t *testing.T) {
 	testing.SetRealm(testing.NewUserRealm(voter))
 	TransferCC(cross(cur), "lmsg2", whale, free)
 	testing.SetRealm(testing.NewUserRealm(voter))
-	uassert.AbortsContains(t, cur, "releasing either one on its own frees nothing", func() {
+	// The tie: both locks are the same figure, so neither alone is the
+	// constraint — the message has to say BOTH, which is the one arm that does.
+	uassert.AbortsContains(t, cur, "is both staked and committed by voting", func() {
 		TransferCC(cross(cur), "lmsg2", whale, 1)
 	})
 }

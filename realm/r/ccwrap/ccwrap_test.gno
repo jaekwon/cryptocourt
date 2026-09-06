@@ -206,6 +206,10 @@ func TestCommittedCoinCannotBeWrapped(cur realm, t *testing.T) {
 	uassert.AbortsContains(t, cur, notEnoughUnstaked, func() {
 		Wrap(cross(cur), "cw4", spend+1)
 	})
+	testing.SetRealm(testing.NewUserRealm(alice))
+	uassert.AbortsContains(t, cur, namesTheStakeLock, func() {
+		Wrap(cross(cur), "cw4", spend+1)
+	})
 
 	// Nothing moved on the failed attempt. A partial wrap would have minted an
 	// unbacked claim.
@@ -219,12 +223,21 @@ func TestCommittedCoinCannotBeWrapped(cur realm, t *testing.T) {
 	uassert.Equal(t, locked, kourtv2.CoinBalanceOf("cw4", alice))
 }
 
-// notEnoughUnstaked is kourtv2's refusal, quoted so this test fails if the
-// refusal it is relying on is ever replaced by a different one — including by a
-// weaker one that no longer mentions being committed.
-const notEnoughUnstaked = "kourtv2: not enough unstaked CC — staked coins stay " +
-	"in your balance and keep voting, but they are committed and cannot also " +
-	"back a deposit, a bond, or another stake"
+/* kourtv2's refusal, quoted so this test fails if the refusal it relies on is
+   ever replaced by a different one — including by a weaker one that no longer
+   says the STAKE is what binds. That is still the point; only the sentence
+   changed. The message used to be a paragraph on the lock model and now leads
+   with the figures ("need 8 CC, you have 3 free; 5 is staked"), so the quotable
+   part is in two pieces: the arm, and the clause that names the constraint.
+   TWO CONSTANTS, TWO ASSERTIONS, because AbortsContains matches one substring
+   and the numbers between these fragments are the fixture's, not the contract's
+   — pinning them whole would make this fail on an unrelated change to how much
+   the fixture stakes. */
+const notEnoughUnstaked = "kourtv2: not enough unstaked CC"
+
+// ...and it still says WHICH lock binds. Without this half, a refusal that had
+// stopped distinguishing the stake lock from the vote lock would pass above.
+const namesTheStakeLock = "is staked"
 
 // Without an allowance there is no wrap. This is what makes the realm
 // unprivileged: it cannot reach anyone's coin unasked.
