@@ -329,6 +329,23 @@ const {PAGE, demoPage} = require('./harness');
                    raw: svg.textContent.includes(M),
                    nameKept: svg.textContent.includes("Furin cleavage site"),
                    ordinary: svg.querySelectorAll('.mset[data-owner="c1"]').length};
+      /* AND IT DOES NOT SIT ON THE NAME. The first version drew it inside the
+         box at the top-left, which is exactly where a left-aligned, vertically
+         centred label begins — so the eye landed on the first letter and read as
+         part of the word. Every count-based assertion above passed while that
+         was true, which is why this one measures BOXES: the mark's rect against
+         every label's rect. There is no free corner inside — the subject
+         watermark holds the right edge and a two-line name fills the height — so
+         it straddles the boundary like a badge, which is what markOnCorner is. */
+      const mk = svg.querySelector('.mset[data-fid]'), bx = svg.querySelector('.mfold');
+      if (mk && bx) {
+        const m = mk.getBoundingClientRect(), r = bx.getBoundingClientRect();
+        out.markOverlapsLabel = [...svg.querySelectorAll('.mhdr-t')].some(t => {
+          const q = t.getBoundingClientRect();
+          return !(m.right < q.left || m.left > q.right || m.bottom < q.top || m.top > q.bottom);
+        });
+        out.markOnCorner = m.left < r.left && m.top < r.top;
+      }
       svg.classList.add('far');
       const cm = svg.querySelector('.mset[data-owner]'), fm = svg.querySelector('.mset[data-fid]');
       out.farClaim = cm ? getComputedStyle(cm).display : null;
@@ -348,6 +365,9 @@ const {PAGE, demoPage} = require('./harness');
   /* Zoomed out the sentences go, so a mark that annotated one goes with it —
      the rule .mtitle and .mstrike already follow. A BOX is still drawn and named
      at every zoom, so its mark stays. */
+  ok("...and the set's mark is clear of its name, on the corner",
+     setmark.markOverlapsLabel === false && setmark.markOnCorner === true,
+     JSON.stringify({overlap: setmark.markOverlapsLabel, corner: setmark.markOnCorner}));
   ok("...the claim's mark leaves with the sentences, the set's stays",
      setmark.farClaim === "none" && setmark.farFolder !== "none",
      `claim ${setmark.farClaim}, folder ${setmark.farFolder}`);
