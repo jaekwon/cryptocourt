@@ -670,7 +670,7 @@ func TestASetIsNotBornUnderARetiredParent(cur realm, t *testing.T) {
 
 
 /* TWO MARKS, ONE DIFFERENCE. Both 𓂀 and 𓁼 make a set; which one the author
- * filed under decides whether it opens shown or hidden, and nothing else.
+ * filed under decides whether it opens shown or concealed, and nothing else.
  *
  * WHY THE TITLE AND NOT A FIELD: the mark had to be in the title anyway for the
  * claim to be a set at all, so the default costs no storage, no argument and no

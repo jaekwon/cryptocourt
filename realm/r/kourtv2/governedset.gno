@@ -59,8 +59,17 @@ const (
 	/* TWO MARKS, AND THE CHOICE BETWEEN THEM IS THE SET'S DEFAULT.
 	 *
 	 * 𓂀 D010, the wedjat, opens SHOWN. 𓁼 D007, the eye with painted lids, opens
-	 * HIDDEN. Both make a set; the one an author typed says which state the set
+	 * CONCEALED. Both make a set; the one an author typed says which state the set
 	 * is in when a reader arrives, and nothing else distinguishes them.
+	 *
+	 * "CONCEALED", NOT "HIDDEN", AND THE WORD IS DELIBERATE. This realm already
+	 * spends "hidden" on a different thing: HideItem and HiddenFromListing are a
+	 * MODERATOR taking a claim out of ordinary discovery, an act with an authority
+	 * and a log row behind it. A set that opens concealed has had nothing done to
+	 * it — the author chose which mark to type, and a reader unticks a filter to
+	 * see it. Two states a page must never conflate, so they do not share a word.
+	 * The overlay says "set that opens shown" / "set that opens concealed" for the
+	 * same reason.
 	 *
 	 * THE MARK WAS ALREADY GOING TO BE THERE, which is the whole reason to spend
 	 * it this way: no second field, no second read, no second thing to keep true.
@@ -72,7 +81,7 @@ const (
 	 * by convention, which is a decision and is written here so it reads as one.
 	 */
 	setMark   = "\U00013080" // 𓂀 U+13080 — a set that opens shown
-	shutMark  = "\U0001307C" // 𓁼 U+1307C — a set that opens hidden
+	shutMark  = "\U0001307C" // 𓁼 U+1307C — a set that opens concealed
 	setPrefix = setMark + " "
 	shutPrefix = shutMark + " "
 )
