@@ -5001,7 +5001,16 @@ function btn(label, func, args, cls, sub, send, gate, edit, blocked, glyph, amt)
      of what it passes, rather than the escape being dropped for every caller —
      anything that is not that object is escaped exactly as before. */
   const face = label && typeof label === "object" && label.html ? label.html : esc(label);
-  const inner = `<span class="g">${glyph || (CFG.mode==="demo"?"↗":"✍\uFE0E")}</span> ${face}${sub?` <small>${esc(sub)}</small>`:""}`;
+  /* A BUTTON MAY DECLINE THE GLYPH. The pen says "this signs something", which
+     is true of nearly every button here and is why it is the default. It is
+     noise on one whose face already carries a mark of its own: "Open 𓂀 Furin
+     cleavage site" is a verb, a mark and a name, and a pen in front of that is
+     a second symbol competing with the one that means something.
+     ON THE LABEL, not an eleventh positional argument — the label is already an
+     object when it carries html, so `{html, bare:true}` says it where a caller
+     is already looking. */
+  const bare = label && typeof label === "object" && label.bare;
+  const inner = `${bare? "" : `<span class="g">${glyph || (CFG.mode==="demo"?"↗":"✍\uFE0E")}</span> `}${face}${sub?` <small>${esc(sub)}</small>`:""}`;
   /* The demo carries `blocked` too. It exists to show what the live page looks
      like, and a control the chain would refuse is part of that — the click
      still answers "demo data", because the inert branch is tested first, but
@@ -14951,7 +14960,7 @@ function resolutionSection(slug,id,d,nowH,tl){
     inner = `<div class="notice ${ruledNo? "ruled-no" : "good"}"><span class="g">${ruledNo? "✕" : "✓"}</span><div><b>Settled ${sideName(v)}</b>${d.route?" — "+esc(d.route)+"":""}.
       Both sides withdraw principal 1×; the winning side also draws its accuracy reward once the rewards are opened.
       ${isSetHead && !ruledNo? `<div class="actions" id="setaffirm" hidden style="margin-top:10px">
-        ${btn({html:`New ${setMarkHtml(safeInline(d.title||""))}`},"New",{courtSlug:slug,claimID:id})}
+        ${btn({html:`Open ${setMarkHtml(safeInline(d.title||""))}`, bare:true},"New",{courtSlug:slug,claimID:id})}
         <span class="small muted" style="display:block;margin-top:6px">The court agreed to create this set. Carrying it is a second transaction nobody has sent yet — and the verdict is the authority, so anyone may send it, moderator or not.</span>
       </div>`:""}
       ${d.rewardsOpened && d.route==="vote"? `<p class="small" style="margin:8px 0 0">Voters whose ballot matched the final verdict may pull a small participation carrot — newly issued, capped just under half the court's base bond — 2% of its trailing average stake, or 1 KOURT, whichever is larger — and queued behind earlier awards; abstain and against-verdict ballots receive nothing.</p>`:""}</div></div>`;
