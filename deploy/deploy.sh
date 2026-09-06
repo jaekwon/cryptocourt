@@ -84,6 +84,18 @@ if [ -z "$SKIP_CHECKS" ]; then
 	say "checking what is about to be shipped"
 	python3 scripts/check-web-dupes.py
 
+	# AND THE NUMBERS THE PAGE RESTATES FROM THE REALM, which belong here by this
+	# block's own rule rather than as an exception to it: 0.03s, no toolchain, and
+	# the class it catches is one that ships INVISIBLY. A syntax error announces
+	# itself on the first load; a drifted constant leaves the page working and
+	# looking right while it quotes the wrong window, misprices a buy before
+	# signing, or refuses a heading the court would have accepted. That is worse
+	# than the two gates above it, not better, and it only ran in `make check` —
+	# which wants a gno toolchain and a node, and so is exactly the thing a person
+	# shipping a one-line copy fix does not run.
+	python3 scripts/check-web-constants.py >/dev/null
+	echo "    the overlay's realm constants still match the realm"
+
 	# node --check on the overlay's script block. If node is absent, say so
 	# rather than skipping quietly: a check that silently does not run is worse
 	# than no check.
