@@ -300,12 +300,14 @@ function chatLineHtml(m, nowSec, court) {
   const hit = chatSetHeading(m.body);
   const fid = hit && court && typeof setFidByName === "function"
     ? setFidByName(court, hit.name) : null;
-  const body = fid == null
-    ? '<span class="chatbody">' + chatEsc(m.body) + "</span>"
-    : '<span class="chatbody"><a class="chatset" href="#/c/' + chatEsc(court) + "/f/"
-      + chatEsc(String(fid)) + '"><span class="chatmark" title="' + chatEsc(hit.word)
-      + '">' + hit.mark + '</span><span class="chatsetname">' + chatEsc(hit.name)
-      + "</span></a></span>";
+  /* ONE WRAPPER, WRITTEN ONCE. Both arms are a .chatbody; only what goes inside it
+     differs, and spelling the span twice is two places for a class name to drift
+     from the CSS that styles it. */
+  const said = fid == null ? chatEsc(m.body)
+    : '<a class="chatset" href="#/c/' + chatEsc(court) + "/f/" + chatEsc(String(fid))
+      + '"><span class="chatmark" title="' + chatEsc(hit.word) + '">' + hit.mark
+      + '</span><span class="chatsetname">' + chatEsc(hit.name) + "</span></a>";
+  const body = '<span class="chatbody">' + said + "</span>";
   return '<li class="chatmsg">'
     + '<span class="chatsaid">'
     +   '<span class="chatwho">'
