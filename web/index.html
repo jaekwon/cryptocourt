@@ -75,7 +75,7 @@ img,svg{display:block;max-width:100%}
   --ink:#16202a; --ink-2:#4a5b68; --muted:#56646f;
   --line:#dbe3e8; --line-2:#c8d2d9;
   --accent:#2e3a7d; --accent-2:#24306b; --accent-wash:#dfe3f2; --accent-ink:#fff;
-  --yes:#1c6551; --yes-wash:#d8e7e1; --no:#93362b; --no-wash:#f0dcd8; --contra:#d92d20; --contra-wash:#fbe0dd;
+  --yes:#1c6551; --yes-wash:#d8e7e1; --no:#93362b; --no-wash:#f0dcd8; --flag:#a5670a; --contra:#d92d20; --contra-wash:#fbe0dd;
   --escrow:#7d5c0f; --escrow-wash:#f0e6cd; --void:#74848f; --void-wash:#e2e8ec;
   --good:#1c6551; --bad:#a3281c;
   --gilt:#9a6f12;   /* the mark's highlight; deeper here so it reads on cream */
@@ -116,7 +116,7 @@ img,svg{display:block;max-width:100%}
     --ink:#e6edf2; --ink-2:#a3b2bd; --muted:#8a99a4;
     --line:#212b33; --line-2:#2b3843;
     --accent:#9aa8ee; --accent-2:#b3bef3; --accent-wash:#1e2545; --accent-ink:#11171c;
-    --yes:#6fc0a5; --yes-wash:#12302a; --no:#e08b7c; --no-wash:#351a16; --contra:#ff6b5e; --contra-wash:#3a1512;
+    --yes:#6fc0a5; --yes-wash:#12302a; --no:#e08b7c; --no-wash:#351a16; --flag:#f5b73d; --contra:#ff6b5e; --contra-wash:#3a1512;
     --escrow:#d7b264; --escrow-wash:#2e2512; --void:#7a8994; --void-wash:#1a232b;
     --good:#6fc0a5; --bad:#e5847a;
     --gilt:#e2b552;   /* and brighter on the dark page */
@@ -159,7 +159,7 @@ img,svg{display:block;max-width:100%}
   --paper:#eaeef1; --surface:#f7f9fa; --surface-2:#e2e8ec; --inset:#e2e8ec;
   --ink:#16202a; --ink-2:#4a5b68; --muted:#56646f; --line:#dbe3e8; --line-2:#c8d2d9;
   --accent:#2e3a7d; --accent-2:#24306b; --accent-wash:#dfe3f2; --accent-ink:#fff;
-  --yes:#1c6551; --yes-wash:#d8e7e1; --no:#93362b; --no-wash:#f0dcd8; --contra:#d92d20; --contra-wash:#fbe0dd;
+  --yes:#1c6551; --yes-wash:#d8e7e1; --no:#93362b; --no-wash:#f0dcd8; --flag:#a5670a; --contra:#d92d20; --contra-wash:#fbe0dd;
   --escrow:#7d5c0f; --escrow-wash:#f0e6cd; --void:#74848f; --void-wash:#e2e8ec; --good:#1c6551; --bad:#a3281c;
   --gilt:#9a6f12;
   --shadow-sm:0 1px 2px rgba(27,27,33,.05); --shadow:0 1px 2px rgba(27,27,33,.05), 0 10px 30px -16px rgba(27,27,33,.22);
@@ -172,7 +172,7 @@ img,svg{display:block;max-width:100%}
   --paper:#11171c; --surface:#171f26; --surface-2:#1d2731; --inset:#0d1317;
   --ink:#e6edf2; --ink-2:#a3b2bd; --muted:#8a99a4; --line:#212b33; --line-2:#2b3843;
   --accent:#9aa8ee; --accent-2:#b3bef3; --accent-wash:#1e2545; --accent-ink:#11171c;
-  --yes:#6fc0a5; --yes-wash:#12302a; --no:#e08b7c; --no-wash:#351a16; --contra:#ff6b5e; --contra-wash:#3a1512;
+  --yes:#6fc0a5; --yes-wash:#12302a; --no:#e08b7c; --no-wash:#351a16; --flag:#f5b73d; --contra:#ff6b5e; --contra-wash:#3a1512;
   --escrow:#d7b264; --escrow-wash:#2e2512; --void:#7a8994; --void-wash:#1a232b; --good:#6fc0a5; --bad:#e5847a;
   --gilt:#e2b552;
   --shadow-sm:0 1px 2px rgba(0,0,0,.3); --shadow:0 1px 2px rgba(0,0,0,.3), 0 12px 34px -18px rgba(0,0,0,.7);
@@ -2031,7 +2031,26 @@ tr.youare .mono{font-weight:600}
 /* THE STATE RING IS NOT A SIDE, so it carries none of a side's colour. The page's
    strongest ink, which is white on the dark theme and near-black on the light one:
    whatever "loudest neutral" means in the theme a reader is in. */
+/* the one claim figure — see CLAIM_FIGURES */
+.cfig{margin-top:22px}
+.cfig-wrap{display:grid; grid-template-columns:1fr minmax(220px,290px); gap:20px; align-items:start}
+.cfig-svg{display:block; width:100%; background:var(--surface); border:1px solid var(--line);
+  border-radius:10px}
+.cfig-side{padding-top:4px}
+.cfig-pct{font:700 42px/1 ui-sans-serif,system-ui; letter-spacing:-.02em; margin:2px 0}
+.cfig-pct.hot{color:var(--flag)}
+.cherry{cursor:pointer}
+.cherry.bud{cursor:default}
+.cherry .fruit{transition:transform .13s}
+.cherry:not(.bud):hover .fruit,.cherry:focus-visible .fruit{transform:scale(1.28)}
+.cherry:focus-visible{outline:none}
+.cherry:focus-visible .fruit{stroke:var(--flag); stroke-width:2}
+@media (max-width:720px){ .cfig-wrap{grid-template-columns:1fr} }
 .mvtag.s{stroke:var(--ink)}
+/* `!` — the answer went against the stake. Its own colour and a heavier ring,
+   because it is the only mark reporting a DISAGREEMENT rather than a stage. */
+.mvtag.s.bang{stroke:var(--flag); stroke-width:1.6}
+.mvs.bang{fill:var(--flag); font-weight:700}
 .mvs{fill:var(--ink)}
 /* REOPENABLE, drawn as a broken ring. A provisional verdict is a decision a new
    dispute can undo, and the glyph inside says only that a vote made it — see
@@ -5973,6 +5992,178 @@ async function mediaUploadFor(court, bytes, mime, sha256){
  * uploaded there is no mirror, and a media line with no mirror is one the realm
  * refuses — so an always-present button would be a control that fails after the
  * work rather than before it. */
+/* ── A FIGURE FOR ONE CLAIM ───────────────────────────────────────────────
+ *
+ * WHAT THIS IS AND WHAT IT IS NOT. Everything else on this page is read off the
+ * chain: the title, the body, the exhibits, the stake, the verdict. This is the
+ * one thing that is not. It is an ILLUSTRATION OF WHAT A CLAIM ALREADY SAYS,
+ * written here rather than filed there, and that makes it editorial in a viewer
+ * that is otherwise a window.
+ *
+ * SO IT IS KEPT WHERE IT CAN BE SEEN AND REMOVED. One registry, keyed by court
+ * and claim, with one entry. Nothing is scattered; deleting the entry deletes
+ * the feature. If a second one ever wants to exist, the fact that they are
+ * listed side by side is the argument about whether either should.
+ *
+ * AND IT ARGUES NOTHING THE CLAIM DOES NOT. Claim covid/12 asserts that the 82%
+ * figure divides completed-pregnancy losses by a denominator excluding
+ * pregnancies still ongoing. The figure draws exactly that sentence and stops.
+ * It takes no position on the vaccine, on the study, or on the claim's verdict —
+ * the court decides that, and the page prints what the court decided a few
+ * inches above this. */
+const CLAIM_FIGURES = {
+  "covid/12": cherryFigure,
+};
+
+function fillClaimFigure(slug, id){
+  const host = document.getElementById("claimfig");
+  if(!host) return;
+  const fig = CLAIM_FIGURES[slug + "/" + id];
+  if(!fig) return;                       // every other claim on every chain
+  try { fig(host); } catch(_) { host.innerHTML = ""; }
+}
+
+/* Pick the cherries.
+ *
+ * WHY A TREE. "Cherry-picking" is the whole of claim covid/12 in one word, and
+ * the word has stopped meaning anything — it is what people call any statistic
+ * they dislike. The drawing puts the reader's hand on it: a cherry ripens only
+ * when a pregnancy ENDS, losses end early, so the only fruit ripe enough to pick
+ * is disproportionately loss. Fill the basket and the number appears. Nobody has
+ * to lie for it to appear, which is the part a sentence cannot carry.
+ *
+ * SCHEMATIC, AND IT SAYS SO. 100 pregnancies, 14 losses, 3 births, 83 ongoing —
+ * chosen so the ratio lands on the figure being argued about. These are not the
+ * study's counts and the caption does not pretend otherwise. */
+function cherryFigure(host){
+  const N = {loss:14, birth:3, ongoing:83};
+  const NS = "http://www.w3.org/2000/svg";
+  const el = (t,a,p)=>{ const e=document.createElementNS(NS,t);
+    for(const k in a) e.setAttribute(k,a[k]); if(p) p.appendChild(e); return e; };
+
+  host.innerHTML = "";
+  const sec = document.createElement("section");
+  sec.className = "cfig";
+  const h = document.createElement("h2");
+  h.className = "sec-h"; h.textContent = "What cherry-picking does to this number";
+  const sub = document.createElement("p");
+  sub.className = "small muted";
+  sub.textContent = "A cherry ripens only when a pregnancy ends, and losses end early. "
+    + "Pick what you like — the basket is the denominator. 100 pregnancies, drawn to scale "
+    + "with the argument rather than from the study's own counts.";
+  sec.appendChild(h); sec.appendChild(sub);
+
+  const wrap = document.createElement("div"); wrap.className = "cfig-wrap";
+  const svg = el("svg",{viewBox:"0 0 760 545", class:"cfig-svg"});
+  const side = document.createElement("div"); side.className = "cfig-side";
+  side.innerHTML = `<div class="small muted">LOSS RATE</div>
+    <div class="cfig-pct" id="cfig-pct">—</div>
+    <div class="small muted" id="cfig-frac">basket empty</div>
+    <div class="actions" style="margin:10px 0 0">
+      <button type="button" class="btn" id="cfig-all">Pick every ripe one</button>
+      <button type="button" class="btn" id="cfig-none">Empty the basket</button></div>
+    <p class="small" id="cfig-say" style="margin-top:12px"></p>`;
+  wrap.appendChild(svg); wrap.appendChild(side);
+  sec.appendChild(wrap);
+  const key = document.createElement("p");
+  key.className = "small muted";
+  key.textContent = "red = ended in loss · green = ended in a birth · grey = still ongoing, "
+    + "no fruit yet — nothing to pick";
+  sec.appendChild(key);
+  host.appendChild(sec);
+
+  el("path",{d:"M368 452 L368 300 M368 350 L318 305 M368 340 L420 300",
+    stroke:"#4a3a2e","stroke-width":13,"stroke-linecap":"round",fill:"none"}, svg);
+  el("ellipse",{cx:370,cy:210,rx:300,ry:150,fill:"#16281f"}, svg);
+  el("ellipse",{cx:370,cy:205,rx:286,ry:140,fill:"#1b3126"}, svg);
+  el("path",{d:"M556 458 L578 532 L738 532 L760 458 Z",fill:"#6b4a2a"}, svg);
+  el("rect",{x:551,y:449,width:214,height:13,rx:6,fill:"#8a6136"}, svg);
+  const bl = el("text",{x:658,y:527,"text-anchor":"middle","font-size":13,fill:"#e9d9c2"}, svg);
+  bl.textContent = "basket";
+
+  /* A FIXED SCATTER. Math.random would redraw the tree on every visit, so two
+     readers comparing what they saw would be comparing two trees. */
+  let seed = 7; const rnd = () => (seed = (seed*1103515245 + 12345) & 0x7fffffff) / 0x7fffffff;
+  const spots = [], want = N.loss + N.birth + N.ongoing;
+  let guard = 0;
+  while(spots.length < want && guard++ < 40000){
+    const a = rnd()*Math.PI*2, r = Math.sqrt(rnd());
+    const x = 370 + Math.cos(a)*r*272, y = 200 + Math.sin(a)*r*126;
+    if(spots.every(s => (s.x-x)**2 + (s.y-y)**2 > 620)) spots.push({x,y});
+  }
+  const kinds = [...Array(N.loss).fill("loss"), ...Array(N.birth).fill("birth"),
+                 ...Array(N.ongoing).fill("ongoing")];
+  for(let i=kinds.length-1;i>0;i--){ const j=Math.floor(rnd()*(i+1)); [kinds[i],kinds[j]]=[kinds[j],kinds[i]]; }
+
+  const picked = new Set(), all = [];
+  kinds.forEach((kind, i) => {
+    if(!spots[i]) return;
+    const {x,y} = spots[i], cid = kind+i, ripe = kind !== "ongoing";
+    const g = el("g",{class:"cherry"+(ripe?"":" bud"), tabindex: ripe?"0":"-1",
+      role: ripe?"button":"img"}, svg);
+    el("path", ripe
+      ? {d:`M${x} ${y-7} q 6 -11 -9 -15`, stroke:"#5f8a4a","stroke-width":1.6,fill:"none","stroke-linecap":"round"}
+      : {d:`M${x} ${y-3} q 1 -3 -1 -5`, stroke:"#3f5a3a","stroke-width":1.3,fill:"none","stroke-linecap":"round"}, g);
+    const f = el("circle",{class:"fruit",cx:x,cy:y,r:ripe?7:3.6,
+      fill: kind==="loss"?"#c0392b":kind==="birth"?"#6fc0a5":"#3d4a52",
+      stroke: ripe?"#00000055":"#2a343a","stroke-width":1}, g);
+    if(ripe) el("circle",{cx:x-2.2,cy:y-2.4,r:1.7,fill:"#ffffff55"}, g);
+    const t = el("title",{}, g);
+    t.textContent = ripe ? (kind==="loss" ? "ended in a loss — ripe" : "ended in a birth — ripe")
+                         : "still ongoing — no outcome yet, so there is no fruit to pick";
+    if(ripe){
+      const toggle = () => { picked.has(cid)? picked.delete(cid) : picked.add(cid); paint(); };
+      g.addEventListener("click", toggle);
+      g.addEventListener("keydown", e => { if(e.key==="Enter"||e.key===" "){ e.preventDefault(); toggle(); } });
+    }
+    all.push({id:cid, kind, g, f, x, y});
+  });
+
+  const set = keep => { picked.clear(); all.forEach(c => { if(keep(c.kind)) picked.add(c.id); }); paint(); };
+  side.querySelector("#cfig-all").onclick  = () => set(k => k !== "ongoing");
+  side.querySelector("#cfig-none").onclick = () => set(() => false);
+
+  function paint(){
+    const inB = all.filter(c => picked.has(c.id));
+    inB.forEach((c, i) => {
+      const col = i % 6, row = Math.floor(i / 6);
+      const bx = 588 + col*27 + row*9, by = 512 - row*23;
+      /* SCALE IS ABOUT THE SVG ORIGIN, NOT ABOUT THE CHERRY, so `translate(bx-x,
+         by-y) scale(s)` lands each fruit at bx-(1-s)x — an offset that varies with
+         where the cherry HUNG. The first draft did exactly that and the basket
+         came out as a diagonal spray up and to the left. Subtracting the scaled
+         point is what puts (x,y) on (bx,by) for every one of them. */
+      const S = .82;
+      c.g.setAttribute("transform",
+        `translate(${(bx - S*c.x).toFixed(1)},${(by - S*c.y).toFixed(1)}) scale(${S})`);
+    });
+    all.forEach(c => {
+      if(!picked.has(c.id)) c.g.removeAttribute("transform");
+      c.f.setAttribute("stroke", picked.has(c.id) ? "var(--flag)"
+        : (c.kind==="ongoing" ? "#2a343a" : "#00000055"));
+    });
+    const den = inB.length, num = inB.filter(c => c.kind==="loss").length;
+    const pct = side.querySelector("#cfig-pct"), frac = side.querySelector("#cfig-frac"),
+          say = side.querySelector("#cfig-say");
+    if(!den){ pct.textContent="—"; pct.classList.remove("hot");
+      frac.textContent="basket empty"; say.textContent=""; return; }
+    const pc = num/den*100;
+    pct.textContent = pc.toFixed(0)+"%";
+    pct.classList.toggle("hot", pc > 50);
+    frac.textContent = `${num} losses ÷ ${den} in the basket`;
+    /* textContent, not innerHTML: nothing here comes from the chain, and the day
+       one of these strings does is the day a claim title reaches the DOM raw. */
+    say.textContent = (den <= N.loss + N.birth && num/den > .5)
+      ? `Look at the tree. ${N.ongoing} pregnancies are still hanging there with no fruit — `
+        + `they have not ended yet, so there was never anything to pick, and nearly all of `
+        + `them will end in a birth. The losses were divided by a basket that could only `
+        + `ever fill with the ones that finished early. That is the 82%.`
+      : `${num} of ${den}. Nothing about any pregnancy changed — the only thing that moved `
+        + `was which ones were counted.`;
+  }
+  set(k => k !== "ongoing");
+}
+
 function mountPicture(host, slug){
   if(!host || typeof mediaArgLine !== "function") return;
   host.innerHTML = "";
@@ -10458,7 +10649,7 @@ function mapSvg(L, data, slug){
     const body = `<rect class="mvtag ${cls}" x="${(right-ovw).toFixed(1)}" `
       + `y="${(cy-h/2).toFixed(1)}" width="${ovw.toFixed(1)}" height="${h.toFixed(1)}" `
       + `rx="${(h/2).toFixed(1)}" data-owner="${owner}"/>`
-      + `<text class="mtext ${cls.startsWith("s")?"mvs":"mvt "+cls}" x="${(right-VTAG.px).toFixed(1)}" `
+      + `<text class="mtext ${cls.startsWith("s")?"mvs"+(cls.includes("bang")?" bang":""):"mvt "+cls}" x="${(right-VTAG.px).toFixed(1)}" `
       + `y="${(cy+0.36*fs).toFixed(1)}" font-size="${fs}" text-anchor="end"${fit} `
       + `data-owner="${owner}">${txt}</text>`;
     return {w:ovw, svg: say? `<g class="vsay"><title>${esc(say)}</title>${body}</g>` : body};
@@ -10470,7 +10661,16 @@ function mapSvg(L, data, slug){
     // The oval answers "what was decided"; the mark answers "what is this glyph".
     const say = mapMarkWords(pc, cl, "side"), markSay = mapMarkWords(pc, cl, "mark");
     let right=n.x+n.w-K.tpad, out="";
-    if(mark.t){ const p=vpill(mark.t,"s"+(mark.reopen?" re":""),right,cy,owner,markSay||say);
+    /* THE BANG IS LOUDER THAN THE OTHER MARKS, on purpose. `…`, `?`, `.` and `–`
+       report where a claim is in its process; `!` reports that the answer went
+       the OTHER WAY from the stake, which is the one thing on this map a reader
+       should not be able to skim past. It shared --ink with every other glyph
+       and read as a smudge at map scale.
+       NOT --contra, though it is the nearest colour on the page: that red means
+       "this claim contradicts that one", an edge BETWEEN two claims. The bang is
+       one claim disagreeing with its own stake. */
+    const bang = mark.t.startsWith(MAPMARK.against) ? " bang" : "";
+    if(mark.t){ const p=vpill(mark.t,"s"+(mark.reopen?" re":"")+bang,right,cy,owner,markSay||say);
       out+=p.svg; right-=p.w+K.vgap; }
     /* THE SIDE RING ONLY WHEN THERE IS A SIDE. A claim nobody has answered has
        none, and its mark rides alone — (…) on an open claim, (–) on one a vote
@@ -12654,6 +12854,7 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
        its text; evidence is not an appendix to the statement. */
     + claimEvidenceNote(d)
     + claimExhibits(d)
+    + `<div id="claimfig"></div>`
     + `<div class="tagrow">
         <span class="tfacts">${verdictBanner(d)}${openedBy}${seededSpan}</span>
         <span class="tacts">${polish}${chip}${mapLink}<a class="tlink" href="#/raw/${esc(slug)}/${id}">chain<span aria-hidden="true">→</span></a>
@@ -12723,6 +12924,7 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
   fillClaimSide(slug, id, d, tline, nowH);
   fillClaimComments(slug, id);
   fillSetAffirm(slug, id);
+  fillClaimFigure(slug, id);
   // arrived from an embed's side button
   if(QP.side) focusStakeSide(QP.side);
   // ?ex=N opens that exhibit, after the list it indexes into has been drawn.

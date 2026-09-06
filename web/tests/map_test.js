@@ -1262,7 +1262,7 @@ ok("controls present", ["mt-titles","mt-ids","mz-in","mz-out","mz-fit","mz-slide
       const u = JSON.parse(JSON.stringify(d));
       u.claims[3] = Object.assign({title:"A claim of fact.", statusText}, extra||{});
       const s2 = mapSvg(mapLayout(u,"titles"), u, "covid");
-      return {mark:(/<text class="mtext mvs"[^>]*data-owner="c3"[^>]*>([^<]*)<\/text>/.exec(s2)||[])[1]||"",
+      return {mark:(/<text class="mtext mvs[^"]*"[^>]*data-owner="c3"[^>]*>([^<]*)<\/text>/.exec(s2)||[])[1]||"",
               side:(/<text class="mtext mvt [yn]"[^>]*data-owner="c3"[^>]*>([^<]*)<\/text>/.exec(s2)||[])[1]||"",
               svg:s2};
     };
@@ -1292,6 +1292,22 @@ ok("controls present", ["mt-titles","mt-ids","mz-in","mz-out","mz-fit","mz-slide
        either alone passes on the wrong drawing: a settled-by-vote claim must NOT be
        dashed — it is over — and the provisional one must be, or the two draw
        identically and the map says a reopenable verdict is final. */
+    /* THE BANG WEARS ITS OWN CLASS, and only the bang. `…`, `?`, `.` and `–`
+       report where a claim is in its process; `!` reports that the answer went
+       against the stake, and it shared --ink with the rest — a smudge at map
+       scale on the one mark a reader should not skim past.
+       BOTH DIRECTIONS, because a class that is always on is the same as no class:
+       the surprising claim carries it, the unsurprising one must not.
+       This is also what the extractor above had to be widened for. It matched
+       class="mtext mvs" EXACTLY, so a second class made it find no mark at all
+       and report the glyph as missing rather than as differently dressed — which
+       is how this change first showed up, as two failures naming the wrong thing. */
+    ok("the surprising answer's mark is classed apart",
+       /<text class="mtext mvs bang"[^>]*data-owner="c3"[^>]*>!…</.test(mark(line.answered,{inst:20}).svg)
+       && /<rect class="mvtag s bang"/.test(mark(line.answered,{inst:20}).svg));
+    ok("...and an unsurprising one is not",
+       !/bang/.test(mark(line.answered,{inst:90}).svg));
+
     ok("...and wears a broken ring, because a new dispute can reopen it",
        /<rect class="mvtag s re"[^>]*data-owner="c3"/.test(mark(line.provisional,{inst:90}).svg));
     /* THE SIDELESS STATES, WHICH THE MAP ONLY LEARNED TO DRAW AFTER THE WORDS WENT.
