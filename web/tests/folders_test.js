@@ -693,6 +693,24 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
      /function setOpensWords\(shown\)\{ return "set that opens " \+ \(shown \? "shown" : "concealed"\); \}/.test(src)
      && (src.match(/setOpensWords\(/g) || []).length === 4);
 
+  /* THE CHAIN DECIDES WHETHER A TITLE IS A HEADING, not the page. isSetTitle
+     gates the New panel and reads the page's OWN two marks — and the two can
+     disagree, because a realm is deployed at genesis and a page whenever.
+     Measured on kourt.xyz: the overlay knows 𓂀 and 𓁼, the realm there knows only
+     𓂀, so a settled 𓁼 claim would be offered New for a transaction that panics.
+     IsSetClaim answers with that chain's own parser, in the batch fillSetAffirm
+     already made, so it costs no round trip. */
+  ok("the panel asks the chain whether this is a heading at all",
+     /one\(`IsSetClaim\(\$\{gstr\(slug\)\},\$\{id\}\)`\)/.test(src));
+  ok("...and removes itself when the chain says no",
+     /if\(String\(isSet\)\.includes\("false"\)\)\{ box\.remove\(\); return; \}/.test(src));
+  /* A READ THAT DOES NOT ANSWER LEAVES THE PANEL, like the failure path below it:
+     silence is not evidence, and an older realm without IsSetClaim would otherwise
+     lose a control that works. Asserted as the shape — a truthy test would remove
+     the panel on null. */
+  ok("...but silence is not a refusal",
+     !/if\(!isSet\)\{ box\.remove/.test(src));
+
   console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");
   process.exit(fail?1:0);
 })();

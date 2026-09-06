@@ -13576,11 +13576,27 @@ async function fillSetAffirm(slug, id){
   const show = () => { box.hidden = false; };
   if(!isLive()){ show(); return; }
   try{
-    const [carried, folders] = await Promise.all([
+    const [carried, folders, isSet] = await Promise.all([
       one(`ClaimSet(${gstr(slug)},${id})`).catch(()=>null),
       one(`ClaimFolders(${gstr(slug)},${id})`).catch(()=>null),
+      one(`IsSetClaim(${gstr(slug)},${id})`).catch(()=>null),
     ]);
     if(carried && String(carried).trim() !== "0"){ box.remove(); return; }
+    /* AND THE CHAIN DECIDES WHETHER THIS IS A HEADING AT ALL, not this file.
+       The panel is gated on isSetTitle, which reads the page's OWN two marks —
+       and the page and the chain can disagree, because a realm is deployed at
+       genesis and a page is deployed whenever. Measured on kourt.xyz today: the
+       overlay knows 𓂀 and 𓁼; the realm there knows only 𓂀. So a settled 𓁼 claim
+       would be offered New for a transaction that panics with "this claim's
+       title is not a set heading" — the false-offer shape again, from skew rather
+       than from a race.
+       IsSetClaim ANSWERS WITH THAT CHAIN'S OWN PARSER, so the page follows
+       whatever marks the realm it is talking to accepts, today and after the next
+       one is added. It costs no round trip: the batch was already two reads wide.
+       A read that does not answer LEAVES THE PANEL, for the same reason the
+       failure path below does — silence is not evidence, and an older realm with
+       no IsSetClaim would otherwise lose a control that works. */
+    if(String(isSet).includes("false")){ box.remove(); return; }
     /* uint64List, NOT a hand-rolled \d+ match. qeval renders the slice as
        `slice[(1 uint64)]`, and "uint64" ENDS IN 64 — so a bare digit match reads
        one filing as two and the note then told the reader their claim was filed
