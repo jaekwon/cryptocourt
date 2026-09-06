@@ -2792,7 +2792,15 @@ const PKG = "gno.land/r/kourt/kourtv2";
    They are sent anyway because they are correct, and because a wallet that does
    honour them must not be handed a ceiling nothing fits inside. */
 const GAS_WANTED = 60000000;
-const GAS_FEE_UGNOT = 60000;   // GAS_WANTED/1000 — the floor at 1ugnot/1000gas
+/* DERIVED, NOT RESTATED. This was `60000` with a comment saying "GAS_WANTED/1000 —
+   the floor at 1ugnot/1000gas": the relationship was written down beside the
+   number instead of into it, so the two could disagree and only the comment would
+   be wrong. Raise the ceiling alone and the fee falls under the chain's price
+   floor, and every transaction this page offers is refused for a fee — the one
+   failure a reader cannot act on, because nothing on the page is wrong.
+   THE FLOOR IS THE CHAIN'S, one ugnot per thousand gas, so it is spelled as the
+   division it is. One number to move, and the second follows. */
+const GAS_FEE_UGNOT = GAS_WANTED / 1000;
 const CFG_DEFAULTS = {mode:"demo", rpc:"http://127.0.0.1:26657", gnoweb:"https://gno.land", chainid:"dev"};
 /* LOCKED is stamped true by deploy/deploy.sh. A deployed site has one chain and
    the values above are fixed at deploy time, so the source panel — mode, RPC,

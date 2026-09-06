@@ -239,11 +239,16 @@ const BUY_GAS_MEASURED = 27954243;
 // the eval'd slice declares these with const, which does not escape its own
 // eval scope — so read the same two lines out of the source directly.
 const GAS_WANTED = Number(src.match(/const GAS_WANTED = (\d+)/)[1]);
-const GAS_FEE_UGNOT = Number(src.match(/const GAS_FEE_UGNOT = (\d+)/)[1]);
+/* THE FEE IS NO LONGER A NUMBER TO READ — it is `GAS_WANTED / 1000` in the source,
+   which is what this test used to assert about two literals. So the assertion
+   moved with it: the thing worth pinning is that the page DERIVES the fee, because
+   a literal that happens to equal the floor today is exactly what drifts when the
+   ceiling moves. Comparing the two values would now be a tautology. */
+ok("gas: the fee is derived from the ceiling, not restated beside it",
+   /const GAS_FEE_UGNOT = GAS_WANTED \/ 1000;/.test(src));
+const GAS_FEE_UGNOT = GAS_WANTED / 1000;   // genesis price: 1ugnot/1000gas
 ok("gas: the ceiling clears the measured cost of a Buy, with headroom",
    GAS_WANTED > BUY_GAS_MEASURED * 1.5);
-ok("gas: the fee is exactly the floor for that ceiling, not a ugnot more",
-   GAS_FEE_UGNOT === GAS_WANTED / 1000);   // genesis price: 1ugnot/1000gas
 ok("gas: the signed tx carries both",
    /gasFee: GAS_FEE_UGNOT, gasWanted: GAS_WANTED/.test(src));
 {
