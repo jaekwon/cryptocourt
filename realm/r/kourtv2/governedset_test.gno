@@ -1,6 +1,7 @@
 package kourtv2
 
 import (
+	"strings"
 	"strconv"
 	"testing"
 
@@ -11,13 +12,14 @@ import (
 // The wedjat, and the two eyes nearest it in the block. Written as escapes for
 // the same reason the constant is: at this size they are one picture.
 const (
-	tD010 = "\U00013080" // 𓂀 the mark
+	tD010 = "\U00013080" // 𓂀 the mark — a set that opens SHOWN
+	tD007 = "\U0001307C" // 𓁼 the other mark — a set that opens HIDDEN
 	tD004 = "\U00013079" // 𓁹 an ordinary eye — NOT the mark
 	tD006 = "\U0001307B" // another one
 )
 
 func TestSetTitleParsesOnlyTheExactMark(cur realm, t *testing.T) {
-	name, ok := parseSetTitle(tD010 + " Lab leak evidence")
+	name, _, ok := parseSetTitle(tD010 + " Lab leak evidence")
 	uassert.True(t, ok)
 	uassert.Equal(t, "Lab leak evidence", name)
 
@@ -36,7 +38,7 @@ func TestSetTitleParsesOnlyTheExactMark(cur realm, t *testing.T) {
 		tD010,                // the mark alone: no name
 		tD010 + " ",          // ...and with an empty name
 	} {
-		if _, ok := parseSetTitle(bad); ok {
+		if _, _, ok := parseSetTitle(bad); ok {
 			t.Fatalf("a near-miss parsed as a set heading: %q", bad)
 		}
 	}
@@ -46,7 +48,7 @@ func TestSetTitleParsesOnlyTheExactMark(cur realm, t *testing.T) {
 // set's name and the claim's title stop matching, which is the one thing the
 // feature promises.
 func TestSetNameIsTheTitleVerbatim(cur realm, t *testing.T) {
-	name, ok := parseSetTitle(tD010 + "  two leading spaces")
+	name, _, ok := parseSetTitle(tD010 + "  two leading spaces")
 	uassert.True(t, ok)
 	uassert.Equal(t, " two leading spaces", name)
 
@@ -56,7 +58,7 @@ func TestSetNameIsTheTitleVerbatim(cur realm, t *testing.T) {
 	for i := 0; i < maxFolderTextLen+1; i++ {
 		long += "x"
 	}
-	if _, ok := parseSetTitle(tD010 + " " + long); ok {
+	if _, _, ok := parseSetTitle(tD010 + " " + long); ok {
 		t.Fatal("an over-long name must not parse as a set heading")
 	}
 }
@@ -147,7 +149,8 @@ func TestASettledMarkedClaimBecomesASet(cur realm, t *testing.T) {
 	// SetBornOf per folder, a hundred at the cap, for a per-folder bit. Asserted
 	// on an AFFIRMED set because every other FolderTree test in this repo makes
 	// its folders by hand, so all of them pin the zero and none pins this.
-	uassert.Equal(t, "1:0:-:"+strconv.FormatUint(id, 10), FolderTree("gs1"))
+	// "f", because this set was filed with 𓂀: it is ticked when a reader arrives.
+	uassert.Equal(t, "1:0:f:"+strconv.FormatUint(id, 10), FolderTree("gs1"))
 
 	// EXACTLY ONCE. Without this anyone re-calls it until the court hits its
 	// folder cap.
@@ -663,4 +666,81 @@ func TestASetIsNotBornUnderARetiredParent(cur realm, t *testing.T) {
 	RestoreFolder(cross(cur), "gsv1", parent)
 	fid := New(cross(cur), "gsv1", id)
 	uassert.Equal(t, parent, FolderParent("gsv1", fid))
+}
+
+
+/* TWO MARKS, ONE DIFFERENCE. Both 𓂀 and 𓁼 make a set; which one the author
+ * filed under decides whether it opens shown or hidden, and nothing else.
+ *
+ * WHY THE TITLE AND NOT A FIELD: the mark had to be in the title anyway for the
+ * claim to be a set at all, so the default costs no storage, no argument and no
+ * second read. And a title cannot be edited, which makes the default immutable
+ * for free — a set opens the way it was filed, or it is a different set.
+ *
+ * D007 IS NOT "CLOSED" IN UNICODE, and the realm's own comment says so. It is
+ * the eye with painted lids; this court uses it to mean not-seeing by
+ * convention. The test pins the convention, since nothing else can.
+ */
+func TestTheMarkChoosesWhetherTheSetOpensShownOrHidden(cur realm, t *testing.T) {
+	// The parser first, both ways round, because everything below rests on it.
+	if n, shown, ok := parseSetTitle(tD010 + " Lab leak evidence"); !ok || !shown || n != "Lab leak evidence" {
+		t.Fatalf("𓂀 must parse as a set that starts ticked: %q %v %v", n, shown, ok)
+	}
+	if n, shown, ok := parseSetTitle(tD007 + " Retired filings"); !ok || shown || n != "Retired filings" {
+		t.Fatalf("𓁼 must parse as an ordinary set: %q %v %v", n, shown, ok)
+	}
+	// ...and the name is the rest either way: the two marks differ in the default
+	// they set and in NOTHING else, which is the whole claim of this feature.
+	nA, _, _ := parseSetTitle(tD010 + " Same name")
+	nB, _, _ := parseSetTitle(tD007 + " Same name")
+	uassert.Equal(t, nA, nB)
+
+	// IsSetClaim does not care which: both are sets.
+	alice := testutils.TestAddress("tm-alice")
+	testCourt(cur, "tm1", alice, 50_000_000_000)
+	testing.SetRealm(testing.NewUserRealm(alice))
+	shownID := OpenClaim(cross(cur), "tm1", tD010+" Shown by default")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	hiddenID := OpenClaim(cross(cur), "tm1", tD007+" Hidden by default")
+	uassert.True(t, IsSetClaim("tm1", shownID))
+	uassert.True(t, IsSetClaim("tm1", hiddenID))
+
+	// And once carried, the choice is on the FOLDER and in the tree row — which
+	// is where a client reads it, without a read of its own.
+	fA := affirmFor(cur, t, "tm1", alice, shownID)
+	fB := affirmFor(cur, t, "tm1", alice, hiddenID)
+	uassert.True(t, mustFolderOf("tm1", fA).focusByDefault)
+	uassert.False(t, mustFolderOf("tm1", fB).focusByDefault)
+
+	tree := FolderTree("tm1")
+	if !strings.Contains(tree, ":f:") {
+		t.Fatalf("the 𓂀 set must carry the f flag: %q", tree)
+	}
+	if !strings.Contains(tree, ":-:") {
+		t.Fatalf("the 𓁼 set must carry no flag: %q", tree)
+	}
+}
+
+// mustFolderOf reaches the folder record the way the realm does, so the test
+// asserts the stored bit rather than a rendering of it.
+func mustFolderOf(slug string, fid uint64) *folder {
+	return mustCourt(slug).mod.mustFolder(fid)
+}
+
+// affirmFor walks the whole route — ripen, answer, settle, carry — because New
+// refuses anything short of a final verdict and the default under test is only
+// written at the last step.
+func affirmFor(cur realm, t *testing.T, slug string, who address, id uint64) uint64 {
+	t.Helper()
+	matureOI(cur, slug, id, who, 200_000_000)
+	testing.SetRealm(testing.NewUserRealm(who))
+	PostAnswer(cross(cur), slug, id, sideYES)
+	testing.SkipHeights(settleDelay)
+	SettleUndisputed(cross(cur), slug, id)
+	testing.SetRealm(testing.NewUserRealm(who))
+	fid := New(cross(cur), slug, id)
+	if fid == 0 {
+		t.Fatalf("New returned 0 for claim %d", id)
+	}
+	return fid
 }

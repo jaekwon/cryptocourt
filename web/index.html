@@ -7142,6 +7142,25 @@ let QCTX = null; // {kind, demo, loaded, total, orderTail, slug, totalClaims}
    does the counting for both, because the counts, the empty state and the
    section collapse all have to agree about one visible set. */
 let FOLD_ON = new Set();   // ticked folders; empty means no filter at all
+let FOLD_TOUCHED = false;  // ...until the reader ticks something themselves
+/* THE COURT'S OWN OPENING VIEW. A set filed with 𓂀 rather than 𓁼 starts TICKED,
+   which makes it the focus; with no 𓂀 set anywhere the filter is empty and inert
+   and the page behaves exactly as it always has. That is what makes the mark
+   worth a codepoint — it costs no field, no read and no extra state, and a court
+   that never uses it never notices it exists.
+   ONCE PER COURT, AND NEVER OVER A READER. This backs off the moment somebody has
+   touched the filter: a page that re-seeded on every repaint would undo an
+   untick, which is the one thing a filter must never do.
+   FOLD_ON IS CLEARED HERE TOO. It was module state that survived navigation, so a
+   set ticked in one court silently filtered the next one. */
+function seedFolderFocus(){
+  if(FOLD_TOUCHED) return;
+  FOLD_ON = new Set();
+  document.querySelectorAll('#qscope .foldsel[data-fold-focus="1"]').forEach(r=>
+    (r.getAttribute("data-fold-keys")||"").split(" ").filter(Boolean)
+      .forEach(k=>FOLD_ON.add(k)));
+  applyFolders();
+}
 function applyFolders(){
   const rows = document.querySelectorAll("#qscope .foldsel");
   if(!rows.length) return;
@@ -7164,6 +7183,7 @@ function toggleFolderRow(row){
   // The row owns its whole subtree, so ticking Fauci ticks the drawers inside it
   // and the claims filed in them come with it.
   const on = keys.every(k=>FOLD_ON.has(k));
+  FOLD_TOUCHED = true;   // the court's opening view is a suggestion, not a lock
   keys.forEach(k=> on? FOLD_ON.delete(k) : FOLD_ON.add(k));
   applyFolders();
 }
@@ -7651,6 +7671,7 @@ on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
   QCTX = {kind: foldRows? "claim titles and set names" : "claim titles",
     demo:!isLive(), loaded:allRows.length + foldRows,
     total:totalClaims + foldRows, slug, totalClaims, orderTail:"", headed:true};
+  seedFolderFocus();              // before the counts: it decides what is visible
   if(QP.sort) applySort(QP.sort); // before applyQ — the search caption reads QCTX.orderTail
   applyShow(QP.show);             // always: it also sets the chips' own pressed state
   if(QP.q){ const qi=document.getElementById("q"); if(qi){ qi.value=QP.q; applyQ(QP.q); } }
@@ -8021,7 +8042,7 @@ function folderRowHtml(slug,f,path,toggle){
     <span class="pill void">set</span></a>`;
   const keys = folderSubtree(f, path, []).join(" ");
   return `<div class="crow folderrow foldsel" role="checkbox" aria-checked="false" tabindex="0"
-    data-q="${esc(f.name + " " + (f.desc||""))}" data-fold-keys="${esc(keys)}">
+    data-q="${esc(f.name + " " + (f.desc||""))}" data-fold-keys="${esc(keys)}"${f.focus? ' data-fold-focus="1"':""}>
     <span class="id"><span class="foldbox">${EYE_CHAR}${ICN_EYE_SHUT}</span></span>
     ${meta}
     <a class="pill void foldopen" href="#/c/${esc(slug)}/f/${path}">open →</a></div>`;
@@ -9219,8 +9240,12 @@ async function chainFolders(slug){
       const id = parseInt(bits[0],10), parent = parseInt(bits[1],10);
       if(!Number.isInteger(id) || !Number.isInteger(parent)) continue;
       const born = bits.length > 3 ? parseInt(bits[3],10) : null;
+      /* "f" — this set is TICKED on arrival, because the claim that carried it in
+         was filed with 𓂀 rather than 𓁼. It rides the row for the same reason the
+         picture flag does: the filter has to know before its FIRST paint, or the
+         page flickers through the wrong view on the way to the right one. */
       shape.set(id, {parent, retired: bits[2].includes("r"), purged: bits[2].includes("p"),
-                     hasImage: bits[2].includes("i"),
+                     hasImage: bits[2].includes("i"), focus: bits[2].includes("f"),
                      born: Number.isInteger(born) ? born : null});
     }
   }
@@ -9290,6 +9315,11 @@ async function chainFolders(slug){
       const born = Number(bornRaw) || 0;
       return {name:String(name), claims:ids, folders:[], fid, img,
               born: born || undefined,
+              /* Carried onto the folder the page draws, so the filter can open in
+                 the state the court filed rather than the one this client happens
+                 to default to. Absent on a realm predating the flag, which reads
+                 as false — unticked — the behaviour every set had. */
+              focus: !!(sh && sh.focus),
               parent: sh? sh.parent : 0, path:String(fid), chain:true};
     }catch(_){ return {name:"read failed — reload to retry", claims:[], folders:[], fid, path:String(fid), chain:true, failed:true}; }
   });

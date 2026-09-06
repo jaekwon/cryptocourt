@@ -56,8 +56,25 @@ import (
  * character; it is NOT a set, and it must not become one by looking like it.
  */
 const (
-	setMark   = "\U00013080" // 𓂀 U+13080, and nothing else
+	/* TWO MARKS, AND THE CHOICE BETWEEN THEM IS THE SET'S DEFAULT.
+	 *
+	 * 𓂀 D010, the wedjat, opens SHOWN. 𓁼 D007, the eye with painted lids, opens
+	 * HIDDEN. Both make a set; the one an author typed says which state the set
+	 * is in when a reader arrives, and nothing else distinguishes them.
+	 *
+	 * THE MARK WAS ALREADY GOING TO BE THERE, which is the whole reason to spend
+	 * it this way: no second field, no second read, no second thing to keep true.
+	 * A title is immutable, so the default is immutable too — a set opens the way
+	 * it was filed, and changing it means filing a different set.
+	 *
+	 * D007 IS NOT "CLOSED" IN UNICODE. It is the eye with cosmetic lines along
+	 * the lids, and no codepoint means "not seeing". This realm uses it that way
+	 * by convention, which is a decision and is written here so it reads as one.
+	 */
+	setMark   = "\U00013080" // 𓂀 U+13080 — a set that opens shown
+	shutMark  = "\U0001307C" // 𓁼 U+1307C — a set that opens hidden
 	setPrefix = setMark + " "
+	shutPrefix = shutMark + " "
 )
 
 /* parseSetTitle reads a governed-set title. The mark, one space, then the name.
@@ -72,22 +89,28 @@ const (
  * caller's string here would mean the set's name and the claim's title no longer
  * match, which is the one invariant this feature sells.
  */
-func parseSetTitle(title string) (string, bool) {
-	if !strings.HasPrefix(title, setPrefix) {
-		return "", false
+func parseSetTitle(title string) (name string, shown bool, ok bool) {
+	pre := ""
+	switch {
+	case strings.HasPrefix(title, setPrefix):
+		pre, shown = setPrefix, true
+	case strings.HasPrefix(title, shutPrefix):
+		pre, shown = shutPrefix, false
+	default:
+		return "", false, false
 	}
-	name := title[len(setPrefix):]
+	name = title[len(pre):]
 	if !folderTextOK(name, "") {
-		return "", false
+		return "", false, false
 	}
-	return name, true
+	return name, shown, true
 }
 
 // IsSetClaim reports whether this claim's title asks to be a set. It says
 // nothing about whether the court agreed — see ClaimSet for that.
 func IsSetClaim(courtSlug string, claimID uint64) bool {
 	cs := mustClaim(mustCourt(courtSlug), claimID)
-	_, ok := parseSetTitle(cs.title)
+	_, _, ok := parseSetTitle(cs.title)
 	return ok
 }
 
@@ -174,7 +197,7 @@ func New(cur realm, courtSlug string, claimID uint64) uint64 {
 	// 1. The title still has to parse. It cannot change under a claim, but
 	//    reading it here rather than trusting a flag set at open means there is
 	//    one definition of what a set title is, in one function.
-	name, ok := parseSetTitle(cs.title)
+	name, shown, ok := parseSetTitle(cs.title)
 	if !ok {
 		panic("kourtv2: this claim's title is not a set heading")
 	}
@@ -256,7 +279,10 @@ func New(cur realm, courtSlug string, claimID uint64) uint64 {
 	}
 
 	fid := newFolderCore(cm, name, "", parent)
-	cm.mustFolder(fid).bornOf = claimID
+	f := cm.mustFolder(fid)
+	f.bornOf = claimID
+	// The mark the author filed under, carried onto the set it became.
+	f.focusByDefault = shown
 	/* ITS OWN ACT CODE, BECAUSE THE ADDRESS BESIDE IT MEANS SOMETHING ELSE HERE.
 	 *
 	 * `by` IS THE AUTHOR, NOT THE SENDER, and that is deliberate: carrying is

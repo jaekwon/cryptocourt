@@ -75,6 +75,18 @@ type folder struct {
 	   retired, purged and moved, and a separate map would be a second place to
 	   remember to do that. */
 	bornOf uint64
+	/* focusByDefault: this set is TICKED when a reader arrives, because the claim
+	   that carried it in was filed with 𓂀 rather than 𓁼.
+	   IT DOES NOT HIDE ANYTHING BY ITSELF. The filter is a spotlight: ticked sets
+	   are what shows, and with none ticked the filter is inert and the whole
+	   docket shows. So a court where every set is 𓁼 behaves exactly as every
+	   court did before this existed — which is the point. A 𓂀 set is a court
+	   saying "start here", and the cost of saying it is that everything outside
+	   the 𓂀 sets waits behind a tick.
+	   Set once at AffirmSet from the title and never again: a title cannot be
+	   edited, so neither can this. A moderator's own CreateFolder leaves it
+	   false — there is no mark on a folder nobody filed a claim for. */
+	focusByDefault bool
 	// parent folder, 0 = a root heading. Zero on pre-nesting folders, which read
 	// as roots — the same "zero on pre-upgrade" shape claimState.openedAtTime
 	// already uses, so there is no migration step and no version field.
@@ -918,6 +930,13 @@ func FolderTree(courtSlug string) string {
 		}
 		if f.purged {
 			flags += "p"
+		}
+		// "f" — this set is ticked on arrival. It rides the row because the filter
+		// has to know before its FIRST paint; a read per folder to find out would
+		// be a hundred at the cap, and the page would flicker through the wrong
+		// view on the way to the right one.
+		if f.focusByDefault {
+			flags += "f"
 		}
 		// "i" — this folder has a picture, so a client knows to spend the read.
 		// It rides here rather than in a read of its own because the alternative

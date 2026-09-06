@@ -798,7 +798,19 @@ for _pth, _dsc in FOLDER_DESC.items():
 s.note("the filing system on chain: every set is BORN — a wedjat claim, staked, "
        "answered and settled, then carried by New. No CreateFolder here.")
 
-SET_MARK = "\U00013080"   # U+13080 EGYPTIAN HIEROGLYPH D010, the exact codepoint
+# TWO MARKS, AND THE SEED USES BOTH, because a seed that only ever files one of
+# them is a seed that never shows what the other does.
+#
+# 𓂀 D010 starts the set TICKED — it is the court saying "start here", and the
+# filter opens focused on it. 𓁼 D007 is the ordinary one: the set exists, it is
+# in the tree, and the docket opens showing everything as it always did.
+#
+# ONE 𓂀 IN THE WHOLE DOCKET, deliberately. Filing every set with it would tick
+# every set, and a filter with everything ticked shows the union of all sets —
+# which hides only the claims filed in no set at all, an odd default nobody
+# asked for. One focused set is the shape the feature is for.
+SET_MARK  = "\U00013080"   # U+13080 D010 𓂀 — starts ticked, the court's focus
+SET_MARK_PLAIN = "\U0001307C"   # U+1307C D007 𓁼 — an ordinary set
 
 # Parents before children: a child is MoveFolder'd under its parent after both
 # exist, so the parent's id has to be known first.
@@ -842,7 +854,7 @@ for _n, _path in enumerate(SET_PATHS, start=1):
     SET_CID[_path] = _n
     who = STAKERS[(_n - 1) % len(STAKERS)]
     SET_FILER[_path] = who
-    s.claim(accounts[who], SLUG, SET_MARK + " " + _path[-1],
+    s.claim(accounts[who], SLUG, SET_MARK_PLAIN + " " + _path[-1],
             FOLDER_DESC.get(_path, "") or None)
     s.stake(accounts[who], SLUG, _n, YES, SET_STAKE)
 
