@@ -872,8 +872,15 @@ function mkDoc() {
        /class="chatmark wedjat"/.test(line(M + " set", "covid")));
     ok("𓂀 hovers as shown", /title="shown"/.test(line(M + " set", "covid")));
     ok("𓁼 hovers as concealed", /title="concealed"/.test(line(S + " set", "covid")));
+    /* LEFT AS TEXT MEANS ENTIRELY ALONE — no link, and no mark span either, so no
+       hover word. A comment above this code claimed for a while that the mark kept
+       its hover "because that costs nothing and is true anywhere"; it had stopped
+       being true when the offer it belonged to was removed, and nothing failed.
+       Asserted on all three of the things that are absent, not just the link. */
     ok("a name the court does not have is left as text",
-       !/chatset/.test(line(M + " nope", "covid")));
+       !/chatset/.test(line(M + " nope", "covid"))
+       && !/chatmark/.test(line(M + " nope", "covid"))
+       && !/title="/.test(line(M + " nope", "covid")));
     /* THE SPACE IS THE DELIMITER, as it is in the realm: without it the mark is a
        first character rather than a prefix, and "𓂀set" is an ordinary message. */
     ok("no space, no heading", !/chatset/.test(line(M + "set", "covid")));
@@ -900,8 +907,9 @@ function mkDoc() {
        chatSetHeading(M + " ") === null);
     /* NO COURT, NO LINK. The panel renders without one and an href built from an
        empty slug goes nowhere. */
-    ok("without a court nothing is linked",
-       !/chatset/.test(line(M + " set", "")));
+    ok("without a court nothing is linked, and nothing is marked",
+       !/chatset/.test(line(M + " set", ""))
+       && !/chatmark/.test(line(M + " set", "")));
     /* THE MAP IS THE SENTENCE — key is the mark, value is what it opens as. A
        `word` field beside a `mark` field would be a pair that can drift; this
        cannot, because there is no pair. Asserted on the SOURCE, so a third mark

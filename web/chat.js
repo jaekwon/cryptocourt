@@ -291,23 +291,14 @@ function chatSetHeading(body) {
 function chatLineHtml(m, nowSec, court) {
   const flag = chatFlag(m.country);
   const suffix = /^[0-9a-f]{1,16}$/.test(String(m.suffix || "")) ? m.suffix : "";
-  /* A HEADING SOMEBODY TYPED, AND THE TWO THINGS THIS PANEL DOES WITH IT.
-     The BODY becomes the control — the mark keeps its hover word and the name
-     reads as the name — and a HINT line follows it saying what the control is
-     for. Two affordances rather than one, because the chip is discoverable only
-     by hovering and the line is the sentence somebody needs the first time.
-     NO COURT, NO OFFER. The panel can be rendered without one (the harness does),
-     and an OpenClaimP with an empty courtSlug is a transaction the realm refuses.
-     The mark still gets its hover word — that costs nothing and is true anywhere. */
   /* IS THIS A SET THIS COURT ACTUALLY HAS? The page knows and this file cannot —
      it reads no chain, for the reason it carries its own escaper — so the answer
      comes through the one function it reaches for, guarded because chat.js is also
-     loaded on its own by the harness.
-     A NAME THAT IS NOT A SET IS LEFT ALONE. The panel offers nothing, suggests
-     nothing and adds no line: somebody typing a heading in chat is talking, and a
-     transcript is not the place to be sold a transaction. The only thing that
-     changes is that a name the court ALREADY HAS becomes a way to go and look at
-     it. */
+     loaded on its own by the harness, which mounts the panel with no court at all.
+     A NAME THAT IS NOT A SET IS LEFT ALONE — plain text, no mark span, no hover,
+     nothing added. Somebody typing a heading in chat is TALKING, and a transcript
+     is not a place to be sold a transaction. The only thing that changes is that a
+     name the court ALREADY HAS becomes a way to go and look at it. */
   const hit = chatSetHeading(m.body);
   const fid = hit && court && typeof setFidByName === "function"
     ? setFidByName(court, hit.name) : null;
