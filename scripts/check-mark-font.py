@@ -13,12 +13,20 @@ MEASURED, WHICH IS WHY THIS EXISTS. On kourt.xyz the map drew its marks as
 silently broken for everyone without an Egyptian font installed. It was found by
 hand; nothing would have caught the next one.
 
-SCOPE, STATED NARROWLY. This looks at web/index.html and web/chat.js for an
-ELEMENT whose text contains a mark — written as a `\\u{...}` escape, as a literal
-glyph, or interpolated from a constant whose name ends in MARK — and requires
-`wedjat` among its classes. It says nothing about anything else that mentions the
-codepoints: a bare `const SET_MARK = "\\u{13080}"`, a comment, the @font-face rule
-and a test fixture are all fine, because none of them is a thing a reader sees.
+SCOPE, STATED NARROWLY, AND IT WORKS BACKWARDS. It finds a MARK in web/index.html
+or web/chat.js — as a `\\u{...}` escape, a literal glyph, a template hole that IS
+the mark, or one concatenated onto a string — and then walks back to the nearest
+opening span or text, requiring `wedjat` among its classes.
+
+THAT DIRECTION IS THE POINT, and it was learned the hard way. Scanning FORWARDS
+from a tag missed a real site three times, because these files build markup by
+concatenation and interpolation: a tag and the glyph it wraps routinely live in
+different expressions, with a <title> child or a string boundary in between.
+
+A BARE `const SET_MARK` and a test fixture never reach an opening tag and drop out
+on their own. COMMENTS ARE SKIPPED EXPLICITLY, which is not the same thing — they
+used to drop out by accident, until a comment explaining this very rule mentioned
+a <text> and the escape within a few lines of each other and was read as markup.
 
 AND IT CHECKS THE CLASS STILL DOES ITS JOB, because "every mark wears .wedjat" is
 worth nothing if .wedjat stops naming the font. Both halves, or this passes while
