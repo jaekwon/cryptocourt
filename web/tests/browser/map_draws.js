@@ -313,11 +313,16 @@ const {PAGE, demoPage} = require('./harness');
   const setmark = await page.evaluate(() => {
     try {
       const M = "\u{13080}", st = t => t + " — every stake withdraws 1×";
-      const d = {folders: [{name: "Origins", claims: [1, 2], folders: [], path: "0", born: 3}],
+      /* A LONG NAME ON PURPOSE, because a short one cannot fail the way this
+         drawing fails. The mark sits INSIDE the box, so the box has to be grown
+         by the width it takes or the name is truncated to fit around it — and
+         truncation is invisible to markOverlapsLabel, which only ever sees two
+         rects that do not touch. "Origins" fitted either way and proved nothing. */
+      const d = {folders: [{name: "Vaccine safety claims", claims: [1, 2], folders: [], path: "0", born: 3}],
                  all: [1, 2, 3],
                  claims: {1: {title: "An ordinary claim.", statusText: st("settled YES")},
                           2: {title: M + " Furin cleavage site", statusText: st("settled YES")},
-                          3: {title: M + " Origins", statusText: st("settled YES")}},
+                          3: {title: M + " Vaccine safety claims", statusText: st("settled YES")}},
                  relations: [], courtName: "C", linkFolders: true};
       const host = document.createElement('div');
       host.innerHTML = mapSvg(mapLayout(d, "titles"), d, "covid");
@@ -328,15 +333,26 @@ const {PAGE, demoPage} = require('./harness');
                    onFolder: svg.querySelectorAll('.mset[data-fid]').length,
                    raw: svg.textContent.includes(M),
                    nameKept: svg.textContent.includes("Furin cleavage site"),
-                   ordinary: svg.querySelectorAll('.mset[data-owner="c1"]').length};
-      /* AND IT DOES NOT SIT ON THE NAME. The first version drew it inside the
-         box at the top-left, which is exactly where a left-aligned, vertically
-         centred label begins — so the eye landed on the first letter and read as
-         part of the word. Every count-based assertion above passed while that
-         was true, which is why this one measures BOXES: the mark's rect against
-         every label's rect. There is no free corner inside — the subject
-         watermark holds the right edge and a two-line name fills the height — so
-         it straddles the boundary like a badge, which is what markOnCorner is. */
+                   ordinary: svg.querySelectorAll('.mset[data-owner="c1"]').length,
+                   // Every word of the folder's name, or the box was sized for a
+                   // label it then had to indent past its own right edge.
+                   folderLabel: [...svg.querySelectorAll('.mhdr-t[data-owner="h0"]')]
+                                  .map(t => t.textContent).join(" ")};
+      /* INSIDE THE BOX, AND STILL NOT ON THE NAME. Both halves are measured
+         because each one alone has been satisfied by a broken drawing. An early
+         version put the mark inside at the top-left — exactly where a
+         left-aligned, vertically centred label begins — so the eye landed on the
+         first letter and read as part of the word, and every count-based
+         assertion above passed while that was true. The fix moved it OUT to
+         straddle the border, which cleared the name and then read as a smudge on
+         the edge rather than as something the node was saying.
+         What holds now is both at once: the mark sits within the rect, and the
+         box was GROWN by mapSetMark's lead so the name has room beside it. Drop
+         the lead from mapFolderSize and the label truncates rather than
+         overlapping — which markOverlapsLabel cannot catch, since it only ever
+         sees two rects that do not touch — so folderLabel asserts the name
+         intact. MEASURED: with the fixture's folder named "Origins" that arm
+         passed against a mapFolderSize that reserved nothing at all. */
       const mk = svg.querySelector('.mset[data-fid]'), bx = svg.querySelector('.mfold');
       if (mk && bx) {
         const m = mk.getBoundingClientRect(), r = bx.getBoundingClientRect();
@@ -344,7 +360,8 @@ const {PAGE, demoPage} = require('./harness');
           const q = t.getBoundingClientRect();
           return !(m.right < q.left || m.left > q.right || m.bottom < q.top || m.top > q.bottom);
         });
-        out.markOnCorner = m.left < r.left && m.top < r.top;
+        out.markInside = m.left >= r.left && m.right <= r.right
+                      && m.top >= r.top && m.bottom <= r.bottom;
       }
       svg.classList.add('far');
       const cm = svg.querySelector('.mset[data-owner]'), fm = svg.querySelector('.mset[data-fid]');
@@ -372,9 +389,13 @@ const {PAGE, demoPage} = require('./harness');
   /* Zoomed out the sentences go, so a mark that annotated one goes with it —
      the rule .mtitle and .mstrike already follow. A BOX is still drawn and named
      at every zoom, so its mark stays. */
-  ok("...and the set's mark is clear of its name, on the corner",
-     setmark.markOverlapsLabel === false && setmark.markOnCorner === true,
-     JSON.stringify({overlap: setmark.markOverlapsLabel, corner: setmark.markOnCorner}));
+  ok("...and the box grew for it, so the whole name is still drawn",
+     /[…]/.test(setmark.folderLabel) === false
+       && setmark.folderLabel.replace(/\s+/g, " ").includes("Vaccine safety claims"),
+     JSON.stringify({label: setmark.folderLabel}));
+  ok("...and the set's mark is inside its box, clear of its name",
+     setmark.markOverlapsLabel === false && setmark.markInside === true,
+     JSON.stringify({overlap: setmark.markOverlapsLabel, inside: setmark.markInside}));
   ok("...the claim's mark leaves with the sentences, the set's stays",
      setmark.farClaim === "none" && setmark.farFolder !== "none",
      `claim ${setmark.farClaim}, folder ${setmark.farFolder}`);

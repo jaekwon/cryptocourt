@@ -9798,12 +9798,33 @@ function mapCourtSize(name, mode){
   // wrapMid derives its own cap from the box height, so the height IS the cap.
   return {w: base.w, h: Math.max(base.h, Math.min(base.w, mapFitHeight(lines.length, fs)))};
 }
-function mapFolderSize(name, count, mode){
+/* WHAT A SET MARK COSTS A FOLDER BOX, in one place because two places need it
+   and they must not disagree: mapFolderSize grows the box wide enough to hold
+   the NAME BESIDE THE MARK, and mapSvg draws them. Spelled twice, a box comes
+   out sized for a label that is then indented past its own right edge — which is
+   exactly what the first version of this did: "Vaccine safety claims · 3" became
+   "Vaccine / safety…" the moment the mark moved inside.
+   NOT `mapMark`, WHICH IS TAKEN AND IS A DIFFERENT VOCABULARY. That one is the
+   VERDICT mark — `mapMark(pc, cl)`, four comments elsewhere point at it — and a
+   second declaration of the name simply replaced it, so the layout called the
+   verdict function and the whole map died with "Cannot read properties of
+   undefined (reading 'short')". The file already warns that "mark" means two
+   things here; this is what walking into it looks like.
+   BOTH NUMBERS FROM ONE ANSWER. `es` is the type size and `lead` is the width it
+   takes with its gap; returning them together is what makes it impossible to
+   grow the box by one and indent by the other. Below 7 the glyph is a smudge
+   rather than a mark, so nothing is drawn and nothing is reserved. */
+function mapSetMark(born, h){
+  const es = born ? Math.min(MAPK.fs.header * 1.25, h) : 0;
+  return es >= 7 ? {es: es, lead: es + 4} : {es: 0, lead: 0};
+}
+function mapFolderSize(name, count, mode, born){
   const base = MAPK.fnode[mode];
   if(mode !== "titles") return base;
   const label = count != null ? `${name} · ${count}` : String(name || "");
+  const lead = mapSetMark(born, base.h).lead;
   const holds = w => {
-    const lines = mapWrapTitle(label, w - 2*MAPK.tpad, MAPK.fs.header,
+    const lines = mapWrapTitle(label, w - 2*MAPK.tpad - lead, MAPK.fs.header,
                                 mapFitLines(base, MAPK.fs.header), "mhdr-t");
     // The same two failures wrapFit weighs at draw time: an ellipsis, or a last
     // line carrying the "· 3" and no word — which reads as a broken label.
@@ -10078,7 +10099,7 @@ function mapTree(data, mode){
       // on a born set says WHICH mark, and that is the only thing the two eyes
       // differ on. Nothing about the drawing's shape or size depends on it.
       img:f.img, born:f.born, focus:f.focus,
-      count, size:mapFolderSize(f.name, count, mode)};
+      count, size:mapFolderSize(f.name, count, mode, f.born)};
     for(const id of (f.claims||[])){
       if(!data.claims[id] || bornIds.has(id)) continue;
       // Filed here AND drawn somewhere else. The spoke records it on the map;
@@ -10931,20 +10952,28 @@ function mapSvg(L, data, slug){
      spends its last characters on punctuation. So: try it with the count, and if
      that truncates, say the name properly and let the folder page carry the
      number. */
-  const wrapFit=(name, count, box, fs, cls, owner)=>{
+  /* `dx` IS ROOM RESERVED AT THE LEFT, and it is the same offset `label` has
+     always taken to set a title after an id. A folder that wears the set mark
+     INSIDE its box has to give the mark that width or the two share pixels —
+     which is the collision that used to keep the mark out on the border. Taken
+     here rather than measured, because the caller is what decides to draw a
+     mark at all, and nothing else may guess. Zero for everything else. */
+  const wrapFit=(name, count, box, fs, cls, owner, dx)=>{
+    const off = dx || 0;
     const withN = count!=null? `${name} · ${count}` : name;
-    const a = mapWrapTitle(withN, box.w-2*K.tpad, fs, mapFitLines(box, fs), cls);
+    const a = mapWrapTitle(withN, box.w-2*K.tpad-off, fs, mapFitLines(box, fs), cls);
     // Two ways the count costs more than it is worth: it pushes the wrap over and
     // the name gets an ellipsis, or it lands on a line of its own — "Learning
     // loss ·" above a bare "1", which reads as a broken label rather than a
     // count. Either way the name wins and the folder page carries the number.
     const orphan = a.length>1 && !/[A-Za-z]/.test(a[a.length-1]);
-    return wrapMid((mapWrapHolds(a, withN) && !orphan)? withN : name, box, fs, cls, owner);
+    return wrapMid((mapWrapHolds(a, withN) && !orphan)? withN : name, box, fs, cls, owner, off);
   };
-  const wrapMid=(txt, box, fs, cls, owner)=>{
-    const lines=mapWrapTitle(txt, box.w-2*K.tpad, fs, mapFitLines(box, fs), cls);
+  const wrapMid=(txt, box, fs, cls, owner, dx)=>{
+    const off = dx || 0;
+    const lines=mapWrapTitle(txt, box.w-2*K.tpad-off, fs, mapFitLines(box, fs), cls);
     const y0=box.y+box.h/2 - (lines.length-1)*(fs+2)/2 + fs*0.36;
-    return lines.map((ln,i)=>label(ln, box, fs, Math.round((y0+i*(fs+2))*10)/10, cls, owner)).join("");
+    return lines.map((ln,i)=>label(ln, box, fs, Math.round((y0+i*(fs+2))*10)/10, cls, owner, off)).join("");
   };
   /* THE COURT IS SELECTABLE TOO. It was a bare rect: not a link, and matched by
      no click handler, so clicking the node the whole drawing hangs off fell
@@ -11004,18 +11033,25 @@ function mapSvg(L, data, slug){
        the sidebar rows carry the eye, the set page names the claim, and the box
        drawn for the same set carried nothing. Top-left, small, clear of the
        subject watermark which is held to the right edge. */
-    /* ON THE CORNER, NOT IN THE BOX. Inside it collided with the name: a folder
-       label is left-aligned and vertically centred, so the top-left is exactly
-       where line one begins — the mark landed on the first letter and read as
-       part of the word ("𓂀Vaccine safety claims"). There is no free corner
-       either, since the subject watermark holds the right edge and a two-line
-       name fills the height.
-       So it straddles the boundary, the way a badge does. Outside the fill it
-       cannot overlap any text at any label length, and it still belongs to the
-       box it is attached to. */
-    const bornMark = (!f.pseudo && f.born)
-      ? (()=>{ const es = Math.min(K.fs.header * 1.25, f.h);
-          if(es < 7) return "";   // too small to read: draw nothing
+    /* IN THE BOX, AT THE LEFT, AND THE LABEL IS TOLD TO MAKE ROOM. This hung off
+       the top-left corner — centred 0.2em OUTSIDE the left edge, straddling the
+       boundary the way a badge does — and at map scale it read as a smudge on
+       the border rather than as anything the node was saying.
+       IT WENT OUT THERE BECAUSE INSIDE COLLIDED: a folder label is left-aligned
+       and vertically centred, so the mark landed on the first letter and read as
+       part of the word ("𓂀Vaccine safety claims"). The answer is not to put it
+       back on top of the text but to RESERVE the width — `label` has always
+       taken a `dx` for exactly this, to set a title after an id, and wrapFit now
+       passes one down. So the mark sits inside and the name begins after it.
+       CENTRED ON THE BOX, not on line one. The label block is vertically centred
+       too, so one number places the mark for a one-line name and a two-line one
+       alike, with no second layout to keep in step. */
+    /* THE SAME ANSWER THE LAYOUT SIZED THIS BOX WITH. mapFolderSize asked
+       mapSetMark for the width to keep clear and grew the box by it; this asks the
+       same function so the mark drawn is the mark the box was made for. */
+    const {es: bornEs, lead: bornLead} = mapSetMark(!f.pseudo && f.born, f.h);
+    const bornMark = bornLead
+      ? (()=>{ const es = bornEs;
           // A <text> in the embedded face, not paths: the same character the
           // rest of the page prints, so a reader selecting the map's text takes
           // the mark with it. Positioned by its own x/y rather than a scale
@@ -11035,14 +11071,14 @@ function mapSvg(L, data, slug){
              short name would flag the verdict marks again; naming the thing what
              it is costs nothing and reads better. */
           const mark = f.focus ? SET_MARK : SHUT_MARK;
-          return `<text class="mset wedjat" data-fid="${i}" x="${(f.x - es*0.2).toFixed(1)}" `
-            + `y="${(f.y + es*0.3).toFixed(1)}" font-size="${es.toFixed(1)}" `
-            + `text-anchor="middle">`
+          return `<text class="mset wedjat" data-fid="${i}" x="${(f.x + K.tpad).toFixed(1)}" `
+            + `y="${(f.y + f.h/2 + es*0.34).toFixed(1)}" font-size="${es.toFixed(1)}" `
+            + `text-anchor="start">`
             + `<title>${setOpensWords(f.focus)}</title>`
             + `${mark}</text>`; })()
       : "";
     const tag=`<rect class="mfold${f.pseudo?" pseudo":""}" x="${f.x}" y="${f.y}" width="${f.w}" height="${f.h}" rx="4" data-fid="${i}"/>`
-      + face + bornMark + wrapFit(f.name, f.count, f, K.fs.header, "mhdr-t", "h"+i);
+      + face + bornMark + wrapFit(f.name, f.count, f, K.fs.header, "mhdr-t", "h"+i, bornLead);
     if(!f.pseudo && f.path!=null && data.linkFolders)
       out.push(`<a class="mfold-a" data-fid="${i}" href="#/c/${esc(slug)}/f/${f.path}">${tag}${tip}</a>`);
     /* Not a link, so it needs a group of its own — an SVG <title> describes the
