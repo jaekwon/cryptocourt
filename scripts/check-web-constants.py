@@ -72,6 +72,20 @@ MIRRORS = {
     # a window. It was unregistered until now, and invisible to boot: MIRRORS
     # demanded a bare integer ending in `;` and this is a BigInt sharing its
     # statement with CURVE_CAP, so no entry could have worked (see main()).
+    # How many folders the overlay will read for a court, and it is the realm's cap
+    # rather than a page-size choice: `const F = Math.min(n, CHAIN_FOLDER_CAP)`
+    # decides how many names are FETCHED, and `capped: n > CHAIN_FOLDER_CAP`
+    # decides whether the reader is told any were left out.
+    #
+    # THE DRIFT IS SILENT IN THE DIRECTION THAT MATTERS. If the realm's cap ROSE
+    # and this did not, a court with more folders than this number would draw the
+    # first hundred, report itself capped — true, but for the wrong reason — and
+    # the rest would simply not exist on the page. They would also stop being
+    # linkable in chat, because SETFID is built from the same truncated list. If
+    # the realm's cap FELL, the overlay asks for folders that are not there, which
+    # is wasteful and harmless. Only one direction loses data, and it loses it
+    # quietly.
+    "CHAIN_FOLDER_CAP": ("realm/r/kourtv2/folders.gno", "maxFolders"),
     "CURVE_D": ("realm/r/kourtv2/court.gno", "curveDenom"),
     # The window an undisputed answer waits before it settles. The page works
     # BACKWARDS from the settle deadline to place "answered" on the timeline, so
