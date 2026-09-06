@@ -651,14 +651,20 @@ const run = async (rows, v, mode) => {
        marked.includes(M) && /class="wedjat"/.test(marked));
     ok("...and it is not silently swapped for a drawing", !/<svg/.test(marked));
     ok("...while the name it prefixed survives intact", marked.includes("Lab leak evidence"));
+    /* THE CLASS THESE THREE WATCH FOR IS THE ONE THAT IS DRAWN. They asked for
+       `class="setmark"` — the wrapper from BEFORE the migration the comment
+       above describes, which nothing in the page has emitted since. So all
+       three passed no matter what: a title dressed as a set when it is not one
+       wears `wedjat`, and none of them was looking at it. Vacuous assertions
+       are worse than absent ones, because the suite reports them as covered. */
     ok("an unmarked title gets no mark",
-       !/class="setmark"/.test(verdictSentence("An ordinary claim", "YES")));
+       !/class="wedjat"/.test(verdictSentence("An ordinary claim", "YES")));
     const near = verdictSentence(NEAR + " A near-miss eye", "YES");
-    ok("a near-miss eye is NOT drawn as the mark", !/class="setmark"/.test(near));
+    ok("a near-miss eye is NOT drawn as the mark", !/class="wedjat"/.test(near));
     ok("...and comes through as the raw character", near.includes(NEAR));
     // The delimiter is required, or "𓂀Name" and "𓂀 Name" become two spellings.
     ok("the mark without its space is not a prefix",
-       !/class="setmark"/.test(verdictSentence(M + "NoSpace", "YES")));
+       !/class="wedjat"/.test(verdictSentence(M + "NoSpace", "YES")));
   }
 
   console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");

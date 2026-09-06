@@ -192,6 +192,7 @@ RUNJS = "web/tests/browser/run.js"
 CHATALL = "web/tests/browser/chat_all.js"
 WEBPAGE = "web/index.html"
 WEBCONST = "scripts/check-web-constants.py"
+MARKFONT = "scripts/check-mark-font.py"
 MEDIAHOSTS = "scripts/check-media-hosts.py"
 MEDIAGNO = "realm/r/kourtv2/media.gno"
 BLOCKTIME = "scripts/check-block-time.py"
@@ -1528,6 +1529,34 @@ control("a leaf that lists harnesses it never spawns", "web/tests/browser/map_dr
 control("a scan too small to be real", BROWREG,
         'if f.endswith(".js")', 'if f == "run.js"',
         "too few to be a real scan", argv=["python3", BROWREG])
+
+print("\ncheck-mark-font")
+# The defect this exists for, MEASURED ON kourt.xyz: the map drew its marks as
+# `text.mset.wedjat` and computed wedjat-font, while the chat panel drew
+# `span.chatmark` and computed -apple-system. Same glyph, two surfaces, one of
+# them a tofu box for every reader without an Egyptian font — and looking
+# perfect to everyone who could have noticed.
+control("a mark drawn in a span the stylesheet does not font", WEBPAGE,
+        '<span class="wedjat" role="img" aria-label="${setOpensWords(p.shown)}">',
+        '<span role="img" aria-label="${setOpensWords(p.shown)}">',
+        "no class on it is one the stylesheet gives the embedded face to",
+        argv=["python3", MARKFONT])
+# THE SECOND ARM IS THE STYLESHEET SIDE. "every mark wears a fonted class" is
+# worth nothing if the class stops naming the face, and the per-site arm above
+# passes cleanly while every mark on the site is a box.
+control("the class stops naming the embedded face", WEBPAGE,
+        '.foldsel .eyeshut{font-family:"wedjat-font",system-ui,sans-serif}',
+        '.foldsel .eyeshut{font-family:system-ui,sans-serif}',
+        "no class on it is one the stylesheet gives the embedded face to",
+        argv=["python3", MARKFONT])
+# AND THE CASE OF THE HEX, which was a live blind spot and not a hypothetical:
+# the pattern read `7C` only, and the page spells one of its two eyes
+# `\\u{1307c}`. A mark was invisible to the whole scanner over a letter's case.
+control("a mark spelled with lowercase hex", WEBPAGE,
+        '<span class="eye eyeshut" aria-hidden="true">\\u{1307c}</span>',
+        '<span class="eye" aria-hidden="true">\\u{1307c}</span>',
+        "no class on it is one the stylesheet gives the embedded face to",
+        argv=["python3", MARKFONT])
 
 print("\ncheck-web-css")
 # The defect this exists for: a comment edited badly, leaving prose and a second

@@ -12736,7 +12736,18 @@ on(/^\/c\/([a-z0-9-]+)\/f\/([0-9.]+)$/, async (slug,fpath)=>{
        .setmark RATHER THAN A NEW CLASS: it is the same mark saying the same
        thing, and it already carries the inline-flex, the accent and the optical
        nudge that put an eye on a baseline. */
-    + `<h1 class="page-h">${EYE_CHAR} ${safeInline(f.name)} <span class="seal">${esc(slug)}</span> `
+    /* THE SET'S OWN MARK, AND DRESSED BY THE FUNCTION THAT DRESSES TITLES.
+       This was the constant EYE_CHAR — D010 spelled in — on every folder page
+       including the ones that open CONCEALED, so on kourt.xyz folders 1 and 2 of
+       covid read 𓂀 on their own page and 𓁼 on the map. Same set, two glyphs,
+       and the glyph is the only thing that tells the two kinds apart.
+       A FOLDER HEADING IS A SET HEADING, which is why this needs no new helper:
+       spell the heading the way the realm spells it — mark, space, name — and
+       setMarkHtml dresses it exactly as it dresses a claim title, mark and
+       aria-label together, from the one string. `f.focus` is already on this
+       object (foldersFor reads it off the FolderTree flags), so the flag costs
+       no field and no read, and it is the same flag the map node draws from. */
+    + `<h1 class="page-h">${setMarkHtml((f.focus ? SET_MARK : SHUT_MARK) + " " + safeInline(f.name))} <span class="seal">${esc(slug)}</span> `
       /* AND IT GOES SOMEWHERE, WHICH THE ARROW IS HOW THIS PAGE SAYS. Every other
          link that leaves for another view ends in one — "Open claim page →",
          "the moderation log →", "back to the docket →" — so the one that did not

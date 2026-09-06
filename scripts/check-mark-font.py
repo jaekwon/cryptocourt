@@ -52,7 +52,11 @@ FILES = ["web/index.html", "web/chat.js"]
 # exact bug it was written for: chat.js's mark stripped of `wedjat` sailed through.
 # Caught by mutating the source rather than by trusting the summary line, which is
 # the only way a blind spot in a scanner ever shows up.
-INSIDE = (r"\\u\{130(?:80|7C)\}", "[\U00013080\U0001307C]",
+# THE HEX IS EITHER CASE, AND THAT WAS A REAL BLIND SPOT. This read `7C` only,
+# and web/index.html spells one of its two eyes `\u{1307c}` — so a mark sitting in
+# a span was invisible to the whole scanner over a letter's case. Found by
+# widening the pattern for something else and noticing the count move.
+INSIDE = (r"(?i:\\u\{130(?:80|7C)\})", "[\U00013080\U0001307C]",
           # A template hole that IS the mark, not one that mentions one. The sites
           # that draw a set mark have gone from `${SET_MARK}` to `${p.mark}` and
           # `${setHead.mark}` as the parser replaced the constants, so this matches
@@ -119,9 +123,51 @@ def classes(attrs):
     return set((m.group(1) if m else "").split())
 
 
+def fonted_classes(web, face):
+    """Which classes does the stylesheet actually give the embedded face to?
+
+    THIS WAS THE LITERAL "wedjat" AND THE STYLESHEET HAD MOVED ON. Three rules
+    name the face now — `.wedjat`, `.mapsvg .wedjat`, and `.foldsel .eyeshut` —
+    so a mark in a `.eyeshut` span renders perfectly and a guard checking for one
+    class calls it broken. Rather than keep a second list in step with the CSS,
+    ask the CSS: any selector whose declarations name the face lends its classes.
+
+    A DESCENDANT SELECTOR IS TAKEN AT ITS WORD, which is the honest limit here.
+    `.foldsel .eyeshut` only applies inside `.foldsel`, and this cannot see an
+    ancestor — so `.eyeshut` counts as fonted wherever it appears. Checked by
+    hand today: its one draw site is inside a `.foldsel` row, and the live page
+    computes wedjat-font on it. A second site outside that row would be a tofu
+    box this guard waves through.
+
+    THE STYLESHEET ONLY, WHICH COST A ROUND. Run over the whole file this also
+    reads JavaScript block bodies as CSS rules, and any brace-block near the
+    string "wedjat-font" lent its dotted words to the accepted set — `.org` and
+    `.sil` arrived that way, two property accesses promoted to font-bearing
+    classes. A guard that accepts too much is the failure mode that never shows.
+
+    ...AND NOT THE @font-face, WHICH IS WHERE `.org` AND `.sil` CAME FROM. That
+    block declares the face, so it matches on the name every time, and the text
+    standing where its selector would be is the COMMENT above it — prose about
+    the subsetting, with dotted words in it. Two of them became font-bearing
+    classes. Comments go first, at-rules are not selectors.
+    """
+    out = set()
+    for block in re.findall(r"<style[^>]*>(.*?)</style>", web, re.S):
+        block = re.sub(r"/\*.*?\*/", " ", block, flags=re.S)
+        for sel, decls in re.findall(r"([^{}]+)\{([^{}]*)\}", block):
+            if face in decls and not sel.lstrip().startswith("@"):
+                out.update(re.findall(r"\.([a-zA-Z][\w-]*)", sel))
+    return out
+
+
 def main():
     bad = 0
     drawn = 0
+    # THE FACE AND ITS CLASSES ARE READ FIRST, because the per-site check below
+    # now asks the stylesheet which classes carry the font rather than naming one.
+    web = io.open(os.path.join(REPO, "web/index.html"), encoding="utf-8").read()
+    face = re.search(r'@font-face\{font-family:"([^"]+)"', web)
+    ok_classes = fonted_classes(web, face.group(1)) if face else set()
     for rel in FILES:
         path = os.path.join(REPO, rel)
         if not os.path.exists(path):
@@ -139,21 +185,23 @@ def main():
             back = opens[-1]
             drawn += 1
             cls = classes(back.group(2))
-            if "wedjat" in cls:
+            if cls & ok_classes:
                 continue
             line = src.count("\n", 0, m.start()) + 1
-            print("check-mark-font: %s:%d draws a set mark in <%s class=%r> with no "
-                  "`wedjat` class. The glyph is an Egyptian hieroglyph and most "
+            print("check-mark-font: %s:%d draws a set mark in <%s class=%r>, and no "
+                  "class on it is one the stylesheet gives the embedded face to "
+                  "(%s). The glyph is an Egyptian hieroglyph and most "
                   "machines have no font for it — without that class this renders "
                   "as a tofu box for every reader who is not on a Mac, and looks "
                   "correct to everyone who could have noticed."
-                  % (rel, line, back.group(1), " ".join(sorted(cls)) or ""),
+                  % (rel, line, back.group(1), " ".join(sorted(cls)) or "",
+                     ", ".join("." + c for c in sorted(ok_classes))),
                   file=sys.stderr)
             bad += 1
 
-    # And the class must still carry the font, or the rule above is theatre.
-    web = io.open(os.path.join(REPO, "web/index.html"), encoding="utf-8").read()
-    face = re.search(r'@font-face\{font-family:"([^"]+)"', web)
+    # And some class must still carry the font, or the rule above is theatre —
+    # `ok_classes` is empty when nothing names the face, and an empty set matches
+    # no element, so every site would already have failed above. This says why.
     rule = re.search(r"^\.wedjat\{([^}]*)\}", web, re.M)
     if not face:
         print("check-mark-font: web/index.html no longer embeds a @font-face for "
@@ -170,8 +218,10 @@ def main():
     if bad:
         return 1
     print("check-mark-font: %d mark-drawing element(s) across %d file(s), every one "
-          "wearing `wedjat`, and the class still applies the embedded %s."
-          % (drawn, len(FILES), face.group(1)))
+          "wearing one of the classes the stylesheet fonts (%s), which still name "
+          "the embedded %s."
+          % (drawn, len(FILES), ", ".join("." + c for c in sorted(ok_classes)),
+             face.group(1)))
     return 0
 
 
