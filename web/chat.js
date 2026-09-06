@@ -42,7 +42,7 @@
 // happily take, too large accepts text the server then rejects with a 400 the user cannot act
 // on. `maxlength` is included because it physically stops typing, so a stale value there is a
 // capability quietly removed rather than a message shown.
-const CHATLIMITS = {body: 400, moniker: 24, bytes: 4096};
+const CHATLIMITS = {body: 400, moniker: 24, bytes: 4096, setname: 200};
 
 // CHATDEFAULTNAME is who you are when you have not said. It is the server's
 // DefaultMoniker and paneldrift_test.go pins the two together: a panel promising one
@@ -235,10 +235,77 @@ function chatValidate(moniker, body) {
   return "";
 }
 
+/* THE TWO SET MARKS, and this file keeps its own copies for the reason chatEsc
+   keeps its own escaper: chat.js is loaded beside the page but does not depend on
+   it, and a constant reached across that line is a constant that breaks when the
+   panel is rendered anywhere else.
+   SPELLED AS ESCAPES, never as the glyph, for the realm's own reason: the Egyptian
+   block holds several eyes that are one picture at this size, and a source file
+   showing a picture instead of a number is a file where the wrong one gets pasted
+   in and nobody sees it.
+   TWO MARKS, ONE MEANING, AND ONE DIFFERENCE. Both make a set. Which one an author
+   typed says what state the set is in when a reader arrives, and nothing else. The
+   hover word is the whole of that difference, so it is said on hover rather than
+   left to be learned.
+   THE MAP IS THE SENTENCE. Key is the mark, value is what it opens as — so there is
+   no `word` field to keep beside a `mark` field and no way for the pair to drift
+   apart, because they are not a pair. Reading it is `CHATSETMARKS[mark]`, which is
+   the same lookup a reader does in their head.
+   AND THE NAME CAP LIVES WITH THE OTHER CAPS, in CHATLIMITS, rather than standing
+   alone: it is one more limit this panel enforces, and a constant on its own is a
+   constant nobody looks for. It is the REALM's number, not the panel's — a body may
+   run to 400 characters and a folder name is 1..200 runes, so a longer heading is
+   not a heading here either. Counted in code points, which is what runeLen counts. */
+const CHATSETMARKS = {
+  "\u{13080}": "shown",      // 𓂀 D010
+  "\u{1307C}": "concealed",  // 𓁼 D007
+};
+
+/* chatSetHeading reads a body as a set heading, or answers null.
+   THE MARK, ONE SPACE, THEN THE NAME — the same shape parseSetTitle insists on,
+   because a title this panel offers to file has to be one the realm will take. */
+function chatSetHeading(body) {
+  const b = String(body == null ? "" : body);
+  for (const mark in CHATSETMARKS) {
+    if (!b.startsWith(mark + " ")) continue;
+    const name = b.slice(mark.length + 1);
+    const runes = [...name].length;
+    if (runes < 1 || runes > CHATLIMITS.setname) return null;
+    return {mark: mark, word: CHATSETMARKS[mark], name: name};
+  }
+  return null;
+}
+
 // chatLineHtml renders one message.
-function chatLineHtml(m, nowSec) {
+function chatLineHtml(m, nowSec, court) {
   const flag = chatFlag(m.country);
   const suffix = /^[0-9a-f]{1,16}$/.test(String(m.suffix || "")) ? m.suffix : "";
+  /* A HEADING SOMEBODY TYPED, AND THE TWO THINGS THIS PANEL DOES WITH IT.
+     The BODY becomes the control — the mark keeps its hover word and the name
+     reads as the name — and a HINT line follows it saying what the control is
+     for. Two affordances rather than one, because the chip is discoverable only
+     by hovering and the line is the sentence somebody needs the first time.
+     NO COURT, NO OFFER. The panel can be rendered without one (the harness does),
+     and an OpenClaimP with an empty courtSlug is a transaction the realm refuses.
+     The mark still gets its hover word — that costs nothing and is true anywhere. */
+  /* IS THIS A SET THIS COURT ACTUALLY HAS? The page knows and this file cannot —
+     it reads no chain, for the reason it carries its own escaper — so the answer
+     comes through the one function it reaches for, guarded because chat.js is also
+     loaded on its own by the harness.
+     A NAME THAT IS NOT A SET IS LEFT ALONE. The panel offers nothing, suggests
+     nothing and adds no line: somebody typing a heading in chat is talking, and a
+     transcript is not the place to be sold a transaction. The only thing that
+     changes is that a name the court ALREADY HAS becomes a way to go and look at
+     it. */
+  const hit = chatSetHeading(m.body);
+  const fid = hit && court && typeof setFidByName === "function"
+    ? setFidByName(court, hit.name) : null;
+  const body = fid == null
+    ? '<span class="chatbody">' + chatEsc(m.body) + "</span>"
+    : '<span class="chatbody"><a class="chatset" href="#/c/' + chatEsc(court) + "/f/"
+      + chatEsc(String(fid)) + '"><span class="chatmark" title="' + chatEsc(hit.word)
+      + '">' + hit.mark + '</span><span class="chatsetname">' + chatEsc(hit.name)
+      + "</span></a></span>";
   return '<li class="chatmsg">'
     + '<span class="chatsaid">'
     +   '<span class="chatwho">'
@@ -248,19 +315,19 @@ function chatLineHtml(m, nowSec) {
     +   (suffix ? '<span class="chatsuf" title="derived from the sender&#39;s connection,'
                   + ' rotates daily">&middot;' + chatEsc(suffix) + "</span>" : "")
     +   "</span>"
-    +   '<span class="chatbody">' + chatEsc(m.body) + "</span>"
+    +   body
     + "</span>"
     + '<span class="chatage">' + chatEsc(chatWhen(nowSec, m.created_at)) + "</span>"
     + "</li>";
 }
 
 // chatLogHtml renders the whole transcript.
-function chatLogHtml(msgs, nowSec) {
+function chatLogHtml(msgs, nowSec, court) {
   const list = Array.isArray(msgs) ? msgs : [];
   if (!list.length) {
     return '<li class="chatempty">Nobody has said anything about this court yet.</li>';
   }
-  return list.map(m => chatLineHtml(m, nowSec)).join("");
+  return list.map(m => chatLineHtml(m, nowSec, court)).join("");
 }
 
 // chatPanelHtml renders the SHELL only — never the transcript.
@@ -494,6 +561,26 @@ const CHATCSS = `
 .chatsuf{opacity:.45;font-size:.8em;font-family:ui-monospace,monospace}
 .chatflag{margin-right:.25rem}
 .chatbody{overflow-wrap:anywhere;white-space:pre-wrap}
+/* THE SET CHIP. A button that has to sit inside a line of chat without looking
+   like a form control: no background, no border, the body's own type, and the
+   hand cursor plus an underline on hover to say it goes somewhere. */
+.chatset{font:inherit;color:inherit;background:none;border:0;padding:0;margin:0;
+  cursor:pointer;text-align:left;display:inline;overflow-wrap:anywhere}
+/* HOVER THE EYE, UNDERLINE THE WORD — the sibling selector, because the mark is
+   what a reader points at to ask "is that a real set?" and the NAME is the answer
+   they want marked. Hovering the name underlines it too, since a link that does
+   not respond to its own text reads as dead. */
+.chatmark:hover + .chatsetname,
+.chatset:hover .chatsetname,.chatset:focus-visible .chatsetname{
+  text-decoration:underline;text-underline-offset:2px}
+/* A SET READS AS A DESTINATION. The accent is on the NAME, not the mark: the mark
+   is punctuation that says which kind, the name is the thing you are going to. */
+.chatset{text-decoration:none}
+.chatsetname{font-weight:600;color:var(--accent,inherit)}
+/* THE MARK CARRIES THE ONE DIFFERENCE between the two eyes, so it gets the
+   help cursor that says "there is something to read here" — the title is the
+   whole of what distinguishes shown from concealed. */
+.chatmark{cursor:help;margin-right:.35em}
 .chatage{flex:0 0 auto;opacity:.45;font-size:.85em}
 .chatempty{opacity:.55;padding:.3rem 0}
 .chatstate{margin:.4rem 0;padding:.35rem .5rem;border-radius:4px;
@@ -691,7 +778,7 @@ function mountChat(el, opts) {
   function paintLog(msgs) {
     if (!live()) return;
     const atBottom = logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 24;
-    logEl.innerHTML = chatLogHtml(msgs, nowSec());
+    logEl.innerHTML = chatLogHtml(msgs, nowSec(), court);
     if (atBottom) logEl.scrollTop = logEl.scrollHeight;
   }
 

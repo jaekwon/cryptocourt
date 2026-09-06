@@ -842,6 +842,69 @@ function mkDoc() {
       JSON.stringify(loads));
   }
 
+  /* A NAME THE COURT ALREADY HAS BECOMES A WAY TO GO AND LOOK AT IT.
+     Everything else is left alone: a heading for a set that does not exist is
+     ordinary text, because somebody typing one in chat is TALKING, and a
+     transcript is not a place to be sold a transaction. */
+  {
+    const M = "\u{13080}", S = "\u{1307C}";
+    const line = (body, court, fid) => {
+      const prev = globalThis.setFidByName;
+      globalThis.setFidByName = (c, n) => (c === "covid" && n === "set") ? 7 : null;
+      const h = chatLineHtml({moniker: "anon", body, country: "", suffix: "", created_at: 1},
+                             100000, court);
+      globalThis.setFidByName = prev;
+      return h;
+    };
+    ok("a heading naming a live set links to it",
+       /href="#\/c\/covid\/f\/7"/.test(line(M + " set", "covid")));
+    /* BOTH MARKS, and the hover word is the ONLY thing that differs between them —
+       so it is the only thing asserted separately. Folding the two into one
+       assertion would pass against a panel that had normalised them. */
+    ok("...and so does the concealed mark",
+       /href="#\/c\/covid\/f\/7"/.test(line(S + " set", "covid")));
+    ok("𓂀 hovers as shown", /title="shown"/.test(line(M + " set", "covid")));
+    ok("𓁼 hovers as concealed", /title="concealed"/.test(line(S + " set", "covid")));
+    ok("a name the court does not have is left as text",
+       !/chatset/.test(line(M + " nope", "covid")));
+    /* THE SPACE IS THE DELIMITER, as it is in the realm: without it the mark is a
+       first character rather than a prefix, and "𓂀set" is an ordinary message. */
+    ok("no space, no heading", !/chatset/.test(line(M + "set", "covid")));
+    /* THE REALM'S CAP, NOT THE PANEL'S. A body may run to CHATLIMITS.body and a
+       folder name to 200 runes, so a heading longer than the realm accepts is not
+       a heading here either — a link to a set that cannot exist is worse than text.
+       READ OUT OF THE SOURCE, the way DEFAULTNAME is read above and for the same
+       reason: eval'd `const` is not visible here, only the functions are. Reading it
+       rather than repeating it means the test moves when the cap moves. */
+    const CAP = Number((PANELSRC.match(/setname: *(\d+)/) || [])[1]);
+    ok("the panel's set-name cap is the realm's 200", CAP === 200, String(CAP));
+    /* ASSERTED ON THE READER, NOT ON THE RENDER, and the first attempt at this got
+       it wrong in a way worth keeping: once the propose control was cut, "not a
+       heading" and "a heading for a set that does not exist" BOTH render as plain
+       text. The cap is invisible from the outside, so a render-level test of it
+       passes for the wrong reason. chatSetHeading is where the boundary lives. */
+    ok("a name past that cap is not a heading",
+       chatSetHeading(M + " " + "x".repeat(CAP + 1)) === null);
+    ok("...and one at the cap still is",
+       (chatSetHeading(M + " " + "x".repeat(CAP)) || {}).name === "x".repeat(CAP));
+    ok("...and an empty name is not one either",
+       chatSetHeading(M + " ") === null);
+    /* NO COURT, NO LINK. The panel renders without one and an href built from an
+       empty slug goes nowhere. */
+    ok("without a court nothing is linked",
+       !/chatset/.test(line(M + " set", "")));
+    /* THE MAP IS THE SENTENCE — key is the mark, value is what it opens as. A
+       `word` field beside a `mark` field would be a pair that can drift; this
+       cannot, because there is no pair. Asserted on the SOURCE, so a third mark
+       or a renamed word is caught here rather than by the two hover checks above
+       happening to still pass. */
+    const MAP = PANELSRC.slice(PANELSRC.indexOf("const CHATSETMARKS"),
+                               PANELSRC.indexOf("function chatSetHeading"));
+    ok("the marks are a map from mark to what it opens as",
+       /"\\u\{13080\}": *"shown"/.test(MAP) && /"\\u\{1307C\}": *"concealed"/.test(MAP)
+       && (MAP.match(/"\\u\{1[0-9A-F]{4}\}"/g) || []).length === 2);
+  }
+
   console.log(fail ? `\n${fail} FAILURES` : "\nALL PASS");
   process.exit(fail ? 1 : 0);
 })();

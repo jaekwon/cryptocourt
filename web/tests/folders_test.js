@@ -624,6 +624,21 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
   ok("...drawn as a link, not as the muted sentence around it",
      /\.mapsel-b\{color:var\(--accent\)\}/.test(src));
 
+  /* THE SET REGISTRY HOLDS ONE COURT, THE ONE LAST READ. Its only caller is the
+     chat panel, and a chat panel is open on one court — the page being read. A Map
+     keyed by slug carried a dimension with exactly one live value and never
+     dropped any of them.
+     THE GUARD IS THE POINT OF THE SLUG FIELD. Asked about a court that has not
+     been read, this must answer null rather than answer about the court that HAS
+     been read — the one wrong answer that would look right, because the name it
+     returns would resolve to a real set on the wrong docket. */
+  ok("the set registry is one court, not a map of them",
+     /let SETFID = \{slug: "", names: new Map\(\)\};/.test(src));
+  ok("...guarded on the slug, so a stale court answers nothing",
+     /if\(SETFID\.slug !== String\(slug\)\) return null;/.test(src));
+  ok("...and replaced whole by the read that fills it",
+     /SETFID = \{slug: String\(slug\), names: live\};/.test(src));
+
   console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");
   process.exit(fail?1:0);
 })();

@@ -9200,6 +9200,26 @@ async function chainHolders(slug, n){
   ]);
   return {total: (total==null? null : Number(total)), rows: parseHolders(raw)};
 }
+/* WHICH SETS ONE COURT ACTUALLY HAS, by name, for the caller that cannot ask the
+   chain itself. Filled by chainFolders below, and EMPTY until the court page or
+   the map has read once — which is the honest state, because an unknown name and
+   a name that is not a set are the same answer here and both mean "no link".
+   ONE COURT, THE LAST READ, not a map per court kept forever. The only caller is
+   the chat panel, and a chat panel is open on ONE court: the page being read. A
+   Map keyed by slug carried a dimension with exactly one live value, grew a
+   hundred names per court visited and dropped none, and paid two gets to walk a
+   nesting that never had a second branch.
+   SO THE SLUG IS A FIELD BESIDE THE NAMES rather than a key above them, and the
+   pair is replaced whole. That field is what makes the guard possible: asked about
+   a court we have not read, this answers null instead of answering about the court
+   we DID read — the one wrong answer that would look right, since the name would
+   resolve to a real set on the wrong docket. */
+let SETFID = {slug: "", names: new Map()};   // the last court read, by name
+function setFidByName(slug, name){
+  if(SETFID.slug !== String(slug)) return null;
+  const fid = SETFID.names.get(String(name));
+  return fid == null ? null : fid;
+}
 async function chainFolders(slug){
   const s2=gstr(slug);
   /* THE COUNT AND THE SHAPE TOGETHER. FolderTree does not need the count — it
@@ -9323,6 +9343,19 @@ async function chainFolders(slug){
               parent: sh? sh.parent : 0, path:String(fid), chain:true};
     }catch(_){ return {name:"read failed — reload to retry", claims:[], folders:[], fid, path:String(fid), chain:true, failed:true}; }
   });
+  /* AND THE NAMES ARE REMEMBERED, so the chat panel can tell a set that EXISTS
+     from a name somebody has only said. chat.js reads no chain — by design, the
+     same reason it carries its own escaper — so the page hands it the one fact it
+     cannot fetch: does this court have a live set called X, and at what id.
+     A SIDE EFFECT OF A READ THE PAGE ALREADY MAKES. The alternative was a lookup
+     per chat line, on a panel that repaints every few seconds.
+     RECORDED FROM `folders`, which is the LIVE list — chainFolders has already
+     skipped the retired rows — so a struck set stops being a link rather than
+     becoming one that 404s. It is replaced wholesale, not merged, or a set that
+     was retired between reads would linger in the map forever. */
+  const live = new Map();
+  for(const f of folders) if(f && f.name && f.fid != null) live.set(String(f.name), f.fid);
+  SETFID = {slug: String(slug), names: live};
   return {folders: nestChainFolders(folders), count:n, capped:n>CHAIN_FOLDER_CAP};
 }
 
