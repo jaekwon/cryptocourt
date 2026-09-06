@@ -108,7 +108,7 @@ ok("deterministic", q2.units===q.units && q2.cost===q.cost);
 const s = {price:118, supply:118500000000, emitted:8900000, minted:S0};
 const html = joinPanel("orem", s);
 ok("panel: input present", html.includes('id="buyamt"'));
-ok("panel: five labels", ["You burn","You get","Average price you pay","Price after this","Your voice share"].every(l=>html.includes(l)));
+ok("panel: five labels", ["You burn","You receive","Average price you pay","Price after this","Your voice share"].every(l=>html.includes(l)));
 // round 61: the Buy button had to be scrolled to. What a reader needs BEFORE
 // pressing is one row — what they get; the rest is a receipt and belongs under
 // the button. Lock the order, or the receipt creeps back above it row by row.
@@ -119,7 +119,7 @@ ok("panel: one row above the button", (()=>{
 ok("panel: button precedes the receipt", html.indexOf('id="buyactions"') < html.indexOf('id="buyrows2"'));
 ok("panel: receipt rows sit below the button", ["Average price you pay","Price after this","Your voice share"]
      .every(l => html.indexOf(l) > html.indexOf('id="buyactions"')));
-ok("panel: what you get sits above the button", html.indexOf("You get") < html.indexOf('id="buyactions"'));
+ok("panel: what you get sits above the button", html.indexOf("You receive") < html.indexOf('id="buyactions"'));
 ok("panel: ack sentence", html.includes("cannot be sold back to the court"));
 // Tags stripped to a SPACE, not to nothing: the coin symbol is wrapped for
 // colour now, so "0.87<span ...>KOURT:X</span>" would otherwise join up.

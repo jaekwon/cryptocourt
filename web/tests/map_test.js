@@ -57,6 +57,13 @@ function buildCode(patch){
   code += slice('const sideName =', '\n').replace('const sideName =','var sideName =') + '\n';
   code += slice('function statusText(', '\n/* =');
   code += slice('function phaseClass(', 'function docketRow');
+  // The map DRAWS the set mark instead of writing it, so mapSvg needs the two
+  // helpers that decide which titles carry one and take it out of the words —
+  // and the geometry itself, stubbed: what matters here is that the mark is
+  // emitted for the right titles, not what its paths look like.
+  code += "var SET_MARK = '\\u{13080}';\n";
+  code += fn('isSetTitle') + '\n' + fn('stripSetMark') + '\n';
+  code += "var EYE_MARK_PATHS = '<path/>';\n";
   // the real body renderer: mapSelCard shows a claim's body now
   code += slice('function claimBody(', '/* ===');
   code += slice('function siteHost(', 'const store');
@@ -268,6 +275,11 @@ ok("A-I pass on live 50-claim ring (both modes)", livepass);
   global.SET_MARK = "\u{13080}";
   global.ICN_EYE_OPEN = '<svg class="eye eyeopen"></svg>';   // drawn form; the harness needs it to exist, not to render
   eval(fn('setMarkHtml'));
+  // The map draws the mark instead of writing it, so it needs the two
+  // helpers that decide which titles carry one and strip it from the words.
+  eval(fn('isSetTitle'));
+  eval(fn('stripSetMark'));
+  global.EYE_MARK_PATHS = '<path/>';   // geometry, not drawn in a harness
   /* sideOval delegates the mark to verdictMark, which reads two tables. `var`,
      not `const`: a const declared inside eval() is block-scoped to that eval and
      never reaches the caller, while a function declaration leaks — which is why

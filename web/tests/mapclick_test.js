@@ -129,6 +129,11 @@ eval(slice('function claimBody(', '/* ==='));
 global.SET_MARK = "\u{13080}";
 global.ICN_EYE_OPEN = '<svg class="eye eyeopen"></svg>';   // drawn form; the harness needs it to exist, not to render
 eval(fn('setMarkHtml'));
+// The map draws the mark instead of writing it, so it needs the two
+// helpers that decide which titles carry one and strip it from the words.
+eval(fn('isSetTitle'));
+eval(fn('stripSetMark'));
+global.EYE_MARK_PATHS = '<path/>';   // geometry, not drawn in a harness
 eval(fn('verdictSentence'));
 // claimExhibits lives inside that same region deliberately: the card renders a
 // claim's statement and its evidence together, so a harness that has one and

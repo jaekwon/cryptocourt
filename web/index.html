@@ -2005,6 +2005,14 @@ tr.youare .mono{font-weight:600}
    with the title at full strength there is now something for it to be secondary
    TO, which there was not when both were the same grey. */
 .mtext{fill:var(--ink)} .mtitle{fill:var(--ink)}
+/* The set mark, on a claim node and on the box of a set that claim bore. Its
+   paths use currentColor, so one colour rule serves both. */
+.mset{color:var(--accent)}
+/* IT GOES WITH THE SENTENCES. Zoomed out the titles are hidden and a mark
+   floating where a sentence used to be is a smudge with nothing to mark — the
+   same rule .mtitle and .mstrike already follow. The FOLDER mark stays: a box
+   is still drawn and named at every zoom. */
+.mapsvg.far .mset[data-owner]{display:none}
 /* The id heads the title and the verdict closes the node. Both survive the
    level-of-detail rule below, which hides only .mtitle. */
 .mid{fill:var(--ink); font-weight:600}
@@ -7693,6 +7701,12 @@ function secHelp(text){
    copy. */
 const EYE_BROW = `<path d="M1.6 4C4.2 1.3 9.6 1 12.8 2.9" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.25"/>`;
 const EYE_TAIL = `<path d="M5.4 10.1 4.1 13.3" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.25"/><path d="M9.8 10.1c.25 2.1 1.7 2.7 2.7 2.2 .95-.45.8-1.7-.3-1.5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.25"/>`;
+/* THE MARK AS MAP FURNITURE. ICN_EYE_OPEN is a whole <svg> element, which is
+   right in HTML and useless inside the map: an <svg> nested in an <svg> brings
+   its own viewport and cannot be positioned by the transform the map places
+   everything else with. This is the same geometry with the wrapper taken off,
+   so a caller supplies the <g transform> and the mark lands where it is put. */
+const EYE_MARK_PATHS = `${EYE_BROW}<path d="M1.8 7.9C4.3 4.8 9.9 4.6 12.4 7.9 9.9 10.8 4.5 10.9 1.8 7.9Z" fill="none" stroke="currentColor" stroke-width="1.2"/><circle cx="7.1" cy="7.8" r="1.55" fill="currentColor"/>${EYE_TAIL}`;
 const ICN_EYE_OPEN = `<svg class="eye eyeopen" viewBox="0 0 15 14" aria-hidden="true">${EYE_BROW}<path d="M1.8 7.9C4.3 4.8 9.9 4.6 12.4 7.9 9.9 10.8 4.5 10.9 1.8 7.9Z" fill="none" stroke="currentColor" stroke-width="1.2"/><circle cx="7.1" cy="7.8" r="1.55" fill="currentColor"/>${EYE_TAIL}</svg>`;
 const ICN_EYE_SHUT = `<svg class="eye eyeshut" viewBox="0 0 15 14" aria-hidden="true">${EYE_BROW}<path d="M1.8 7.1C4.4 10.2 9.9 10.3 12.4 7.1" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.35"/>${EYE_TAIL}</svg>`;
 /* "Open the rewards" is the one button on this page that is not about signing a
@@ -7983,7 +7997,7 @@ function parseGnot(v){
   return x > 9223372036854775807n? null : x;
 }
 /* TWO ROWS ABOVE THE BUTTON, FOUR BELOW IT. All six sat between the amount and
-   the Buy button — you get, average price, dust returned, price after, voice
+   the Buy button — you receive, average price, dust returned, price after, voice
    share — which put the control six rows and a tick down the panel, far enough
    that a reader arriving at ?at=join had to scroll for the thing they came for.
    What a buyer needs BEFORE pressing is how much they get. The other four are
@@ -7997,8 +8011,8 @@ function buyRowsHtml(q, price, slug, after){
   if(!q || q.units<=0n){
     if(after) return "";
     return !q
-      ? `<div class="line"><span class="l">You get</span><span class="r">— <small>enter a GNOT amount, like 100 or 2.5</small></span></div>`
-      : `<div class="line"><span class="l">You get</span><span class="r">0 <small>too small to mint — the court refuses it and your GNOT never leaves</small></span></div>`;
+      ? `<div class="line"><span class="l">You receive</span><span class="r">— <small>enter a GNOT amount, like 100 or 2.5</small></span></div>`
+      : `<div class="line"><span class="l">You receive</span><span class="r">0 <small>too small to mint — the court refuses it and your GNOT never leaves</small></span></div>`;
   }
   const pct = q.share*100;
   /* NOTHING IN FRONT, EVERYTHING BEHIND "see details". This kept one line out where
@@ -8055,7 +8069,7 @@ function buyRowsHtml(q, price, slug, after){
      a reader has no use for it: the coin amount beside it already says what they
      get, and the conversion that would make the number mean anything was itself
      cut from the price tile for being meaningless without arithmetic. */
-  return `<div class="line"><span class="l">You get</span><span class="r tnum">${cc(Number(q.units),slug)}</span></div>`;
+  return `<div class="line"><span class="l">You receive</span><span class="r tnum">${cc(Number(q.units),slug)}</span></div>`;
 }
 let BUYQ=null, BUYCTX=null;
 /* THE FORM SURVIVES A RE-RENDER, and this is a bug fix rather than a nicety.
@@ -10811,8 +10825,19 @@ function mapSvg(L, data, slug){
           return `<g class="mfglyph" data-fid="${i}" transform="translate(`
             + `${(f.x + f.w - side - pad).toFixed(1)} ${(f.y + pad).toFixed(1)}) scale(${k.toFixed(4)})">`
             + g + `</g>`; })();
+    /* A BORN SET WEARS THE MARK. `born` is the claim the court affirmed to make
+       this set, and until now the map was the one surface that never said so —
+       the sidebar rows carry the eye, the set page names the claim, and the box
+       drawn for the same set carried nothing. Top-left, small, clear of the
+       subject watermark which is held to the right edge. */
+    const bornMark = (!f.pseudo && f.born)
+      ? (()=>{ const es = Math.min(K.fs.header * 1.3, f.h - 6); if(es < 7) return "";
+          return `<g class="mset" data-fid="${i}" transform="translate(`
+            + `${(f.x + 4).toFixed(1)} ${(f.y + 4).toFixed(1)}) scale(${(es/14).toFixed(4)})">`
+            + EYE_MARK_PATHS + `</g>`; })()
+      : "";
     const tag=`<rect class="mfold${f.pseudo?" pseudo":""}" x="${f.x}" y="${f.y}" width="${f.w}" height="${f.h}" rx="4" data-fid="${i}"/>`
-      + face + wrapFit(f.name, f.count, f, K.fs.header, "mhdr-t", "h"+i);
+      + face + bornMark + wrapFit(f.name, f.count, f, K.fs.header, "mhdr-t", "h"+i);
     if(!f.pseudo && f.path!=null && data.linkFolders)
       out.push(`<a class="mfold-a" data-fid="${i}" href="#/c/${esc(slug)}/f/${f.path}">${tag}${tip}</a>`);
     /* Not a link, so it needs a group of its own — an SVG <title> describes the
@@ -10868,13 +10893,32 @@ function mapSvg(L, data, slug){
          It is still WRAPPED as one string, so the break points account for the id
          and no word is lost between the two elements. */
       const idTxt=`#${n.id}`;
-      const lines=mapWrapTitle(`${idTxt} ${cl.title}`, n.w-2*K.tpad, K.fs.title, K.maxTitleLines, "mtitle");
+      /* THE SET MARK IS DRAWN, NOT WRITTEN — the map's half of what setMarkHtml
+         does in HTML. A set-heading's title carries U+13080, and an SVG <text>
+         has no span to swap it into, so it reached the drawing as a raw
+         codepoint: a tofu box in front of the sentence for any reader without a
+         hieroglyph font, on the one surface that is hardest to zoom into.
+         Stripped from the words here so the WRAP measures the sentence a reader
+         actually sees, and re-drawn below as geometry beside the id. */
+      const setHead = isSetTitle(cl.title);
+      const titleTxt = stripSetMark(cl.title);
+      const lines=mapWrapTitle(`${idTxt} ${titleTxt}`, n.w-2*K.tpad, K.fs.title, K.maxTitleLines, "mtitle");
       const rest=(lines[0]||idTxt).slice(idTxt.length).replace(/^ /,"");
       // ONE EXPRESSION, TWO CALLERS: where line 0's title begins is also where
       // its strike begins, and the two must not measure the id apart.
       const tdx=est(idTxt+" ", K.fs.title);
       out.push(label(idTxt, n, K.fs.title, n.y+16, "mid", "c"+n.id));
       if(rest) out.push(label(rest, n, K.fs.title, n.y+16, "mtitle", "c"+n.id, tdx));
+      /* Sized to the type it sits beside and hung just above the baseline, so it
+         reads as a mark ON the sentence rather than a glyph in it. Drawn after
+         the text so it cannot be overdrawn, and .mset takes its colour from the
+         accent the way the sidebar's eye does. */
+      if(setHead){
+        const es = K.fs.title * 1.15, ex = n.x + K.tpad + tdx, ey = n.y + 16 - es*0.78;
+        out.push(`<g class="mset" data-owner="c${n.id}" transform="translate(`
+          + `${ex.toFixed(1)} ${ey.toFixed(1)}) scale(${(es/14).toFixed(4)})">`
+          + EYE_MARK_PATHS + `</g>`);
+      }
       lines.slice(1).forEach((ln,i)=>
         out.push(label(ln, n, K.fs.title, n.y+16+(i+1)*K.lineH, "mtitle", "c"+n.id)));
       /* STRUCK ONLY ON A SETTLED NO, and the reasoning is claimTitleHtml's,
@@ -10964,7 +11008,10 @@ function mapSvg(L, data, slug){
        does. An ids box fits four characters — the id and nothing else — and the
        dot encodes phase, never the decision, so a settled-NO node and a
        settled-YES node are identical there until you hover. */
-    out.push(`<title>#${n.id} · ${esc(pc.short)}${pc.side? " "+esc(pc.side):""} — ${esc(cl.title)}</title></a>`);
+    // The tooltip loses the mark for the same reason the label did: the node
+    // already wears it as geometry, so repeating the codepoint here only puts a
+    // tofu box in the hover text of a reader with no hieroglyph font.
+    out.push(`<title>#${n.id} · ${esc(pc.short)}${pc.side? " "+esc(pc.side):""} — ${esc(stripSetMark(cl.title))}</title></a>`);
   }
   out.push(`</svg>`);
   return out.join("\n");
@@ -14449,6 +14496,19 @@ function focusStakeSide(side){
    the chain does not consider a set — which is the more dangerous direction of
    the two, because it is the one a reader would believe. */
 const SET_MARK = "\u{13080}";
+/* THE MAP CANNOT DRAW HTML, so a set-heading's title reached the SVG with the
+   codepoint still in it — and that is the one place the raw character actually
+   hurts. In HTML setMarkHtml swaps it for the drawn eye; in an SVG <text> there
+   is no span to swap, so a reader without a hieroglyph font saw a tofu box at
+   the front of the sentence, on the surface that is hardest to zoom into.
+   So the map strips the mark from the words and draws it as geometry instead.
+   Same codepoint, same delimiter as parseSetTitle on chain — a looser test here
+   would strip the first character off an ordinary claim. */
+function stripSetMark(t){
+  const s = String(t == null ? "" : t);
+  return s.startsWith(SET_MARK + " ") ? s.slice(SET_MARK.length + 1) : s;
+}
+function isSetTitle(t){ return String(t == null ? "" : t).startsWith(SET_MARK + " "); }
 /* THE DOOR TO A GOVERNED SET, and it was the one thing this feature never had.
    Everything else existed — the realm parses the heading, the page draws the eye,
    the affirm button carries a settled YES into a real set — and the only way to

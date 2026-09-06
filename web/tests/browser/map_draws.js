@@ -295,6 +295,63 @@ const {PAGE, demoPage} = require('./harness');
      above and leave an empty map, which is the failure that reads as success. */
   ok("...while the court's other claims still do", setborn.ids.length > 0, JSON.stringify(setborn.ids));
 
+  /* THE SET MARK IS GEOMETRY ON THE MAP, not a character in the text. In HTML
+     setMarkHtml swaps U+13080 for the drawn eye; an SVG <text> has no span to
+     swap into, so the codepoint reached the drawing raw — a tofu box in front of
+     the sentence for a reader with no hieroglyph font, on the surface hardest to
+     zoom into. Asserted as: no codepoint anywhere in the SVG, and a .mset drawn
+     instead.
+     TWO PLACES, ONE MARK, and which one depends on whether the court agreed
+     yet. An unborn heading is still a claim, so it is a NODE and wears the mark
+     beside its id. A born one is not drawn as a claim at all — mapSvg's own note
+     calls a set and the claim it came from "one object shown twice" and drops
+     the node — so its mark belongs on the BOX. Both are checked, because either
+     alone would pass with the other missing.
+     Ablated: dropping the folder arm leaves onFolders 0; dropping the strip
+     leaves rawAnywhere true while the marks still draw, which is the failure
+     that looks fine in a screenshot and is a tofu on a stranger's machine. */
+  const setmark = await page.evaluate(() => {
+    try {
+      const M = "\u{13080}", st = t => t + " — every stake withdraws 1×";
+      const d = {folders: [{name: "Origins", claims: [1, 2], folders: [], path: "0", born: 3}],
+                 all: [1, 2, 3],
+                 claims: {1: {title: "An ordinary claim.", statusText: st("settled YES")},
+                          2: {title: M + " Furin cleavage site", statusText: st("settled YES")},
+                          3: {title: M + " Origins", statusText: st("settled YES")}},
+                 relations: [], courtName: "C", linkFolders: true};
+      const host = document.createElement('div');
+      host.innerHTML = mapSvg(mapLayout(d, "titles"), d, "covid");
+      document.querySelector('.mapwrap').appendChild(host);
+      const svg = host.querySelector('svg.mapsvg');
+      const out = {marks: svg.querySelectorAll('.mset').length,
+                   onClaim: svg.querySelectorAll('.mset[data-owner]').length,
+                   onFolder: svg.querySelectorAll('.mset[data-fid]').length,
+                   raw: svg.textContent.includes(M),
+                   nameKept: svg.textContent.includes("Furin cleavage site"),
+                   ordinary: svg.querySelectorAll('.mset[data-owner="c1"]').length};
+      svg.classList.add('far');
+      const cm = svg.querySelector('.mset[data-owner]'), fm = svg.querySelector('.mset[data-fid]');
+      out.farClaim = cm ? getComputedStyle(cm).display : null;
+      out.farFolder = fm ? getComputedStyle(fm).display : null;
+      host.remove();
+      return out;
+    } catch (e) { return {err: String(e).slice(0, 160)}; }
+  });
+  ok("the set mark is drawn, and the codepoint is not in the text",
+     setmark.marks === 2 && setmark.raw === false, JSON.stringify(setmark));
+  ok("...on the node of a heading the court has not carried yet",
+     setmark.onClaim === 1, JSON.stringify(setmark));
+  ok("...and on the box of the set a claim became",
+     setmark.onFolder === 1, JSON.stringify(setmark));
+  ok("...while the name it prefixed survives, and an ordinary claim gets none",
+     setmark.nameKept === true && setmark.ordinary === 0, JSON.stringify(setmark));
+  /* Zoomed out the sentences go, so a mark that annotated one goes with it —
+     the rule .mtitle and .mstrike already follow. A BOX is still drawn and named
+     at every zoom, so its mark stays. */
+  ok("...the claim's mark leaves with the sentences, the set's stays",
+     setmark.farClaim === "none" && setmark.farFolder !== "none",
+     `claim ${setmark.farClaim}, folder ${setmark.farFolder}`);
+
   // A page error is a failure even when the frame looks right: the map may have
   // drawn a first pass and thrown on the data.
   ok("no page errors on the map route", errs.length === 0, errs.slice(0, 2).join(" | "));
