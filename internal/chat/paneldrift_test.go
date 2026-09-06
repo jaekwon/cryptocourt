@@ -30,6 +30,14 @@ import (
 //
 // This test lives in Go, next to the authority, rather than in web/tests/ — the JS harnesses
 // can only check that the panel agrees with itself.
+//
+// scripts/check-chat-limits.py holds the same three pairs from the other side, in Python, and
+// the overlap is deliberate rather than an oversight: that one runs in `make web-guards` with no
+// Go toolchain, which is the check a person gets while editing the panel and not the server.
+// THIS ONE IS THE STRONGER OF THE TWO — it compares the COMPILED constants rather than a regex
+// of them, and it owns the `maxlength` half below, which the Python guard does not see at all.
+// Measured: hardcode a maxlength and only this refuses. Do not collapse them into one without
+// deciding which toolchain the survivor requires.
 func TestThePanelsLimitsMatchTheServers(t *testing.T) {
 	path := filepath.Join("..", "..", "web", "chat.js")
 	src, err := os.ReadFile(path)

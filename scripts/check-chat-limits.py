@@ -9,6 +9,21 @@ typing before a round trip:
     MaxMonikerRunes = 24         CHATLIMITS.moniker = 24
     MaxInputBytes   = 4096       CHATLIMITS.bytes   = 4096
 
+AND IT IS NOT THE ONLY THING HOLDING THEM, which is worth saying before somebody
+deletes the wrong one. internal/chat/paneldrift_test.go checks the same three
+pairs and is STRICTLY STRONGER: it compares against the COMPILED constants rather
+than a regex of them, and it also requires the two `maxlength` attributes to be
+derived from CHATLIMITS rather than written out as literals. Measured, both ways:
+drift the body cap and both this file and that test refuse; hardcode a maxlength
+and only the test does.
+
+SO WHY THIS STILL EARNS ITS PLACE — one reason, and it is the same one that makes
+the duplication below unavoidable. That test needs a Go toolchain. This runs in
+`make web-guards` with nothing but Python, which is the check a person gets when
+they are editing the panel and not the server. Losing the numeric half there in
+exchange for one fewer file is a bad trade, and the file that would be deleted is
+the cheap one.
+
 THIS ADDS A CHECK RATHER THAN REMOVING A COPY, which is the wrong direction for
 a sweep that prefers deletions, so the reason is worth stating: the copy cannot
 be removed. web/README.md promises the overlay is "no build, no dependencies,
