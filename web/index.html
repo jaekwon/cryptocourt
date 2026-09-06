@@ -844,7 +844,20 @@ a.card:hover{border-color:var(--line-2)}
    not for this control. Both are characters in the same face now, so the shut
    half needs the family without taking .wedjat, which is what the toggle keys
    on. Exactly one shows, unchanged. */
+/* THE PUPIL MUST NOT JUMP. The two glyphs are boxed identically — the foldbox is
+   a centring flex, so their ELEMENT boxes already line up — but the ink inside
+   does not: 𓂀 carries its almond high with the tail hanging below, while 𓁼 is
+   drawn centred. Toggling therefore dropped the pupil by about a fifth of an em,
+   which reads as the icon lurching rather than opening.
+   -0.22em, measured rather than guessed: the two were overlaid at a range of
+   offsets and this is where the pupils coincide. A transform, not vertical-align
+   — these are flex items, and vertical-align does nothing to one. */
 .foldsel .eyeshut{font-family:"wedjat-font",system-ui,sans-serif}
+/* ...and the nudge in a rule of its own, because the line above is the anchor of
+   a control arm in selftest-checks.py — reformatting it turned that arm into a
+   no-op, which check-control-anchors caught. A rule somebody else's guard quotes
+   is a rule to add beside, not to edit. */
+.foldsel .eyeshut{transform:translateY(-.22em)}
 .foldsel .eye{font-size:1.35em; line-height:1; vertical-align:-.18em}
 .foldsel .wedjat{font-size:1.35em; display:none}
 .foldsel .eyeshut{display:inline}
@@ -11088,8 +11101,16 @@ function mapSvg(L, data, slug){
              thicken and thin together instead of drifting apart. */
           return `<circle class="mvtag msetring" cx="${f.x.toFixed(1)}" `
             + `cy="${f.y.toFixed(1)}" r="${bornR.toFixed(1)}" data-fid="${i}"/>`
+            /* THE PUPIL SITS IN THE SAME PLACE WHICHEVER MARK IS DRAWN. The two
+               glyphs are not drawn alike inside their em: 𓂀 carries its almond
+               high with the tail hanging below, 𓁼 is drawn centred. One y for
+               both put the pupil a fifth of an em lower on a concealed set, so
+               two rings side by side looked misaligned rather than different.
+               0.22em, the same figure the folder filter uses and measured the
+               same way — the two overlaid until the pupils coincided. Here it is
+               a dy on the baseline because this is SVG type, not a flex item. */
             + `<text class="mset wedjat" data-fid="${i}" x="${f.x.toFixed(1)}" `
-            + `y="${(f.y + es*0.35).toFixed(1)}" font-size="${es.toFixed(1)}" `
+            + `y="${(f.y + es*0.35 - (f.focus ? 0 : es*0.22)).toFixed(1)}" font-size="${es.toFixed(1)}" `
             + `text-anchor="middle">`
             + `<title>${setOpensWords(f.focus)}</title>`
             + `${mark}</text>`; })()
