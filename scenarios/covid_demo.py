@@ -774,7 +774,7 @@ for _pth, _dsc in FOLDER_DESC.items():
 # EVERY SET IS BORN OF A CLAIM. Not one CreateFolder in the docket's filing
 # system: each heading is filed as an ordinary claim whose title opens with the
 # wedjat, staked and answered and settled like any other, and only then carried
-# into a set by AffirmSet. That is the whole point of the mark — the court
+# into a set by New. That is the whole point of the mark — the court
 # decides its own filing system rather than being handed one.
 #
 # BATCHED IN PHASES, and the arithmetic is why. A set-claim needs its open
@@ -791,12 +791,12 @@ for _pth, _dsc in FOLDER_DESC.items():
 # names a different claim now.
 #
 # THE DESCRIPTION BECOMES THE CLAIM'S BODY rather than the folder's desc field.
-# AffirmSet creates the set with an empty description on purpose: the claim
+# New creates the set with an empty description on purpose: the claim
 # behind it has a body, a stake history and a verdict, which is a better account
 # of what belongs in the set than a line anybody could have written, and it means
 # the text lives in exactly one place.
 s.note("the filing system on chain: every set is BORN — a wedjat claim, staked, "
-       "answered and settled, then carried by AffirmSet. No CreateFolder here.")
+       "answered and settled, then carried by New. No CreateFolder here.")
 
 SET_MARK = "\U00013080"   # U+13080 EGYPTIAN HIEROGLYPH D010, the exact codepoint
 
@@ -867,16 +867,16 @@ for _path in SET_PATHS:
 s.advance(72 * 3600 + 60, why="the 72h undisputed window in WALL CLOCK, once, for every heading")
 s.advance_height(int(51_840), why="...and the same window in blocks, for the series")
 
-# Phase 4 — settled, then carried. AffirmSet is permissionless: the verdict is
+# Phase 4 — settled, then carried. New is permissionless: the verdict is
 # the authority, so the staker calls it rather than a moderator.
 _folder_seq = 0
 for _path in SET_PATHS:
     s.settle(accounts["arbiter"], SLUG, SET_CID[_path])
-    s.call(accounts[SET_FILER[_path]], "AffirmSet", [SLUG, str(SET_CID[_path])])
+    s.call(accounts[SET_FILER[_path]], "New", [SLUG, str(SET_CID[_path])])
     _folder_seq += 1
     FOLDER_ID[_path] = _folder_seq
 
-# Phase 5 — the nesting. AffirmSet creates at the root because the title is spent
+# Phase 5 — the nesting. New creates at the root because the title is spent
 # on the name, so the tree is assembled afterwards by the same moderator
 # authority that could have retired any of these anyway.
 for _path in SET_PATHS:
@@ -1335,7 +1335,7 @@ s.expect("BoardNewest", [SLUG, P3, 0, 25], r"[|]h[|]", final=True)
 # A SET THE COURT HAS ALREADY AGREED TO, AND NOBODY HAS CARRIED. It is opened
 # with the mark, filed into Origins — which is what declares its parent, since
 # the title has room for a name and not a path — staked, answered YES and
-# settled. Every gate AffirmSet checks is satisfied. The one thing missing is
+# settled. Every gate New checks is satisfied. The one thing missing is
 # the transaction itself, which is permissionless: any address may send it, and
 # whoever does turns this claim into a subset of Origins.
 #
@@ -1347,13 +1347,13 @@ s.expect("BoardNewest", [SLUG, P3, 0, 25], r"[|]h[|]", final=True)
 # LAST, so the docket keeps its numbering: the six headings are 1..6 and the
 # claims 7..25, and this becomes 26 rather than displacing anything.
 s.note("a seventh heading, settled and waiting: the court said yes and nobody "
-       "has carried it yet — AffirmSet is permissionless, so anyone may")
+       "has carried it yet — New is permissionless, so anyone may")
 PENDING_NAME = "Furin cleavage site"
 PENDING_CID = 26
 s.claim(accounts["genomics"], SLUG, SET_MARK + " " + PENDING_NAME,
         "Whether the site has a natural analogue is the question three claims "
         "here already turn on; this heading gathers them.")
-# THE FILING IS THE PARENT. AffirmSet reads ClaimFolders and refuses a claim
+# THE FILING IS THE PARENT. New reads ClaimFolders and refuses a claim
 # filed in more than one set, so exactly one AddToFolder here is load-bearing.
 s.call(DEPLOYER, "AddToFolder", [SLUG, str(FOLDER_ID[("Origins",)]), str(PENDING_CID)])
 for _r in range(3):
@@ -1364,7 +1364,7 @@ s.answer(accounts["arbiter"], SLUG, PENDING_CID, YES)
 s.advance(72 * 3600 + 60, why="the 72h window in wall clock, for the seventh heading")
 s.advance_height(int(51_840), why="...and in blocks, so its series is not empty")
 s.settle(accounts["arbiter"], SLUG, PENDING_CID)
-# AND NO AffirmSet. That is the point.
+# AND NO New. That is the point.
 s.expect("ClaimSet", [SLUG, PENDING_CID], r"0", final=True)
 s.expect("IsSetClaim", [SLUG, PENDING_CID], r"true", final=True)
 
@@ -1403,7 +1403,7 @@ _tree = ",".join(f"{FOLDER_ID[_p]}:{FOLDER_ID[_p[:-1]] if len(_p) > 1 else 0}:-"
 s.expect("FolderTree", [SLUG], _tree.replace("|", "[|]"), final=True)
 s.expect("FolderCount", [SLUG], r"6", final=True)
 s.expect("FolderName", [SLUG, FOLDER_ID[FAUCI]], r"Fauci", final=True)
-# THE DESCRIPTION MOVED TO THE CLAIM, so the check follows it. AffirmSet creates
+# THE DESCRIPTION MOVED TO THE CLAIM, so the check follows it. New creates
 # a set with an EMPTY desc on purpose — the claim that carried it has a body, a
 # stake history and a verdict, which says more about what belongs in the set than
 # a line anybody could have written, and it keeps the text in one place. The old

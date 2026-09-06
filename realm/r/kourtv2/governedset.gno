@@ -103,7 +103,7 @@ func IsSetClaim(courtSlug string, claimID uint64) bool {
  * folderNameTaken beside it — that one skips them on purpose, so a retired
  * folder's NAME comes free again. The asymmetry is not an oversight: a name is a
  * label and may be reused, a birth is an event and happened once. Make this skip
- * retired rows to match, and AffirmSet's exactly-once guard reads zero again on a
+ * retired rows to match, and New's exactly-once guard reads zero again on a
  * claim whose set was retired — so it mints a second folder, and a moderator
  * retiring each one in turn pumps a single settled claim against maxFolders, one
  * carry per retirement, with RestoreFolder to put them all back afterwards.
@@ -136,7 +136,18 @@ func SetBornOf(courtSlug string, folderID uint64) uint64 {
 	return c.mod.mustFolder(folderID).bornOf
 }
 
-/* AffirmSet carries a settled 𓂀 claim into the set it asked to be.
+/* New carries a settled 𓂀 claim into the set it asked to be.
+ *
+ * THE VERB IS "NEW" — you new a set. It was AffirmSet, which named the mechanism
+ * (a verdict being affirmed) rather than the act, and read as bookkeeping for
+ * something a court decided. The button has said "New" since the door was built;
+ * the entrypoint, the act code and the word a person would use are now one thing.
+ *
+ * GENERIC ON PURPOSE, AND SAFE HERE. `New` is a bare name in a package with 172
+ * exported reads and no other `New` — a realm's exported surface is addressed as
+ * kourtv2.New, so the qualifier is always present at the call site, and MsgCall
+ * names it in full. What it buys is that the chain, the page and the sentence
+ * agree, which is the whole argument for a governed set having a verb at all.
  *
  * PERMISSIONLESS, like ExecuteMetaVerdict: the verdict is the authority, and
  * making execution a privilege would let whoever holds it sit on a decision the
@@ -153,7 +164,7 @@ func SetBornOf(courtSlug string, folderID uint64) uint64 {
  * stated rather than hidden: a moderator can MoveFolder it afterwards, which is
  * the same authority that could have retired it anyway.
  */
-func AffirmSet(cur realm, courtSlug string, claimID uint64) uint64 {
+func New(cur realm, courtSlug string, claimID uint64) uint64 {
 	if !cur.IsCurrent() {
 		panic(errStaleRealm)
 	}
@@ -260,7 +271,11 @@ func AffirmSet(cur realm, courtSlug string, claimID uint64) uint64 {
 	 * discretion from a court decision being executed — and would count this row as
 	 * moderation activity by an address that took no moderator action at all. One
 	 * string separates them, and now `by` is unambiguous in both: on folder-create
-	 * it is who decided, on set-affirm it is who asked.
+	 * it is who decided, on new it is who asked.
+	 *
+	 * AND THE CODE IS THE VERB, not a third spelling of it. It was `set-affirm`
+	 * while the entrypoint was AffirmSet; both are `new` now, so a reader who sees
+	 * the row can find the function without a lookup table.
 	 *
 	 * NOT OBSERVABLE BY THIS SUITE, and that is structural rather than an omission.
 	 * Only a filetest's `Events:` directive can see emitted events, filetests run
@@ -270,7 +285,7 @@ func AffirmSet(cur realm, courtSlug string, claimID uint64) uint64 {
 	 * holds the folder verbs precisely because those need no coin. The gap is named
 	 * here rather than left for someone to discover by changing this string and
 	 * seeing the suite stay green. */
-	emitModAct(c.id, claimID, "set-affirm", cs.author)
+	emitModAct(c.id, claimID, "new", cs.author)
 	chain.Emit("SetAffirmed",
 		"court", c.id,
 		"claim", strconv.FormatUint(claimID, 10),

@@ -1625,8 +1625,8 @@ meta court executes `mod:newset`), `folder-move`, `folder-add`, `folder-remove`,
 `folder-sort`, and `court-desc`. Neither `folders.gno` nor `court.gno` calls
 `appendLog` anywhere.
 
-**`set-affirm` is a twelfth, and the only one whose `by` is not the sender.**
-`AffirmSet` carries a settled `𓂀` claim into a set, and carrying is
+**`new` is a twelfth, and the only one whose `by` is not the sender.**
+`New` carries a settled `𓂀` claim into a set, and carrying is
 permissionless — once the verdict lands anybody presses it — so the address
 recorded is the claim's AUTHOR, who framed the heading and put it to the court,
 rather than whoever happened to execute it. It emitted `folder-create` until that
@@ -1634,7 +1634,7 @@ made the pair unreadable: a consumer of the stream could not tell a moderator
 exercising discretion from a court decision being executed, and would have counted
 this row as moderation activity by an address that took no moderator action. With
 its own code, `by` is unambiguous in both — on `folder-create` it is who decided,
-on `set-affirm` it is who asked. Observed rather than inferred: the demo court had three
+on `new` it is who asked. Observed rather than inferred: the demo court had three
 folders created and five claims filed into them, and its log said "No moderation
 acts yet."
 

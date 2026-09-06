@@ -962,7 +962,7 @@ func TestMetaLifecycleGuards(cur realm, t *testing.T) {
 	}
 
 	// ---- 22. newset REFUSES A PARENT STRUCK FROM THE TREE -------------------
-	/* THE SAME HOLE AffirmSet HAD, one verb over. A folder proposal STORES its
+	/* THE SAME HOLE New HAD, one verb over. A folder proposal STORES its
 	   parent and the verdict that carries it lands weeks later; nothing revisits
 	   the proposal when that parent is retired or purged, and newFolderCore never
 	   asked — it and mustNestable contain no reference to either field. So a

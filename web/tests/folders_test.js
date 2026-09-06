@@ -519,7 +519,7 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
        written, titled "Name of the set". */
     ok("...and it is marked as carrying placeholder text",
        /"", "the court votes on it[\s\S]*?null, false, true\)/.test(fnSrc));
-    /* A SUBSET IS THE SAME DOOR ONE STEP IN: AffirmSet reads the parent off the
+    /* A SUBSET IS THE SAME DOOR ONE STEP IN: New reads the parent off the
        claim's own filing, so the proposal has to be FILED in the set it should sit
        under — which is OpenClaimIn, with the set's id. */
     ok("...and a subset is proposed by filing the claim in its parent",

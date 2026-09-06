@@ -95,7 +95,7 @@ func TestSetNameIsTheTitleVerbatim(cur realm, t *testing.T) {
      - the final-YES check     -> the suite goes red at rc=2, but as an UNCAUGHT
                                   ABORT with a VM state dump inside this test,
                                   not a clean "--- FAIL" line. Without the check,
-                                  AffirmSet runs on a claim that never settled
+                                  New runs on a claim that never settled
                                   and dies deeper in the folder machinery. It is
                                   covered — the suite cannot pass — but a grep
                                   for "--- FAIL" does NOT see it, which is worth
@@ -120,7 +120,7 @@ func TestASettledMarkedClaimBecomesASet(cur realm, t *testing.T) {
 
 	// ...and it cannot be carried before it settles.
 	uassert.AbortsContains(t, cur, "no final verdict", func() {
-		AffirmSet(cross(cur), "gs1", id)
+		New(cross(cur), "gs1", id)
 	})
 
 	matureOI(cur, "gs1", id, alice, 200_000_000)
@@ -132,7 +132,7 @@ func TestASettledMarkedClaimBecomesASet(cur realm, t *testing.T) {
 	// PERMISSIONLESS: the verdict is the authority. bob is nobody here.
 	bob := testutils.TestAddress("gs-bob")
 	testing.SetRealm(testing.NewUserRealm(bob))
-	fid := AffirmSet(cross(cur), "gs1", id)
+	fid := New(cross(cur), "gs1", id)
 	uassert.True(t, fid != 0)
 	uassert.Equal(t, "Lab leak evidence", FolderName("gs1", fid))
 	uassert.Equal(t, 1, FolderCount("gs1"))
@@ -153,7 +153,7 @@ func TestASettledMarkedClaimBecomesASet(cur realm, t *testing.T) {
 	// folder cap.
 	testing.SetRealm(testing.NewUserRealm(bob))
 	uassert.AbortsContains(t, cur, "already carries set", func() {
-		AffirmSet(cross(cur), "gs1", id)
+		New(cross(cur), "gs1", id)
 	})
 	uassert.Equal(t, 1, FolderCount("gs1"))
 }
@@ -172,7 +172,7 @@ func TestASettledNoCarriesNoSet(cur realm, t *testing.T) {
 	SettleUndisputed(cross(cur), "gsn1", id)
 
 	uassert.AbortsContains(t, cur, "was not YES", func() {
-		AffirmSet(cross(cur), "gsn1", id)
+		New(cross(cur), "gsn1", id)
 	})
 	uassert.Equal(t, 0, FolderCount("gsn1"))
 	uassert.Equal(t, uint64(0), ClaimSet("gsn1", id))
@@ -194,7 +194,7 @@ func TestAnUnmarkedClaimIsNeverASet(cur realm, t *testing.T) {
 
 	uassert.False(t, IsSetClaim("gsu1", id))
 	uassert.AbortsContains(t, cur, "not a set heading", func() {
-		AffirmSet(cross(cur), "gsu1", id)
+		New(cross(cur), "gsu1", id)
 	})
 	uassert.Equal(t, 0, FolderCount("gsu1"))
 }
@@ -221,7 +221,7 @@ func TestAffirmRefusesANameTakenSinceTheClaimOpened(cur realm, t *testing.T) {
 
 	testing.SetRealm(testing.NewUserRealm(alice))
 	uassert.AbortsContains(t, cur, "already exists", func() {
-		AffirmSet(cross(cur), "gst1", id)
+		New(cross(cur), "gst1", id)
 	})
 	// ...and the hand-made one is untouched and unbound.
 	uassert.Equal(t, 1, FolderCount("gst1"))
@@ -255,7 +255,7 @@ func TestABornSetNestsWhereItsClaimIsFiled(cur realm, t *testing.T) {
 	SettleUndisputed(cross(cur), "gsp1", id)
 
 	testing.SetRealm(testing.NewUserRealm(alice))
-	fid := AffirmSet(cross(cur), "gsp1", id)
+	fid := New(cross(cur), "gsp1", id)
 	uassert.Equal(t, parent, FolderParent("gsp1", fid))
 	uassert.Equal(t, "Furin cleavage site", FolderName("gsp1", fid))
 }
@@ -273,7 +273,7 @@ func TestAnUnfiledSetClaimIsBornAtTheRoot(cur realm, t *testing.T) {
 	testing.SkipHeights(settleDelay)
 	SettleUndisputed(cross(cur), "gsr1", id)
 	testing.SetRealm(testing.NewUserRealm(alice))
-	fid := AffirmSet(cross(cur), "gsr1", id)
+	fid := New(cross(cur), "gsr1", id)
 	uassert.Equal(t, uint64(0), FolderParent("gsr1", fid))
 }
 
@@ -304,7 +304,7 @@ func TestASetClaimFiledTwiceRefusesToBeBorn(cur realm, t *testing.T) {
 
 	testing.SetRealm(testing.NewUserRealm(alice))
 	uassert.AbortsContains(t, cur, "more than one set", func() {
-		AffirmSet(cross(cur), "gsa1", id)
+		New(cross(cur), "gsa1", id)
 	})
 	uassert.Equal(t, uint64(0), ClaimSet("gsa1", id))
 	uassert.Equal(t, 2, FolderCount("gsa1"))   // the two it was filed in, and no third
@@ -407,13 +407,13 @@ func TestOpenClaimInGivesNoPowerOverOtherClaims(cur realm, t *testing.T) {
 }
 
 /* A CLAIM CLOSED WITHOUT A DECISION CARRIES NOTHING, and this is the one guard
- * of AffirmSet's five that reads as redundant and is not.
+ * of New's five that reads as redundant and is not.
  *
  * THE PAIR IS LOAD-BEARING BECAUSE OF ONE CONSTANT: sideYES = 0. provCloseClaim
  * STAMPS verdictAt — the claim really is over — and leaves `provisional` holding
  * the answer that never got a vote behind it. So a claim answered YES and then
  * closed after three failed rounds has verdictAt != 0 AND provisional == 0, which
- * is byte-for-byte the state a settled YES leaves. Neither of AffirmSet's other
+ * is byte-for-byte the state a settled YES leaves. Neither of New's other
  * two verdict checks can tell them apart; only `cs.provClose` can, and the court
  * in this story never decided anything — three rounds tried and three failed.
  *
@@ -464,7 +464,7 @@ func TestAProvClosedYesCarriesNoSet(cur realm, t *testing.T) {
 	uassert.Equal(t, int8(sideYES), cs.provisional)
 
 	uassert.AbortsContains(t, cur, "no final verdict", func() {
-		AffirmSet(cross(cur), "gsx1", id)
+		New(cross(cur), "gsx1", id)
 	})
 	uassert.Equal(t, 0, FolderCount("gsx1"))
 	uassert.Equal(t, uint64(0), ClaimSet("gsx1", id))
@@ -484,12 +484,12 @@ func TestAProvClosedYesCarriesNoSet(cur realm, t *testing.T) {
  * coincidence of two independent constants, not an invariant anything enforces.
  * Raise the title cap alone and a long marked title opens fine, stakes fine and
  * settles YES — and then IsSetClaim quietly answers false, so the overlay draws
- * no eye and no affirm button, and AffirmSet refuses with "not a set heading" on
+ * no eye and no affirm button, and New refuses with "not a set heading" on
  * a title that visibly begins with the mark. A silent no is the worst available
  * shape for that failure. Better a red line here.
  *
  * AND IT IS CARRIED, not merely parsed, because the length has to survive the
- * whole route: parseSetTitle at open, parseSetTitle AGAIN inside AffirmSet, and
+ * whole route: parseSetTitle at open, parseSetTitle AGAIN inside New, and
  * folderTextOK inside newFolderCore. Asserting the parse alone would leave the
  * two later reads unmeasured.
  */
@@ -517,7 +517,7 @@ func TestTheLongestFilableHeadingCanBeCarried(cur realm, t *testing.T) {
 	testing.SkipHeights(settleDelay)
 	SettleUndisputed(cross(cur), "gsl1", id)
 
-	fid := AffirmSet(cross(cur), "gsl1", id)
+	fid := New(cross(cur), "gsl1", id)
 	uassert.True(t, fid != 0)
 	// VERBATIM, at the cap. The name the folder carries is the title's own tail
 	// and not a truncation of it — a silent trim here would make the set's name
@@ -534,7 +534,7 @@ func TestTheLongestFilableHeadingCanBeCarried(cur realm, t *testing.T) {
  * name is a label and can be reused, a birth is an event and happened once.
  *
  * WHAT THE SYMMETRIC VERSION WOULD COST. Make ClaimSet skip retired rows and
- * AffirmSet's exactly-once guard reads zero again on a claim whose set was
+ * New's exactly-once guard reads zero again on a claim whose set was
  * retired — so it mints a second folder, and a moderator who retires each one in
  * turn can pump a single settled claim against the 100-folder cap, one carry per
  * retirement. RestoreFolder then puts them all back. That is precisely the
@@ -560,7 +560,7 @@ func TestRetiringABornSetDoesNotFreeTheClaim(cur realm, t *testing.T) {
 	PostAnswer(cross(cur), "gsq1", id, sideYES)
 	testing.SkipHeights(settleDelay)
 	SettleUndisputed(cross(cur), "gsq1", id)
-	fid := AffirmSet(cross(cur), "gsq1", id)
+	fid := New(cross(cur), "gsq1", id)
 	uassert.Equal(t, 1, FolderCount("gsq1"))
 
 	testing.SetRealm(testing.NewUserRealm(alice))
@@ -572,11 +572,11 @@ func TestRetiringABornSetDoesNotFreeTheClaim(cur realm, t *testing.T) {
 	uassert.Equal(t, id, SetBornOf("gsq1", fid))
 
 	// SO THE SECOND CARRY IS STILL REFUSED — by anyone, not just the moderator
-	// who retired it, since AffirmSet is permissionless and the pump would be too.
+	// who retired it, since New is permissionless and the pump would be too.
 	bob := testutils.TestAddress("gsq-bob")
 	testing.SetRealm(testing.NewUserRealm(bob))
 	uassert.AbortsContains(t, cur, "already carries set", func() {
-		AffirmSet(cross(cur), "gsq1", id)
+		New(cross(cur), "gsq1", id)
 	})
 	uassert.Equal(t, 1, FolderCount("gsq1"))
 
@@ -591,7 +591,7 @@ func TestRetiringABornSetDoesNotFreeTheClaim(cur realm, t *testing.T) {
 	PostAnswer(cross(cur), "gsq1", id2, sideYES)
 	testing.SkipHeights(settleDelay)
 	SettleUndisputed(cross(cur), "gsq1", id2)
-	fid2 := AffirmSet(cross(cur), "gsq1", id2)
+	fid2 := New(cross(cur), "gsq1", id2)
 	uassert.True(t, fid2 != fid)
 	uassert.Equal(t, "Reading room", FolderName("gsq1", fid2))
 }
@@ -652,7 +652,7 @@ func TestASetIsNotBornUnderARetiredParent(cur realm, t *testing.T) {
 
 	before := FolderCount("gsv1")
 	uassert.AbortsContains(t, cur, "has been retired", func() {
-		AffirmSet(cross(cur), "gsv1", id)
+		New(cross(cur), "gsv1", id)
 	})
 	uassert.Equal(t, before, FolderCount("gsv1")) // and nothing was created
 	uassert.Equal(t, uint64(0), ClaimSet("gsv1", id))
@@ -661,6 +661,6 @@ func TestASetIsNotBornUnderARetiredParent(cur realm, t *testing.T) {
 	// than a "never" — the claim keeps everything the court gave it.
 	testing.SetRealm(testing.NewUserRealm(alice))
 	RestoreFolder(cross(cur), "gsv1", parent)
-	fid := AffirmSet(cross(cur), "gsv1", id)
+	fid := New(cross(cur), "gsv1", id)
 	uassert.Equal(t, parent, FolderParent("gsv1", fid))
 }

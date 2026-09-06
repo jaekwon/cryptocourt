@@ -543,8 +543,8 @@ func applyMetaVerb(mc, tc *Court, cm *courtMod, p modParse, cs, target *claimSta
 		   builds a LIVE folder under a struck one — the shape RetireFolder refuses
 		   to create ("retire the folders inside it first, so the tree cannot grow
 		   orphans"), reached from underneath instead of from above. Same hole
-		   AffirmSet had, and the same fix, one verb over.
-		   PURGED AS WELL AS RETIRED, which is where this differs from AffirmSet's
+		   New had, and the same fix, one verb over.
+		   PURGED AS WELL AS RETIRED, which is where this differs from New's
 		   guard. That one reads its parent from ClaimFolders, and ClaimFolders
 		   already skips purged rows, so a purged parent cannot reach it and a
 		   branch for one would be dead. This parent comes from a proposal STORED

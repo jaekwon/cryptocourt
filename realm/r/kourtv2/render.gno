@@ -843,7 +843,7 @@ func renderFolderPage(slug string, fid uint64) string {
 	}
 	/* WHO MADE THIS HEADING, which the chain knew and would not say.
 	 *
-	 * A GOVERNED SET RENDERED AS A BARE TITLE. AffirmSet deliberately leaves the
+	 * A GOVERNED SET RENDERED AS A BARE TITLE. New deliberately leaves the
 	 * description empty — "this set has a whole claim, with a body, a stake history
 	 * and a verdict, sitting behind it, and that is a better description than a line
 	 * anybody could have written" — so the page went heading, breadcrumb, and

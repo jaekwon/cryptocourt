@@ -167,7 +167,7 @@ func TestTheFolderRouteRefusesWhatIsNotOne(cur realm, t *testing.T) {
  * realm directly gets — rendered a governed set and a moderator's folder as the
  * same object.
  *
- * IT WAS A BARE TITLE, WHICH MAKES IT WORSE THAN AN OMISSION. AffirmSet leaves
+ * IT WAS A BARE TITLE, WHICH MAKES IT WORSE THAN AN OMISSION. New leaves
  * the description empty on purpose: "this set has a whole claim, with a body, a
  * stake history and a verdict, sitting behind it, and that is a better
  * description than a line anybody could have written." Right — and the
@@ -197,7 +197,7 @@ func TestABornSetsPageNamesTheClaimThatMadeIt(cur realm, t *testing.T) {
 	PostAnswer(cross(cur), "fr5", id, sideYES)
 	testing.SkipHeights(settleDelay)
 	SettleUndisputed(cross(cur), "fr5", id)
-	born := AffirmSet(cross(cur), "fr5", id)
+	born := New(cross(cur), "fr5", id)
 
 	page := Render("fr5/folder/" + strconv.FormatUint(born, 10))
 	if !strings.Contains(page, "The court voted this heading into existence") {
