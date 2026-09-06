@@ -11084,8 +11084,12 @@ function mapSvg(L, data, slug){
          hieroglyph font, on the one surface that is hardest to zoom into.
          Stripped from the words here so the WRAP measures the sentence a reader
          actually sees, and re-drawn below as geometry beside the id. */
-      const setHead = isSetTitle(cl.title);
-      const titleTxt = stripSetMark(cl.title);
+      /* THE PARTS, NOT A BOOLEAN. This asked isSetTitle and then stripSetMark —
+         two passes over the same string to learn two halves of one answer — and
+         kept neither the mark nor which state it names, so the glyph below was
+         drawn from a constant. */
+      const setHead = setTitleParts(cl.title);
+      const titleTxt = setHead ? setHead.name : cl.title;
       const lines=mapWrapTitle(`${idTxt} ${titleTxt}`, n.w-2*K.tpad, K.fs.title, K.maxTitleLines, "mtitle");
       const rest=(lines[0]||idTxt).slice(idTxt.length).replace(/^ /,"");
       // ONE EXPRESSION, TWO CALLERS: where line 0's title begins is also where
@@ -11099,8 +11103,17 @@ function mapSvg(L, data, slug){
          accent the way the sidebar's eye does. */
       if(setHead){
         const es = K.fs.title * 1.15, ex = n.x + K.tpad + tdx, ey = n.y + 16;
+        /* THE TITLE'S OWN MARK. This was \u{13080} written in, so the moment the
+           parser learned the second mark every 𓁼 heading drew 𓂀 on the map —
+           the glyph for the opposite state, on the surface where the mark is the
+           only thing said about it at all.
+           AND IT NAMES THE STATE, because a <text> is read aloud as the codepoint
+           and nothing else. `shown` comes out of the mark, so this costs no second
+           lookup. */
         out.push(`<text class="mset wedjat" data-owner="c${n.id}" x="${ex.toFixed(1)}" `
-          + `y="${ey.toFixed(1)}" font-size="${es.toFixed(1)}">\u{13080}</text>`);
+          + `y="${ey.toFixed(1)}" font-size="${es.toFixed(1)}">`
+          + `<title>set that opens ${setHead.shown ? "shown" : "concealed"}</title>`
+          + `${setHead.mark}</text>`);
       }
       lines.slice(1).forEach((ln,i)=>
         out.push(label(ln, n, K.fs.title, n.y+16+(i+1)*K.lineH, "mtitle", "c"+n.id)));

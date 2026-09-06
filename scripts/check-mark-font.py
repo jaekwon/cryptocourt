@@ -45,12 +45,45 @@ FILES = ["web/index.html", "web/chat.js"]
 # Caught by mutating the source rather than by trusting the summary line, which is
 # the only way a blind spot in a scanner ever shows up.
 INSIDE = (r"\\u\{130(?:80|7C)\}", "[\U00013080\U0001307C]",
-          r"\$\{[^}]*\b(?:SET_MARK|SHUT_MARK|MARKS?\[[^\]]*\])[^}]*\}",
-          r"['\"]\s*\+\s*[A-Za-z_$][\w.$]*[Mm]ark\b")
+          # A template hole that IS the mark, not one that mentions one. The sites
+          # that draw a set mark have gone from `${SET_MARK}` to `${p.mark}` and
+          # `${setHead.mark}` as the parser replaced the constants, so this matches
+          # a bare path rather than a roster of names.
+          #
+          # AND "mark" IS TWO VOCABULARIES IN THIS CODEBASE. The verdict marks —
+          # `?`, `…`, `.`, `–`, `!` — travel as `rv.mark` and `dv.mark`, and a
+          # looser pattern flagged `${verdictSentence(r.title, sd, rv.mark, …)}`
+          # as an unfonted hieroglyph twice. Requiring the hole to be ONLY the
+          # path, with no call and no arguments, tells the two apart without
+          # needing to know either name.
+          r"\$\{\s*(?:[A-Za-z_$][\w$]*\.)?(?:mark|SET_MARK|SHUT_MARK)\s*\}",
+          # ...and the quote may be a BACKTICK, which was the fifth miss: setMarkHtml
+          # closes its opening tag with a template literal and concatenates the
+          # glyph after it. Every miss this scanner has had is the same mistake —
+          # assuming the tag and its content are adjacent in the SOURCE because
+          # they are adjacent in the OUTPUT.
+          r"['\"`]\s*\+\s*[A-Za-z_$][\w.$]*[Mm]ark\b")
 
-# An opening span/text tag, then up to a little text, then a mark.
-ELEM = re.compile(
-    r"<(span|text)\b([^>]*)>(?:[^<>]{0,40}?)(?:%s)" % "|".join(INSIDE))
+# FOUND FROM THE MARK BACKWARDS, not from the tag forwards, and the direction is
+# the whole difference. Matching "an opening tag, then up to a little text, then a
+# mark" missed a site three times: once because chat.js concatenates the tag and
+# the glyph as separate strings, once because a template hole is not a literal,
+# and once because a <title> child sat between the two and the pattern demanded
+# no angle brackets in between.
+#
+# Every one of those is the same mistake — assuming the two are adjacent in the
+# SOURCE because they are adjacent in the OUTPUT. They are not: this file builds
+# markup by concatenation and interpolation, so the tag and its content routinely
+# live in different expressions.
+#
+# So find the MARK first — that part is unambiguous — and walk backwards for the
+# nearest opening span or text. Anything between them is somebody else's problem.
+MARK = re.compile("|".join(INSIDE))
+# The LAST opening tag in the window, not one anchored to the end of it. Anchoring
+# was the fourth miss: an SVG <text> whose glyph follows a <title> child has two
+# more angle brackets in between, so a pattern demanding none after the tag found
+# nothing at all. Take every opener and keep the nearest.
+OPEN = re.compile(r"<(span|text)\b([^>]*)>", re.S)
 
 
 def classes(attrs):
@@ -66,9 +99,16 @@ def main():
         if not os.path.exists(path):
             continue
         src = io.open(path, encoding="utf-8").read()
-        for m in ELEM.finditer(src):
+        for m in MARK.finditer(src):
+            # The nearest opening tag before it. 400 chars is generous for a tag
+            # plus an intervening <title>, and short enough that an unrelated span
+            # a page away cannot answer for this glyph.
+            opens = list(OPEN.finditer(src[max(0, m.start() - 400):m.start()]))
+            if not opens:
+                continue
+            back = opens[-1]
             drawn += 1
-            cls = classes(m.group(2))
+            cls = classes(back.group(2))
             if "wedjat" in cls:
                 continue
             line = src.count("\n", 0, m.start()) + 1
@@ -77,7 +117,7 @@ def main():
                   "machines have no font for it — without that class this renders "
                   "as a tofu box for every reader who is not on a Mac, and looks "
                   "correct to everyone who could have noticed."
-                  % (rel, line, m.group(1), " ".join(sorted(cls)) or ""),
+                  % (rel, line, back.group(1), " ".join(sorted(cls)) or ""),
                   file=sys.stderr)
             bad += 1
 
