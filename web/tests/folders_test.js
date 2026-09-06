@@ -636,8 +636,17 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
      /let SETFID = \{slug: "", names: new Map\(\)\};/.test(src));
   ok("...guarded on the slug, so a stale court answers nothing",
      /if\(SETFID\.slug !== String\(slug\)\) return null;/.test(src));
-  ok("...and replaced whole by the read that fills it",
-     /SETFID = \{slug: String\(slug\), names: live\};/.test(src));
+  /* ONE WRITER OWNS THE REPLACE-OR-MERGE RULE, and `complete` is the whole of it:
+     a caller says whether its list is the court's entire live one. chainFolders
+     answers true and REPLACES, so a set retired between reads falls out; the claim
+     page answers false and MERGES, so arriving from the court page does not shrink
+     a complete list to one claim's few. A different court starts fresh either way.
+     Asserted as the EXPRESSION, because that single condition is the rule — a test
+     on the two call sites would pass against a helper that had it backwards. */
+  ok("...through one writer that owns when a list may replace what is there",
+     /const names = \(!complete && SETFID\.slug === String\(slug\)\) \? SETFID\.names : new Map\(\);/.test(src));
+  ok("...which chainFolders calls with the complete list",
+     /rememberSets\(slug, folders\.map\(f => \[f && f\.name, f && f\.fid\]\), true\);/.test(src));
 
   /* THE CLAIM PAGE FEEDS THE REGISTRY FROM NAMES IT ALREADY FETCHED. Measured
      across the six routes that mount the chat panel: the court page, the map and a
@@ -646,9 +655,12 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
      MERGED, NOT REPLACED, when the court matches — arriving from the court page
      must keep the complete list rather than shrinking it to this claim's few. */
   ok("the claim page hands its folder names to the chat registry",
-     /for\(const f of claimFolders\) names\.set\(String\(f\.name\), f\.fid\);/.test(src));
-  ok("...merging when the court matches, replacing when it does not",
-     /const names = SETFID\.slug === String\(slug\) \? SETFID\.names : new Map\(\);/.test(src));
+     /rememberSets\(slug, claimFolders\.map\(f => \[f\.name, f\.fid\]\), false\)/.test(src));
+  /* FALSE IS LOAD-BEARING. Its list is only the sets this claim is filed in, so
+     passing true would replace the court's complete list with those few and every
+     other set would stop linking until the next court-page read. */
+  ok("...declaring it PARTIAL, which is what makes it merge",
+     /claimFolders\.map\(f => \[f\.name, f\.fid\]\), false\)/.test(src));
 
   console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");
   process.exit(fail?1:0);

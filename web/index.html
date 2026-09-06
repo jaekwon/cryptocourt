@@ -9231,6 +9231,21 @@ async function chainHolders(slug, n){
    we DID read — the one wrong answer that would look right, since the name would
    resolve to a real set on the wrong docket. */
 let SETFID = {slug: "", names: new Map()};   // the last court read, by name
+/* ONE WRITER, because the interesting part is not building a Map — it is WHEN A
+   LIST MAY REPLACE WHAT IS ALREADY THERE, and that rule was written twice, in two
+   places, in two different comments.
+   `complete` IS THE WHOLE RULE. chainFolders has the court's entire live list, so
+   it REPLACES: a set retired between reads has to fall out, and merging would keep
+   it forever. The claim page has only the sets one claim is filed in, so it MERGES
+   — arriving there from the court page must not shrink a complete list to a few.
+   A different court always starts fresh, complete or not.
+   The caller answers one question about its own data. Nothing here has to know
+   which page it came from. */
+function rememberSets(slug, pairs, complete){
+  const names = (!complete && SETFID.slug === String(slug)) ? SETFID.names : new Map();
+  for(const [name, fid] of pairs) if(name && fid != null) names.set(String(name), fid);
+  SETFID = {slug: String(slug), names};
+}
 function setFidByName(slug, name){
   if(SETFID.slug !== String(slug)) return null;
   const fid = SETFID.names.get(String(name));
@@ -9369,9 +9384,7 @@ async function chainFolders(slug){
      skipped the retired rows — so a struck set stops being a link rather than
      becoming one that 404s. It is replaced wholesale, not merged, or a set that
      was retired between reads would linger in the map forever. */
-  const live = new Map();
-  for(const f of folders) if(f && f.name && f.fid != null) live.set(String(f.name), f.fid);
-  SETFID = {slug: String(slug), names: live};
+  rememberSets(slug, folders.map(f => [f && f.name, f && f.fid]), true);
   return {folders: nestChainFolders(folders), count:n, capped:n>CHAIN_FOLDER_CAP};
 }
 
@@ -13047,11 +13060,7 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
        from the court page keeps the complete list rather than shrinking it to this
        claim's few. Nothing retired can enter: RetireFolder clears a folder's item
        list, so a struck set is not in ClaimFolders to begin with. */
-    if(claimFolders.length){
-      const names = SETFID.slug === String(slug) ? SETFID.names : new Map();
-      for(const f of claimFolders) names.set(String(f.name), f.fid);
-      SETFID = {slug: String(slug), names};
-    }
+    if(claimFolders.length) rememberSets(slug, claimFolders.map(f => [f.name, f.fid]), false);
   }
   /* TITLES FOR THE ASSOCIATION ROWS, and the gate on them was left behind when
      the chain learned to store relations.
