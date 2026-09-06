@@ -29,11 +29,23 @@ Group=kourt
 # BOTH NAMES, because one binary serves whatever is pointed at it: "dev" keeps a
 # local gnodev working against this same service, and kourt-1 is the chain this
 # host actually runs. Adding a chain here is the only thing needed to serve it.
+#
+# --archive-rpc IS WHAT KEEPS FILED PICTURES, and it was missing. Its own help
+# says the consequence plainly — "empty disables promotion, so every upload
+# expires" — and this unit shipped without it, so on this host the archive held
+# every image for an hour and swept it. Uploading worked, the hash went on chain,
+# /m/<sha> answered 404 forever, and nothing anywhere failed. Found when the
+# first folder was given a picture; it was never about folders.
+#
+# The archive asks a node whether the chain really references a blob before
+# keeping it, so it needs a node to ask. This is the same chain the overlay is
+# stamped with at deploy time.
 ExecStart=/opt/kourt/kourtchat \
     --addr 127.0.0.1:8788 \
     --db /var/lib/kourt/chat.db \
     --secret-file /var/lib/kourt/secret/iphash.key \
     --chain dev,kourt-1 \
+    --archive-rpc https://rpc.kourt.xyz \
     --behind-proxy \
     --trusted-proxy 127.0.0.1/32,::1/128
 
