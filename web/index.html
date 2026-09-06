@@ -13064,7 +13064,23 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
   let claimFolders = [];
   if(isLive()){
     const s3 = gstr(slug);
-    const fids = uint64List(await tup(`ClaimFolders(${s3},${id})`).then(t=>t[0]).catch(()=>""));
+    /* AND WHETHER THIS CHAIN CALLS THE TITLE A HEADING AT ALL, asked beside the
+       filings rather than after them, so it costs no round trip of its own.
+       THE PAGE MUST NOT ANSWER THIS. isSetTitle reads the page's own two marks,
+       and a realm is deployed at genesis while a page is deployed whenever — on
+       kourt.xyz today the overlay knows 𓂀 and 𓁼 and the realm knows only 𓂀. The
+       New panel already asks (fillSetAffirm); the SENTENCE below it did not, so a
+       pending 𓁼 claim was told "this asks the court for a set called X" on a chain
+       that would parse it as an ordinary claim of fact.
+       CARRIED ON `d`, which resolutionSection is already handed — no signature to
+       thread and no second object to keep. Left undefined off-chain, where demo
+       data has no realm to ask and the sentence is as true as the fixture is. */
+    const [fidsRaw, chainSet] = await Promise.all([
+      tup(`ClaimFolders(${s3},${id})`).then(t=>t[0]).catch(()=>""),
+      one(`IsSetClaim(${s3},${id})`).catch(()=>null),
+    ]);
+    d.chainSaysSet = !String(chainSet).includes("false");   // silence is not a refusal
+    const fids = uint64List(fidsRaw);
     claimFolders = (await Promise.all(fids.slice(0,6).map(async fid => {
       /* HOW BIG THE SHELF IS, asked beside its name rather than after it. Both
          reads are per folder because both are per folder — issued together so
@@ -15387,7 +15403,11 @@ function resolutionSection(slug,id,d,nowH,tl){
      THE NAME IS THE TITLE'S OWN TAIL, cut at the mark and its single space, so
      the sentence cannot disagree with the heading above it. */
   const setName = (setTitleParts(d.title) || {}).name || "";
-  const pending = setName && d.phase!=="settled" && d.phase!=="provClose" && d.phase!=="closed";
+  /* `d.chainSaysSet !== false` rather than a truthy test: undefined means nobody
+     asked — demo mode, or a realm too old to have IsSetClaim — and that is not a
+     refusal. Only an explicit false from the chain silences the sentence. */
+  const pending = setName && d.chainSaysSet !== false
+    && d.phase!=="settled" && d.phase!=="provClose" && d.phase!=="closed";
   const ask = pending
     ? `<p class="small muted" style="margin:8px 0 0">This claim asks the court for a set called
         <b>${safeInline(setName)}</b>. A YES does not create it by itself — anyone may then carry

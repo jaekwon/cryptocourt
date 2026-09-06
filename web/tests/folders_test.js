@@ -541,9 +541,20 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
      a SETTLED claim, which already carries the affirm panel and would say it
      twice; nor on one closed without a decision, where a note about what a YES
      would have made reads as an offer that is no longer open. */
+  /* AND THE CHAIN HAS TO AGREE IT IS A HEADING. The page's own two marks gate
+     this sentence, and page and chain can disagree — on kourt.xyz the overlay
+     knows 𓂀 and 𓁼 while the realm there knows only 𓂀 — so a pending 𓁼 claim was
+     told "this asks the court for a set called X" on a chain that would parse it
+     as an ordinary claim of fact.
+     `!== false` and not a truthy test: undefined means nobody asked, which is demo
+     mode or a realm too old to answer, and neither is a refusal. */
   ok("a pending set heading says what a YES would build",
-     /const pending = setName && d\.phase!=="settled" && d\.phase!=="provClose" && d\.phase!=="closed";/.test(src)
+     /const pending = setName && d\.chainSaysSet !== false/.test(src)
+     && /d\.phase!=="settled" && d\.phase!=="provClose" && d\.phase!=="closed";/.test(src)
      && /This claim asks the court for a set called/.test(src));
+  ok("...and the chain is asked beside the filings, not in a read of its own",
+     /one\(`IsSetClaim\(\$\{s3\},\$\{id\}\)`\)\.catch\(\(\)=>null\),/.test(src)
+     && /d\.chainSaysSet = !String\(chainSet\)\.includes\("false"\);/.test(src));
   ok("...and it says a YES alone does not create it",
      /A YES does not create it by itself/.test(src));
   /* NAMED BY THE ONE PARSER, not by a prefix test of its own. Five sites tested
