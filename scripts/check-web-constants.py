@@ -33,6 +33,24 @@ import sys
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WEB = os.path.join(REPO, "web", "index.html")
 
+# AND ONE THE CHAT PANEL RESTATES, which lives in a different file and a different
+# SHAPE — so it gets its own map rather than loosening the one above. MIRRORS reads
+# `const NAME = <int>;` in web/index.html; this is a FIELD inside CHATLIMITS in
+# web/chat.js, and a pattern wide enough to see both would be wide enough to match
+# a number in a comment.
+#
+# WHY IT IS HERE AT ALL. chat.js decides whether a `𓂀 name` typed in chat is a
+# heading worth linking, and it refuses a name longer than the realm's folder cap —
+# because a link to a set the realm would refuse to create is a link to nothing.
+# The number is the REALM's, restated in a file that cannot ask the chain: exactly
+# the drift this guard exists for. It is not internal/chat's to check either, and
+# paneldrift_test.go says so in as many words — that test owns the caps the SERVER
+# owns, and this is not one of them.
+CHATJS = os.path.join(REPO, "web", "chat.js")
+CHAT_MIRRORS = {
+    "setname": ("realm/r/kourtv2/folders.gno", "maxFolderTextLen"),
+}
+
 # web symbol -> (realm file, the constant's name there)
 MIRRORS = {
     "WEEK": ("realm/r/kourtv2/court.gno", "periodBlocks"),
@@ -167,6 +185,32 @@ def main():
                   f"{name} is {want}. The overlay passes {sym} into realm reads, "
                   f"so a page that disagrees queries the wrong window and still "
                   f"looks right.", file=sys.stderr)
+            bad += 1
+    chatsrc = open(CHATJS, encoding="utf-8").read() if os.path.exists(CHATJS) else ""
+    for sym, (relpath, name) in sorted(CHAT_MIRRORS.items()):
+        # Anchored INSIDE the declaration, not loose in the file, so a number in a
+        # comment about the cap cannot stand in for the cap.
+        decl = re.search(r"^\s*const\s+CHATLIMITS\s*=\s*\{([^}]*)\}", chatsrc, re.M)
+        m = re.search(r"\b%s\s*:\s*([0-9][0-9_]*)" % re.escape(sym),
+                      decl.group(1)) if decl else None
+        if not m:
+            print(f"check-web-constants: web/chat.js no longer declares "
+                  f"`{sym}` inside CHATLIMITS — it mirrors {name} and this guard "
+                  f"cannot see it any more. Restore the field or drop the mirror "
+                  f"from CHAT_MIRRORS.", file=sys.stderr)
+            bad += 1
+            continue
+        got = int(m.group(1).replace("_", ""))
+        want = realm_value(relpath, name)
+        if want is None:
+            print(f"check-web-constants: {relpath} no longer declares {name}, "
+                  f"which chat.js mirrors as CHATLIMITS.{sym}.", file=sys.stderr)
+            bad += 1
+        elif got != want:
+            print(f"check-web-constants: chat.js's CHATLIMITS.{sym} is {got} and "
+                  f"{name} is {want}. Below the realm's, a heading the court would "
+                  f"accept is not linked; above it, chat offers a link to a set the "
+                  f"realm refuses to create.", file=sys.stderr)
             bad += 1
     for sym, (relpath, realm_expr, web_re) in sorted(UNITS.items()):
         src = open(os.path.join(REPO, relpath), encoding="utf-8").read()
@@ -320,6 +364,8 @@ def main():
           "cost = ceil((s1^2 - s0^2) / 2d).")
     print(f"check-web-constants: {len(PHRASES)} mirrored phrase(s) still agree "
           f"across the boundary.")
+    print(f"check-web-constants: {len(CHAT_MIRRORS)} chat-panel constant(s) match "
+          f"the realm's.")
     print(f"check-web-constants: {len(MIRRORS)} mirrored constant(s) match the "
           f"realm — " + ", ".join(f"{s}={realm_value(*v)}"
                                   for s, v in sorted(MIRRORS.items())) + ".")
