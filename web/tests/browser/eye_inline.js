@@ -64,6 +64,18 @@ const ROUTES = ["#/c/orem", "#/c/orem/f/0", "#/c/orem/f/1", "#/c/orem/11", "#/c/
       };
       return [...document.querySelectorAll(".wedjat, .eye")]
         .filter(e => !e.closest("svg.mapsvg"))
+        /* AND NOT ONE THAT IS NOT LAID OUT AT ALL, which this said it meant two
+           comments up ("Only the eyes laid out by CSS are in scope") and did not
+           enforce. .foldbox carries BOTH eyes — open and shut — with one of them
+           display:none by design, and a hidden element's rect is all zeros. So
+           `|0 - tr.y| > 0 * 0.75` is true whenever there is any text beside it,
+           and every folder row reported two eyes breaking a line they have no box
+           in. Measured on #/c/orem: two, both .foldbox, both display:none.
+           ASKED OF THE BOX, NOT OF `display`. getClientRects() is empty for an
+           element with no layout for ANY reason — display:none on itself, on an
+           ancestor, or detached — where a display check would have to walk up and
+           would still miss the last case. The rect already knows. */
+        .filter(e => e.getClientRects().length)
         .map(e => {
           const p = e.parentElement;
           const {er, tr} = rowOf(e);

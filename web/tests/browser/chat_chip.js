@@ -33,13 +33,23 @@ const PAGE = 'file://' + path.join(__dirname, '..', '..', 'index.html');
     await new Promise(z => setTimeout(z, 1400));
 
     const look = () => page.evaluate(() => {
-      const m = document.querySelector(".chatmoniker");
+      /* THE NAME CONTROL AS THE READER SEES IT, whichever element is currently
+         playing that part. This used to name .chatmoniker outright, and the design
+         moved underneath it: the name at rest is now a real <button>, and the
+         input ships `hidden` behind it, so every assertion below was measuring a
+         box with no layout and reading its plain input styling as a regression.
+         ASKED OF THE BOX, NOT OF A CLASS NAME. getClientRects() is empty for an
+         element that is not laid out, so "the one on screen" needs no flag and no
+         second selector to keep in step — whichever of the two is showing is the
+         one a reader is looking at, which is exactly what these checks are about. */
+      const live = sel => [...document.querySelectorAll(sel)].find(e => e.getClientRects().length);
+      const m = live(".chatnamebtn, .chatmoniker");
       if (!m) return {none: true};
       const g = e => { const c = getComputedStyle(e);
         return {bg: c.backgroundColor, bd: c.borderTopColor, align: c.textAlign, cursor: c.cursor}; };
       return {moniker: g(m), send: g(document.querySelector(".chatsend")),
               input: g(document.querySelector(".chatinput")),
-              focused: document.activeElement === m};
+              focused: document.activeElement === live(".chatmoniker")};
     });
 
     const rest = await look();
@@ -54,7 +64,14 @@ const PAGE = 'file://' + path.join(__dirname, '..', '..', 'index.html');
     ok(`${scheme}: ...reading as something to press, not to fill`,
        rest.moniker.cursor === "pointer", JSON.stringify(rest.moniker));
 
-    await page.evaluate(() => document.querySelector(".chatmoniker").focus());
+    /* PRESSED, NOT FOCUSED. The chip is a button now, and clicking it is what
+       swaps the input in — focusing a hidden input does nothing and left `focused`
+       false while the panel was working correctly. */
+    await page.evaluate(() => {
+      const b = document.querySelector(".chatnamebtn");
+      if (b && b.getClientRects().length) b.click();
+      else document.querySelector(".chatmoniker").focus();
+    });
     await new Promise(z => setTimeout(z, 200));
     const on = await look();
     /* A CHIP YOU CANNOT EDIT IS THE FAILURE MODE. The whole point of the chip is
