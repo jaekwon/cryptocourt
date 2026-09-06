@@ -130,8 +130,22 @@ if [ -z "$SKIP_CHECKS" ]; then
 		io.open("/tmp/kourt-overlay.js", "w", encoding="utf-8").write(s[a:b])
 		PY
 		node --check /tmp/kourt-overlay.js
+		# AND THE TWO FILES THAT SHIP BESIDE IT. index.html loads chat.js and
+		# media.js as separate <script src>, and neither was ever parsed here —
+		# only the block extracted above was. A syntax error in chat.js does not
+		# degrade the panel, it removes it: mountChat is never defined, the rail
+		# chat is dead on every court, and index.html is untouched so nothing else
+		# looks wrong.
+		#
+		# MEASURED, TWICE, IN THIS REPO'S OWN HISTORY: a comment inside the CHATCSS
+		# template literal quoted two words in backticks and ended the string, and
+		# the file stopped parsing. Both times it was caught by web-test evaluating
+		# the file — and web-test wants a node and does not run here. The check that
+		# would have caught it at ship time is the one line below.
+		node --check web/chat.js
+		node --check web/media.js
 		rm -f /tmp/kourt-overlay.js
-		echo "    overlay parses"
+		echo "    the overlay, chat.js and media.js all parse"
 	else
 		echo "    node not found — overlay NOT syntax-checked (set SKIP_CHECKS=1 to stop being told)" >&2
 	fi
