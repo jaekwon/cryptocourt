@@ -711,16 +711,25 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
      𓂀, so a settled 𓁼 claim would be offered New for a transaction that panics.
      IsSetClaim answers with that chain's own parser, in the batch fillSetAffirm
      already made, so it costs no round trip. */
-  ok("the panel asks the chain whether this is a heading at all",
-     /one\(`IsSetClaim\(\$\{gstr\(slug\)\},\$\{id\}\)`\)/.test(src));
-  ok("...and removes itself when the chain says no",
-     /if\(String\(isSet\)\.includes\("false"\)\)\{ box\.remove\(\); return; \}/.test(src));
+  /* THE PANEL IS HANDED THE ANSWER, it does not fetch one. It asked IsSetClaim
+     itself for one commit, and the claim page asked it too the commit after — for
+     the same claim, on the same load, a hundred lines apart, because each fix
+     reached for the read it needed without noticing the other had. */
+  ok("the panel is handed the chain's answer rather than asking again",
+     /fillSetAffirm\(slug, id, d\.chainSaysSet\);/.test(src)
+     && /async function fillSetAffirm\(slug, id, chainSaysSet\)\{/.test(src));
+  ok("...and IsSetClaim is read exactly once on the page",
+     (src.match(/one\(`IsSetClaim\(/g) || []).length === 1);
+  ok("...removing itself only when the chain says no",
+     /if\(chainSaysSet === false\)\{ box\.remove\(\); return; \}/.test(src));
   /* A READ THAT DOES NOT ANSWER LEAVES THE PANEL, like the failure path below it:
      silence is not evidence, and an older realm without IsSetClaim would otherwise
      lose a control that works. Asserted as the shape — a truthy test would remove
      the panel on null. */
+  /* `=== false`, not falsy: undefined means nobody asked — off-chain, or a realm
+     too old to answer — and neither is a refusal. */
   ok("...but silence is not a refusal",
-     !/if\(!isSet\)\{ box\.remove/.test(src));
+     !/if\(!chainSaysSet\)\{ box\.remove/.test(src));
 
   console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");
   process.exit(fail?1:0);

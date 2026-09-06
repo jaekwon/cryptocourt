@@ -13243,7 +13243,7 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
      subtract two heights from the same clock. */
   fillClaimSide(slug, id, d, tline, nowH);
   fillClaimComments(slug, id);
-  fillSetAffirm(slug, id);
+  fillSetAffirm(slug, id, d.chainSaysSet);
   fillClaimFigure(slug, id);
   // arrived from an embed's side button
   if(QP.side) focusStakeSide(QP.side);
@@ -13574,7 +13574,16 @@ function claimCommentsHtml(slug, id, n, open, rows, kids, roles, withheld, nowH)
    FAILURES ARE SILENT AND LEAVE THE BUTTON. A read that does not answer is not
    evidence the set exists, and the realm refuses a second New anyway, so
    the worst case is a clear panic in the wallet rather than a duplicate set. */
-async function fillSetAffirm(slug, id){
+/* `chainSaysSet` IS PASSED, NOT FETCHED AGAIN. This asked IsSetClaim itself, and
+   one commit later the claim page asked it too — for the same claim, on the same
+   load, a hundred lines apart — because each fix reached for the read it needed
+   without noticing the other had. Two reads of one fact is the shape this sweep
+   exists to remove, and it arrived by the same route as the three copies of "set
+   that opens": one per commit, none of them deciding to duplicate anything.
+   THE PAGE FETCHES IT ONCE, beside the filings, and hands it down. undefined
+   still means nobody asked — off-chain, or a realm too old to answer — and is
+   still not a refusal. */
+async function fillSetAffirm(slug, id, chainSaysSet){
   const box = document.getElementById("setaffirm");
   if(!box) return;
   /* SHIPPED HIDDEN, REVEALED ONLY BY AN ANSWER. Measured on kourt.xyz against a
@@ -13592,10 +13601,9 @@ async function fillSetAffirm(slug, id){
   const show = () => { box.hidden = false; };
   if(!isLive()){ show(); return; }
   try{
-    const [carried, folders, isSet] = await Promise.all([
+    const [carried, folders] = await Promise.all([
       one(`ClaimSet(${gstr(slug)},${id})`).catch(()=>null),
       one(`ClaimFolders(${gstr(slug)},${id})`).catch(()=>null),
-      one(`IsSetClaim(${gstr(slug)},${id})`).catch(()=>null),
     ]);
     if(carried && String(carried).trim() !== "0"){ box.remove(); return; }
     /* AND THE CHAIN DECIDES WHETHER THIS IS A HEADING AT ALL, not this file.
@@ -13612,7 +13620,7 @@ async function fillSetAffirm(slug, id){
        A read that does not answer LEAVES THE PANEL, for the same reason the
        failure path below does — silence is not evidence, and an older realm with
        no IsSetClaim would otherwise lose a control that works. */
-    if(String(isSet).includes("false")){ box.remove(); return; }
+    if(chainSaysSet === false){ box.remove(); return; }
     /* uint64List, NOT a hand-rolled \d+ match. qeval renders the slice as
        `slice[(1 uint64)]`, and "uint64" ENDS IN 64 — so a bare digit match reads
        one filing as two and the note then told the reader their claim was filed
