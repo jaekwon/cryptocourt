@@ -285,8 +285,14 @@ const PAGE = 'file://' + path.join(__dirname, '..', '..', 'index.html');
   const eyes = await page.evaluate(() => {
     const rows = [...document.querySelectorAll("#qscope .foldsel")];
     if (rows.length < 2) return {few: rows.length};
+    /* THE SHOWN HALF IS THE CHARACTER, the hidden half is still a drawing. Both
+       used to be SVGs so the pair would read as one object; the rule is narrower
+       than that — the CLOSED eye is the exception, because Unicode has no
+       codepoint meaning "not seeing", and everything else is the real mark. So
+       .wedjat is the open state and .eyeshut the shut one, and the property this
+       asserts is unchanged: both ship, and exactly one shows. */
     const look = r => {
-      const o = r.querySelector(".eyeopen"), sh = r.querySelector(".eyeshut");
+      const o = r.querySelector(".wedjat"), sh = r.querySelector(".eyeshut");
       return {checked: r.getAttribute("aria-checked"),
               both: !!(o && sh),
               open: o ? getComputedStyle(o).display : "absent",
@@ -324,12 +330,12 @@ const PAGE = 'file://' + path.join(__dirname, '..', '..', 'index.html');
      `eye ${ink.off.opacity}, box ${ink.off.boxOpacity}`);
   ok("the folder glyph is gone from the set rows", ink.folderGlyphs === 0, String(ink.folderGlyphs));
 
-  ok("both eyes ship in every folder row",
+  ok("both halves ship in every set row — the character and the shut drawing",
      !eyes.few && eyes.on.both && eyes.off.both, JSON.stringify(eyes));
-  ok("a ticked folder shows the open eye and only that",
+  ok("a ticked set shows the character and only that",
      !eyes.few && eyes.on.checked === "true"
        && eyes.on.open !== "none" && eyes.on.shut === "none", JSON.stringify(eyes.on));
-  ok("an unticked folder shows the shut eye and only that",
+  ok("an unticked set shows the shut drawing and only that",
      !eyes.few && eyes.off.checked === "false"
        && eyes.off.shut !== "none" && eyes.off.open === "none", JSON.stringify(eyes.off));
 

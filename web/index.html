@@ -824,11 +824,25 @@ a.card:hover{border-color:var(--line-2)}
    the filter. Both eyes ship in the markup; exactly one is ever displayed.
    ONE INK IN BOTH. The shut eye was dimmed to half alpha, which says DISABLED
    when it means NOT BEING LOOKED AT. The lid carries the state on its own. */
-.foldsel .foldbox{display:inline-flex; margin-right:8px; color:var(--accent)}
+/* THE OPEN HALF IS THE CHARACTER TOO. It was drawn so both halves of this
+   two-state control would be one object; the owner's rule is narrower than that
+   — the CLOSED eye is the exception, because no codepoint means "not seeing",
+   and everything else is the real mark. So shown is U+13080 and hidden is the
+   drawing, which also means the state a reader is most likely to want — the set
+   they are looking AT — is the one they can select and paste.
+   SIZED TO MATCH ACROSS THE SWAP: a 1.6em SVG and a 1.35em glyph land on the
+   same visual height because the font's em box carries its own padding, and a
+   control whose mark jumps size when you tick it reads as two controls. */
+/* FIXED BOX, so ticking cannot move the row. The two halves are a glyph and an
+   SVG and their natural heights differ by a few px; without a height here the
+   whole line shifts as you toggle, which is the one thing a filter control must
+   not do while you are reading down a list of them. */
+.foldsel .foldbox{display:inline-flex; align-items:center; justify-content:center;
+  margin-right:8px; color:var(--accent); min-width:1.5em; height:1.6em; line-height:1}
 .foldsel .eye{height:1.6em; vertical-align:-.45em}
-.foldsel .eyeopen{display:none}
+.foldsel .wedjat{font-size:1.35em; display:none}
 .foldsel .eyeshut{display:block}
-.foldsel[aria-checked="true"] .eyeopen{display:block}
+.foldsel[aria-checked="true"] .wedjat{display:inline}
 .foldsel[aria-checked="true"] .eyeshut{display:none}
 .foldsel[aria-checked="true"]{background:color-mix(in srgb, var(--accent) 14%, transparent)}
 .foldsel:hover{background:color-mix(in srgb, var(--accent) 7%, transparent)}
@@ -7981,7 +7995,7 @@ function folderRowHtml(slug,f,path,toggle){
   const keys = folderSubtree(f, path, []).join(" ");
   return `<div class="crow folderrow foldsel" role="checkbox" aria-checked="false" tabindex="0"
     data-q="${esc(f.name + " " + (f.desc||""))}" data-fold-keys="${esc(keys)}">
-    <span class="id"><span class="foldbox">${ICN_EYE_OPEN}${ICN_EYE_SHUT}</span></span>
+    <span class="id"><span class="foldbox">${EYE_CHAR}${ICN_EYE_SHUT}</span></span>
     ${meta}
     <a class="pill void foldopen" href="#/c/${esc(slug)}/f/${path}">open →</a></div>`;
 }
