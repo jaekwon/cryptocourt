@@ -46,6 +46,30 @@ WEB = os.path.join(REPO, "web", "index.html")
 # the drift this guard exists for. It is not internal/chat's to check either, and
 # paneldrift_test.go says so in as many words — that test owns the caps the SERVER
 # owns, and this is not one of them.
+# THE TWO SET MARKS, WRITTEN IN THREE PLACES AND THREE SPELLINGS. The realm decides
+# what a set heading is; the overlay and the chat panel each restate the codepoints
+# so they can recognise one without asking the chain.
+#
+#   realm        setMark  = "\U00013080"      shutMark = "\U0001307C"
+#   overlay      SET_MARK = "\u{13080}"       SHUT_MARK = "\u{1307C}"
+#   chat panel   CHATSETMARKS keys
+#
+# AND THEY HAVE ALREADY MOVED. Two commits in this repo relocated the mark — to
+# D007, then back to D010 — and the second mark was added to the realm while the
+# overlay still knew one, which left isSetHead gating the New panel on half the
+# marks: a court could settle a 𓁼 heading YES and the page offered no way to carry
+# it. That is what an unheld codepoint costs, and it is invisible until somebody
+# files a heading with the mark the surface forgot.
+#
+# COMPARED AS CODEPOINTS, not as text, because the three spellings differ by
+# language: Go writes \U00013080 and JS writes \u{13080} for the same character.
+#
+# AND THE REALM IS THE AUTHORITY, not a list kept here. A pair written into this
+# guard would be a FOURTH copy — one more thing to keep true, and the one that
+# would fail on the day somebody deliberately moves a mark, pointing at the realm
+# as if the realm were the mistake. Read from governedset.gno, so a deliberate
+# move flags exactly the two surfaces that have not followed it.
+
 CHATJS = os.path.join(REPO, "web", "chat.js")
 CHAT_MIRRORS = {
     "setname": ("realm/r/kourtv2/folders.gno", "maxFolderTextLen"),
@@ -231,6 +255,32 @@ def main():
                   f"this one costs.", file=sys.stderr)
             bad += 1
     chatsrc = open(CHATJS, encoding="utf-8").read() if os.path.exists(CHATJS) else ""
+
+    # The realm is the authority; the other two restate it.
+    gset = open(os.path.join(REPO, "realm/r/kourtv2/governedset.gno"), encoding="utf-8").read()
+    realm_marks = tuple(m.upper() for m in
+                        re.findall(r'(?:setMark|shutMark)\s+=\s+"\\U000([0-9A-Fa-f]{5})"', gset))
+    web_marks = tuple(m.upper() for m in
+                      re.findall(r"(?:SET_MARK|SHUT_MARK)\s*=\s*\"\\u\{([0-9A-Fa-f]{5})\}\"", web))
+    chat_marks = tuple(m.upper() for m in
+                       re.findall(r'"\\u\{([0-9A-Fa-f]{5})\}"\s*:', chatsrc))
+    if not realm_marks:
+        print("check-web-constants: governedset.gno no longer declares setMark and "
+              "shutMark the way this guard reads them, so the codepoints the "
+              "overlay and the chat panel restate are unchecked.", file=sys.stderr)
+        bad += 1
+    else:
+        for who, got in (("the overlay", web_marks), ("the chat panel", chat_marks)):
+            if got != realm_marks:
+                print("check-web-constants: %s declares set mark(s) %s and the realm "
+                      "takes %s. A surface that misses one stops recognising every "
+                      "heading filed with it — silently, because an ordinary claim is "
+                      "exactly what a heading looks like when the mark is unknown. "
+                      "That already happened once: the realm gained a second mark and "
+                      "the overlay kept one, so the New panel was gated on half of "
+                      "them and a settled heading could not be carried."
+                      % (who, list(got) or "none", list(realm_marks)), file=sys.stderr)
+                bad += 1
     for sym, (relpath, name) in sorted(CHAT_MIRRORS.items()):
         # Anchored INSIDE the declaration, not loose in the file, so a number in a
         # comment about the cap cannot stand in for the cap.
@@ -444,6 +494,8 @@ def main():
           "cost = ceil((s1^2 - s0^2) / 2d).")
     print(f"check-web-constants: {len(PHRASES)} mirrored phrase(s) still agree "
           f"across the boundary.")
+    print(f"check-web-constants: the two set marks agree across the realm, the "
+          f"overlay and the chat panel ({', '.join('U+' + m for m in realm_marks)}).")
     print(f"check-web-constants: {len(CHAT_MIRRORS)} chat-panel constant(s) match "
           f"the realm's.")
     print(f"check-web-constants: {len(MIRRORS)} mirrored constant(s) match the "
