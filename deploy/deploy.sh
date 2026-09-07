@@ -150,6 +150,46 @@ if [ -z "$SKIP_CHECKS" ]; then
 		echo "    node not found — overlay NOT syntax-checked (set SKIP_CHECKS=1 to stop being told)" >&2
 	fi
 
+	# THE TESTS, WHICH THIS SCRIPT DID NOT RUN. Everything above reads the file;
+	# nothing above ran it. So a deploy could ship — and did ship, repeatedly —
+	# a page failing 55 source harnesses or 19 browser checks, because the gates
+	# here are static and the defect was behavioural.
+	#
+	# MEASURED, IN THIS REPO, THIS WEEK: eye_inline went red when a set page's
+	# actions block stopped being nested in the section its list was in, and
+	# stayed red across several deploys. gofmt, go vet, node --check and all four
+	# python guards passed the whole time. The check that would have caught it is
+	# the one below.
+	#
+	# 4.6 SECONDS FOR THE SOURCE SUITE, measured, against a Go cross-build that
+	# takes longer — there is no argument for leaving it out.
+	if command -v node >/dev/null 2>&1; then
+		node web/tests/run.js >/dev/null \
+			|| { echo "deploy: a source harness failed — run: node web/tests/run.js" >&2; exit 1; }
+		echo "    55 source harnesses pass"
+		# AND THE THREE SURFACES THAT MUST NOT REGRESS, in a browser, because
+		# geometry is the one thing no static gate can read: route_crawl walks
+		# every internal link, map_draws is the map, eye_inline is the folder and
+		# set pages, row_parity compares a claim's row on the court page against
+		# the same row on a set page. 48 seconds for the four, against 234 for all
+		# nineteen — the rest are worth running, and `make web-visual` runs them.
+		#
+		# PUPPETEER'S ABSENCE IS REPORTED, NOT PASSED. web/tests/browser/run.js
+		# prints "puppeteer not installed" and exits 0, which is right for a
+		# developer and wrong for a gate: taken at its word it would report a
+		# clean browser sweep on a machine that cannot open a browser. So the
+		# module is resolved here first, and a missing one is said out loud the
+		# same way a missing node is.
+		if node -e "require.resolve('puppeteer')" >/dev/null 2>&1; then
+			ONLY=route_crawl,eye_inline,map_draws,row_parity \
+				node web/tests/browser/run.js >/dev/null \
+				|| { echo "deploy: a browser check failed — run: make web-visual" >&2; exit 1; }
+			echo "    the map, the folder page and court/set row parity hold in a browser"
+		else
+			echo "    puppeteer absent — browser checks NOT run (set SKIP_CHECKS=1 to stop being told)" >&2
+		fi
+	fi
+
 	gofmt -l cmd internal | { ! grep .; } || { echo "unformatted Go above" >&2; exit 1; }
 	go vet ./internal/... ./cmd/... >/dev/null
 	go test ./internal/... ./cmd/... >/dev/null
