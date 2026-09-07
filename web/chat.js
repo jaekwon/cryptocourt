@@ -265,6 +265,33 @@ const CHATSETMARKS = {
   "\u{1307C}": "concealed",  // 𓁼 D007
 };
 
+/* A CLAIM NUMBER IN A SENTENCE BECOMES A WAY TO READ IT, and only if the court
+   really has that claim. Unlike a set heading — which IS the whole message — this
+   is a reference inside prose, so it is a substitution rather than a replacement.
+   RUN ON THE ESCAPED TEXT, which is what makes the exclusion below load-bearing.
+   chatEsc turns an apostrophe into `&#39;` and a backtick into `&#96;` — both of
+   which END IN A HASH FOLLOWED BY DIGITS. A pattern reading the escaped string
+   without refusing a preceding `&` turns every apostrophe in the room into a link
+   to claim 39, and every backtick into claim 96. Both are ordinary typing.
+   NO LEADING ZERO, so `#019` and `#0` stay plain: the displayed text is what was
+   typed and the href is the number, and those two must not disagree.
+   AND THE COURT MUST SAY SO. claimIsReal lives in the page, not here — chat.js
+   reads no chain by design, the same reason it carries its own escaper — so a
+   panel loaded alone, or on a court whose count was never read, links nothing.
+   That is the safe direction: a plain "#19" is a sentence, a wrong "#19" is a
+   link to somebody else's claim. */
+const CHATCLAIMREF = /(^|[^&\w])#([1-9]\d{0,8})(?![\w#])/g;
+
+function chatClaimRefs(escaped, court, isReal) {
+  if (!court || typeof isReal !== "function") return escaped;
+  return String(escaped == null ? "" : escaped).replace(
+    CHATCLAIMREF,
+    (all, pre, digits) => isReal(court, Number(digits))
+      ? pre + '<a class="chatclaim" href="#/c/' + chatEsc(court) + "/" + digits
+            + '">#' + digits + "</a>"
+      : all);
+}
+
 /* chatSetHeading reads a body as a set heading, or answers null.
    THE MARK, ONE SPACE, THEN THE NAME — the same shape parseSetTitle insists on,
    because a title this panel offers to file has to be one the realm will take. */
@@ -305,7 +332,9 @@ function chatLineHtml(m, nowSec, court) {
   /* ONE WRAPPER, WRITTEN ONCE. Both arms are a .chatbody; only what goes inside it
      differs, and spelling the span twice is two places for a class name to drift
      from the CSS that styles it. */
-  const said = fid == null ? chatEsc(m.body)
+  const said = fid == null
+    ? chatClaimRefs(chatEsc(m.body), court,
+                    typeof claimIsReal === "function" ? claimIsReal : null)
     : '<a class="chatset" href="#/c/' + chatEsc(court) + "/f/" + chatEsc(String(fid))
       + '"><span class="chatmark wedjat" title="' + chatEsc(CHATSETMARKS[hit.mark]) + '">' + hit.mark
       + '</span><span class="chatsetname">' + chatEsc(hit.name) + "</span></a>";
@@ -589,6 +618,12 @@ const CHATCSS = `
    inside the CHATCSS template literal, so one backtick ends the string and the
    file stops parsing. It cost a red suite writing this very note. */
 .chatset{color:inherit;text-decoration:none}
+/* A CLAIM REFERENCE, and it looks like the number it is rather than like a link
+   in the middle of a sentence. Underlined on hover only: a transcript with three
+   accented spans per line reads as a page of links, and what a reader is here to
+   read is what people said. */
+.chatclaim{color:var(--accent,inherit);text-decoration:none;font-weight:600}
+.chatclaim:hover,.chatclaim:focus-visible{text-decoration:underline;text-underline-offset:2px}
 /* HOVER THE EYE, UNDERLINE THE WORD — the sibling selector, because the mark is
    what a reader points at to ask "is that a real set?" and the NAME is the answer
    they want marked. Hovering the name underlines it too, since a link that does

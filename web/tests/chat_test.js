@@ -842,6 +842,51 @@ function mkDoc() {
       JSON.stringify(loads));
   }
 
+  /* A CLAIM NUMBER IN A SENTENCE BECOMES A WAY TO READ IT, on the same terms as
+     a set name: only if the court really has it, and only because the PAGE says
+     so — chat.js reads no chain. */
+  {
+    const line = (body, court, top) => {
+      const prev = globalThis.claimIsReal;
+      globalThis.claimIsReal = (c, id) => c === "covid" && id >= 1 && id <= (top == null ? 26 : top);
+      const h = chatLineHtml({moniker: "anon", body, country: "", suffix: "", created_at: 1},
+                             100000, court);
+      globalThis.claimIsReal = prev;
+      return h;
+    };
+    ok("a real claim number becomes a link to that claim",
+       /<a class="chatclaim" href="#\/c\/covid\/19">#19<\/a>/.test(line("look at #19", "covid")));
+    ok("...mid-sentence, with the text around it untouched",
+       /look at <a[^>]*>#19<\/a> then/.test(line("look at #19 then", "covid")));
+    ok("a number past the court's count is left as text",
+       !/chatclaim/.test(line("what about #999", "covid")));
+    /* THE TWO ESCAPES THAT END IN A HASH AND DIGITS. chatEsc writes an
+       apostrophe as `&#39;` and a backtick as `&#96;`, so a pattern that reads
+       the escaped string without refusing a preceding `&` turns ordinary typing
+       into links to claims 39 and 96.
+       THE CEILING IS RAISED TO 100 HERE ON PURPOSE, and the first version of
+       these two was worthless without it: at the fixture's default of 26 neither
+       39 nor 96 is a real claim, so the COUNT check refused them and the pattern
+       was never tested at all — dropping the `&` exclusion left both green.
+       Above the ceiling, only the exclusion can save them. */
+    ok("an apostrophe does not become a link to claim 39",
+       !/chatclaim/.test(line("Fauci's own words", "covid", 100)));
+    ok("a backtick does not become a link to claim 96",
+       !/chatclaim/.test(line("a `quoted` word", "covid", 100)));
+    // The displayed text is what was typed, so the href and the label must agree:
+    // a leading zero would make them differ.
+    ok("a padded number is not a claim reference",
+       !/chatclaim/.test(line("route #019", "covid")) && !/chatclaim/.test(line("#0", "covid")));
+    ok("and #19x is not one either", !/chatclaim/.test(line("#19x", "covid")));
+    /* NO COURT, NO LINK. The harness mounts this panel with no court at all, and
+       a page that never read the count leaves claimIsReal answering false — both
+       have to end in plain text rather than in a link to nowhere. */
+    ok("a panel with no court links nothing",
+       !/chatclaim/.test(line("see #19", "")));
+    ok("...and neither does one the page has told nothing about",
+       !/chatclaim/.test(line("see #19", "covid", 0)));
+  }
+
   /* A NAME THE COURT ALREADY HAS BECOMES A WAY TO GO AND LOOK AT IT.
      Everything else is left alone: a heading for a set that does not exist is
      ordinary text, because somebody typing one in chat is TALKING, and a

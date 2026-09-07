@@ -3702,6 +3702,9 @@ async function courtStats(slug){
   const s=gstr(slug);
   // Name comes from the court page's own "# heading" — courtNameFor is
   // purge-gated and tombstones removed courts; the raw CourtName qeval is not.
+  /* THE CHAT PANEL LEARNS THE CEILING HERE, from the read the court page was
+     already making — see rememberClaims. The rail's chat is mounted beside this
+     page, so this is where "#19" becomes clickable. */
   const [md,tier,price,supply,emitted,reservoir,seniorOwed,claims,minted,burnHist,burned,tlAnchor] = await Promise.all([
     qrender(slug), one(`CourtTier(${s})`), one(`CoinPrice(${s})`), one(`CoinSupply(${s})`),
     one(`EmittedTotal(${s})`), one(`Reservoir(${s})`), one(`SeniorOwed(${s})`), one(`ClaimCount(${s})`),
@@ -3719,6 +3722,7 @@ async function courtStats(slug){
     // with no claims simply gets no date, which is the right answer anyway.
     one(`ClaimTimeline(${s},1)`).catch(()=>null)]);
   const nm = (md.match(/^#\s+(.+)$/m)||[])[1];
+  rememberClaims(slug, claims);
   return {name: nm? unesc(nm.trim()) : slug, tier,price,supply,emitted,reservoir,seniorOwed,claims,minted,burnHist,burned,nowUnix:anchorNow(tlAnchor)};
 }
 /* The chain's per-court policing lists, derived from the sample exactly as
@@ -9316,6 +9320,28 @@ function setFidByName(slug, name){
   const fid = SETFID.names.get(String(name));
   return fid == null ? null : fid;
 }
+/* AND THE SAME FAVOUR FOR A CLAIM NUMBER, so "#19" in the chat can become a way
+   to go and read #19. One number does it: ids are 1-based and INCLUSIVE of the
+   count — the realm increments nextID before assigning, which the docket scan
+   further down already relies on — so a ceiling is the whole fact, and there is
+   no set to build or keep in step.
+   SILENCE IS NOT A LINK, exactly as for a set name. A route that never read the
+   count leaves the ceiling at 0 and every "#19" stays plain text; a court that
+   does not match leaves it alone too, because the one wrong answer that would
+   look right is #19 on this court linking to #19 on another one.
+   Written by the reads the page ALREADY makes — courtStats, the claim page, the
+   folder page — never by a read of its own: a chat panel repainting every few
+   seconds must not be able to put a query on the wire. */
+let CLAIMTOP = {slug: "", top: 0};
+function rememberClaims(slug, count){
+  const n = Number(count);
+  CLAIMTOP = {slug: String(slug), top: Number.isFinite(n) && n > 0 ? Math.floor(n) : 0};
+}
+function claimIsReal(slug, id){
+  if(CLAIMTOP.slug !== String(slug)) return false;
+  const n = Number(id);
+  return Number.isInteger(n) && n >= 1 && n <= CLAIMTOP.top;
+}
 async function chainFolders(slug){
   const s2=gstr(slug);
   /* THE COUNT AND THE SHAPE TOGETHER. FolderTree does not need the count — it
@@ -13085,6 +13111,7 @@ on(/^\/c\/([a-z0-9-]+)\/f\/([0-9.]+)$/, async (slug,fpath)=>{
   if(curF0 && curF0.source!=="chain"){
     if(isLive()){
       const n = await one(`ClaimCount(${gstr(slug)})`).catch(()=>null);
+      if(n!=null) rememberClaims(slug, n);    // the rail's chat reads this too
       if(n!=null) curF = Object.assign({}, curF0, {folders: curFilterFolders(curF0.folders, curValidSet(slug, n))});
     } else {
       curF = Object.assign({}, curF0, {folders: curFilterFolders(curF0.folders, curValidSet(slug, 0))});
@@ -13416,6 +13443,7 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
   if(isLive()){
     const n = await one(`ClaimCount(${gstr(slug)})`).catch(()=>null);
     ccount = n;
+    if(n!=null) rememberClaims(slug, n);      // the rail's chat reads this too
     const idn = parseInt(id,10);
     if(n===null){ main.innerHTML = crumbs([{label:"Directory",href:"#/"}]) + notFound("No such court on this node (or the node did not answer)."); return; }
     if(idn<1 || idn>n){ main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:courtCrumb(slug),href:"#/c/"+slug}]) + notFound("No claim by that id."); return; }
