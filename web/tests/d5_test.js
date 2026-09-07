@@ -38,9 +38,9 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
    THE TALLY IS STILL SEALED, which is the realm's design: the ballots are on
    chain and anyone may add them up, but this page does not sum a running vote.
    So the line says WHEN, never who is winning — asserted below. */
-ok("disputed with no close read yet = the bare sealed line",
-   clockLine(null,"in dispute",null,null)==="a sealed vote is deciding"
-   && clockLine(123,"in dispute",99,99)==="a sealed vote is deciding");
+ok("disputed with no close read yet = the bare line",
+   clockLine(null,"in dispute",null,null)==="a vote is deciding"
+   && clockLine(123,"in dispute",99,99)==="a vote is deciding");
 ok("...with a close and a height, it counts down",
    // wall() spells the duration in words — "about 2 hours 38 min" — so the tail is
    // matched as prose rather than as one token, which is what this first got wrong.

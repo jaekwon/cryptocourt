@@ -86,8 +86,10 @@ its links — so the directory and docket are always whatever the chain says. Th
 
 - **Titles render verbatim**, never paraphrased, and are HTML-escaped wherever they
   appear — the integrity argument depends on both.
-- **No live tally is ever shown.** While a dispute or flag vote is open, the claim reads
-  only "the tally is sealed until the vote closes."
+- **No live tally is ever shown.** While a dispute or flag vote is open, the claim
+  reads only "a vote is deciding", or the time until it closes when that is known.
+  The page does not call the vote sealed — the reader is told what is happening,
+  not how the tally is kept.
 - **A verdict shows its route** — *undisputed* or *by vote*.
 - **Principal is never framed as a wager.** It always returns 1×; only the reward
   (conviction) is at stake. There is **no** "backing", "redeem", "cash out", "APR", or

@@ -201,7 +201,7 @@ const run = async (rows, v, mode) => {
     return r.side === "YES" && r.mark === "pending" && r.contested === false;
   })());
   ok("...a disputed one is marked as contested", (()=>{
-    const r = rowVerdict("disputed NO — a sealed vote is deciding");
+    const r = rowVerdict("disputed NO — a vote is deciding");
     return r.side === "NO" && r.mark === "contested" && r.contested === true;
   })());
   ok("...a provisional one is marked as reopenable", (()=>{
@@ -466,7 +466,7 @@ const run = async (rows, v, mode) => {
      must hold is that the pill uses the classifier's word. */
   ok("the dispute pill uses the classifier's own word for the state", (()=>{
     const pill = verdictBanner({phase:"disputed"});
-    const short = phaseClass("disputed — a sealed vote is deciding").short;
+    const short = phaseClass("disputed — a vote is deciding").short;
     return short && pill.includes(short);
   })());
   ok("...and does not name it a second way", (()=>{
@@ -490,20 +490,20 @@ const run = async (rows, v, mode) => {
      The colour still carries the phase, so the question mark is not doing that
      job alone. */
   ok("a disputed row names the side under dispute", (()=>{
-    const p = statusPill("disputed YES — a sealed vote is deciding; principal is never withheld");
+    const p = statusPill("disputed YES — a vote is deciding; principal is never withheld");
     return p.includes(">YES?<") && !p.includes("in dispute");
   })());
   ok("...on either side", (()=>{
-    return statusPill("disputed NO — a sealed vote is deciding").includes(">NO?<");
+    return statusPill("disputed NO — a vote is deciding").includes(">NO?<");
   })());
   ok("...keeping the dispute colour, so the phase is not carried by punctuation", (()=>{
-    const p = statusPill("disputed YES — a sealed vote is deciding");
+    const p = statusPill("disputed YES — a vote is deciding");
     return p.includes(`class="pill ${phaseClass("disputed YES — x").cls}"`);
   })());
   /* A realm older than the side-naming status line answers without one. Saying
      less is right there; inventing a side would not be. */
   ok("...and falls back to the bare phase when no side is readable", (()=>{
-    const p = statusPill("disputed — a sealed vote is deciding; principal is never withheld");
+    const p = statusPill("disputed — a vote is deciding; principal is never withheld");
     return p.includes(">in dispute<") && !p.includes("?");
   })());
   /* The side regex is anchored to the words that carry a decision. "open — stake

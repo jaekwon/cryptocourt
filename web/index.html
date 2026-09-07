@@ -4316,7 +4316,7 @@ function statusText(d){
   // side and the demo docket disagrees with a live one.
   if(d.phase==="disputed"){
     const sd = sideName(d.provisional!=null && d.provisional>=0 ? d.provisional : d.answer);
-    return "disputed" + (sd==="—" ? "" : " "+sd) + " — a sealed vote is deciding; principal is never withheld";
+    return "disputed" + (sd==="—" ? "" : " "+sd) + " — a vote is deciding; principal is never withheld";
   }
   /* AND NAMES ITS SIDE, for the third time and the same reason: the settled branch
      does it, the disputed branch above does it, and this one did not — so a
@@ -4606,7 +4606,7 @@ function clockLine(nowH, phaseShort, settleAt, escrowUntil, voteCloses){
     return voteCloses && nowH!=null
       ? (voteCloses>nowH? `the vote closes in ${wall(nowH,voteCloses)}`
                         : "the vote has closed — the verdict is one call away")
-      : (voteCloses? `the vote closes at ≈block ${fmtN(voteCloses)}` : "a sealed vote is deciding");
+      : (voteCloses? `the vote closes at ≈block ${fmtN(voteCloses)}` : "a vote is deciding");
   if(phaseShort==="proposed" && settleAt)
     return nowH!=null? (settleAt>nowH? `settles undisputed in ${wall(nowH,settleAt)} unless disputed`
                                      : "the settle window has passed — anyone may settle it now")
@@ -10004,8 +10004,8 @@ function mapMarkWords(pc, cl, part){
      copied is the day two of them start to differ. */
   let verdict = "", glyph = "";
   if(pc.short==="in dispute"){
-    verdict = `Answered ${side}, and disputed — a sealed vote is deciding.`;
-    glyph   = "A sealed vote is deciding whether to overturn this answer.";
+    verdict = `Answered ${side}, and disputed — a vote is deciding.`;
+    glyph   = "A vote is deciding whether to overturn this answer.";
   } else if(pc.short==="provisional"){
     verdict = `A vote decided ${side}, provisionally — a new dispute can reopen it.`;
     glyph   = "A vote decided it, and a new dispute can reopen it.";
@@ -10039,7 +10039,7 @@ function mapMarkWords(pc, cl, part){
    The vocabulary is compositional, so a reader learns four glyphs and not eight
    combinations:
        …   the clock is running: answered and undisputed, or not yet answered
-       ?   a dispute is running: a sealed vote is deciding
+       ?   a dispute is running: a vote is deciding
        .   a vote decided it
        –   a vote decided NOTHING: rounds were held and no side stands
        !   the answer went AGAINST the stake, which is the surprising case
@@ -16302,7 +16302,7 @@ async function meHoldings(addr,courts){
       ladder = `<section style="margin-top:14px"><h2 class="sec-h">Since you were last here <span class="count">this browser's memory${CFG.mode==="demo"?" (sample)":""}</span></h2>
         <div class="ticket">${changes.map(ch=>{ const [sl,id]=ch.key.split("/");
           return `<div class="line"><span class="l tnum"><a href="#/c/${esc(sl)}/${esc(id)}">#${esc(id)} · ${esc(sl)}</a></span><span class="r">${esc(ch.to)} since your last visit — was ${esc(ch.from)}</span></div>`; }).join("")}
-        <p class="small muted" style="margin:8px 0 0">this browser's memory of your last look${prev&&prev.h!=null&&nowH!=null?` — height ${fmtN(prev.h)} → ${fmtN(nowH)}`:""}. Clear storage and it forgets. Phases only — sealed votes never move here.</p></div></section>`;
+        <p class="small muted" style="margin:8px 0 0">this browser's memory of your last look${prev&&prev.h!=null&&nowH!=null?` — height ${fmtN(prev.h)} → ${fmtN(nowH)}`:""}. Clear storage and it forgets. Phases only — votes never move here.</p></div></section>`;
     }
     if(mefail===0) store.set(seenKey(addr), JSON.stringify(snapshot)); // never memorize a partial view
   }catch(_){}
@@ -16447,7 +16447,7 @@ async function needsList(addr,courts){
       <span class="rt"><span class="pill void">excluded</span></span></div>`;
   const ballotsSec = (ballots.length||bexcluded.length)
     ? `<h2 class="sec-h" style="margin-top:14px">Open ballots — courts you hold <span class="count">${ballots.length} · checked ${ballotCourts} court${ballotCourts===1?"":"s"} you hold coin in</span></h2>
-       <p class="small muted" style="margin:0 0 8px">Sealed votes running in courts whose coin you hold — one question per ballot: overturn the answer? Sealed means un-summed, not secret — this page will not add ballots up mid-vote, and anyone who wants the running count can read it off the chain. Weight is the balance at the hourly snapshot before the round opened — receiving now adds nothing; the claim's author, answerer, and stakers are excluded — the court refuses them when they sign.${stripUnchecked? ` …and ${fmtN(stripUnchecked)} more rows awaiting review were not checked — the chain's page shows the nearest 50.`:""}</p>
+       <p class="small muted" style="margin:0 0 8px">Votes running in courts whose coin you hold — one question per ballot: overturn the answer? Sealed means un-summed, not secret — this page will not add ballots up mid-vote, and anyone who wants the running count can read it off the chain. Weight is the balance at the hourly snapshot before the round opened — receiving now adds nothing; the claim's author, answerer, and stakers are excluded — the court refuses them when they sign.${stripUnchecked? ` …and ${fmtN(stripUnchecked)} more rows awaiting review were not checked — the chain's page shows the nearest 50.`:""}</p>
        ${ballots.length? `<div class="docket">${ballots.map(brow).join("")}</div>`:""}
        ${bexcluded.length? `<h2 class="sec-h" style="margin-top:10px">You are excluded from these <span class="count">${bexcluded.length}</span></h2><div class="docket">${bexcluded.map(exrow).join("")}</div>`:""}`
     : "";

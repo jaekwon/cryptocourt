@@ -1316,7 +1316,7 @@ ok("controls present", ["mt-titles","mt-ids","mz-in","mz-out","mz-fit","mz-slide
     const line = {
       settledUndisputed: "settled YES — every stake withdraws 1×",
       settledVote:       "settled YES — every stake withdraws 1×",
-      disputed:          "disputed YES — a sealed vote is deciding; principal is never withheld",
+      disputed:          "disputed YES — a vote is deciding; principal is never withheld",
       answered:          "answered YES — staking frozen; disputable, then it settles undisputed",
       provisional:       "provisional YES — reopenable by a new dispute; the losing side may withdraw 1× now",
     };
@@ -1410,7 +1410,7 @@ ok("controls present", ["mt-titles","mt-ids","mz-in","mz-out","mz-fit","mz-slide
        badge would pass a check for a non-empty string. */
     const words = (st, extra) => mapMarkWords(phaseClass(st), extra||{});
     ok("the card explains a dispute",
-       words(line.disputed,{inst:90}) === "Answered YES, and disputed — a sealed vote is deciding.");
+       words(line.disputed,{inst:90}) === "Answered YES, and disputed — a vote is deciding.");
     ok("...a clock still running",
        words(line.answered,{inst:90}) === "Answered YES. Nobody has disputed it yet, and the window is still open.");
     ok("...a vote that ended it",

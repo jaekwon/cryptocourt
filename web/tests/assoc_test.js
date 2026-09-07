@@ -247,7 +247,7 @@ ok("a row's mark is flat, and the asking control is opt-in",
 /* NOT STRUCK, even on a NO: the strike says "no longer accurate", which is a
    verdict, and a dispute has not reached one. */
 ok("...and a contested NO is not struck through", (()=>{
-  const r = assocRow("orem", 3, "x", () => ({title:"t", statusText:"disputed NO — a sealed vote is deciding"}));
+  const r = assocRow("orem", 3, "x", () => ({title:"t", statusText:"disputed NO — a vote is deciding"}));
   return r.includes('vtag n">NO<') && r.includes('class="vqm"') && !r.includes("<s>");
 })());
 
@@ -772,7 +772,7 @@ ok("a settled row wears the side, unquestioned", (()=>{
       && n.side === "NO"  && n.contested === false;
 })());
 ok("a disputed row wears the side, questioned", (()=>{
-  const d = rowVerdict("disputed YES — a sealed vote is deciding");
+  const d = rowVerdict("disputed YES — a vote is deciding");
   return d.side === "YES" && d.contested === true;
 })());
 /* A PROVISIONAL VERDICT WEARS ONE NOW, and so does a posted answer. Both have an
@@ -789,7 +789,7 @@ ok("...and a claim nobody has answered wears nothing", (()=>{
 })());
 ok("...so a disputed row shows the oval with its mark, not a pill", (()=>{
   const r = assocRow("orem", 4, "x",
-    () => ({title:"t", statusText:"disputed YES — a sealed vote is deciding"}));
+    () => ({title:"t", statusText:"disputed YES — a vote is deciding"}));
   // It wears the oval THROUGH the contested path, which carries the mark with it.
   return r.includes('class="vqm"') && r.includes('vtag y">YES<');
 })());
