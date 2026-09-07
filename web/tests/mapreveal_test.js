@@ -175,22 +175,34 @@ ok("the mark is a tspan beside the title, not the text's whole content",
    && /mk = t\.querySelector\(["'`]\.msetmark/.test(src));
 ok("...and the words are re-said for the state it swapped to",
    /ti\.textContent = setOpensWords\(open\)/.test(src));
-/* AND THE RING MOVES WITH THE PUPIL. mapSvg draws the badge's outline centred on
-   the nudged glyph; leaving it at the filed position while the glyph rises puts
-   the mark through the top of its own outline — which is the misalignment the
-   nudge exists to prevent, arriving by the other door. */
-ok("the ring carries its open centre too", /data-cy0="/.test(src));
-ok("...and paint moves it by the same nudge",
-   /ring\.setAttribute\("cy", \(cy0 - dy\)/.test(src));
+/* THE RING IS NOT MOVED BY ANYONE. Both marks are drawn centred on f.y now, so
+   the outline is simply centred there too. It used to chase the glyph — which
+   was only necessary because the glyph was drawn off-centre in the first place,
+   and was one more pair of numbers to keep in step. */
+ok("the badge's outline is centred on the node, flatly", /cy="\$\{f\.y\.toFixed\(1\)\}"/.test(src));
+ok("...and nothing moves it afterwards", !/ring\.setAttribute\("cy"/.test(src));
+/* THE TWO BASELINES ARE MEASURED, NOT TUNED, and they are what makes each mark
+   sit in the middle of its ring. Named constants because the browser check reads
+   them back off the page and compares them against the ink it renders. */
+ok("each mark has its own measured baseline",
+   /const MSET_DY_OPEN = 0\.\d+;/.test(src) && /const MSET_DY_SHUT = 0\.\d+;/.test(src));
+/* AND THE MAP PICKS PER MARK. This one is here rather than in the browser check
+   on purpose: the sample draws only the OPEN mark at rest — its single born set
+   is filed 𓂀 — so a mapSvg that used the open offset for both states renders
+   the sample correctly and the browser check passes. Measured: that mutation
+   survives there and dies here. The browser check owns whether the number is
+   right; this owns whether both numbers are reachable. */
+ok("...and the map draws each mark on its own",
+   /const dyOf = f2 => es \* \(f2 \? MSET_DY_OPEN : MSET_DY_SHUT\);/.test(src));
+ok("...and the node carries its ring centre for the swap", /data-cy="/.test(src));
 /* AND THE PUPIL DOES NOT MOVE THROUGH THE SWAP. 𓂀 and 𓁼 sit on different
    baselines in the font, so drawing them at one y makes the eye jump as it
    opens. The layout stores the open baseline and the em; the shut glyph is
    nudged up from it. */
-ok("the open baseline and the em are carried on the node",
-   /data-y0="/.test(src) && /data-es="/.test(src));
-ok("...and the shut mark is drawn up from that baseline",
-   /const dy = open \? 0 : es \* 0\.22;/.test(src)
-   && /setAttribute\("y", \(y0 - dy\)/.test(src));
+ok("the ring centre and the em are carried on the node",
+   /data-cy="/.test(src) && /data-es="/.test(src));
+ok("...and onto the baseline measured for whichever mark it swapped to",
+   /setAttribute\("y", \(cy \+ es \* \(open \? MSET_DY_OPEN : MSET_DY_SHUT\)\)/.test(src));
 
 console.log(fail ? "\n" + fail + " FAILURES" : "\nALL PASS");
 process.exit(fail ? 1 : 0);

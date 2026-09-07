@@ -11242,14 +11242,27 @@ function mapSvg(L, data, slug){
              the other. Caught by map_draws: the ring assertion went red the pass
              after the nudge landed, with the glyph poking out of the top of its
              own outline on every concealed set. */
-          const dy = f.focus ? 0 : es * 0.22;
-          /* THE RING'S OWN OPEN CENTRE, for the same reason the glyph carries a
-             baseline: paint() moves both when the mark swaps, and a ring that
-             stayed put while the pupil rose is the misalignment this nudge was
-             added to fix, arriving by the other door. */
+          /* EACH MARK SITS ON ITS OWN BASELINE, MEASURED FROM THE FACE.
+             A single y with a nudge for the shut one was a hand-fit, and it put
+             𓂀 0.09em BELOW the middle of its ring and 𓁼 0.10em above — the eye
+             low in the circle, reported twice. These two numbers are where the
+             baseline has to be for each glyph's ink to be CENTRED on the ring:
+             the negated middle of its inked box, at 16x supersample, in the
+             page's own face. 𓂀 needs more because it hangs a tail below the
+             eye and 𓁼 does not.
+             AND THE PUPIL BARELY MOVES BETWEEN THEM — 0.03em, half a pixel at
+             the size the map draws these — which is the other half of the ask:
+             the eye opens and closes without jumping. The old pair moved it a
+             fifth of an em. */
+          const dyOf = f2 => es * (f2 ? MSET_DY_OPEN : MSET_DY_SHUT);
+          const dy = dyOf(f.focus);
+          /* THE RING DOES NOT MOVE. It used to chase the glyph, because the
+             glyph was drawn off-centre and the outline had to follow it there.
+             Now each mark is centred on f.y by construction, so the ring is
+             simply centred on f.y too — one less thing to keep in step, and one
+             less way for the badge and its contents to disagree. */
           return `<circle class="mvtag msetring" cx="${f.x.toFixed(1)}" `
-            + `data-cy0="${f.y.toFixed(1)}" `
-            + `cy="${(f.y - dy).toFixed(1)}" r="${bornR.toFixed(1)}" data-fid="${i}"/>`
+            + `cy="${f.y.toFixed(1)}" r="${bornR.toFixed(1)}" data-fid="${i}"/>`
             /* THE PUPIL SITS IN THE SAME PLACE WHICHEVER MARK IS DRAWN. The two
                glyphs are not drawn alike inside their em: 𓂀 carries its almond
                high with the tail hanging below, 𓁼 is drawn centred. One y for
@@ -11265,8 +11278,8 @@ function mapSvg(L, data, slug){
                nudge from data-y0 and data-es is what keeps the pupil still
                through the swap. */
             + `<text class="mset wedjat" data-fid="${i}" x="${f.x.toFixed(1)}" `
-            + `data-y0="${(f.y + es*0.35).toFixed(1)}" data-es="${es.toFixed(1)}" `
-            + `y="${(f.y + es*0.35 - dy).toFixed(1)}" font-size="${es.toFixed(1)}" `
+            + `data-cy="${f.y.toFixed(1)}" data-es="${es.toFixed(1)}" `
+            + `y="${(f.y + dy).toFixed(1)}" font-size="${es.toFixed(1)}" `
             /* THE MARK IN ITS OWN TSPAN, so paint() can swap the character
                without touching the <title> beside it. `t.textContent = mark`
                replaces EVERY child, and the title is a child — the swap would
@@ -12760,17 +12773,14 @@ function mountMap(slug, data, focusId, focusPath){
        baseline the layout stored, so the pupil does not move through the swap. */
     box.querySelectorAll("text.mset").forEach(t=>{
       const open = held.has("f"+t.dataset.fid);
-      const y0 = parseFloat(t.dataset.y0), es = parseFloat(t.dataset.es);
-      const dy = open ? 0 : es * 0.22;   // the same nudge mapSvg drew it with
+      const cy = parseFloat(t.dataset.cy), es = parseFloat(t.dataset.es);
       const mk = t.querySelector(".msetmark"), ti = t.querySelector("title");
       if(mk) mk.textContent = open ? SET_MARK : SHUT_MARK;
       if(ti) ti.textContent = setOpensWords(open);
-      if(isFinite(y0) && isFinite(es)){
-        t.setAttribute("y", (y0 - dy).toFixed(1));
-        const ring = box.querySelector(`circle.msetring[data-fid="${t.dataset.fid}"]`);
-        const cy0 = ring && parseFloat(ring.dataset.cy0);
-        if(isFinite(cy0)) ring.setAttribute("cy", (cy0 - dy).toFixed(1));
-      }
+      // The same two offsets mapSvg drew it with, so the swap lands the new
+      // glyph centred on the ring exactly as the first draw did.
+      if(isFinite(cy) && isFinite(es))
+        t.setAttribute("y", (cy + es * (open ? MSET_DY_OPEN : MSET_DY_SHUT)).toFixed(1));
     });
     if(!sel){
       undim();
@@ -15213,6 +15223,16 @@ function focusStakeSide(side){
    the chain does not consider a set — which is the more dangerous direction of
    the two, because it is the one a reader would believe. */
 const SET_MARK = "\u{13080}";
+/* WHERE EACH MARK'S BASELINE GOES, as a fraction of the em, for its inked box to
+   be centred on the point the badge is drawn around. Measured in the page's own
+   face by rendering each glyph at 16x and taking the negated middle of its ink:
+   𓂀 spans -0.743em to +0.218em about its baseline, 𓁼 -0.429em to -0.031em.
+   NOT A DESIGN CHOICE — a property of these two glyphs in this face, which is
+   why they are measured rather than tuned. The previous single baseline plus a
+   0.22em nudge put 𓂀 0.09em low in its ring and 𓁼 0.10em high; the eye sitting
+   low was reported twice before this was measured instead of adjusted. */
+const MSET_DY_OPEN = 0.2625;
+const MSET_DY_SHUT = 0.2299;
 /* AND THE SECOND MARK, which this file did not have. The realm takes BOTH — 𓂀
    D010 opens the set shown, 𓁼 D007 opens it concealed, and parseSetTitle returns
    which — while every test here was `startsWith(SET_MARK + " ")`, five of them,

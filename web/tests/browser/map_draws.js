@@ -367,12 +367,23 @@ const {PAGE, demoPage} = require('./harness');
                          && m.right > r.left && m.bottom > r.top;
         const ring = svg.querySelector('.msetring');
         out.ringed = !!ring;
-        // The ring must be centred on the same corner the glyph is, or the two
-        // drift apart at some zoom and the eye sits half out of its own badge.
+        /* The ring must be on the same corner the glyph is, or the two drift
+           apart at some zoom and the eye sits half out of its own badge.
+           MEASURED LOOSELY ON PURPOSE, VERTICALLY. getBoundingClientRect on an
+           SVG <text> returns the FONT's line box — ascender to descender —
+           not the glyph's ink, and the two do not share a centre: with the
+           mark's INK centred exactly on the ring, its line box still reports a
+           centre a tenth of an em high. Requiring the line box inside the ring
+           was therefore a test of the font's metrics rather than of where the
+           mark is drawn, and it went red the moment the ink was centred
+           properly. The exact placement is measured in map_reveal.js, against
+           rendered pixels; what belongs here is that the badge and the mark are
+           on the same corner at all. */
         if (ring) {
           const c = ring.getBoundingClientRect();
+          const mid = r0 => r0.top + r0.height / 2;
           out.ringHoldsMark = m.left >= c.left - 1 && m.right <= c.right + 1
-                           && m.top >= c.top - 1 && m.bottom <= c.bottom + 1;
+                           && Math.abs(mid(m) - mid(c)) < c.height / 3;
         }
       }
       svg.classList.add('far');

@@ -68,7 +68,7 @@ const SHUT_MARK = "\u{1307C}";  // 𓁼 — concealed
       mark: (t.querySelector(".msetmark") || {}).textContent,
       says: (t.querySelector("title") || {}).textContent,
       y: parseFloat(t.getAttribute("y")),
-      y0: parseFloat(t.dataset.y0),
+      cy: parseFloat(t.dataset.cy),
       es: parseFloat(t.dataset.es),
       /* The ring's centre, read back off the circle: it is drawn around the
          nudged glyph, so it has to travel with it. */
@@ -119,59 +119,77 @@ const SHUT_MARK = "\u{1307C}";  // 𓁼 — concealed
     ok("this court filed nothing 𓂀, so it opens on nothing", a.lit.length === 0);
   }
 
-  /* 2. THE PUPIL, AND THE ONLY HONEST WAY TO MEASURE IT.
-        𓂀 is a whole wedjat — almond, brow, and the tail curling below — while
-        𓁼 is an eye alone. Drawn at one baseline the two pupils sit about a fifth
-        of an em apart, so the code raises the shut glyph by 0.22em.
+  /* 2. THE EYE SITS IN THE MIDDLE OF ITS RING, whichever mark is drawn.
+        Reported twice as "the eye sits a little lower in the circle", and both
+        times the code was adjusted rather than measured. So this measures.
         TWO OBVIOUS PROBES BOTH LIE. getBBox() on SVG <text> returns the FONT's
-        line box, not the ink: measured here, 𓂀 and 𓁼 report byte-identical
-        top and height and differ only in advance width, so a bbox comparison
-        cannot see the pupil move at all and passes whatever the nudge is. And
-        the ink centre is no better — 𓂀's tail drags its centre down, so aligning
-        centres would deliberately misalign the eyes.
-        SO ASK THE PIXELS WHICH SHIFT OVERLAYS THEM. Both glyphs are drawn to a
-        canvas at eight times the em, reduced to a per-row ink profile, and
-        correlated across every offset. The peak is the shift that makes the two
-        eyes coincide — a self-calibrating measurement of the constant the code
-        applies, which is exactly what would go stale if the face changed. */
-  const nudge = await page.evaluate(() => {
+        line box, not the ink: 𓂀 and 𓁼 report byte-identical top and height and
+        differ only in advance width, so a bbox comparison cannot see the mark
+        move at all. And correlating the two glyphs' ink profiles finds the shift
+        that overlays their MASS, which for a tall glyph over a short one lands
+        the short one on the tall one's densest band — its brow — not its eye.
+        That measurement said 0.2154em and it is why the marks were a fifth of an
+        em apart while every check passed.
+        SO MEASURE EACH MARK AGAINST ITS OWN RING. Draw the glyph to a canvas at
+        sixteen times the em, take the middle of its inked box, and ask where
+        that lands relative to the circle the badge is drawn around. Zero is
+        centred. This is the reader's complaint, in a number. */
+  const ink = await page.evaluate(() => {
     const t = document.querySelector('.mapwrap svg text.mset');
     const cs = getComputedStyle(t);
-    const px = Math.round(parseFloat(cs.fontSize) * 8), N = px * 3;
+    const S = 16, px = Math.round(parseFloat(cs.fontSize) * S), N = px * 3, base = Math.round(N * 0.7);
     const c = document.createElement('canvas'); c.width = N; c.height = N;
     const x = c.getContext('2d');
-    const prof = ch => {
+    const midOf = ch => {
       x.clearRect(0, 0, N, N); x.fillStyle = "#000";
       x.font = `${cs.fontWeight} ${px}px ${cs.fontFamily}`;
-      x.textAlign = "center"; x.fillText(ch, N / 2, N * 0.7);
-      const d = x.getImageData(0, 0, N, N).data, p = new Float64Array(N);
+      x.textAlign = "center"; x.fillText(ch, N / 2, base);
+      const d = x.getImageData(0, 0, N, N).data;
+      let t0 = null, b0 = null;
       for (let yy = 0; yy < N; yy++) { let s = 0;
-        for (let xx = 0; xx < N; xx++) s += d[(yy * N + xx) * 4 + 3]; p[yy] = s; }
-      return p;
+        for (let xx = 0; xx < N; xx++) s += d[(yy * N + xx) * 4 + 3];
+        if (s > 0) { if (t0 === null) t0 = yy; b0 = yy; } }
+      return t0 === null ? null : ((t0 + b0) / 2 - base) / px;   // ems from baseline
     };
-    const A = prof("\u{13080}"), B = prof("\u{1307C}");
-    let best = 0, bestv = -1;
-    for (let d = -px; d <= px; d++) {
-      let s = 0;
-      for (let yy = 0; yy < N; yy++) { const j = yy + d; if (j >= 0 && j < N) s += A[yy] * B[j]; }
-      if (s > bestv) { bestv = s; best = d; }
-    }
-    // best > 0 means the shut glyph's ink sits that far BELOW the open one's, so
-    // that is how far up it has to be moved. Reported in ems, like the constant.
-    return {em: best / px, px, ink: bestv > 0};
+    return {open: midOf("\u{13080}"), shut: midOf("\u{1307C}")};
   });
-  ok("both marks render as real ink in the page's own face", nudge.ink);
-  /* THE TOLERANCE IS HALF A PIXEL at the size the map draws these, wide enough
-     for hinting to differ between machines and far too tight to survive the
-     nudge being dropped (0.00) or reversed (-0.22). Measured on this face:
-     0.2154 against the 0.22 the code applies. */
-  ok("the coded nudge is the one that actually overlays the two eyes",
-     Math.abs(nudge.em - 0.22) < 0.03,
-     `measured ${nudge.em.toFixed(4)}em, code uses 0.22em`);
+  ok("both marks render as real ink in the page's own face",
+     ink.open !== null && ink.shut !== null);
+
+  /* THE OFFSET THE CODE APPLIES MUST BE THE NEGATED MIDDLE OF THE INK — that is
+     what "centred" means here. Checked against the constants the page ships, so
+     the day the face is swapped for one whose glyphs sit differently, this says
+     so instead of the reader having to. */
+  const coded = await page.evaluate(() => ({open: MSET_DY_OPEN, shut: MSET_DY_SHUT}));
+  for (const which of ["open", "shut"]) {
+    const off = coded[which] + ink[which];    // 0 when the ink is centred on the ring
+    ok(`the ${which} mark is centred in its ring`, Math.abs(off) < 0.04,
+       `${(off > 0 ? "+" : "")}${off.toFixed(4)}em off centre `
+       + `(code ${coded[which]}, ink middle ${ink[which].toFixed(4)})`);
+  }
+  /* AND THE TWO AGREE WITH EACH OTHER, which is the pupil-does-not-jump half:
+     if both are centred they are also in the same place, so opening the eye does
+     not move it. Stated separately because it is the property that was asked
+     for, and a check should fail on the words it was given. */
+  ok("...so the eye does not jump as it opens",
+     Math.abs((coded.open + ink.open) - (coded.shut + ink.shut)) < 0.05,
+     `open ${(coded.open + ink.open).toFixed(4)} vs shut ${(coded.shut + ink.shut).toFixed(4)}`);
+
+  /* AND EVERY MARK ON THE PAGE IS ACTUALLY DRAWN THERE. The two checks above
+     compare the constants against the ink; this one compares the DRAWN baseline
+     against the constants, which is the step where a mark can still come out
+     wrong — one offset used for both states draws a correct number in the wrong
+     place, and reading the constants alone would never see it. */
+  for (const st of a.sets) {
+    const want = coded[st.mark === SET_MARK ? "open" : "shut"];
+    ok(`set ${st.fid} is drawn on the baseline its mark calls for`,
+       Math.abs((st.y - st.cy) / st.es - want) < 0.01,
+       `drawn ${((st.y - st.cy) / st.es).toFixed(4)}em, want ${want}`);
+  }
 
   const subject = a.sets[0];
-  ok("a set carries its open baseline and its em", isFinite(subject.y0) && isFinite(subject.es),
-     `y0=${subject.y0} es=${subject.es}`);
+  ok("a set carries its ring centre and its em", isFinite(subject.cy) && isFinite(subject.es),
+     `cy=${subject.cy} es=${subject.es}`);
   const before = subject;
   await page.evaluate(fid => {
     document.querySelector(`.mapwrap svg .mfold-a[data-fid="${fid}"]`).dispatchEvent(
@@ -185,21 +203,19 @@ const SHUT_MARK = "\u{1307C}";  // 𓁼 — concealed
      `${before.mark} -> ${after.mark}`);
   ok("...and it is the other one of the pair, not a third thing",
      [SET_MARK, SHUT_MARK].includes(after.mark));
-  /* AND THE BASELINE MOVED BY THAT MEASURED AMOUNT, in the right direction: the
-     shut mark is drawn higher, by the shift the pixels just asked for. This is
-     the runtime half — the constant is right AND paint() applies it. */
+  /* AND paint() APPLIES THE SAME TWO OFFSETS the first draw did, so a swap
+     lands the new glyph centred rather than wherever the old one was. */
   const shut = after.mark === SHUT_MARK ? after : before;
   const open = after.mark === SHUT_MARK ? before : after;
   const applied = (open.y - shut.y) / open.es;
-  ok("...and paint moves the baseline by that same shift, upward",
-     Math.abs(applied - nudge.em) < 0.03,
-     `applied ${applied.toFixed(4)}em, measured ${nudge.em.toFixed(4)}em`);
-  /* THE RING TRAVELS WITH IT. It is drawn centred on the nudged glyph; left at
-     the filed position it would sit a fifth of an em low and the mark would
-     poke through the top of its own outline. */
-  ok("...and the ring travels with the glyph",
-     Math.abs((open.ring - shut.ring) - (open.y - shut.y)) < 0.6,
-     `glyph moved ${(open.y-shut.y).toFixed(2)}, ring moved ${(open.ring-shut.ring).toFixed(2)}`);
+  ok("...and paint moves the baseline by the difference between them",
+     Math.abs(applied - (coded.open - coded.shut)) < 0.02,
+     `applied ${applied.toFixed(4)}em, coded ${(coded.open - coded.shut).toFixed(4)}em`);
+  /* THE RING DOES NOT MOVE AT ALL ANY MORE. It used to chase the glyph because
+     the glyph was drawn off-centre; both marks are centred on it now, so a ring
+     that shifts means one of them has come loose again. */
+  ok("...and the ring stays put, because it no longer has to chase anything",
+     open.ring === shut.ring, `${shut.ring} -> ${open.ring}`);
   ok("...and the badge still says which state it is in",
      !!after.says && after.says !== before.says, `"${before.says}" -> "${after.says}"`);
 
