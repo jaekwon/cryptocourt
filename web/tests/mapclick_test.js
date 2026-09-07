@@ -257,10 +257,25 @@ ok("...and drops EVERY selection, not just the newest",
   const after = vb();
   const mid = v => [v[0]+v[2]/2, v[1]+v[3]/2];
   ok("selecting a node moves the view", mid(before)[0]!==mid(after)[0] || mid(before)[1]!==mid(after)[1]);
-  ok("and lands on that node", (()=>{
+  /* HALFWAY, NOT ALL THE WAY. This asserted that the view LANDED on the node,
+     which is what centreOn did and what was reported as too much: everything the
+     reader had been looking at swung off the far side, and a selection is a
+     comparison at least as often as it is a destination. The camera now goes
+     half the distance from wherever it was — so the assertion needs the starting
+     point too, which is the part a "lands on it" test never had to know. */
+  ok("and stops halfway between where the view was and that node", (()=>{
     const L2 = mapLayout(data, "titles"), n = L2.nodes.find(x=>x.id===3);
-    const [mx,my] = mid(after);
-    return Math.abs(mx-n.cx) < 1 && Math.abs(my-n.cy) < 1;
+    const [bx,by] = mid(before), [mx,my] = mid(after);
+    return Math.abs(mx - (bx + (n.cx-bx)/2)) < 1 && Math.abs(my - (by + (n.cy-by)/2)) < 1;
+  })());
+  /* AND IT REALLY IS PART OF THE WAY — a blend that returned the node's own
+     coordinates would satisfy the midpoint test whenever the view happened to
+     start near the node, so the two ends are refused explicitly. */
+  ok("...which is neither where it started nor on the node itself", (()=>{
+    const L2 = mapLayout(data, "titles"), n = L2.nodes.find(x=>x.id===3);
+    const [bx,by] = mid(before), [mx,my] = mid(after);
+    const trav = Math.hypot(n.cx-bx, n.cy-by);
+    return trav < 2 || (Math.hypot(mx-bx, my-by) > 1 && Math.hypot(mx-n.cx, my-n.cy) > 1);
   })());
   ok("titles stay legible after centring",
      !box.querySelector("svg").classList.contains("far"));
@@ -270,8 +285,8 @@ ok("...and drops EVERY selection, not just the newest",
    paint the next frame, so selecting a node in the outer ring replaced the whole
    drawing between one frame and the next — "jarring", and worse than cosmetic:
    the motion is what tells a reader that the thing they clicked is the thing now
-   in the middle. Landing on target was already asserted above; these arms say it
-   ARRIVES rather than appears.
+   in the middle. Where it lands is asserted above; these arms say it ARRIVES
+   rather than appears.
    The rAF stub here is synchronous, so the whole flight happens inside click() —
    which is also the case the frame cap in glideTo exists for. */
 {
@@ -279,16 +294,22 @@ ok("...and drops EVERY selection, not just the newest",
   const svg = box.querySelector("svg");
   const seen = [], set = svg.setAttribute.bind(svg);
   svg.setAttribute = (k,v)=>{ if(k==="viewBox") seen.push(v); return set(k,v); };
-  claimA(3).click();
   const mid = v => { const a=v.split(" ").map(Number); return [a[0]+a[2]/2, a[1]+a[3]/2]; };
+  /* THE FLIGHT'S DESTINATION IS NO LONGER THE NODE, so the start has to be read
+     before the click. The camera stops halfway from wherever it was, which means
+     "where it was" is now part of the answer — a glide test written when the
+     target was a fixed point did not need it. */
+  const from = mid(svg.getAttribute("viewBox"));
+  claimA(3).click();
   const L3 = mapLayout(data,"titles"), n3 = L3.nodes.find(x=>x.id===3);
+  const aim = [from[0] + (n3.cx-from[0])/2, from[1] + (n3.cy-from[1])/2];
   ok("the view is stepped over many frames, not written once", seen.length > 3);
   ok("and the steps are distinct views", new Set(seen).size >= 3);
   ok("the first step has not arrived yet",
-     Math.abs(mid(seen[0])[0]-n3.cx) > 0.5 || Math.abs(mid(seen[0])[1]-n3.cy) > 0.5);
-  ok("the last step lands exactly on the node", (()=>{
+     Math.abs(mid(seen[0])[0]-aim[0]) > 0.5 || Math.abs(mid(seen[0])[1]-aim[1]) > 0.5);
+  ok("the last step lands exactly on the halfway point", (()=>{
      const [mx,my]=mid(seen[seen.length-1]);
-     return Math.abs(mx-n3.cx)<0.001 && Math.abs(my-n3.cy)<0.001; })());
+     return Math.abs(mx-aim[0])<0.001 && Math.abs(my-aim[1])<0.001; })());
   ok("a glide never outlives the reader taking over",
      /const schedule=\(\)=>\{ stopTween\(\);/.test(src));
   ok("reduced motion gets the jump instead",

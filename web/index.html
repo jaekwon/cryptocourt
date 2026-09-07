@@ -12809,11 +12809,22 @@ function mountMap(slug, data, focusId, focusPath){
     panel.querySelectorAll(".mapsel-face").forEach(b=>
       b.addEventListener("click", ()=>openPictureFull(b.dataset.full)));
   }
-  /* CENTRE ON WHAT WAS SELECTED. Picking a node in the outer ring used to leave
-     it wherever it happened to sit — often at the edge, sometimes half off — and
-     the reader then had to pan to look at the thing they had just chosen. The
-     zoom is left alone: changing it as well moves everything else under the
-     pointer, and the reader asked for this node, not for a different view. */
+  /* MOVE HALFWAY TO WHAT WAS SELECTED. Picking a node in the outer ring used to
+     leave it wherever it happened to sit — often at the edge, sometimes half off
+     — and the reader then had to pan to look at the thing they had just chosen.
+     Centring on it fixed that and overcorrected: the map jumped the whole way,
+     so everything the reader had been looking at swung off the other side and
+     they lost the place they were reading FROM. A selection is a comparison at
+     least as often as it is a destination.
+     SO SPLIT THE DIFFERENCE. The camera goes half the distance, which brings the
+     new node well inside the frame while leaving the old neighbourhood in it.
+     Clicking the same node again halves what is left, so a reader who does want
+     to land on it gets there by repeating the gesture rather than by learning a
+     second one — and never has to undo an arrival they did not ask for.
+     THE ZOOM IS NOT BLENDED. It is a floor, not a target: it only ever raises z
+     far enough for the titles to clear the LOD line, and half of "far enough to
+     read" is not far enough to read. */
+  const CENTRE_BLEND = 0.5;
   function centreOn(next){
     if(!next) return;
     const b = next.kind==="court" ? L.court
@@ -12824,7 +12835,8 @@ function mountMap(slug, data, focusId, focusPath){
     const el = svgEl(), px = el && el.clientWidth;
     let tz = z;
     if(px) tz = Math.min(MAPK.zMax, Math.max(z, MAPK.readSelPx*fit.w/(MAPK.fs.title*px)));
-    glideTo(b.cx, b.cy, tz);
+    glideTo(cx + (b.cx - cx) * CENTRE_BLEND,
+            cy + (b.cy - cy) * CENTRE_BLEND, tz);
   }
   /* THE CARD'S TEXT IS READ WHEN THE CARD IS OPENED, not for the whole docket
      when the map loads. A body is paragraphs and a docket can be fifty claims, so

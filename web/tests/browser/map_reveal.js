@@ -321,6 +321,55 @@ const SHUT_MARK = "\u{1307C}";  // 𓁼 — concealed
     }
   }
 
+  /* 6. THE CAMERA STOPS HALFWAY. Measured on the real thing rather than read off
+        the source, because the number that matters is where the viewport ends up
+        after the glide settles — a blend applied to the wrong pair of
+        coordinates, or a tween that overshoots and stays, both produce correct
+        -looking source and a map that jumps.
+        MEASURED AS A RATIO OF THE TRAVEL, so it holds at any zoom and on any
+        court: where did the camera start, where is the node, where did the
+        camera stop. */
+  const glide = await page.evaluate(async () => {
+    const svg = document.querySelector('.mapwrap svg');
+    const wrap = svg.parentElement;
+    // The viewport centre in the SVG's own units, before and after.
+    const centre = () => {
+      const r = wrap.getBoundingClientRect();
+      const pt = svg.createSVGPoint();
+      pt.x = r.left + r.width / 2; pt.y = r.top + r.height / 2;
+      const m = svg.getScreenCTM().inverse();
+      const p = pt.matrixTransform(m);
+      return {x: p.x, y: p.y};
+    };
+    const far = [...svg.querySelectorAll('.mnode-a')]
+      .map(a => ({a, r: a.getBoundingClientRect()}))
+      .sort((p, q) => q.r.top - p.r.top)[0];      // something well off centre
+    if (!far) return null;
+    const before = centre();
+    const t = far.a.getBoundingClientRect();
+    const pt = svg.createSVGPoint();
+    pt.x = t.left + t.width / 2; pt.y = t.top + t.height / 2;
+    const target = pt.matrixTransform(svg.getScreenCTM().inverse());
+    far.a.dispatchEvent(new MouseEvent("click", {bubbles: true, cancelable: true}));
+    await new Promise(r => setTimeout(r, 1400));   // let the glide settle
+    const after = centre();
+    const travel = Math.hypot(target.x - before.x, target.y - before.y);
+    const moved  = Math.hypot(after.x - before.x, after.y - before.y);
+    return {travel, moved, ratio: travel > 1 ? moved / travel : null};
+  });
+  ok("there is a node far enough off centre to measure a move against",
+     glide && glide.ratio !== null, JSON.stringify(glide));
+  if (glide && glide.ratio !== null) {
+    /* MEASURED 0.500 HERE, and the band is wide anyway: tz can raise z to clear
+       the LOD line, and when it does, the SVG units this ratio is computed in
+       change under it. Wide enough for that, and nowhere near either failure it
+       exists to catch — measured at 1.000 when the blend is removed and 0.000
+       when the camera is pinned. */
+    ok("the camera stops about halfway to the node it was given",
+       glide.ratio > 0.25 && glide.ratio < 0.75,
+       `moved ${glide.moved.toFixed(1)} of ${glide.travel.toFixed(1)} = ${glide.ratio.toFixed(3)}`);
+  }
+
   ok("the page threw nothing while doing all that", errs.length === 0, errs.join(" | "));
   await browser.close();
   console.log(fail ? "\n" + fail + " FAILURES" : `\nALL PASS (${a.sets.length} set(s) on ${slug})`);

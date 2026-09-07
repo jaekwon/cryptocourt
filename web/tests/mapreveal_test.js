@@ -139,6 +139,20 @@ ok("a redraw puts the reader's state back on the new nodes",
 ok("select() pushes the pick alone, leaving the subtree to be derived",
    /SEL\.push\(next\);\s*\n\s*paint\(\);/.test(src));
 
+/* THE CAMERA MEETS THE READER HALFWAY. Centring outright threw away the view
+   they were selecting FROM, which matters because a selection is a comparison as
+   often as it is a destination. Half is also self-correcting: the same click
+   again halves the remainder, so landing on the node is the same gesture
+   repeated rather than a second one to learn. */
+ok("a pick moves the camera part of the way, not all of it",
+   /const CENTRE_BLEND = 0\.5;/.test(src));
+ok("...blended from where the camera already was",
+   /glideTo\(cx \+ \(b\.cx - cx\) \* CENTRE_BLEND,\s*\n\s*cy \+ \(b\.cy - cy\) \* CENTRE_BLEND, tz\)/.test(src));
+/* THE ZOOM IS NOT BLENDED, and that is not an oversight: tz is a FLOOR that
+   raises z far enough for titles to clear the LOD line, and half of "far enough
+   to read" is not far enough to read. */
+ok("...while the zoom is passed through whole", /, tz\);/.test(src));
+
 /* THE PASSENGERS. Two rebuilds filter a folder tree by claim id and construct a
    fresh object naming what they keep, and each has now dropped a field that
    merely rides along: `img` first, then `born`, then `focus`. All three failed
