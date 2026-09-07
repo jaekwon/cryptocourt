@@ -808,87 +808,6 @@ function chatStyles(doc) {
   d.head.appendChild(s);
 }
 
-/* A PROBE, BECAUSE FOUR FIXES REASONED FROM HERE CHANGED NOTHING.
-   A reader reports that the name chip and the send button take no click and
-   show no pointer when the cursor sits directly on their LETTERS, while the
-   padding of those same buttons works and every other button on the page
-   works. In headless Chromium against the live site none of it reproduces:
-   the button is topmost at every point sampled across its width, computes
-   cursor:pointer, and has zero elements covering its centre. So the fact I
-   need is on their machine, and no amount of measuring mine will produce it.
-
-   IT REPORTS RATHER THAN REASONS. Append ?probe=1 before the hash and a
-   readout follows the pointer, naming the element actually beneath it and the
-   cursor that element computes. One glance settles what I have been guessing:
-   if it names the button, hit testing is fine and the cursor is painted wrong;
-   if it names something unfamiliar, an extension has wrapped the text nodes;
-   if it names the form, the glyphs are painting outside their own button.
-
-   IT LIVES HERE, NOT IN index.html, for two reasons. The chat is what is
-   being measured, so the probe mounts and unmounts with it. And index.html is
-   open in another session that has overwritten it from a stale buffer several
-   times today — a diagnostic that vanishes mid-investigation is worse than
-   none. This file is served no-cache, so it arrives.
-
-   OFF UNLESS ASKED FOR, and temporary: delete it once the answer is in. */
-/* LATCHED AT LOAD, NOT READ AT MOUNT — and this is the bug the probe found in
-   itself before it found anything else. The overlay's router navigates with
-   history.replaceState(null, "", "#" + path), and a URL consisting of only a
-   fragment DISCARDS THE QUERY STRING. So ?probe=1 survives the first paint and
-   is gone the instant the reader clicks anything; the panel then remounts, the
-   flag no longer reads, and the probe silently stops existing. It looked
-   installed here because a headless load never clicks.
-   So the flag is read ONCE, when this file parses, before any rewrite can run,
-   out of the whole href so it is found in the search or after the hash. And it
-   is remembered for the tab, because a diagnostic that a navigation can erase
-   is the kind that reports nothing and gets believed. ?probe=0 forgets it. */
-const CHATPROBEKEY = "kourt.chat.probe";
-const CHATPROBEON = (() => {
-  try {
-    if (typeof location === "undefined") return false;
-    const href = String(location.href || "");
-    const ss = typeof sessionStorage !== "undefined" ? sessionStorage : null;
-    if (/[?&]probe=0/.test(href)) {
-      if (ss) ss.removeItem(CHATPROBEKEY);
-      return false;
-    }
-    if (/[?&]probe=1/.test(href)) {
-      if (ss) ss.setItem(CHATPROBEKEY, "1");
-      return true;
-    }
-    return !!ss && ss.getItem(CHATPROBEKEY) === "1";
-  } catch (e) { return false; }
-})();
-
-function chatProbe(doc) {
-  const d = doc || (typeof document !== "undefined" ? document : null);
-  if (!d || !CHATPROBEON) return () => {};
-  if (d.getElementById("chatprobe")) return () => {};
-  const box = d.createElement("div");
-  box.id = "chatprobe";
-  box.style.cssText = "position:fixed;left:0;top:0;right:0;z-index:99999;"
-    + "font:12px ui-monospace,monospace;background:#000;color:#0f0;"
-    + "padding:6px 8px;pointer-events:none;white-space:pre-wrap;"
-    + "border-bottom:1px solid #0f0";
-  box.textContent = "probe on. hover the letters of the name chip and of send.";
-  (d.body || d.documentElement).appendChild(box);
-  const onMove = ev => {
-    const t = d.elementFromPoint(ev.clientX, ev.clientY);
-    if (!t) { box.textContent = "beneath pointer: nothing"; return; }
-    const name = n => n.tagName.toLowerCase()
-      + (n.className && typeof n.className === "string"
-         ? "." + n.className.trim().split(/\s+/).join(".") : "");
-    const path = [];
-    for (let n = t; n && n !== d.documentElement && path.length < 4; n = n.parentElement)
-      path.push(name(n));
-    const cs = getComputedStyle(t);
-    box.textContent = "beneath pointer: " + path.join("  in  ")
-      + "\ncursor:" + cs.cursor + "   pointer-events:" + cs.pointerEvents;
-  };
-  addEventListener("mousemove", onMove, {passive: true});
-  return () => { removeEventListener("mousemove", onMove); box.remove(); };
-}
-
 // mountChat attaches a panel to `el` for one court.
 //
 // Returns a stop() that must be called before the element is discarded. The page's
@@ -907,14 +826,6 @@ function mountChat(el, opts) {
   const live = () => gen === CHATGEN && el.isConnected !== false;
   chatStyles(o.doc);
   if (el.classList && el.classList.add) el.classList.add("chatpanel");
-
-  /* ABOVE EVERY EARLY RETURN, and torn down by whichever one is taken.
-     The first placement sat beside the poller at the end of this function,
-     which demo mode never reaches — mountChat returns as soon as it finds no
-     endpoint, so the probe was dead on exactly the pages a reader without a
-     node would open, and it reported nothing while looking installed. */
-  const stopProbe = chatProbe(o.doc);
-  const unmount = fn => () => { stopProbe(); fn(); };
 
   let moniker = "";
   try { moniker = window.localStorage.getItem("kourt.chat.moniker") || ""; } catch (e) {}
@@ -1066,7 +977,7 @@ function mountChat(el, opts) {
       ev.preventDefault();
       note("This is a demo — nothing is sent anywhere.");
     });
-    return unmount(() => { if (gen === CHATGEN) CHATGEN++; });
+    return () => { if (gen === CHATGEN) CHATGEN++; };
   }
 
   // One health request per mount, in live mode only — demo mode makes no network calls.
@@ -1204,18 +1115,16 @@ function mountChat(el, opts) {
   if (canListen) document.addEventListener("visibilitychange", onVisible);
 
   tick();
-  return unmount(() => {
+  return () => {
     if (gen === CHATGEN) CHATGEN++;
     if (timer) clearTimeout(timer);
     if (canListen) document.removeEventListener("visibilitychange", onVisible);
-  });
+  };
 }
 
 if (typeof module !== "undefined" && module.exports) {
   module.exports = {chatEsc, chatFlag, chatWhen, chatStatusLine, chatValidate,
     chatLineHtml, chatLogHtml, chatPanelHtml, chatDemoThread, chatEndpoint,
-    chatFetch, chatPost, chatStyles, chatHealth, mountChat, chatProbe,
-    CHATPROBEON,
-    CHATCSS,
+    chatFetch, chatPost, chatStyles, chatHealth, mountChat, CHATCSS,
     CHATLIMITS};
 }
