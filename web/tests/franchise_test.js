@@ -196,6 +196,26 @@ ok("...without ever saying buy",
    !/\bbuy|\bpurchas/i.test(about.replace(/<!--[\s\S]*?-->/g, " ").replace(/<[^>]*>/g, " ")),
    about.slice(0, 120));
 
+/* ---- and the sample has a meta court to open ------------------------------
+   Demo is the DEFAULT mode and the sample had no meta court, so "the meta court"
+   was a phrase with no page behind it: the panel had to withhold its own link,
+   and meta's own wording — this coin is not received for GNOT, it is earned —
+   had nowhere to appear at all. route_crawl caught the link dead-ending; this
+   catches the court going away again.
+   SMALL BUT NOT EMPTY, on purpose. On the live chain meta reads zero across the
+   board because nobody has claimed yet, and a sample that copies that shows the
+   reader exactly the screen that confused them in the first place. */
+const sample = src.slice(src.indexOf("const DEMO_CHAIN = {"),
+                         src.indexOf("/* ===== END GENERATED"));
+ok("the sample has a meta court", /\n\s*meta:\{ name:"The Meta Court", tier:\d/.test(sample));
+ok("...with some claimed supply, so 'claimed so far' has a case offline",
+   /meta:\{[\s\S]{0,220}?supply:[1-9]/.test(sample), (sample.match(/meta:\{[\s\S]{0,200}/)||[""])[0]);
+/* AND NO BURN OF ITS OWN, which is the fact the whole feature turns on: you do
+   not burn FOR meta, you burn for another court and meta is what that earns. A
+   sample that gave meta a burn figure would teach the opposite. */
+ok("...and no burn of its own — you do not burn for meta",
+   /meta:\{[\s\S]{0,120}?burned:0,/.test(sample), (sample.match(/meta:\{[\s\S]{0,140}/)||[""])[0]);
+
 /* ---- the wiring ------------------------------------------------------------ */
 ok("the read is by ADDRESS, not by court — it is earned everywhere",
    /async function franchiseOf\(addr\)\{/.test(src)
