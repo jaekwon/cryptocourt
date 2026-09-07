@@ -332,17 +332,23 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
     ok("...and what is filed directly is still said, once, in words",
        /of these are filed directly in this set/.test(route)
        && /None are filed directly in this set/.test(route));
-    /* ONE PAGER REACHES THE PAGE. The window is one slice in curated order, so
-       two pagers would be two controls for one position.
-       ASSERTED AS AN INVARIANT, NOT A COUNT. This used to require exactly two
-       occurrences — one declaration, one use — and went red the moment the empty
-       case grew a return of its own, which emits the same single pager down a
-       different branch. Counting mentions measures the source; what matters is
-       that no ONE path emits two. */
-    ok("...with one pager over the window, not one per section",
+    /* A PAGER ABOVE AND A PAGER BELOW, which is what the court page has:
+       docketPager over the lists and docketPagerBot under them, so a reader at
+       the end of twenty-five rows does not scroll back past all of them to page.
+       THIS ASSERTION SAID THE OPPOSITE AND WAS GREEN. It read "two pagers would
+       be two controls for one position" and required at most one per path — a
+       rule invented here, contradicted by the reference page it is supposed to
+       be measuring against. It passed the bottom pager only because `fpagerBot`
+       is a different identifier, so it never even noticed. A test that states a
+       false rule and is satisfied anyway is worse than no test.
+       WHAT IS ACTUALLY TRUE: each of the two is built once and spent once, and
+       the bottom one only exists when there is somewhere to page to. */
+    ok("...with a pager above the lists and, when it pages, one below",
        /const fpager = pagerHtml\(/.test(route)
+       && /const fpagerBot = \(fentries\.length>PAGE_N \|\| fpage>1\)/.test(route)
+       && (route.match(/\+ fpagerBot\b/g) || []).length === 1
        && route.split(/\breturn\b/).slice(1)
-               .every(seg => (seg.match(/\bfpager\b/g) || []).length <= 1));
+               .every(seg => (seg.match(/\bfpager\b(?!Bot)/g) || []).length <= 1));
     ok("...and the Subsets heading carries a count, as Sets does",
        /Subsets <span class="count">/.test(route));
     /* AND THE OPEN SECTION IS NEVER HIDDEN. It was rendered with `hidden` when
@@ -350,6 +356,12 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
        entirely and said nothing — while the court page keeps the section and
        answers in it. Two answers, because they are different questions: a paging
        fact and a fact about the set. */
+    /* A PAGE PAST THE END IS NOT AN EMPTY SET. The outer empty state guarded on
+       the window rather than the total, so page 2 of a nine-claim set said "No
+       claims in this set yet." above a pager reading "9 claims in all" — and
+       returned before the bottom pager, so there was no way back either. */
+    ok("...and an empty set is told apart from a page past its end",
+       /if\(!all\)/.test(route) && !/if\(!fwin\.length\)/.test(route));
     ok("...the Open section is drawn even with nothing in it",
        !/<section\$\{fopen\.length\?""/.test(route)
        && /No open claims\./.test(route) && /Nothing on this page\./.test(route));

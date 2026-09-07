@@ -13264,6 +13264,20 @@ on(/^\/c\/([a-z0-9-]+)\/f\/([0-9.]+)$/, async (slug,fpath)=>{
   const fwin = resolved.filter(m=>!m.drop && !m.pending);
   omitted += resolved.filter(m=>m.drop).length;
   const fpager = pagerHtml(`/c/${slug}/f/${fpath}`, fpage, fwin.length, fentries.length, "claims", "curated order");
+  /* AND ONE AT THE BOTTOM, which the court page has had all along: docketPager
+     above the lists and docketPagerBot below them. A reader at the end of
+     twenty-five rows had to scroll back past all of them to reach ‹ newer /
+     older ›, on the one page whose order is fixed so there is nothing else down
+     there to act on.
+     ONLY WHEN THERE IS PAGING, the court page's own condition — a set that fits
+     on one page gets no second control, because there is nowhere to go.
+     ORDER SUPPRESSED WITH "", because the top pager has already said "curated
+     order" and nothing between them can change it. The court page is the other
+     way round for the same reason: its top pager passes "" since its count rides
+     the Search heading, and its bottom one states the order because nothing else
+     had. Each page says it once. */
+  const fpagerBot = (fentries.length>PAGE_N || fpage>1)
+    ? pagerHtml(`/c/${slug}/f/${fpath}`, fpage, fwin.length, fentries.length, "claims", "") : "";
   main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:courtCrumb(slug),href:"#/c/"+slug},...trail])
     /* THE JUMP RIDES THE HEADING. It was a paragraph of its own underneath, which
        put a whole line between the folder's name and the one action that name
@@ -13380,8 +13394,16 @@ on(/^\/c\/([a-z0-9-]+)\/f\/([0-9.]+)$/, async (slug,fpath)=>{
         const fopen = fwin.filter(cl=>!isDone(cl)), fdone = fwin.filter(isDone);
         const rows = list => `<div class="docket">${list.map(cl=>docketRow(slug,cl,metaOf[cl.id])).join("")}</div>`;
         const gap = subs? ' style="margin-top:22px"' : "";
-        if(!fwin.length)
-          return `<section${gap}><h2 class="sec-h">Claims <span class="count">${fmtN(all)}</span></h2>`
+        /* `!all`, NOT `!fwin.length` — a set with claims on another page is not
+           an empty set. Guarding on the WINDOW meant page 2 of a nine-claim set
+           answered "No claims in this set yet." over a pager that had just said
+           "9 claims in all", and the bottom pager never rendered because this
+           branch returned before it. The court page has always kept the two
+           apart: "Nothing on this page" is a paging fact, "No claims" is a fact
+           about the set. Found by paging a set past its end to check the bottom
+           pager, which is the only reason it was looked at. */
+        if(!all)
+          return `<section${gap}><h2 class="sec-h">Claims <span class="count">0</span></h2>`
             + fpager + `<div class="empty"><div class="g">◌</div><p>No claims in this set yet.</p></div></section>`;
         return fpager
           + (all!==direct
@@ -13405,7 +13427,8 @@ on(/^\/c\/([a-z0-9-]+)\/f\/([0-9.]+)$/, async (slug,fpath)=>{
                 : `<div class="empty"><div class="g">◌</div><p>No open claims.</p></div>`)
             + `</section>`
           + (fdone.length? `<section style="margin-top:22px"><h2 class="sec-h">Recently settled `
-              + `<span class="count">${fdone.length}</span></h2>` + rows(fdone) + `</section>` : ""); })()
+              + `<span class="count">${fdone.length}</span></h2>` + rows(fdone) + `</section>` : "")
+          + fpagerBot; })()
     /* A WAY TO ACT, WHICH THIS PAGE DID NOT HAVE. It listed a set's claims and
        stopped: a reader who had just read three claims about the same thing and
        wanted to file a fourth had to find their way back to the court first.
