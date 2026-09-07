@@ -858,10 +858,15 @@ also found the constants were wrong in the OTHER direction at launch scale, and
 that "the forge price does not scale, so `minAnswerX` stops being the forgery
 dial" mis-states the position: it was never the dial once `decidedRounds > 0`
 landed. See the correction in §3.3.
-5. **StartCourt creation fee — RESOLVED (v0.8.2): no GNOT fee.** A fixed GNOT
-   fee can't be sized without a USD oracle; court-count floods are priced by the
-   per-byte storage deposit court creation already incurs (protocol-set, no
-   oracle), and `StartCourt` stays realm-callable. (β is **no longer an owner
+5. **StartCourt creation fee — REOPENED AND REVERSED (see §13.5 v0.63).** The
+   v0.8.2 resolution was **no GNOT fee**: a fixed GNOT fee can't be sized without
+   a USD oracle; court-count floods are priced by the per-byte storage deposit
+   court creation already incurs (protocol-set, no oracle), and `StartCourt`
+   stays realm-callable. That reasoning held for a fee written into the source.
+   It does not hold for one an administrator sets, which is what `courtburn.gno`
+   now adds — the missing oracle is a human, repricing it as GNOT moves. Default
+   0, i.e. off, so every property above is still true of a realm nobody has
+   configured, including realm-callability. (β is **no longer an owner
    knob** — round 6 froze it
    with a two-sided deploy invariant; the owner sets only the invariant's
    floor/ceiling shape, not a live value.)
@@ -980,6 +985,29 @@ decision must be made before launch, not after.
   individual argument edge (§7), not just a node/claim. Constitution-consistent
   and no re-vet needed (an edge is zero-weight, text-free, so an edge hide is
   strictly weaker than the audited claim hide). Build hooks it when edges land.
+- **v0.63 — the StartCourt creation fee, reversed (owner decision).** v0.8.2
+  resolved "no GNOT creation fee" because a fee in the source cannot be sized
+  without a USD oracle. The objection was about a CONSTANT, and it is answered by
+  making the figure administrative rather than by finding an oracle: the global
+  DAO admin sets `SetCourtCreationBurn` at the day's price and moves it when the
+  price moves. Shipped at **0, which is off**, so the v0.8.2 properties still
+  describe an unconfigured realm — no unsizable number in the source, and
+  `StartCourt` still realm-callable, since the off path returns before the
+  `IsUserCall` check that a paid one requires.
+  - **THE REFUND WAS THE INTERESTING PART.** The first cut copied `Buy`: burn the
+    price, refund the excess. `check-nontransferable` refused it — a refund is
+    GNOT leaving the realm **to a user**, and "the payment is burned, nothing ever
+    redeems" is what REGULATIONS.md rests on. `Buy`'s remainder send is the one
+    sanctioned exception because a bonding curve genuinely cannot spend the last
+    ugnot; nothing here has that arithmetic. So the whole payment burns and the
+    refund is deleted rather than exempted, which also makes the figure a true
+    **minimum** instead of a price with change. The one remaining `SendCoins` is
+    registered in that gate together with a new rule — every send in a sink-only
+    file must name `burnSinkPath` — so the registration cannot become cover for a
+    user-destined send that keeps the count at one.
+  - Not counted toward the court's own `burnedGNOT`: the directory ranks on that
+    figure precisely because it is voluntary, and an identical toll on every court
+    is rank noise rather than signal (§3.2).
 - **v0.8.2 — owner decisions (front-page sort + StartCourt fee)**: the listed
   tier sorts by **GNOT-burn descending** (default; an un-sybil-able capital
   signal) or **creation newest-first**, both paginated from monotone secondary
