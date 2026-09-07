@@ -2201,7 +2201,20 @@ tr.youare .mono{font-weight:600}
 .picfull-x{position:fixed; top:14px; right:18px; font:400 26px/1 ui-sans-serif,system-ui;
   background:none; border:0; color:var(--ink); opacity:.75; cursor:pointer}
 .picfull-x:hover{opacity:1}
-.folderface{display:block; width:100%; max-height:180px; object-fit:cover;
+/* THE WHOLE PICTURE, NOT A BAND OUT OF THE MIDDLE OF IT. This was
+   `width:100%; max-height:180px; object-fit:cover` — a full-width banner — and
+   MEASURED on kourt.xyz that took an 800x514 portrait, scaled it to 968 wide,
+   and kept 180 of the resulting 622: the middle 29%, which on a face is the
+   mouth and tie. Reported as "I can't see his eyes."
+   `cover` IS RIGHT ON THE MAP AND WRONG HERE. A map node is a box the picture
+   has to fill, so a slice is the only option and the label is the subject. This
+   page is the one surface where the picture IS the subject — a reader followed
+   the set to look at it — so it is sized to fit rather than cropped to shape:
+   its own aspect, bounded, and nothing outside the frame.
+   NO object-fit AT ALL, because with `width:auto` there is nothing to fit — an
+   img at its natural aspect inside a max box is already contained, and naming a
+   fit here would only be a second rule to keep true. */
+.folderface{display:block; width:auto; max-width:100%; max-height:340px;
   border:1px solid var(--line); border-radius:8px; margin:10px 0 2px; background:var(--surface-2)}
 .mfold.pseudo{fill:none; stroke-dasharray:4 3; stroke:var(--muted)}
 .mhdr-t{fill:var(--accent-2); font-weight:600}
@@ -7922,8 +7935,43 @@ function bornClaimIds(folders){
   (function walk(fs){ (fs||[]).forEach(f=>{ if(f.born) out.add(Number(f.born)); walk(f.folders); }); })(folders);
   return out;
 }
+/* EVERY CLAIM UNDER A FOLDER, IN ORDER, AND WHERE IT CAME FROM.
+   The set page listed only what was filed DIRECTLY in the folder, and the note it
+   used to carry admitted the result: the court page's row says Fauci holds "9
+   claims" and the set page then showed none, because all nine are in its three
+   subsets. A reader who followed the set to read its claims found a list of other
+   sets to follow. It now reads like the court page — the claims underneath, with
+   the subset each one is filed in as its meta.
+   ORDER COMES FROM THE WALK, LABELS COME FROM folderMeta. Direct items first, in
+   the curated order the realm stores, then each subset depth-first — so the
+   caption still describes the list. folderMeta already builds the breadcrumb the
+   court page prints beside a claim, but it answers a MAP keyed by id, and integer
+   keys iterate numerically rather than in walk order, so the order has to come
+   from somewhere else. This walks for order and asks folderMeta for the label:
+   one rule for what a claim's folder is called, not two.
+   ONCE EACH, first-wins, matching folderMeta's own rule — chain folders may share
+   a claim, and a claim filed in both a set and its subset is one claim. */
+function folderClaimEntries(f){
+  const lbl = folderMeta((f && f.folders) || [], "", {});
+  const seen = new Set(), out = [];
+  const push = (id, via) => {
+    const n = Number(id);
+    if(seen.has(n)) return;
+    seen.add(n);
+    out.push({id: n, meta: via ? (lbl[n] || null) : null});
+  };
+  for(const id of (f && f.claims) || []) push(id, false);
+  (function walk(fs){ (fs||[]).forEach(x=>{
+    ((x && x.claims) || []).forEach(id=>push(id, true)); walk(x && x.folders);
+  }); })((f && f.folders) || []);
+  return out;
+}
+/* THE COUNT IS THE LENGTH OF THAT LIST, so the number in a heading and the rows
+   under it cannot disagree. It was its own recursion and counted a claim twice if
+   it was filed in both a set and its subset; the walk above is first-wins, which
+   is also what folderMeta has always done for the court page's meta. */
 function folderCount(f){
-  return (f.claims||[]).length + (f.folders||[]).reduce((a,x)=>a+folderCount(x),0);
+  return folderClaimEntries(f).length;
 }
 /* Screen-2 layout: folders are a compact CLICKABLE list, the docket is
    sectioned (open / recently settled) with each claim carrying its folder as
@@ -13156,7 +13204,14 @@ on(/^\/c\/([a-z0-9-]+)\/f\/([0-9.]+)$/, async (slug,fpath)=>{
   // items; a re-sort would betray the "curated order" caption), then resolve
   // only THIS PAGE's out-of-window ids — bounded at 25×3 reads per page
   const fpage = pageOf();
-  const idWin = pageSlice(f.claims||[], fpage);
+  /* EVERY CLAIM UNDER THIS SET, not only the ones filed directly in it — see
+     folderClaimEntries. `metaOf` carries the subset a claim came from, in the
+     same {label, path} shape the court page hands docketRow, so a claim from a
+     subset says which one and a claim filed here says nothing extra. */
+  const fentries = folderClaimEntries(f);
+  const metaOf = {};
+  for(const e of fentries) if(e.meta) metaOf[e.id] = e.meta;
+  const idWin = pageSlice(fentries.map(e=>e.id), fpage);
   let omitted = 0;
   const resolved = [];
   for(const id of idWin){
@@ -13188,7 +13243,7 @@ on(/^\/c\/([a-z0-9-]+)\/f\/([0-9.]+)$/, async (slug,fpath)=>{
     : (f.desc || "");
   const fwin = resolved.filter(m=>!m.drop && !m.pending);
   omitted += resolved.filter(m=>m.drop).length;
-  const fpager = pagerHtml(`/c/${slug}/f/${fpath}`, fpage, fwin.length, (f.claims||[]).length, "claims", "curated order");
+  const fpager = pagerHtml(`/c/${slug}/f/${fpath}`, fpage, fwin.length, fentries.length, "claims", "curated order");
   main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:courtCrumb(slug),href:"#/c/"+slug},...trail])
     /* THE JUMP RIDES THE HEADING. It was a paragraph of its own underneath, which
        put a whole line between the folder's name and the one action that name
@@ -13265,13 +13320,19 @@ on(/^\/c\/([a-z0-9-]+)\/f\/([0-9.]+)$/, async (slug,fpath)=>{
        the section heads a list. So when they differ the heading says which is
        which, and when they agree it stays a bare number — a folder with no
        subfolders should not be made to explain a distinction it does not have. */
-    + (()=>{ const direct = (f.claims||[]).length, all = folderCount(f);
-        const count = all===direct? fmtN(direct)
-          : `${fmtN(direct)} filed here · ${fmtN(all)} with its subfolders`;
+    /* THE COUNT AND THE LIST ARE THE SAME NUMBER NOW. This used to read
+       "0 filed here · 9 with its subfolders" and then list nothing, because the
+       section showed only direct items while the court page's row counted the
+       subtree — the same word carrying two numbers one click apart. The list is
+       the subtree, so the heading is the subtree, and the split is a note about
+       where they sit rather than an explanation for a missing list. */
+    + (()=>{ const direct = (f.claims||[]).length, all = fentries.length;
+        const count = all===direct? fmtN(all)
+          : `${fmtN(all)} · ${fmtN(direct)} filed here directly`;
         return `<section${subs?' style="margin-top:22px"':""}><h2 class="sec-h">Claims <span class="count">${count}</span></h2>`; })()
     + fpager
-    + (fwin.length? `<div class="docket">${fwin.map(cl=>docketRow(slug,cl)).join("")}</div>`
-        : `<div class="empty"><div class="g">◌</div><p>No claims filed directly in this set.</p></div>`)
+    + (fwin.length? `<div class="docket">${fwin.map(cl=>docketRow(slug,cl,metaOf[cl.id])).join("")}</div>`
+        : `<div class="empty"><div class="g">◌</div><p>No claims in this set yet.</p></div>`)
     /* A WAY TO ACT, WHICH THIS PAGE DID NOT HAVE. It listed a set's claims and
        stopped: a reader who had just read three claims about the same thing and
        wanted to file a fourth had to find their way back to the court first.

@@ -60,7 +60,13 @@ code += slice('const MON=', 'function resolutionLadder(').replace(/^const MON=/m
 code += slice('function resolutionLadder(', 'function resolutionSection');
 code += slice('function demoCensus(', 'function courtRecordPanel');
 code += 'const ICN_EYE_OPEN="<svg/>", ICN_EYE_SHUT="<svg/>";\n';   // the row needs the marks to exist, not to be drawn
+/* folderCount IS THE LENGTH OF THE WALK NOW, so the walk comes with it — and
+   folderMeta with that, because the walk asks it for a claim's folder label. One
+   slice per function rather than one wide range: the three are adjacent today
+   and a range would quietly pick up whatever lands between them tomorrow. */
+code += slice('function folderClaimEntries(', 'function folderCount(');
 code += slice('function folderCount(', 'function folderMeta');
+code += slice('function folderMeta(', 'function folderSubtree(');
 eval(code);
 
 

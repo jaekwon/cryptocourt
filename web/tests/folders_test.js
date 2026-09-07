@@ -88,6 +88,8 @@ code += slice('const CHAIN_FOLDER_CAP', '/* ======').replace('const CHAIN_FOLDER
 code += slice('function resolveFolderPath(', 'function folderMeta(');
 code += 'const ICN_EYE_OPEN="<svg/>", ICN_EYE_SHUT="<svg/>";\n';   // the row needs the marks to exist, not to be drawn
 global.EYE_CHAR = '<span class="wedjat">\u{13080}</span>';   // the character, in the embedded face
+// folderCount is the LENGTH of the transitive walk now, so the walk comes too.
+code += slice('function folderClaimEntries(', 'function folderCount(');
 code += slice('function folderCount(', 'function folderRowHtml');
 code += slice('function folderRowHtml(', 'function isDone');
 code += 'function safeInline(x){ return esc(String(x)); }\n';
@@ -274,6 +276,54 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
   ok("D3: nested dot-path + composed label", metaN[7].label==="A · Ax" && metaN[7].path==="0.0");
   const metaC = folderMeta([{name:"C",claims:[9],folders:[],path:"3"}], "", {});
   ok("D3: chain fid path wins over index", metaC[9].path==="3");
+
+  /* A SET LISTS THE CLAIMS UNDER IT, NOT ONLY THE ONES FILED IN IT. Measured on
+     kourt.xyz: Fauci holds nine claims across three subsets and none of its own,
+     so the court page's row said "9 claims" and the set page then listed nothing
+     — a reader who followed the set to read its claims got a list of other sets.
+     ORDER IS PART OF IT. Direct items keep the realm's curated order and come
+     first; then each subset depth-first. The caption says "curated order", so a
+     walk that returned them sorted by id would make the caption a lie. */
+  {
+    const fauci = {name:"Fauci", claims:[], folders:[
+      {name:"Gain-of-function funding", claims:[10,22,24], folders:[], path:"4"},
+      {name:"Proximal Origin",          claims:[13,17],    folders:[], path:"5"},
+    ]};
+    const e = folderClaimEntries(fauci);
+    ok("a set with no claims of its own still lists its subsets' claims",
+       e.map(x=>x.id).join(",") === "10,22,24,13,17");
+    ok("...and each one says which subset it is filed in",
+       e[0].meta.label === "Gain-of-function funding" && e[4].meta.label === "Proximal Origin");
+    ok("...with the subset's own path, so the label is a way back to it",
+       e[0].meta.path === "4" && e[4].meta.path === "5");
+
+    const mixed = {name:"Origins", claims:[7,8], folders:[
+      {name:"Furin", claims:[26], folders:[], path:"7"}]};
+    const m = folderClaimEntries(mixed);
+    ok("what is filed here comes first, in the order the realm stored it",
+       m.map(x=>x.id).join(",") === "7,8,26");
+    ok("...and only the inherited one carries a subset label",
+       m[0].meta === null && m[1].meta === null && m[2].meta.label === "Furin");
+
+    /* ONCE EACH. A claim filed in both a set and its subset is one claim, and
+       first-wins is the rule folderMeta has always used for the court page. The
+       count is the length of this list, so a double count would put a number in
+       the heading that no list under it could reach. */
+    const dup = {name:"P", claims:[10], folders:[{name:"K", claims:[10,11], folders:[]}]};
+    const de = folderClaimEntries(dup);
+    ok("a claim in both a set and its subset is listed once",
+       de.map(x=>x.id).join(",") === "10,11");
+    /* AND IT IS FILED HERE, so it says nothing extra. This is the ONE case the
+       direct-vs-inherited guard decides: claim 10 is in both, and folderMeta's
+       map has a label for it either way — so dropping the guard labels a claim
+       filed in THIS set as belonging to a subset of it. Every other fixture
+       above passes without the guard, which is how it was nearly shipped
+       untested. */
+    ok("...as filed HERE, not as inherited from the subset it is also in",
+       de[0].meta === null && de[1].meta.label === "K");
+    ok("...and the count is exactly what the list holds",
+       folderCount(dup) === 2 && folderCount(fauci) === 5 && folderCount(mixed) === 3);
+  }
 
   // captions present in source; apology extinct
   ok("chain caption (docket)", src.includes("read live from the chain — moderator curation, zero economic weight"));
