@@ -2178,6 +2178,20 @@ tr.youare .mono{font-weight:600}
    than the texture. Capped in height because a folder is a heading: the claims
    filed under it are what the page is for, and a cover that pushed the first
    row below the fold would have the picture outranking the record. */
+/* The set's face on the map card: CONTAIN, so the whole picture is there, and a
+   height cap so a tall one cannot push the claim list off the panel. */
+.mapsel-face{display:block; width:100%; padding:0; margin:8px 0 10px; border:0;
+  background:none; cursor:zoom-in; border-radius:8px; overflow:hidden}
+.mapsel-face img{display:block; width:100%; max-height:190px; object-fit:contain;
+  background:var(--surface-2); border:1px solid var(--line); border-radius:8px}
+.mapsel-face:hover img{border-color:var(--accent)}
+.picfull{border:0; padding:0; background:none; max-width:100vw; max-height:100vh;
+  width:100vw; height:100vh; cursor:zoom-out}
+.picfull::backdrop{background:rgba(6,8,12,.92)}
+.picfull img{display:block; width:100%; height:100%; object-fit:contain}
+.picfull-x{position:fixed; top:14px; right:18px; font:400 26px/1 ui-sans-serif,system-ui;
+  background:none; border:0; color:var(--ink); opacity:.75; cursor:pointer}
+.picfull-x:hover{opacity:1}
 .folderface{display:block; width:100%; max-height:180px; object-fit:cover;
   border:1px solid var(--line); border-radius:8px; margin:10px 0 2px; background:var(--surface-2)}
 .mfold.pseudo{fill:none; stroke-dasharray:4 3; stroke:var(--muted)}
@@ -10619,6 +10633,37 @@ function mapSelCard(id, data, slug, L){
    A pseudo folder has no page to offer: it is the map's own bucket for claims
    nobody has filed, not a folder the court has. It gets a card that says so
    rather than a dead link. */
+/* FULL SIZE, IN PLACE. A native <dialog> for the reason every other dialog in
+   this file is one: Escape and the backdrop both close it without a keydown
+   handler of our own, and the browser handles the focus trap and the inert
+   background. Built once and reused — a viewer created per click leaks one node
+   per look.
+   THE IMAGE IS `contain`, not `cover`. This surface exists to show the whole
+   picture; cropping it here would make the viewer another thumbnail, larger.
+   NOTHING BUT THE PICTURE. No caption, no chrome, no controls: the card behind
+   it already says whose set it is, and a viewer that explains itself is a viewer
+   that covers the thing it opened for. */
+let PIC_FULL = null;
+function openPictureFull(url){
+  if(!url) return;
+  if(!PIC_FULL){
+    PIC_FULL = document.createElement("dialog");
+    PIC_FULL.className = "picfull";
+    PIC_FULL.innerHTML = `<img alt=""><button type="button" class="picfull-x"`
+      + ` aria-label="Close">×</button>`;
+    // A click anywhere closes, including on the picture: the whole surface is a
+    // dismiss target, which is what a reader expects of something opened to look
+    // at rather than to work in.
+    PIC_FULL.addEventListener("click", ()=>PIC_FULL.close());
+    document.body.appendChild(PIC_FULL);
+  }
+  const img = PIC_FULL.querySelector("img");
+  img.referrerPolicy = "no-referrer";
+  img.src = url;
+  if(typeof PIC_FULL.showModal === "function") PIC_FULL.showModal();
+  else PIC_FULL.setAttribute("open", "");   // a browser without <dialog> still shows it
+}
+
 function mapFolderCard(f, data, slug){
   if(!f) return "";
   /* EVERYTHING FILED HERE, not everything drawn here, and those differ. A claim
@@ -10637,8 +10682,23 @@ function mapFolderCard(f, data, slug){
     return `<li><button type="button" class="mapsel-c" data-go="${id}">`
       + `<span class="mono">#${id}</span> ${safeInline(clipText(t, 52))}</button></li>`;
   }).join("");
+  /* THE SET'S OWN FACE, WHOLE. The node draws it cropped to a rectangle the
+     layout chose — object-fit:cover, because a node is a box and the picture has
+     to fill it — so the map shows a slice and never the photograph. The card is
+     where there is room to show the thing itself, and contain rather than cover
+     is the difference between a picture and a texture.
+     AND IT OPENS. A picture that fits a 300px column is still a thumbnail; the
+     click is what makes the card a way to actually look at it. A button rather
+     than an anchor: it opens a viewer in place and leaves the map alone, which
+     is this panel's whole rule — "nothing here leaves the map until you ask". */
+  const faceHtml = f.img
+    ? `<button type="button" class="mapsel-face" data-full="${esc(f.img)}"`
+      + ` aria-label="Look at this set's picture full size">`
+      + `<img src="${esc(f.img)}" alt="" loading="lazy" referrerpolicy="no-referrer"></button>`
+    : "";
   return `<div class="mapsel-h"><span class="mono">set</span>`
     + `<button type="button" class="mapsel-x" id="msel-x" aria-label="Clear selection">×</button></div>`
+    + faceHtml
     + `<p class="mapsel-t">${safeInline(f.name)}</p>`
     // The moderators' own words for what belongs in here — the one thing that
     // distinguishes a filing decision from an arbitrary grouping. Chain folders
@@ -12536,6 +12596,8 @@ function mountMap(slug, data, focusId, focusPath){
       b.addEventListener("click", ()=>select({kind:"claim", id:parseInt(b.dataset.go,10)})));
     panel.querySelectorAll(".mapsel-f").forEach(b=>
       b.addEventListener("click", ()=>select({kind:"folder", fid:parseInt(b.dataset.go,10)})));
+    panel.querySelectorAll(".mapsel-face").forEach(b=>
+      b.addEventListener("click", ()=>openPictureFull(b.dataset.full)));
   }
   /* CENTRE ON WHAT WAS SELECTED. Picking a node in the outer ring used to leave
      it wherever it happened to sit — often at the edge, sometimes half off — and

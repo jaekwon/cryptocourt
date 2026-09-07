@@ -1709,7 +1709,7 @@ control("the page's media-src drops a host the realm still stores", NGINXCONF,
 # failure: without the route, every exhibit on every claim page is a broken
 # image, because the realm's markdown points every reader at /m/<sha256>.
 control("the archive route goes missing", NGINXCONF,
-        "location /m {", "location /gone {",
+        "location /m/ {", "location /gone/ {",
         "unreachable", argv=["python3", MEDIAHOSTS])
 
 print("\ncheck-live-reads")
