@@ -5704,6 +5704,7 @@ function confirmArgs(func, args, bodyKey, sendPre){
 const TX_REWARD = new Set(["OpenRewards","WithdrawBonus","AuthorBonus",
                            "AnswererBonus","PullCarrot"]);
 const TX_SENT = {
+  ClaimMetaFranchise: "your meta claim",
   OpenRewards:    "the reward draw",
   WithdrawStake:  "your withdrawal",
   WithdrawBonus:  "your accuracy reward",
@@ -12243,9 +12244,16 @@ function franchiseHtml(slug, pending, supply, hasMeta){
         + `is still waiting as an entitlement.`;
   const mine = pending == null ? ""
     : pending > 0
+      /* AND A WAY TO TAKE IT. Telling a reader what is owed and giving them no
+         control is the same silence one step further along: the entitlement is
+         claimed by an ordinary transaction and there was nowhere on the site to
+         make it. No arguments — ClaimMetaFranchise reads the caller off the
+         crossing frame and mints whatever that address has accrued. */
       ? `<p class="fr-mine"><span class="fr-k">yours, waiting</span> `
         + `<b class="tnum">${gnotAmt(pending)}</b> of burn — claimable as `
         + `${esc(META_SLUG)} coin whenever you ask for it.</p>`
+        + btn("Claim your meta coin", "ClaimMetaFranchise", {}, "",
+              "mints what you have accrued; the rest of your holdings are untouched")
       : `<p class="fr-mine muted">You have nothing waiting here yet — burn for any `
         + `court's coin and it starts accruing.</p>`;
   return `<h2 class="sec-h">The meta franchise</h2>`

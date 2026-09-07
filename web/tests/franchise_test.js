@@ -29,6 +29,12 @@ global.META_SLUG = "meta";
 // The two money formatters, as the page spells them, so the figures are real.
 eval(fn("gnotAmt"));
 global.cc = (n, slug) => `${n} CC:${String(slug).toUpperCase()}`;
+/* btn is the page's one signing control and is 6000 lines away; the panel only
+   needs to hand it a label and an entrypoint, so it is stubbed as the pair it
+   passes. The real one is held to its own contract by its own harnesses. */
+global.btn = (label, func, args, cls, sub) =>
+  `<button data-func="${func}" data-args='${JSON.stringify(args||{})}'>${label}</button>`
+  + (sub? `<span class="sub">${sub}</span>` : "");
 const html = eval(fn("franchiseHtml") + "; franchiseHtml");
 
 /* ---- the rule is stated whether or not anyone is connected ---------------- */
@@ -65,12 +71,26 @@ ok("a pending entitlement is shown as the GNOT it came from",
    /554\.4 GNOT/.test(mine), mine.slice(mine.indexOf("fr-mine"), mine.indexOf("fr-mine") + 140));
 ok("...and says it is claimable whenever they ask",
    /claimable/.test(mine) && /whenever you ask/.test(mine));
+/* AND A WAY TO TAKE IT. Telling a reader what is owed and offering no control is
+   the same silence one step on — the entitlement is claimed by an ordinary
+   transaction and there was nowhere on the site to make it. */
+ok("...and offers the transaction that takes it",
+   /data-func="ClaimMetaFranchise"/.test(mine), mine.slice(mine.indexOf("<button"), 200));
+ok("...with no arguments, because the realm reads the caller off the frame",
+   /data-args='\{\}'/.test(mine));
+ok("...and says what it will and will not touch",
+   /the rest of your holdings are untouched/.test(mine));
+ok("the confirmation names the claim", /ClaimMetaFranchise: "your meta claim"/.test(src));
 /* ZERO IS NOT THE SAME AS NOT CONNECTED. A connected wallet with nothing waiting
    gets told how to start; an unconnected one is told nothing about itself,
    because the page does not know anything about it. */
 const zero = html("covid", 0, 5105763090, true);
 ok("a connected wallet with nothing waiting is told how to start",
    /nothing waiting here yet/.test(zero) && /burn for any court's coin/.test(zero));
+/* NOT OFFERED WHEN THERE IS NOTHING TO CLAIM. A control that signs a no-op is a
+   control that spends a fee to do nothing. */
+ok("no claim control when nothing is waiting", !/ClaimMetaFranchise/.test(zero), zero);
+ok("...nor with no wallet connected", !/ClaimMetaFranchise/.test(anon));
 ok("...and an unconnected one is told nothing about itself",
    !/fr-mine/.test(anon), anon);
 
