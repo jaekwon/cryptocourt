@@ -47,6 +47,10 @@ function buildCode(patch){
 // so a change to the real table is a change to what these tests exercise
   code += slice('const SUBJECT_WORDS', "/* A COURT'S FACE.");
   code += slice('function esc(', '\n');
+  // the comment cluster's geometry — the real one, because every defect it has
+  // had was a placement defect and a stub would place things correctly
+  code += slice('const CMT_MAX_DOTS', 'function commentClusterSvg(');
+  code += slice('function commentClusterSvg(', '\n}\n') + '}\n';
   code += slice('function fmtN(', 'function ugnot(');
   code += 'var NOW='+global.NOW+';\n';
   code += slice('const DEMO_OVERLAY = {', '/* ===== BEGIN GENERATED').replace('const DEMO_OVERLAY = {','var DEMO_OVERLAY = {') + '\n';
@@ -1473,6 +1477,68 @@ ok("controls present", ["mt-titles","mt-ids","mz-in","mz-out","mz-fit","mz-slide
      TT.filter(t=>t.cls!=="mvs").every(t=>!t.t.includes("\u2026")));
   ok("ids mode is the id alone", I.includes("#1") && I.includes("#2"));
   ok("and carries no side it has no room for", !I.some(t=>/YES|NO/.test(t)));
+}
+
+/* THE COMMENT CLUSTER STAYS OUTSIDE THE NODE IT BELONGS TO.
+   The group is translated to the node's bottom-right corner, so in its own frame
+   the node occupies negative x and negative y: only the 0..90 degree quadrant is
+   clear of both edges. The first version swept a golden-angle spiral over the
+   FULL circle, which put half the dots up and to the left — inside the frame, on
+   top of the title. Nothing failed; it was visible only in a preview render, and
+   this is that render turned into arithmetic. */
+{
+  const cx = svg => [...svg.matchAll(/cx="(-?[\d.]+)"/g)].map(m=>+m[1]);
+  const cy = svg => [...svg.matchAll(/cy="(-?[\d.]+)"/g)].map(m=>+m[1]);
+  const dots = svg => cx(svg).length;
+  const reach = svg => { const X=cx(svg), Y=cy(svg);
+    return Math.max(...X.map((x,i)=>Math.hypot(x, Y[i]))); };
+
+  ok("no comments draws nothing at all",
+     commentClusterSvg(0) === "" && commentClusterSvg(-3) === "");
+  ok("one comment is one dot and no edge",
+     dots(commentClusterSvg(1)) === 1 && !/<path/.test(commentClusterSvg(1)));
+
+  /* THE QUADRANT INVARIANT, at every count. Strictly positive: a dot at x=0 sits
+     on the node's own right edge, which is the line the frame is drawn on. */
+  let outside = true;
+  for(let n = 1; n <= 60; n++){
+    const g = commentClusterSvg(n), X = cx(g), Y = cy(g);
+    if(!X.every(v=>v>0) || !Y.every(v=>v>0)) { outside = false; break; }
+  }
+  ok("every dot at every count is right of and below the node's corner", outside);
+
+  ok("the dot count is capped, so a busy claim is not a smudge",
+     dots(commentClusterSvg(9)) === 9 && dots(commentClusterSvg(40)) === 9
+     && dots(commentClusterSvg(4000)) === 9);
+  /* PAST THE CAP THE FAN GROWS. Capping the dots alone drew 12, 25 and 40 as the
+     same picture, which throws away the only thing the cluster is for: where the
+     most talking is. */
+  ok("...but the fan still grows past the cap, and stays bounded",
+     reach(commentClusterSvg(25)) > reach(commentClusterSvg(12)) + 1
+     && reach(commentClusterSvg(4000)) < 17);
+
+  /* NO CROSSING EDGES. A chain through spiral points crossed itself constantly
+     and read as a scribble. Checked as geometry rather than trusted to the
+     construction: every pair of segments is tested for a proper intersection. */
+  const segs = svg => [...svg.matchAll(/M(-?[\d.]+) (-?[\d.]+)L(-?[\d.]+) (-?[\d.]+)/g)]
+    .map(m=>[[+m[1],+m[2]],[+m[3],+m[4]]]);
+  const cross = (p,q,r,s) => {
+    const d=(a,b,c)=>(b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]);
+    const shared = [p,q].some(a=>[r,s].some(b=>a[0]===b[0]&&a[1]===b[1]));
+    if(shared) return false;                       // meeting at a dot is not a crossing
+    return d(p,q,r)*d(p,q,s) < 0 && d(r,s,p)*d(r,s,q) < 0;
+  };
+  let tangled = 0;
+  for(const n of [4,5,7,9,12,25,40]){
+    const S = segs(commentClusterSvg(n));
+    for(let i=0;i<S.length;i++) for(let j=i+1;j<S.length;j++)
+      if(cross(S[i][0],S[i][1],S[j][0],S[j][1])) tangled++;
+  }
+  ok("no two edges cross, at any count", tangled === 0, "crossings: "+tangled);
+
+  // Two draws of the same claim must be the same picture, or the map flickers.
+  ok("the same count always draws the same cluster",
+     commentClusterSvg(7) === commentClusterSvg(7) && commentClusterSvg(13) === commentClusterSvg(13));
 }
 
 console.log(fail? "\n"+fail+" FAILURES" : "\nALL PASS");

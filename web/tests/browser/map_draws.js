@@ -474,6 +474,36 @@ const {PAGE, demoPage} = require('./harness');
   ok("...and the edges radiating from the centre pass under it",
      temple.afterEdges === true, JSON.stringify(temple));
 
+  /* THE COMMENT CLUSTER'S CELL IS ON EVERY CLAIM NODE, at the corner outside it.
+     Only the CELL is checkable here: filling it reads BoardSize per claim and the
+     demo has no chain, so a demo map draws no dots by design. What this asserts is
+     the part a live fill depends on — that the group exists, is inside the node's
+     own anchor so it dims with it, and is translated to the bottom-right corner
+     rather than into the frame. */
+  const cmt = await page.evaluate(() => {
+    const gs = [...document.querySelectorAll("svg.mapsvg g.mcmt")];
+    const nodes = document.querySelectorAll("svg.mapsvg a.mnode-a").length;
+    if (!gs.length) return {groups: 0, nodes};
+    const g = gs[0], a = g.closest("a.mnode-a");
+    const r = a && a.querySelector("rect.mnode");
+    const tr = (g.getAttribute("transform") || "").match(/translate\(([-\d.]+) ([-\d.]+)\)/);
+    return {
+      groups: gs.length, nodes,
+      inNodeAnchor: !!a,
+      // the corner it names must be the node's own bottom-right
+      atCorner: !!(r && tr
+        && Math.abs(+tr[1] - (+r.getAttribute("x") + +r.getAttribute("width"))) < 0.6
+        && Math.abs(+tr[2] - (+r.getAttribute("y") + +r.getAttribute("height"))) < 0.6),
+      emptyInDemo: gs.every(x => x.children.length === 0),
+    };
+  });
+  ok("every claim node carries a comment-cluster cell", cmt.groups === cmt.nodes && cmt.groups > 0,
+     JSON.stringify(cmt));
+  ok("...inside the node's own anchor, at its bottom-right corner",
+     cmt.inNodeAnchor === true && cmt.atCorner === true, JSON.stringify(cmt));
+  ok("...and empty in demo, where there is no chain to count comments",
+     cmt.emptyInDemo === true, JSON.stringify(cmt));
+
   ok("no page errors on the map route", errs.length === 0, errs.slice(0, 2).join(" | "));
 
   await browser.close();
