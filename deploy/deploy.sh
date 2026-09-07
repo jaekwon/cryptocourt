@@ -432,6 +432,70 @@ say "verifying"
   echo \"    site  index.html + chat.js + media.js  match\"
 "
 
+# ...AND THE FILE ON DISK IS NOT THE FILE A READER RECEIVES. The check above
+# hashes the webroot, which is everything a stale copy or a wrong server root
+# could break — and nothing that happens between the disk and the wire.
+#
+# MEASURED, AND IT TOOK THE SITE DOWN. ModSecurity is in front of this host with
+# SecResponseBodyAccess On and a 512 KiB SecResponseBodyLimit. index.html grew
+# past that, an outbound CRS rule scored the buffered half at the blocking
+# threshold, and nginx decided to deny a response whose headers were already
+# sent — so it cut the stream at exactly 524288 bytes. The page arrived
+# truncated mid-statement, every route rendered blank, and THIS SCRIPT REPORTED
+# "match" because the bytes on disk were perfect.
+#
+# So the last word belongs to a reader: fetch the page over the public URL and
+# compare it to what was shipped.
+#
+# A FETCH THAT CANNOT HAPPEN IS NOT A FAILURE. Serving to the world is nginx's
+# job and out of this script's scope — there may be no TLS, no DNS, or no route
+# from here — so an unreachable URL is reported and skipped. Bytes that ARRIVE
+# and differ are a hard stop: that is the case this exists for.
+SITE_URL="${SITE_URL:-https://${HOST#*@}}"
+if command -v curl >/dev/null 2>&1; then
+	say "verifying what a reader receives"
+	WIRE="$(mktemp)"; trap 'rm -f "$WIRE"' EXIT
+	# NOT `curl -f` AND NOT "non-zero means unreachable", which is how the first
+	# version of this check let the very deploy it was written for through. A
+	# response the WAF cuts mid-stream makes curl exit 18/56/92 — PARTIAL_FILE,
+	# RECV_ERROR, HTTP/2 stream error — and treating that as "cannot reach the
+	# site" reported "skipped, not failed" over a page that was arriving broken.
+	# A BROKEN STREAM IS THE FAILURE. Only the codes that mean nothing was ever
+	# established — no DNS, no connection, no TLS, no answer in time — are a skip.
+	# `|| crc=$?` RATHER THAN `; crc=$?`, because this script runs under `set -e`
+	# and a failing curl aborts it before the assignment — which is exactly what
+	# happened the first time this fired: the deploy stopped with a bare "Error
+	# 92" and printed none of the explanation below. A guard that knows why and
+	# cannot say so is half a guard.
+	crc=0
+	curl -sS --max-time 45 "$SITE_URL/index.html" -o "$WIRE" 2>/dev/null || crc=$?
+	case "$crc" in
+		0) ;;
+		18|56|92|16|55|95)
+			echo "    wire  $SITE_URL/index.html  the response BROKE mid-stream (curl $crc)" >&2
+			echo "    $(wc -c < "$WIRE" | tr -d ' ') of $(wc -c < "$STAMPED" | tr -d ' ') bytes arrived. The webroot is correct, so" >&2
+			echo "    something between the disk and the client is truncating the response — a" >&2
+			echo "    WAF response-body limit, a proxy buffer, or a rewriting cache." >&2
+			exit 1 ;;
+		*)
+			echo "    wire  $SITE_URL/index.html unreachable from here (curl $crc) — skipped, not failed"
+			crc=skip ;;
+	esac
+	if [ "$crc" = 0 ]; then
+		wsha=$(shasum -a 256 "$WIRE" 2>/dev/null | cut -d' ' -f1 || sha256sum "$WIRE" | cut -d' ' -f1)
+		wlen=$(wc -c < "$WIRE" | tr -d ' ')
+		if [ "$wsha" = "$LOCAL_SHA" ]; then
+			echo "    wire  $SITE_URL/index.html  $wlen bytes  identical to what was shipped"
+		else
+			echo "    wire  $SITE_URL/index.html  $wlen bytes  DOES NOT MATCH the shipped file" >&2
+			echo "    the webroot is correct, so something between the disk and the client is" >&2
+			echo "    altering or truncating the response — a WAF response-body limit, a proxy" >&2
+			echo "    buffer, or a rewriting cache. The page a reader gets is not the page." >&2
+			exit 1
+		fi
+	fi
+fi
+
 say "deployed"
 cat <<MSG
 
