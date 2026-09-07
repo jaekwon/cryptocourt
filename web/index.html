@@ -13409,7 +13409,18 @@ on(/^\/c\/([a-z0-9-]+)\/f\/([0-9.]+)$/, async (slug,fpath)=>{
     + (()=>{
         const direct = (f.claims||[]).length, all = fentries.length;
         const fopen = fwin.filter(cl=>!isDone(cl)), fdone = fwin.filter(isDone);
-        const rows = list => `<div class="docket">${list.map(cl=>docketRow(slug,cl,metaOf[cl.id])).join("")}</div>`;
+        /* THE FOLD KEYS TOO, from folderKeys — the same call the court page makes.
+           Without them docketRow falls back to `data-fold="~none"`, which does
+           not mean "no filter here", it means THIS CLAIM IS IN NO FOLDER — and
+           every claim on a set page is in at least one, the set itself. The
+           attribute was a false statement that nothing happened to read: the
+           filter is scoped to `#qscope [data-fold]` and a set page's rows are
+           not in it. Dead markup that lies is still a lie, and it is one line to
+           make it true — after which a claim's row is byte-identical on the two
+           pages apart from which folder its meta names. */
+        const foldOf = (curF && curF.folders && curF.folders.length)
+          ? folderKeys(curF.folders, {}, null) : {};
+        const rows = list => `<div class="docket">${list.map(cl=>docketRow(slug,cl,metaOf[cl.id],foldOf[cl.id])).join("")}</div>`;
         const gap = subs? ' style="margin-top:22px"' : "";
         /* `!all`, NOT `!fwin.length` — a set with claims on another page is not
            an empty set. Guarding on the WINDOW meant page 2 of a nine-claim set

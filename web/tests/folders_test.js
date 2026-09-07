@@ -367,6 +367,15 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
        that sweep — asserted BY NAME, because a second copy of it beside this one
        is how the two pages come to disagree about what one row says.
        AND NO applySort BEHIND IT: a folder page keeps the realm's order. */
+    /* AND THE ROWS CARRY THEIR FOLD KEYS. Without them docketRow writes
+       `data-fold="~none"`, which does not mean "no filter on this page" — it
+       means the claim is in no folder, and every claim here is in at least one.
+       Nothing reads it (the filter is scoped to `#qscope`), but a row that
+       states something false is a trap for whoever widens that scope. */
+    ok("...and its rows state the folders they are in, not `~none`",
+       /const foldOf = \(curF && curF\.folders && curF\.folders\.length\)/.test(route)
+       && /folderKeys\(curF\.folders, \{\}, null\)/.test(route)
+       && /docketRow\(slug,cl,metaOf\[cl\.id\],foldOf\[cl\.id\]\)/.test(route));
     ok("...and its rows are filled by the same sweep the court page uses",
        /fillDocketRows\(gstr\(slug\), slug, fwin, seq0, nowHq\)/.test(route)
        && /const seq0 = renderSeq/.test(route)
