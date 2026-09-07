@@ -660,6 +660,27 @@ const CHATCSS = `
 .chatstate{margin:.4rem 0;padding:.35rem .5rem;border-radius:4px;
   background:rgba(128,128,128,.15)}
 .chatdemo{display:block;margin-top:.25rem;font-size:.85em;font-weight:600}
+/* THE COMPOSER MUST NOT SHRINK, and this is the whole bug behind four failed
+   fixes. In the rail the panel is a flex COLUMN (index.html's .railchat), and
+   its rule for every direct child of .railchat sets min-height:0 there, which
+   removes the automatic
+   minimum size that normally stops a flex item shrinking below its content. All
+   these rows still had flex-shrink:1, so a short window shrank them TOGETHER
+   rather than letting the log absorb it alone: measured at a 700px viewport,
+   .chatform collapsed to a 10px box while the 35px name button inside it
+   overflowed 25px BELOW that box, and .chatnote — the panel's last child, so
+   painted on top — covered the overflow.
+   That is why the reported symptom was so strange. The button's top padding is
+   still inside the form's own box and takes the pointer; its LETTERS sit in the
+   overflow, where the note gets the hit instead, so the cursor stays auto and
+   the click lands on a div. Nothing was wrong with the button, the cursor, or
+   the browser, and none of it appears in a tall window — which is the only kind
+   I had been measuring in.
+   So the log is the one row that shrinks (it has flex:1 1 auto and its own
+   max-height and scrollbar), and everything else is pinned. If the rail ever
+   gets too short for the fixed rows it clips the NOTE, the least important
+   thing in the panel, instead of swallowing the controls. */
+.chathead,.chatstate,.chatform,.chatnote{flex:0 0 auto}
 .chatform{display:flex;gap:.4rem;margin-top:.5rem;flex-wrap:wrap}
 /* THE NAME IS A LABEL, NOT A MESSAGE. At 8rem it took a third of a 230px rail
    and left the message box too narrow to read what you were typing. It needs
@@ -810,10 +831,38 @@ function chatStyles(doc) {
    none. This file is served no-cache, so it arrives.
 
    OFF UNLESS ASKED FOR, and temporary: delete it once the answer is in. */
+/* LATCHED AT LOAD, NOT READ AT MOUNT — and this is the bug the probe found in
+   itself before it found anything else. The overlay's router navigates with
+   history.replaceState(null, "", "#" + path), and a URL consisting of only a
+   fragment DISCARDS THE QUERY STRING. So ?probe=1 survives the first paint and
+   is gone the instant the reader clicks anything; the panel then remounts, the
+   flag no longer reads, and the probe silently stops existing. It looked
+   installed here because a headless load never clicks.
+   So the flag is read ONCE, when this file parses, before any rewrite can run,
+   out of the whole href so it is found in the search or after the hash. And it
+   is remembered for the tab, because a diagnostic that a navigation can erase
+   is the kind that reports nothing and gets believed. ?probe=0 forgets it. */
+const CHATPROBEKEY = "kourt.chat.probe";
+const CHATPROBEON = (() => {
+  try {
+    if (typeof location === "undefined") return false;
+    const href = String(location.href || "");
+    const ss = typeof sessionStorage !== "undefined" ? sessionStorage : null;
+    if (/[?&]probe=0/.test(href)) {
+      if (ss) ss.removeItem(CHATPROBEKEY);
+      return false;
+    }
+    if (/[?&]probe=1/.test(href)) {
+      if (ss) ss.setItem(CHATPROBEKEY, "1");
+      return true;
+    }
+    return !!ss && ss.getItem(CHATPROBEKEY) === "1";
+  } catch (e) { return false; }
+})();
+
 function chatProbe(doc) {
   const d = doc || (typeof document !== "undefined" ? document : null);
-  if (!d || typeof location === "undefined") return () => {};
-  if (!/[?&]probe=1/.test(location.search || "")) return () => {};
+  if (!d || !CHATPROBEON) return () => {};
   if (d.getElementById("chatprobe")) return () => {};
   const box = d.createElement("div");
   box.id = "chatprobe";
@@ -1166,6 +1215,7 @@ if (typeof module !== "undefined" && module.exports) {
   module.exports = {chatEsc, chatFlag, chatWhen, chatStatusLine, chatValidate,
     chatLineHtml, chatLogHtml, chatPanelHtml, chatDemoThread, chatEndpoint,
     chatFetch, chatPost, chatStyles, chatHealth, mountChat, chatProbe,
+    CHATPROBEON,
     CHATCSS,
     CHATLIMITS};
 }

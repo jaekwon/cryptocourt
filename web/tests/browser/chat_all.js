@@ -17,7 +17,8 @@ const {spawnSync} = require("child_process");
 const path = require("path");
 const fs = require("fs");
 
-const CHECKS = ["chat_page.js", "chat_render.js", "chat_live.js", "chat_moderation.js", "chat_chip.js"];
+const CHECKS = ["chat_page.js", "chat_render.js", "chat_live.js", "chat_moderation.js",
+  "chat_chip.js", "chat_reach.js"];
 
 let failed = 0;
 for (const f of CHECKS) {
