@@ -446,9 +446,39 @@ global.SHUT_MARK = "\u{1307C}";   // 𓁼 — the second mark, opens concealed
   ok("modified and middle clicks still follow the link",
      /ev\.metaKey\|\|ev\.ctrlKey\|\|ev\.shiftKey\|\|ev\.altKey\|\|ev\.button!==0/.test(mount));
   ok("a drag that ends on a node does not select it", /if\(dragged\)/.test(mount));
+  /* THIS ASSERTION PINNED THE BUG IT WAS WATCHING FOR. It required the literal
+     `if(sel) return;` — and `sel` is a const declared inside paint(), not in the
+     scope these listeners close over, so every one of them threw ReferenceError
+     on the first mouseover of any node and the dim-on-hover never ran once. A
+     source-level regex asserts a SHAPE; it cannot tell a name that resolves from
+     a name that does not, so it held the broken shape in place. Caught by a
+     browser check counting page errors, never by this.
+     `focused()` is the same question asked of something that exists, and the
+     second arm refuses the old spelling so it cannot come back. */
   ok("hover does not fight a held selection",
      ["mouseover","mouseout","focusin"].every(evt =>
-        new RegExp(`addEventListener\\("${evt}"[^\\n]*if\\(sel\\) return;`).test(mount)));
+        new RegExp(`addEventListener\\("${evt}"[^\\n]*if\\(focused\\(\\)\\) return;`).test(mount)));
+  /* SCOPED TO WHERE THE NAME IS ABSENT, which is everything from select() on:
+     paint() opens with `const sel = focused()` and reads it legitimately three
+     lines later, so banning the spelling across the whole mount fails on the one
+     place it is correct. The ban is about the listeners, and they all live below
+     paint — so cut there and the guard says what it means. */
+  const outside = mount.slice(mount.indexOf("function select(next)"));
+  ok("paint is where sel is declared, and the only place it resolves",
+     /function paint\(\)\{\s*\n\s*const sel = focused\(\);/.test(mount));
+  /* ANY READ OF THE BARE NAME, not just `if(sel)`. The narrow spelling let the
+     Escape handler keep `ev.key==="Escape" && sel` — the identical bug, in the
+     identical mount, live for as long as this guard has existed. A word-boundary
+     match on the name itself is the question the guard was always asking. */
+  /* COMMENTS ARE NOT CODE, and a scan that forgets it reports the explanation of
+     a bug as the bug. That has happened repeatedly in this suite — a sample
+     btn() in a comment counted as a real button, a Math.random in a comment
+     tripping a ban on Math.random — and it happened here the moment this guard
+     was widened, on the very comment describing the fix. */
+  const code = outside.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/\/\/[^\n]*/g, " ");
+  ok("...asked of a name that is actually in scope out there",
+     !/\bsel\b/.test(code.replace(/\bselKey\b|\bselClaim\b|\bselFold\b/g, "")),
+     (code.match(/.{0,40}\bsel\b.{0,25}/) || [""])[0]);
   ok("escape clears the selection", /ev\.key==="Escape"/.test(mount));
 
   // ---- the folder card ----
@@ -535,8 +565,13 @@ global.SHUT_MARK = "\u{1307C}";   // 𓁼 — the second mark, opens concealed
      !/\.mapsel\[hidden\]|display:none/.test(css));
   ok("the empty column explains that the map is interactive",
      /mapsel-hint/.test(mount) && /Click a claim/.test(mount));
+  /* PAINTED AT MOUNT, and after every redraw. This used to read `put(); paint();`
+     at the mount, which pinned the call rather than the property: put() replaces
+     box.innerHTML outright, so a SECOND put — switching titles↔ids — dropped every
+     class paint had set and there was no third call to put it back. The repaint
+     now lives inside put(), where a new call site cannot forget it. */
   ok("and it is painted at mount, not only after the first click",
-     /put\(\);\s*paint\(\);/.test(mount));
+     /apply\(\); paint\(\); \}/.test(mount) && /SEL = defaultReveal\(\);\s*\n\s*put\(\);/.test(mount));
 }
 
 // NODES SIZED TO THEIR OWN TEXT, and rings compacted radially.

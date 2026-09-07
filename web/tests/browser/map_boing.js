@@ -191,7 +191,21 @@ const MAPKVOV = (() => {
   // -------------------------------------------------------------- every node
   // Overlap is a property of WHERE a node sits, so one node proves nothing.
   const sweep = [];
+  /* ONE NODE AT A TIME, FROM A CLEAN MAP. Selection accumulates now — a second
+     click adds a second node and a click on a held node RELEASES it — so a
+     sweep that clicked all eleven in a row was measuring "does the eleventh
+     click still select" against a map holding ten. Red since accumulate landed.
+     Escape between clicks is the reset, dispatched at the map because its
+     keydown listener is on the map box. */
+  const clearMap = async () => {
+    await page.evaluate(() => {
+      const w = document.querySelector('.mapwrap');
+      if (w) w.dispatchEvent(new KeyboardEvent("keydown", {key: "Escape", bubbles: true}));
+    });
+    await new Promise(r => setTimeout(r, 150));
+  };
   for (let i = 0; i < n; i++) {
+    await clearMap();
     await clickNode(i);
     await new Promise(r => setTimeout(r, 400));
     sweep.push(await page.evaluate(k => {
@@ -287,6 +301,16 @@ const MAPKVOV = (() => {
   // `transition:none; transform:none` would quietly break.
   await page.emulateMediaFeatures([{name: 'prefers-reduced-motion', value: 'reduce'}]);
   await openMap();
+  /* FROM A CLEAN MAP. openMap() re-goto()s a URL that differs from the current
+     one only in its hash, which the browser treats as a same-document
+     navigation — nothing reloads and the sweep's eleven selected nodes are all
+     still held. This phase measured a node BEFORE clicking it and expected it to
+     grow, so a node that was already selected made the ratio 1.00.
+     IT PASSED BEFORE BECAUSE OF A BUG, which is the uncomfortable half: put()
+     replaced the SVG without repainting, so any redraw silently dropped the
+     selection and handed this phase the clean map it never asked for. Fixing
+     that made the reliance visible. Escape is the real reset and now works. */
+  await clearMap();
   const rm0 = await page.evaluate(() => {
     const a = document.querySelector('.mnode-a');
     return {w: a.getBoundingClientRect().width, dur: getComputedStyle(a).transitionDuration};

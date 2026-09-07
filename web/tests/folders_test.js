@@ -693,16 +693,21 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
   /* AND THE LABEL SAYS WHICH, because a screen reader gets no glyph. `shown` is
      derived from the mark rather than stored beside it, so there is no second
      lookup and nothing to keep in step. */
-  /* SAID ONCE, IN WORDS, FOR THE THREE SURFACES THAT NAME IT. The dresser's
+  /* SAID ONCE, IN WORDS, FOR THE FOUR SURFACES THAT NAME IT. The dresser's
      aria-label and a <title> on each of the map's two marks all built the same
      sentence from the same ternary; three copies is three places to reword and two
      to forget. The chat panel deliberately says just the state word — asked for
-     that way, and right: a hover there has the message beside it. */
+     that way, and right: a hover there has the message beside it.
+     THE FOURTH IS paint(), which arrived with the reveal: the map's mark now
+     swaps as a reader opens and closes sets, so the words beside it have to be
+     re-said for the state it swapped TO. Leaving them was the same bug in a
+     quieter place — a badge describing a state that is over, to the one reader
+     who cannot see the glyph and check. */
   ok("...and its label names which state it opens in",
      /aria-label="\$\{setOpensWords\(p\.shown\)\}"/.test(src));
   ok("...through the one place that phrase lives",
      /function setOpensWords\(shown\)\{ return "set that opens " \+ \(shown \? "shown" : "concealed"\); \}/.test(src)
-     && (src.match(/setOpensWords\(/g) || []).length === 4);
+     && (src.match(/setOpensWords\(/g) || []).length === 5);
 
   /* THE CHAIN DECIDES WHETHER A TITLE IS A HEADING, not the page. isSetTitle
      gates the New panel and reads the page's OWN two marks — and the two can

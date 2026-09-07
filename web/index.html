@@ -3424,7 +3424,12 @@ const DEMO_OVERLAY = {
     annex:{desc:"Hidden from the directory by moderation — the sample's proof that direct links still open a court.", folders:[
         // born: the claim the court affirmed to create this set — folder.bornOf
         // on chain, and the field SetBornOf reads back.
-        {name:"Reading room", claims:[1,5], born:6},
+        /* AND IT OPENS SHOWN — the "f" bit, from a 𓂀 in the claim that bore it.
+           THE SAMPLE HAD NO 𓂀 SET ANYWHERE, so the map's opening view — the one
+           thing the mark decides — had no case in it at all: every demo court
+           opened with nothing revealed whether the seeding worked or not.
+           Measured: deleting the court's seed entirely broke no check. */
+        {name:"Reading room", claims:[1,5], born:6, focus:true},
         {name:"Deeds",        claims:[2]},
       ]},
     ledger:{desc:"Documentary and technical claims about Denver — filings, measurements, dated records. If a document can settle it, we hear it."},
@@ -9204,6 +9209,14 @@ function curFilterFolders(folders, validSet){
     // not a claim in it. Dropped here, a set born of a claim looked declared —
     // the second field to be lost by a rebuild that names what it keeps.
     born:f.born,
+    /* AND focus, THE THIRD FIELD TO BE LOST BY THIS REBUILD, for the reason
+       given twice above. It is the "f" bit of the tree row — whether the set
+       opens shown — and dropping it made every set on the map open concealed
+       whatever its title said. Nothing failed: the map's marks are drawn from
+       the selection, so a set that never opens simply looks like a set nobody
+       opened. Found by a browser check asking the DATASET what it declared and
+       the page what it drew. */
+    focus:f.focus,
     claims:(f.claims||[]).filter(id=>validSet.has(id)),
     folders:curFilterFolders(f.folders, validSet)}));
 }
@@ -10504,6 +10517,29 @@ function mapLayout(data, mode){
     }
     return box;
   })(root, K.base, K.base+2*Math.PI, 0);
+  /* THE HIERARCHY, CARRIED ONTO THE BOXES. A box is a fresh object with a
+     curated field set, so `kids` does not survive the walk above — the tree
+     knows what is filed under what and the layout, until now, only knew how
+     many (`subs`, a count). The map's reveal needs the actual children: opening
+     a set opens what is inside it, at every depth.
+     `path` LOOKS LIKE THE ANSWER AND IS NOT. A demo folder's path is "0.2" and
+     nests by prefix, but chainFolders stamps every folder on a live chain with
+     `path:String(fid)` — flat, whatever its parent — so a prefix test works
+     offline and silently reveals nothing on the real site. Found exactly that
+     way: the browser check reported one set lit and none of its contents.
+     STAMPED AS `_key` STRINGS, the same ones spokes and the DOM already use, so
+     nothing has to hold a second lookup table. A second pass, because a child's
+     index in `folders` is not known when its parent is pushed. */
+  (function link(n){
+    if(n._box){
+      n._box.kidF = n.kids.filter(k=>k.kind==="folder" && k._box).map(k=>k._box._key);
+      n._box.kidC = n.kids.filter(k=>k.kind==="claim").map(k=>k.id);
+    }
+    n.kids.forEach(link);
+  })(root);
+  // court is a copy taken mid-walk, so it needs the same stamp applied to it.
+  court.kidF = root._box ? root._box.kidF : [];
+  court.kidC = root._box ? root._box.kidC : [];
   const byId=Object.fromEntries(nodes.map(n=>[n.id,n]));
   // The cross-cut memberships, drawn to the one node the claim actually has.
   for(const a of alsoIn){ const t=byId[a.id]; if(a.folder._box && t) spokes.push({from:a.folder._box, to:t, kind:"also"}); }
@@ -11207,7 +11243,12 @@ function mapSvg(L, data, slug){
              after the nudge landed, with the glyph poking out of the top of its
              own outline on every concealed set. */
           const dy = f.focus ? 0 : es * 0.22;
+          /* THE RING'S OWN OPEN CENTRE, for the same reason the glyph carries a
+             baseline: paint() moves both when the mark swaps, and a ring that
+             stayed put while the pupil rose is the misalignment this nudge was
+             added to fix, arriving by the other door. */
           return `<circle class="mvtag msetring" cx="${f.x.toFixed(1)}" `
+            + `data-cy0="${f.y.toFixed(1)}" `
             + `cy="${(f.y - dy).toFixed(1)}" r="${bornR.toFixed(1)}" data-fid="${i}"/>`
             /* THE PUPIL SITS IN THE SAME PLACE WHICHEVER MARK IS DRAWN. The two
                glyphs are not drawn alike inside their em: 𓂀 carries its almond
@@ -11217,11 +11258,23 @@ function mapSvg(L, data, slug){
                0.22em, the same figure the folder filter uses and measured the
                same way — the two overlaid until the pupils coincided. Here it is
                a dy on the baseline because this is SVG type, not a flex item. */
+            /* THE OPEN BASELINE AND THE EM RIDE ALONG, because the glyph is
+               swapped at paint time now — a set that is revealed wears 𓂀 and one
+               that is not wears 𓁼, and which it is depends on the selection
+               rather than only on the mark it was filed under. Recomputing the
+               nudge from data-y0 and data-es is what keeps the pupil still
+               through the swap. */
             + `<text class="mset wedjat" data-fid="${i}" x="${f.x.toFixed(1)}" `
-            + `y="${(f.y + es*0.35 - (f.focus ? 0 : es*0.22)).toFixed(1)}" font-size="${es.toFixed(1)}" `
+            + `data-y0="${(f.y + es*0.35).toFixed(1)}" data-es="${es.toFixed(1)}" `
+            + `y="${(f.y + es*0.35 - dy).toFixed(1)}" font-size="${es.toFixed(1)}" `
+            /* THE MARK IN ITS OWN TSPAN, so paint() can swap the character
+               without touching the <title> beside it. `t.textContent = mark`
+               replaces EVERY child, and the title is a child — the swap would
+               have silently deleted the only thing said about this badge to a
+               reader who cannot see it. */
             + `text-anchor="middle">`
             + `<title>${setOpensWords(f.focus)}</title>`
-            + `${mark}</text>`; })()
+            + `<tspan class="msetmark">${mark}</tspan></text>`; })()
       : "";
     const tag=`<rect class="mfold${f.pseudo?" pseudo":""}" x="${f.x}" y="${f.y}" width="${f.w}" height="${f.h}" rx="4" data-fid="${i}"/>`
       + face + bornMark + wrapFit(f.name, f.count, f, K.fs.header, "mhdr-t", "h"+i, bornLead);
@@ -12254,7 +12307,7 @@ on(/^\/c\/([a-z0-9-]+)\/map$/, async (slug)=>{
      reasons, and the only way to make it pass was to name the passengers in the
      guard — a fourth place to update and a fourth to forget. */
   const filterFolders = fs => (fs||[]).map(f=>({name:f.name, path:f.path, fid:f.fid, chain:f.chain,
-    img:f.img, born:f.born,
+    img:f.img, born:f.born, focus:f.focus,
     claims:(f.claims||[]).filter(id=>validIds.has(id)),
     folders:filterFolders(f.folders)}));
   const curFolders = cur? filterFolders(cur.folders) : [];
@@ -12494,9 +12547,18 @@ function mountMap(slug, data, focusId, focusPath){
     };
     tween=requestAnimationFrame(step);
   }
+  /* put() DRAWS THE GRAPH; paint() PUTS THE READER'S STATE BACK ON IT. Every put
+     replaces box.innerHTML outright, so the classes and marks paint() had set are
+     gone with the nodes that carried them — which is why switching between titles
+     and ids used to clear the selection, and why it would now also reset every
+     open eye to whatever mark its title was filed under.
+     THE REPAINT BELONGS HERE, not at the two call sites. A third one would have
+     to remember, and forgetting looks like a redraw glitch rather than a missing
+     call. paint() reads SEL and writes the DOM; it is safe to run on an empty
+     selection, which is what the first draw is. */
   function put(){ box.innerHTML = mapSvg(L, data, slug);
     if(focusId!=null){ const a=box.querySelector(`.mnode-a[data-id="${focusId}"]`); if(a) a.classList.add("focused"); }
-    apply(); }
+    apply(); paint(); }
   function setZ(nz, anchor){
     const el=svgEl(); if(!el) return;
     nz=Math.min(MAPK.zMax, Math.max(0.5, nz));
@@ -12604,14 +12666,86 @@ function mountMap(slug, data, focusId, focusPath){
      Last is focused: the card, the centring and the text fetch all read SEL[SEL
      .length-1], so "most recent" has exactly one meaning across the three. */
   let SEL = [];
+  /* AND WHAT THE READER PUT OUT BY HAND. Keys only — a released node is not a
+     selection, it is a hole in one. */
+  const OUT = new Set();
+  /* THE MAP OPENS WHERE THE COURT POINTED. Every 𓂀 set reachable from the root
+     through 𓂀 parents starts revealed, with its subtree; a court that filed
+     everything 𓁼 opens with nothing selected, which is how every map behaved
+     before any of this. Seeded once, below, after the layout exists. */
   // The key a selection dims to. One string for three kinds, so paint() and the
   // hover handler ask neighbourhood() the same question.
   const selKey = x => !x ? null
     : x.kind==="claim" ? "c"+x.id : x.kind==="folder" ? "f"+x.fid : "court";
   const focused = () => SEL.length ? SEL[SEL.length-1] : null;
+
+  /* ── REVEALING A SET REVEALS WHAT IS IN IT ────────────────────────────────
+   *
+   * A set is a drawer. Opening it and finding its subsets still shut would be a
+   * filing system that answers a different question from the one asked, so
+   * selecting a folder selects its whole subtree — subsets and the claims filed
+   * in them.
+   *
+   * AND THE CHAIN CAN BE BROKEN, which is the part that carries meaning. A
+   * subset is revealed only if its parent is; a 𓂀 nested under a 𓁼 stays shut,
+   * because the court that concealed the parent concealed everything filed under
+   * it. Reveal descends from the court root and stops at the first shut door.
+   *
+   * So the eye on a node reports REVEALED, not the mark the claim was filed
+   * under: 𓂀 when the set is open, 𓁼 when it is not. The filed mark decides
+   * where the map STARTS; the reader decides where it goes from there. */
+  /* WHAT IS FILED UNDER A BOX, at every depth. `kidF` is a list of the layout's
+     own `_key` strings — "f3" — which is also what the DOM writes as data-fid,
+     so the walk needs no lookup table and no second idea of identity.
+     GUARDED AGAINST A CYCLE, because the tree is built from chain rows whose
+     `parent` a court sets and nothing here re-verifies. mapTree already refuses
+     to descend into a loop, so this is the second fence rather than the first —
+     but a walk that can be handed arbitrary chain data and can hang the page
+     should not depend on somebody else's check staying correct. */
+  const subtreeOf = box => {
+    const out = [], seen = new Set();
+    (function walk(b){
+      (b.kidC||[]).forEach(id => out.push({kind:"claim", id}));
+      (b.kidF||[]).forEach(key=>{
+        if(seen.has(key)) return;
+        seen.add(key);
+        const fid = parseInt(key.slice(1), 10);
+        out.push({kind:"folder", fid});
+        const k = L.folders[fid];
+        if(k) walk(k);
+      });
+    })(box || {});
+    return out;
+  };
+  /* WHAT IS REVEALED IS DERIVED, NOT STORED. SEL holds the picks — what the
+     reader clicked, and what the court opened on. Everything a pick drags with
+     it is recomputed here on every paint.
+     THE ALTERNATIVE WAS TO STORE THE SUBTREE TOO, and it is wrong twice. Closing
+     a set would leave its contents behind unless the removal walked the same
+     tree in reverse; and a claim filed in two revealed sets would be dropped by
+     whichever closed first, though the other still holds it. A derived set has
+     neither problem because it never disagrees with the picks. */
+  const revealed = () => {
+    const keys = new Set(SEL.map(selKey));
+    for(const p of SEL){
+      if(p.kind!=="folder") continue;
+      const node = L.folders[p.fid];
+      if(node) subtreeOf(node).forEach(d => keys.add(selKey(d)));
+    }
+    OUT.forEach(k => keys.delete(k));
+    return keys;
+  };
+  /* THE COURT'S OWN PICKS: every 𓂀 set hanging off the root. A 𓁼 ends the
+     descent — its subsets do not open however they were filed, which is the
+     chain of command the marks describe. One level is all this needs, because
+     a set that DOES open drags its whole subtree through revealed() anyway. */
+  const defaultReveal = () => (((L.court || {}).kidF) || [])
+    .map(key => parseInt(key.slice(1), 10))
+    .filter(fid => (L.folders[fid] || {}).focus)
+    .map(fid => ({kind:"folder", fid}));
   function paint(){
     const sel = focused();
-    const held = new Set(SEL.map(selKey));      // every node held, not just the newest
+    const held = revealed();   // the picks, plus everything they open
     const selClaim = sel && sel.kind==="claim" ? sel.id : null;
     const selFold = sel && sel.kind==="folder" ? sel.fid : null;
     box.querySelectorAll(".mnode-a").forEach(a=>
@@ -12620,6 +12754,24 @@ function mountMap(slug, data, focusId, focusPath){
       a.classList.toggle("selected", held.has("f"+a.dataset.fid)));
     box.querySelectorAll(".mcourt-a").forEach(a=>
       a.classList.toggle("selected", held.has("court")));
+    /* THE EYE REPORTS REVEALED, NOT FILED. The mark a set was filed under decides
+       where the map STARTS; once a reader opens or closes one, the glyph has to
+       follow them or it is describing a state that is over. Redrawn from the
+       baseline the layout stored, so the pupil does not move through the swap. */
+    box.querySelectorAll("text.mset").forEach(t=>{
+      const open = held.has("f"+t.dataset.fid);
+      const y0 = parseFloat(t.dataset.y0), es = parseFloat(t.dataset.es);
+      const dy = open ? 0 : es * 0.22;   // the same nudge mapSvg drew it with
+      const mk = t.querySelector(".msetmark"), ti = t.querySelector("title");
+      if(mk) mk.textContent = open ? SET_MARK : SHUT_MARK;
+      if(ti) ti.textContent = setOpensWords(open);
+      if(isFinite(y0) && isFinite(es)){
+        t.setAttribute("y", (y0 - dy).toFixed(1));
+        const ring = box.querySelector(`circle.msetring[data-fid="${t.dataset.fid}"]`);
+        const cy0 = ring && parseFloat(ring.dataset.cy0);
+        if(isFinite(cy0)) ring.setAttribute("cy", (cy0 - dy).toFixed(1));
+      }
+    });
     if(!sel){
       undim();
       // The empty state is an affordance, not a blank: the map gave no sign it
@@ -12631,7 +12783,7 @@ function mountMap(slug, data, focusId, focusPath){
       return;
     }
     // The dim is the same call whatever was picked; only the card differs.
-    dimTo(SEL.map(selKey));
+    dimTo([...held]);
     if(!panel) return;
     if(sel.kind==="court") panel.innerHTML = mapCourtCard(data, slug, L);
     else if(selClaim!=null) panel.innerHTML = mapSelCard(selClaim, data, slug, L);
@@ -12714,14 +12866,37 @@ function mountMap(slug, data, focusId, focusPath){
      node they just clicked, and yanking the viewport away from it would punish
      the gesture. */
   function select(next){
-    if(!next){ SEL = []; paint(); return; }
-    const k = selKey(next), at = SEL.findIndex(x=>selKey(x)===k);
+    if(!next){ SEL = []; OUT.clear(); paint(); return; }
+    const k = selKey(next);
+    /* THE CLICK TOGGLES WHAT IS LIT, not what is in the pick list, and those
+       stopped being the same thing when a set began opening its contents. A
+       claim filed in an open set is lit without ever having been picked — under
+       the old test the second click on it found nothing in SEL to remove and so
+       read as a first click, and the node the reader was trying to put out
+       stayed on. Measured as: "re-clicking a held claim releases it" going red.
+       SO A RELEASE IS REMEMBERED. OUT holds keys the reader put out by hand; it
+       outranks the reveal, because an explicit gesture should beat something
+       inherited from a parent. Picking a set again clears the releases inside it
+       — opening a drawer you had reached into is a fresh start, and without that
+       a release would haunt the set for the rest of the session.
+       BUT ONLY A PICK RELEASES. Toggling on "is it lit" instead was the obvious
+       reading and it is wrong: a claim inside an open set is lit before anyone
+       has touched it, so the first click on it — the click that means "show me
+       this one" — put it out instead of opening its card. First click picks it,
+       second click, now that it IS a pick, puts it out. */
+    const at = SEL.findIndex(x=>selKey(x)===k);
     if(at >= 0){
       SEL.splice(at, 1);
+      OUT.add(k);                       // in case a set still holds it
       paint();
       const f = focused();
       if(f) fetchText(f);
       return;
+    }
+    OUT.delete(k);
+    if(next.kind==="folder"){
+      const node = L.folders[next.fid];
+      if(node) subtreeOf(node).forEach(d => OUT.delete(selKey(d)));
     }
     SEL.push(next);
     paint(); fetchText(next); centreOn(next);
@@ -12770,7 +12945,12 @@ function mountMap(slug, data, focusId, focusPath){
     else if(ev.key==="+"||ev.key==="="){ setZ(z*1.25); ev.preventDefault(); }
     else if(ev.key==="-"){ setZ(z/1.25); ev.preventDefault(); }
     else if(ev.key==="0"){ z=1; cx=fit.w/2; cy=fit.h/2; schedule(); ev.preventDefault(); }
-    else if(ev.key==="Escape" && sel){ select(null); ev.preventDefault(); }
+    /* `focused()`, NOT `sel`. This read a const declared inside paint(), from a
+       listener that does not close over it — the same mistake, in the same
+       mount, that made the hover dim never run once. Escape therefore never
+       cleared the map's selection, and nothing said so: the guard that was
+       written for that bug bans `if(sel)` and this spelling is `&& sel`. */
+    else if(ev.key==="Escape" && focused()){ select(null); ev.preventDefault(); }
   });
   const bind=(id,fn)=>{ const el=document.getElementById(id); if(el) el.addEventListener("click",fn); };
   bind("mz-in", ()=>setZ(z*1.25));
@@ -12789,8 +12969,12 @@ function mountMap(slug, data, focusId, focusPath){
   }
   bind("mt-titles", ()=>setMode("titles"));
   bind("mt-ids", ()=>setMode("ids"));
-  put();
-  paint();   // the empty card, so the column is never a bare box
+  /* THE COURT'S OPENING VIEW, before the first draw. defaultReveal takes the
+     court's 𓂀 sets and stops at every 𓁼, so a 𓂀 filed under a concealed parent
+     stays shut — the chain of command, not the flag alone. A court with no 𓂀
+     anywhere yields nothing and the map opens exactly as it always did. */
+  SEL = defaultReveal();
+  put();     // which paints, so the court's picks are on the graph as it appears
   /* LAND ON THE COURT, NOT ON EVERYTHING. The map opened at fit — the whole
      graph in a 640px box — which on a real docket makes every node a few pixels
      tall, drops the titles below the LOD line, and presents the reader with a
