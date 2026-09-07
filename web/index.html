@@ -2170,6 +2170,15 @@ tr.youare .mono{font-weight:600}
 .mcglyph{fill:var(--accent-ink); opacity:.26; pointer-events:none}
 .mcourt-a:hover .mcglyph,.mcourt-a:focus .mcglyph{opacity:.42}
 .mapsvg.far .mcglyph{display:none}
+/* THE TEMPLE'S INK. The court node's own fill, so the building reads as the same
+   material as the box it stands on rather than as something resting on top of
+   it — one shape in two parts, which is why there is no gap between them either.
+   IT STAYS WHEN THE MAP ZOOMS OUT, unlike the watermark above: the watermark is
+   texture under a name and turns to noise at small sizes, while a pediment on
+   three columns is a silhouette and is the one thing still legible when the
+   labels have gone. */
+.mtemple path{fill:var(--accent)}
+.mcourt-a:hover .mtemple path,.mcourt-a.selected .mtemple path{fill:var(--accent-2,var(--accent))}
 .mfold-a:hover .mfglyph,.mfold-a:focus .mfglyph,.mfold-a.selected .mfglyph{opacity:.52}
 .mapsvg.far .mfglyph{display:none}
 .mfold-a:hover .mfimg,.mfold-a:focus .mfimg,.mfold-a.selected .mfimg{opacity:.68}
@@ -7873,7 +7882,19 @@ const ICN_BIN = `<svg class="icn" viewBox="0 0 14 12" aria-hidden="true"><path d
    Not a path with round caps pretending to be dots: at 14x12 a cap is a smear,
    and the stars need to read as points. */
 const ICN_CONSTEL = `<svg class="icn" viewBox="0 0 14 12" aria-hidden="true"><path d="M2.1 9.4 5.5 3.2 9 6.5 12 2.3" fill="none" stroke="currentColor" stroke-width="0.9" stroke-linejoin="round" opacity=".5"/><circle cx="2.1" cy="9.4" r="1.15" fill="currentColor"/><circle cx="5.5" cy="3.2" r="1.15" fill="currentColor"/><circle cx="9" cy="6.5" r="1.15" fill="currentColor"/><circle cx="12" cy="2.3" r="1.15" fill="currentColor"/></svg>`;
-const ICN_COURT = `<svg class="icn" viewBox="0 0 14 12" aria-hidden="true"><path d="M7 0l6 2.8V4H1V2.8zM2.2 5h1.8v4.4H2.2zm3.9 0h1.8v4.4H6.1zm3.9 0h1.8v4.4H10zM1 10.4h12V12H1z" fill="currentColor"/></svg>`;
+/* THE TEMPLE, AND IT IS DRAWN RATHER THAN SPELLED. Unicode has the picture —
+   U+1F3DB CLASSICAL BUILDING is a pediment on columns, which is exactly this —
+   but the page's embedded face is a woff2 subsetted to the two set marks, so a
+   character would fall through to the reader's emoji font: colour on a Mac,
+   nothing at all on a machine with no emoji font, and neither is a silhouette.
+   A path needs no font and scales to any size the map asks for.
+   NAMED ONCE BECAUSE TWO SURFACES DRAW IT: the inline court icon at 14x12, and
+   the map's temple above the court node at whatever the layout allows. The same
+   twelve segments — pediment, three columns, stylobate — so the building on the
+   map and the building in a line of text are the same building. */
+const TEMPLE_D = "M7 0l6 2.8V4H1V2.8zM2.2 5h1.8v4.4H2.2zm3.9 0h1.8v4.4H6.1zm3.9 0h1.8v4.4H10zM1 10.4h12V12H1z";
+const TEMPLE_VB = 14;   // the path's own width; the height is 12
+const ICN_COURT = `<svg class="icn" viewBox="0 0 14 12" aria-hidden="true"><path d="${TEMPLE_D}" fill="currentColor"/></svg>`;
 /* Folders ARE on-chain (folders.gno) and LIVE courts now read them —
    chainFolders() fetches the flat chain shape and foldersFor() composes one
    labeled source: local curation ?? chain ?? demo sample ?? none. */
@@ -11077,7 +11098,26 @@ function mapSvg(L, data, slug){
      fallback — a court named for one word is named for a topic, not a face. */
   const cg = subjectGlyph(c.name);
   const cgPad = 5, cgSide = Math.max(0, c.h - cgPad*2);
+  /* A TEMPLE ON THE COURT, and it stands ON the box rather than floating over it.
+     The court node is the one node the whole drawing hangs off and it was a
+     rounded rectangle like every other; this is the only place on the map where
+     saying WHAT KIND OF THING it is costs nothing, because the space directly
+     above the centre is the one gap no node is ever laid out into.
+     SIZED FROM THE BOX, not fixed: 0.30 of its width, capped so it stays a mark
+     above a heading rather than a second heading. Its base sits on c.y exactly —
+     no gap — so it reads as built on the box and not as a balloon tied to it.
+     INSIDE THE COURT'S OWN GROUP, which is what makes it part of the node: the
+     group carries data-court, so a click on the pediment selects the court the
+     same as a click on the box, and the hover and selected styles reach it
+     without a second rule. aria-hidden, because the label already names the
+     court and a screen reader announcing "building" describes the decoration.
+     AFTER the spokes and chords are pushed, so the edges that radiate from the
+     centre pass UNDER it. Drawn before the label for the same reason. */
+  const tw = Math.min(Math.round(c.w * 0.30), 72), th = Math.round(tw * 12 / TEMPLE_VB);
   out.push(`<g class="mcourt-a" data-court="1">`
+    + `<g class="mtemple" aria-hidden="true" transform="translate(`
+      + `${(c.x + c.w / 2 - tw / 2).toFixed(1)} ${(c.y - th).toFixed(1)}) `
+      + `scale(${(tw / TEMPLE_VB).toFixed(4)})"><path d="${TEMPLE_D}"/></g>`
     + `<rect class="mcourt" x="${c.x}" y="${c.y}" width="${c.w}" height="${c.h}" rx="6"/>`
     + (cg && cgSide >= 14
         ? `<g class="mcglyph" transform="translate(${(c.x + c.w - cgSide - cgPad).toFixed(1)} `
@@ -11159,8 +11199,16 @@ function mapSvg(L, data, slug){
              oval's own class — the surface fill and the non-scaling stroke that
              keep an outline one pixel wide at every zoom — so the two badges
              thicken and thin together instead of drifting apart. */
+          /* THE RING FOLLOWS THE PUPIL, because the nudge below moves the ink
+             and a badge whose contents have moved is a badge the eye sits high
+             in. `dy` is that nudge, named once and spent twice — on the circle's
+             centre and on the baseline — so there is no way to shift one without
+             the other. Caught by map_draws: the ring assertion went red the pass
+             after the nudge landed, with the glyph poking out of the top of its
+             own outline on every concealed set. */
+          const dy = f.focus ? 0 : es * 0.22;
           return `<circle class="mvtag msetring" cx="${f.x.toFixed(1)}" `
-            + `cy="${f.y.toFixed(1)}" r="${bornR.toFixed(1)}" data-fid="${i}"/>`
+            + `cy="${(f.y - dy).toFixed(1)}" r="${bornR.toFixed(1)}" data-fid="${i}"/>`
             /* THE PUPIL SITS IN THE SAME PLACE WHICHEVER MARK IS DRAWN. The two
                glyphs are not drawn alike inside their em: 𓂀 carries its almond
                high with the tail hanging below, 𓁼 is drawn centred. One y for
@@ -12701,10 +12749,18 @@ function mountMap(slug, data, focusId, focusPath){
     const fa=t.closest(".mfold-a"); if(fa) return "f"+fa.dataset.fid;
     return t.closest(".mcourt-a")? "court" : null;
   };
-  box.addEventListener("mouseover", ev=>{ if(sel) return; const k=hoverKey(ev.target); if(k) dimTo(k); });
-  box.addEventListener("mouseout", ev=>{ if(sel) return; if(hoverKey(ev.target)) undim(); });
-  box.addEventListener("focusin", ev=>{ if(sel) return; const k=hoverKey(ev.target); if(k) dimTo(k); });
-  box.addEventListener("focusout", ()=>{ if(!sel) undim(); });
+  /* `focused()`, NOT `sel`. These four read "is something already selected?" —
+     hover must not fight a selection — and they asked a name that exists only
+     INSIDE paint(), as a const of its own. So every one of them threw
+     ReferenceError on the first mouseover of any node, and the dim-on-hover this
+     whole block exists for has never run: the handler dies before dimTo is
+     reached, and a listener that throws is silent unless somebody is watching
+     the console. Found by a browser check counting page errors, on a map that
+     looked completely normal. */
+  box.addEventListener("mouseover", ev=>{ if(focused()) return; const k=hoverKey(ev.target); if(k) dimTo(k); });
+  box.addEventListener("mouseout", ev=>{ if(focused()) return; if(hoverKey(ev.target)) undim(); });
+  box.addEventListener("focusin", ev=>{ if(focused()) return; const k=hoverKey(ev.target); if(k) dimTo(k); });
+  box.addEventListener("focusout", ()=>{ if(!focused()) undim(); });
   box.addEventListener("keydown", ev=>{
     const w=fit.w/z, h=fit.h/z;
     if(ev.key==="ArrowLeft"){ cx-=w*0.1; schedule(); ev.preventDefault(); }

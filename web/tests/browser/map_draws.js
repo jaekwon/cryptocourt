@@ -421,6 +421,48 @@ const {PAGE, demoPage} = require('./harness');
 
   // A page error is a failure even when the frame looks right: the map may have
   // drawn a first pass and thrown on the data.
+  /* THE TEMPLE ON THE COURT NODE, measured rather than eyeballed. Three things
+     make it part of the node instead of a picture near it, and each has its own
+     way of being wrong: it can drift off centre, it can float above the box, and
+     it can sit OUTSIDE the group that carries data-court — which would leave a
+     pediment that ignores clicks while the box under it selects.
+     The path is shared with the inline court icon, so this also fails if the two
+     stop being the same building. */
+  const temple = await page.evaluate(() => {
+    const t = document.querySelector(".mtemple"), c = document.querySelector("rect.mcourt");
+    if (!t || !c) return {drawn: !!t, court: !!c};
+    /* SCREEN RECTS, NOT getBBox. getBBox on a <g> answers in the group's OWN
+       coordinate system — before its transform — so a temple translated onto the
+       court's top edge reports y=0,height=12 and every comparison with the box
+       is nonsense. Measured in the one space both elements share. */
+    const tb = t.getBoundingClientRect(), cb = c.getBoundingClientRect();
+    return {
+      drawn: true,
+      // Its base on the box's top edge, to within a rounding of the transform.
+      gap: +(cb.top - tb.bottom).toFixed(2),
+      offCentre: +(((tb.left + tb.right) / 2) - ((cb.left + cb.right) / 2)).toFixed(2),
+      // Narrower than the heading it stands over, or it is a second heading.
+      narrower: tb.width < cb.width,
+      inCourtGroup: !!t.closest("[data-court]"),
+      // Drawn after the edges, so the spokes radiating from the centre pass under.
+      afterEdges: !!t.closest("svg").querySelector(".medge")
+        && Array.from(t.closest("svg").children).indexOf(t.closest("[data-court]"))
+           > Array.from(t.closest("svg").children).indexOf(
+               document.querySelector(".medge").parentElement === t.closest("svg")
+                 ? document.querySelector(".medge") : document.querySelector(".medge").closest("svg > *")),
+      fill: getComputedStyle(t.querySelector("path")).fill,
+    };
+  });
+  ok("a temple stands on the court node, centred and on its top edge",
+     temple.drawn === true && Math.abs(temple.gap) < 1 && Math.abs(temple.offCentre) < 1,
+     JSON.stringify(temple));
+  ok("...narrower than the heading, inside the court's own group, and inked",
+     temple.narrower === true && temple.inCourtGroup === true
+       && /rgb|#/.test(temple.fill || ""),
+     JSON.stringify(temple));
+  ok("...and the edges radiating from the centre pass under it",
+     temple.afterEdges === true, JSON.stringify(temple));
+
   ok("no page errors on the map route", errs.length === 0, errs.slice(0, 2).join(" | "));
 
   await browser.close();

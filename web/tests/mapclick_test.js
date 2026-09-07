@@ -129,6 +129,11 @@ eval(slice('function claimBody(', '/* ==='));
 global.SET_MARK = "\u{13080}";
 global.SHUT_MARK = "\u{1307C}";   // 𓁼 — the second mark, opens concealed
 eval(fn("setTitleParts"));   // the real parser — a stub could know one mark
+// The temple's path and its viewBox width. mapSvg draws the court's pediment
+// from these, so the real ones are loaded rather than stubbed: a fake `d`
+// would let a broken path pass, and the width is what the scale divides by.
+eval(slice('const TEMPLE_D =', '\n').replace('const ', 'global.'));
+eval(slice('const TEMPLE_VB =', '\n').replace('const ', 'global.'));
 global.ICN_EYE_OPEN = '<svg class="eye eyeopen"></svg>';   // drawn form; the harness needs it to exist, not to render
 eval(fn('setMarkHtml'));
 // The map draws the mark instead of writing it, so it needs the two

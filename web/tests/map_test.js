@@ -86,6 +86,18 @@ code += fn('isSetTitle') + '\n' + fn('stripSetMark') + '\n';
 // slice, so it has to be brought in or the region throws ReferenceError.
 // Its own rule is asserted in cliptext_test.js; this is only the definition.
 eval(fn("clipText"));
+// The temple's path and its viewBox width, which mapSvg draws the court's
+// pediment from. The real ones, not stubs: a fake `d` would let a broken path
+// pass, and the width is what the scale divides by.
+// `const` REWRITTEN TO `global.`, because a const declared inside eval() is
+// block-scoped to that eval and never reaches the code that needs it — which is
+// why every stub around here is `global.X = ...`. Rewriting the keyword keeps
+// the VALUE the page's own, which a hand-copied stub would not.
+// AND BEFORE buildCode, not beside the other stubs further down: those are set
+// at line 286 and mapSvg is CALLED at 198, so a global assigned there arrives
+// after the only call that reads it.
+eval(slice('const TEMPLE_D =', '\n').replace('const ', 'global.'));
+eval(slice('const TEMPLE_VB =', '\n').replace('const ', 'global.'));
 eval(buildCode());
 
 let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else console.log("ok:",n); };
