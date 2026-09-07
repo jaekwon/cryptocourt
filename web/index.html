@@ -3735,7 +3735,7 @@ const DEMO_CHAIN = {
   // (contradicts) credible. type "supersedes": from re-files to after a
   // no-decision. Relations move nothing mechanical — each claim is decided alone.
   positions:{ "orem/2":{yes:12_000_000,no:0,cy:6_400_000,cn:0}, "orem/3":{yes:8_000_000,no:4_000_000,cy:4_100_000,cn:1_900_000}, "orem/4":{yes:20_000_000,no:0,cy:10_800_000,cn:0}, "orem/6":{yes:0,no:5_000_000,cy:0,cn:2_100_000}, "orem/7":{yes:0,no:0,cy:2_000_000,cn:0}, "ledger/2":{yes:3_000_000,no:0,cy:900_000,cn:0} },
-  balances:{ orem:38_400_000, ledger:4_200_000 },
+  balances:{ orem:38_400_000, ledger:4_200_000, meta:900_000 },
 };
 /* ===== END GENERATED DEMO DATA ===== */
 
@@ -3760,6 +3760,20 @@ function mergeDemo(chain, overlay){
 const DEMO = mergeDemo(DEMO_CHAIN, DEMO_OVERLAY);
 
 const DEMO_ME = "g1youdemoholder0000000000000000000000000";
+/* WHAT THAT READER HAS WAITING IN THE META COURT, keyed by address the way the
+   realm keys it — the entitlement is a property of who burned, not of which
+   court they burned on. The figure is deliberately not round: a burn total is
+   whatever the curve charged, never a tidy number.
+   THE SAMPLE HOLDS SOME META COIN TOO, in DEMO.balances, because holding and
+   waiting are different things and both are true of anyone who has claimed once
+   and kept burning since. Without both, half the panel has no case offline.
+   HERE RATHER THAN INSIDE THE DEMO OBJECT, and that is not tidiness. Written as
+   `franchise:{ [DEMO_ME]: … }` up there it sat in DEMO_ME's temporal dead zone —
+   a top-level const initialised from one declared thirty lines below it — and
+   threw "Cannot access 'DEMO_ME' before initialization" on every page load. The
+   second time that shape has bitten in this file. A map about an address belongs
+   beside the address. */
+const DEMO_FRANCHISE = { [DEMO_ME]: 41_637_004 };
 
 /* ======================= data access (demo | live) ====================== */
 /* Both branches return the SAME shapes, so views never know which is live. The
@@ -4412,7 +4426,7 @@ async function balanceOf(slug,addr){
 const META_SLUG = "meta";
 async function franchiseOf(addr){
   if(!addr) return 0;
-  if(!isLive()) return Object.hasOwn(DEMO.franchise||{}, addr)? DEMO.franchise[addr] : 0;
+  if(!isLive()) return Object.hasOwn(DEMO_FRANCHISE, addr)? DEMO_FRANCHISE[addr] : 0;
   return one(`FranchiseOf(${gstr(addr)})`).catch(()=>null);
 }
 const rawRender = pth => isLive() ? qrender(pth) : demoRender(pth);
@@ -5291,6 +5305,23 @@ function tx(func, args){
    has to replace before it means anything. Two do: StartCourt and StartCourtP
    ship slug:"my-court", name:"My Court". Everything else on this page passes
    arguments the page derived itself, which is why they no longer stop to ask. */
+/* WHICH ENTRYPOINTS TAKE COIN, and where the amount comes from.
+   This used to be the single condition `func === "Buy"`, in three places, which
+   was true right up until the realm started charging for court creation. Once a
+   burn is priced, StartCourt and StartCourtP need GNOT attached or the call
+   panics — so the buttons on the directory would have failed for everybody, and
+   failed with a realm error rather than anything a reader could act on.
+   The two kinds are genuinely different and are kept apart rather than merged:
+     - BUY's amount is the reader's choice, so it is typed into the receipt
+       field and the button prompts for it when it is missing.
+     - CREATION's amount is the realm's, read from CourtCreationBurn(). There is
+       nothing to ask: the price is the price, and prompting for it would invite
+       somebody to type a number that gets refused. When the burn is 0 — the
+       shipped default — nothing is attached and the call is exactly what it was
+       before this existed. */
+const PAYS_FIXED = f => f === "StartCourt" || f === "StartCourtP";
+const takesCoin  = f => f === "Buy" || PAYS_FIXED(f);
+
 function btn(label, func, args, cls, sub, send, gate, edit, blocked, glyph, amt){
   // In demo mode the data is a sample: an action that links a real network to
   // sample arguments is a trap, so the button is inert and says why.
@@ -5387,6 +5418,9 @@ function cliCmd(func, args, send){
         + "gnokey maketx call \\\n  --pkgpath \"" + PKG + "\" --func \"" + func + "\"";
   for(const k of Object.keys(args||{})) c += " \\\n  --args " + shq(args[k]);
   if(func==="Buy") c += " \\\n  --send " + (send||"AMOUNTugnot");
+  // No placeholder for a fixed price: an unpriced realm takes no coin, and a
+  // pasted "--send AMOUNTugnot" would be a command that cannot run.
+  else if(PAYS_FIXED(func) && send) c += " \\\n  --send " + send;
   c += " \\\n  --gas-fee " + GAS_FEE_UGNOT + "ugnot --gas-wanted " + GAS_WANTED + " --broadcast" +
        " \\\n  --chainid \"" + (CFG.chainid||"dev") + "\" --remote \"" + CFG.rpc + "\" YOURKEY";
   return c;
@@ -5887,7 +5921,7 @@ async function adenaSign(func, args, el){
     const sendRaw = el.dataset.send || "";
     const sendOk = /^[1-9][0-9]*ugnot$/.test(sendRaw);
     const needsSend = func === "Buy" && !sendOk;
-    let vals, send = func === "Buy" && sendOk ? sendRaw : "";
+    let vals, send = takesCoin(func) && sendOk ? sendRaw : "";
     if(el.dataset.edit || el.dataset.authored || needsSend){
       const ok = await confirmArgs(func, args||{},
         el.dataset.authored ? (el.dataset.bodykey || "text") : null,
@@ -7707,6 +7741,25 @@ on(/^\/$/, async ()=>{
   } else {
     listed = pageSlice(listed, page);
   }
+  /* THE PRICE OF STARTING ONE, read before the buttons that charge it.
+     Failing SOFT and to zero is deliberate: an unpriced realm is the shipped
+     default and reads 0 anyway, and a node that will not answer this one query
+     must not cost a reader the whole directory. The button then behaves exactly
+     as it did before creation was priceable — which is the wrong behaviour only
+     on a chain that IS charging and did not answer, and on that chain the realm
+     refuses the call with its own message naming both figures. */
+  let creationBurnNow = 0;
+  if(isLive()){
+    try { creationBurnNow = parseInt(await one("CourtCreationBurn()"), 10) || 0; }
+    catch(_){ creationBurnNow = 0; }
+  }
+  const burnSend  = creationBurnNow > 0 ? creationBurnNow + "ugnot" : null;
+  // Said on the button itself, not only in the helper dialog behind a link: a
+  // price a reader discovers in their wallet prompt is a price sprung on them.
+  const burnNote  = creationBurnNow > 0
+    ? "burns " + gnotAmt(creationBurnNow) + ", which is not refundable"
+    : null;
+
   const faceSlugs = ((page===1? featured:[]).concat(listed)).map(c=>c.slug);
   const dirChips = (page===1 && listed.length>=2)
     ? `<span class="schips" role="group" aria-label="sort order"><button class="pill void" data-sort="rank" aria-pressed="${QP.sort!=="claims"}">GNOT burned</button><button class="pill void" data-sort="claims" aria-pressed="${QP.sort==="claims"}">busiest</button></span>` : "";
@@ -7761,12 +7814,13 @@ on(/^\/$/, async ()=>{
     + `<div class="lead-row" style="margin-top:26px"><div><h1 class="page-h">Courts of record</h1>
        <p class="page-sub">Each court runs its own coin and its own docket of claims of fact. Stake on YES or NO; your staked coin always returns 1×, and conviction — stake × time held — earns the reward when the verdict goes your way. Pick the court whose judgment you trust.
        <button type="button" class="helplink" data-help="help-newcourt">what starting one involves →</button></p></div>
-       ${btn("Create a new court","StartCourt",{slug:"my-court",name:"My Court"},"primary",null,null,false,true)}
-       ${btn("Create one with a polish window","StartCourtP",{slug:"my-court",name:"My Court",stakeOpenDelay:720},"","one hour before staking opens, so an author can fix the wording",null,false,true)}</div>
+       ${btn("Create a new court","StartCourt",{slug:"my-court",name:"My Court"},"primary",burnNote,burnSend,false,true)}
+       ${btn("Create one with a polish window","StartCourtP",{slug:"my-court",name:"My Court",stakeOpenDelay:720},"","one hour before staking opens, so an author can fix the wording"+(burnNote?" — "+burnNote:""),burnSend,false,true)}</div>
       <dialog class="helper" id="help-newcourt" aria-labelledby="help-newcourt-h">
         <div class="hd"><h3 id="help-newcourt-h">What starting a court involves</h3><button type="button" class="pill void" data-close>Close</button></div>
         <div class="bd">
           <div class="line"><span class="l">A slug and a name</span><span class="r">The slug is the address — <span class="mono">/covid</span> — and cannot be changed afterwards. Both are placeholders in the transaction until you edit them.</span></div>
+          ${creationBurnNow > 0 ? `<div class="line"><span class="l">A burn, up front</span><span class="r">Opening a court burns <b>${gnotAmt(creationBurnNow)}</b>. It goes to a keyless address nobody holds the key to — it is not a deposit and nothing returns it. Send more than the minimum and the extra burns too.</span></div>` : ""}
           <div class="line"><span class="l">Its own coin</span><span class="r">The court mints one, and every stake, bond and reward on it is denominated in that coin rather than in GNOT.</span></div>
           <div class="line"><span class="l">You moderate it</span><span class="r">The address that starts a court is its first moderator: you can file sets, seed claims and hide rows. Moderation never touches a stake, a bond or a verdict.</span></div>
           <div class="line"><span class="l">The polish window</span><span class="r">The second button opens the court with one hour before staking begins, so an author can fix wording nobody has staked against yet. A court started without it takes stake immediately, and a title freezes at the first stake either way.</span></div>
@@ -16936,7 +16990,13 @@ async function meHoldings(addr,courts){
   DETC = new Map();
   const box=document.getElementById("holdings"); box.innerHTML=`<div class="empty"><div class="g">⚖︎</div><p>Reading your positions…</p></div>`;
   let mefail = courts.degraded? 1 : 0;
-  const nowH = await chainHeight().catch(()=>null);
+  /* THE FRANCHISE IS READ FOR THE ADDRESS BEING VIEWED, not for the connected
+     wallet — this page looks up any address you paste, and "what is waiting for
+     them in the meta court" is the same question asked about somebody else. One
+     read, started alongside the height rather than after it. */
+  const [nowH, pendingFr] = await Promise.all([
+    chainHeight().catch(()=>null),
+    franchiseOf(addr).catch(()=>null)]);
   const blocks=[], mescan=[], pullsNow=[], maybeCourts=[], seniorBlocks=[];
   let seniorCount=0;
   const snapshot={h:nowH, claims:{}};
@@ -17102,8 +17162,21 @@ async function meHoldings(addr,courts){
     : heldList.length===1
     ? `<div class="stat"><div class="k">coin held</div><div class="v tnum">${cc(heldList[0][2], heldList[0][0])}</div><div class="sub">in ${safeInline(heldList[0][1])} — stake it on a claim to earn conviction</div></div>`
     : `<div class="stat"><div class="k">coin held</div><div class="v tnum">${heldList.length} courts</div><div class="sub">${heldList.map(([sl,,b])=>cc(b,sl)).join(" · ")} — one coin per court, never summed</div></div>`;
+  /* WHAT IS OWED BUT NOT YET MINTED, which no page could tell you before. Every
+     burn on every court accrues here one for one and nothing is minted until it
+     is claimed — so a reader can hold no meta coin at all and still be owed the
+     whole of what they have ever burned. Measured on kourt.xyz: seventeen covid
+     holders owed 13,068 GNOT between them, against a meta supply of zero. */
+  const frStat = pendingFr == null ? ""
+    : `<div class="stat"><div class="k">waiting in the meta court</div>`
+      + `<div class="v tnum">${pendingFr > 0 ? gnotAmt(pendingFr) : "none"}</div>`
+      + `<div class="sub">${pendingFr > 0
+          ? `burn accrued across every court — claimable as ${esc(META_SLUG)} coin`
+          : "every burn accrues here, one for one, and waits until it is claimed"}`
+      + `</div></div>`;
   const strip = `<section><div class="grid stats">
       ${heldStat}
+      ${frStat}
       <div class="stat"><div class="k">staked on claims</div><div class="v tnum">${posClaims}</div><div class="sub">${posClaims? `across ${posCourts} court${posCourts===1?"":"s"}` : "holding coin is a position; staking it takes a side"}</div></div>
       <div class="stat"><div class="k">you can pull now</div><div class="v tnum">${pullsNow.length}</div><div class="sub">principal and earned pools — open each claim</div></div>
       <div class="stat"><div class="k">maybe — the court decides</div><div class="v tnum">${maybeCourts.length}</div><div class="sub">voter carrots — a pull costs only gas</div></div>

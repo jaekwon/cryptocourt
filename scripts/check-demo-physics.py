@@ -161,8 +161,23 @@ def check_burn(region, bad):
     minted is derived as supply - emitted, which is how the demo branch itself
     derives it (web/index.html). That identity holds only because the sample has
     no coin burns; on a real chain it does not, which is a separate known gap.
+
+    THE META COURT IS EXEMPT, AND IT IS THE ONE COURT THAT CAN BE. This rule says
+    "a court's supply was paid for at the curve", which is true wherever supply
+    arrives through Buy — buy.gno:64 records the burn with reindexBurn(c, spent)
+    right beside the mint. Meta's supply does not arrive that way: it arrives
+    through ClaimMetaFranchise (meta.gno), which moves the curve and mints, and
+    records NO burn, because the GNOT was already burned into whichever court the
+    claimant bought. Counting it again here would double it.
+
+    So on the live chain meta reads a growing supply against a burn of zero, by
+    construction, and a sample that could not express that could not show the
+    meta court at all. The exemption is narrow on purpose: only this slug, only
+    this rule. Its supply and emitted are still checked by everything else.
     """
     for slug, body in courts(region):
+        if slug == "meta":
+            continue
         burned, supply, emitted = num(body, "burned"), num(body, "supply"), num(body, "emitted")
         if burned is None or supply is None or emitted is None:
             continue

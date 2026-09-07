@@ -216,6 +216,46 @@ ok("...with some claimed supply, so 'claimed so far' has a case offline",
 ok("...and no burn of its own — you do not burn for meta",
    /meta:\{[\s\S]{0,120}?burned:0,/.test(sample), (sample.match(/meta:\{[\s\S]{0,140}/)||[""])[0]);
 
+/* ---- and the positions page says what is waiting --------------------------
+   "How much do I have" is asked on #/me, and that page knew about coin HELD and
+   nothing about coin OWED — so a reader who had never claimed saw no meta
+   anywhere, while being owed the whole of what they had ever burned. */
+ok("the positions page reads the franchise", /const \[nowH, pendingFr\] = await Promise\.all\(\[/.test(src));
+/* FOR THE ADDRESS BEING VIEWED, not the connected wallet. #/me looks up any
+   address you paste, and "what is waiting for them" is the same question asked
+   about somebody else — reading CFG.addr there would answer about the wrong
+   person and look right. */
+ok("...for the address being viewed, not the connected wallet",
+   /franchiseOf\(addr\)\.catch/.test(src) && !/franchiseOf\(CFG\.addr\)\.catch\(\)=>null\]\)/.test(src));
+ok("...and shows it as its own tile", /waiting in the meta court/.test(src));
+/* AND THE STRIP ACTUALLY CARRIES IT. Building the tile and never inserting it
+   leaves every assertion above green and the page unchanged — measured: deleting
+   `${frStat}` from the strip survived this file until this arm existed. The same
+   shape as a tile that exists in a variable nobody renders. */
+ok("...and the positions strip renders it, not just builds it",
+   /\$\{heldStat\}\s*\n\s*\$\{frStat\}/.test(src));
+ok("...saying none rather than a bare zero when there is none",
+   /pendingFr > 0 \? gnotAmt\(pendingFr\) : "none"/.test(src));
+ok("...and the tile is omitted when the read did not land",
+   /const frStat = pendingFr == null \? ""/.test(src));
+
+/* ---- the sample can show both halves --------------------------------------
+   Holding and waiting are different things and both are true of anyone who has
+   claimed once and kept burning since. Without both in the sample, half the
+   panel has no case offline. */
+ok("the sample reader holds some meta coin", /balances:\{[^}]*meta:[1-9]/.test(src));
+ok("...and has some waiting too", /const DEMO_FRANCHISE = \{ \[DEMO_ME\]: [0-9_]+ \};/.test(src));
+/* AND IT IS DECLARED AFTER THE ADDRESS IT IS KEYED BY. Written inside the DEMO
+   object it sat in DEMO_ME's temporal dead zone — a top-level const initialised
+   from one declared thirty lines below — and threw "Cannot access 'DEMO_ME'
+   before initialization" on every page load. The SECOND time that shape has bitten
+   in this file; the first was REF_SET_MARKS reading SET_MARK. Both were invisible
+   to every source harness, because a harness sets those names as globals before
+   evaluating the region, and both were caught only by loading the real page. */
+ok("...declared after the address it is keyed by, not inside the demo object",
+   src.indexOf("const DEMO_ME =") < src.indexOf("const DEMO_FRANCHISE ="),
+   `DEMO_ME at ${src.indexOf("const DEMO_ME =")}, map at ${src.indexOf("const DEMO_FRANCHISE =")}`);
+
 /* ---- the wiring ------------------------------------------------------------ */
 ok("the read is by ADDRESS, not by court — it is earned everywhere",
    /async function franchiseOf\(addr\)\{/.test(src)

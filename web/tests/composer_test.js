@@ -22,6 +22,15 @@ eval(slice('function fmtN(', '\n'));
 eval(slice('function cc(n, slug){', '\nfunction ugnot('));
 eval(slice('function ccSym(', '\n'));
 eval(V(slice('const shq =', '\n\n')));
+/* cliCmd calls PAYS_FIXED, which is a top-level const rather than a function and
+   so is not inside either slice above. The page has it — this harness did not,
+   and the whole file died on "PAYS_FIXED is not defined" the moment cliCmd grew
+   the call. Loaded rather than stubbed: which entrypoints pay a fixed amount is
+   exactly the thing an assertion about the --send flag is about.
+   AND `var`, NOT `const`. A const declared inside eval() does not leak to the
+   scope around it — only function declarations do, which is why every other
+   slice here works untouched. cliptext_test's header says the same thing. */
+eval(slice('const PAYS_FIXED', '\n').replace(/^const /, 'var '));
 eval(slice('const GAS_WANTED', 'const CFG_DEFAULTS') + slice('function cliCmd(', '\n\n'));
 // MAX_COMMENT_CHARS is read out of the file, never restated: it is pinned to the
 // realm's maxBoardTextLen by check-web-constants, and a copy here would be a
@@ -193,7 +202,13 @@ const st = o => Object.assign({addr:"g1me", now:1000, boardOpen:true, claimFroze
   // argument on an unrelated call made this read "three placeholder buttons".
   ok("the placeholder buttons are marked, and they are the only ones",
      (src.match(/btn\([^\n]*,false,true\)/g)||[]).length === 2
-     && /StartCourt",\{slug:"my-court",name:"My Court"\},"primary",null,null,false,true\)/.test(src)
+     /* THE PLACEHOLDERS AND THE MARKING, not the two positions between them.
+        This pinned `"primary",null,null,false,true` and went stale the moment
+        that button grew a burn note and a send amount — arguments five and six,
+        which have nothing to do with whether the call ships a literal a reader
+        must replace. What matters is the placeholder args and the trailing
+        `,false,true` that marks the button as needing the dialog. */
+     && /StartCourt",\{slug:"my-court",name:"My Court"\},"primary",[^\n]*,false,true\)/.test(src)
      && src.includes('data-edit="1"'));
   // A concrete amount comes from the receipt input the reader typed into; the
   // no-quote fallback ships the literal "AMOUNTugnot", a placeholder like any
