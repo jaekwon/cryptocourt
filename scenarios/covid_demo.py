@@ -1439,6 +1439,30 @@ s.expect("ClaimSet", [SLUG, SET_CID[FAUCI]], str(FOLDER_ID[FAUCI]), final=True)
 s.expect("ClaimAssociations", [SLUG, ids["lab23"]], r"in:", final=True)
 s.expect("AssociationBond", [SLUG], r"1000000", final=True)
 
+# THE COURT-CREATION BURN, PRICED LAST, and the position is the point.
+#
+# Set it before s.court() above and the seed would have to pay it — the burn
+# applies to every StartCourt after the moment it is set, including this
+# scenario's own. Priced here, at the end, the seeded courts are made for free
+# and the price is live for anyone who opens the NEXT one, which is exactly the
+# state worth handing a reader: a configured realm they can actually try against.
+#
+# 2 GNOT is a demonstration figure, not a recommendation. It is large enough to
+# be visible on the parameters page and in a wallet prompt, small enough that a
+# faucet-funded visitor can pay it. The realm ships at 0; nothing here is a
+# default (see docs/ADR_COURT_CREATION_BURN.md).
+#
+# THE ADMIN IS THE DEPLOYER because realm init builds the meta court through
+# startCourt, which sets directoryAdmin to whoever deployed — so the global DAO
+# has an admin from the first block, which is also why SetSiteDomain works up at
+# the top before any court of this scenario exists.
+s.note("price court creation, so the next court anyone opens burns GNOT")
+s.call(DEPLOYER, "SetCourtCreationBurn", ["2000000"])
+s.expect("CourtCreationBurn", [], r"2000000", final=True)
+# The listing must carry it too, or the page a reader opens disagrees with the
+# chain it claims to be reading.
+s.expect("AdminParams", [], r"creationBurn:2000000", final=True)
+
 # ------------------------------------------------------------- the curation
 #
 # The half the chain cannot hold. Written from the SAME table, with the ids the
