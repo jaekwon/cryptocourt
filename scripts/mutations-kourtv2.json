@@ -9979,8 +9979,8 @@
   "pkg": "kourtv2",
   "file": "render.gno",
   "label": "v0.58 help: help carve swallows every court",
-  "find": "\t\tif parts[0] == helpPath {\n\t\t\treturn renderHelp()\n\t\t}\n\t\treturn renderCourt(parts[0])",
-  "replace": "\t\tif parts[0] != helpPath {\n\t\t\treturn renderHelp()\n\t\t}\n\t\treturn renderCourt(parts[0])"
+  "find": "\t\tif parts[0] == helpPath {\n\t\t\treturn renderHelp()\n\t\t}",
+  "replace": "\t\tif parts[0] != helpPath {\n\t\t\treturn renderHelp()\n\t\t}"
  },
  {
   "pkg": "kourtv2",
