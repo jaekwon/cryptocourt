@@ -1945,6 +1945,24 @@ tr.youare .mono{font-weight:600}
 .mhdr-t,.mverdict,.mvt{font-family:var(--sans)}
 .mnode{fill:var(--surface); stroke:var(--ink-2); stroke-width:1; vector-effect:non-scaling-stroke}
 .mnode-a{cursor:pointer}
+/* THE COMMENT CLUSTER, and faint is the whole specification. It answers "is
+   anyone talking here" at a glance and must never compete with the title, the
+   verdict oval or the edges — a reader who notices it before the sentence is
+   reading the wrong thing. Hence 0.30, and a hairline that does not thicken
+   with zoom: vector-effect keeps it one device pixel at every scale, so the
+   cluster stays a whisper on a map zoomed right in.
+   IT BRIGHTENS WITH ITS OWN NODE on hover and selection, which is what makes it
+   readable exactly when a reader is asking about that claim, and invisible the
+   rest of the time. */
+.mcmt-d{fill:var(--muted); opacity:.30}
+.mcmt-e{stroke:var(--muted); stroke-width:.5; fill:none; opacity:.22;
+  vector-effect:non-scaling-stroke}
+.mnode-a:hover .mcmt-d,.mnode-a:focus .mcmt-d,.mnode-a.selected .mcmt-d{opacity:.75}
+.mnode-a:hover .mcmt-e,.mnode-a:focus .mcmt-e,.mnode-a.selected .mcmt-e{opacity:.55}
+/* GONE WHEN THE TITLES GO. Zoomed out to boxes the nodes are a few pixels wide
+   and a cluster beside each one reads as noise on the drawing rather than as a
+   fact about a claim — the same rule .mtitle and .mthumb already follow. */
+.mapsvg.far .mcmt{display:none}
 /* THE PICKED NODE GROWS, so its label is readable without leaving the map.
    Scaled on the <a> that wraps the box AND its text, so the words grow with the
    box rather than staying put inside a bigger frame.
@@ -7913,6 +7931,78 @@ on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
       .then(()=>{ if(renderSeq===seq0 && QP.sort) applySort(QP.sort); });   // one settle once every key landed
   }
 });
+/* A CLUSTER THAT SAYS HOW MUCH TALKING, WITHOUT SAYING ANYTHING ELSE.
+   n circles joined by hairlines, hanging off a claim node's bottom-right corner.
+   It is not the thread shape and does not claim to be: replies are one level
+   deep on this board, so a faithful drawing would be a star with a fixed centre
+   and would look the same at four comments as at forty. What a reader scanning
+   the map wants is WHERE the talking is, and that is a question about size.
+   SQUARE-ROOT SIZED, so the drawing keeps discriminating where it matters. A
+   linear cluster spends its whole range on the first few comments and then grows
+   without bound: 40 comments would draw 40 dots into the neighbouring node. The
+   dot COUNT is capped and the radius grows as sqrt(n), which separates 1 from 4
+   from 12 — the range boards actually occupy — and lets 40 read as "many".
+   LAID OUT ON A SPIRAL rather than a circle, because a ring of eight dots reads
+   as a decoration and a drift outward reads as an accumulation. The angle step
+   is the golden angle, which is what keeps a small spiral from lining its points
+   up into spokes.
+   NO RANDOMNESS. Two draws of the same claim must be the same picture, or the
+   map flickers on every repaint and a reader learns nothing from the shape. */
+const CMT_MAX_DOTS = 9;
+function commentClusterSvg(count){
+  const n = Math.max(0, Math.floor(count));
+  if(n < 1) return "";
+  const dots = Math.min(CMT_MAX_DOTS, n);
+  const reach = 3.2 + Math.sqrt(n) * 1.9;      // how far the last dot drifts out
+  const GOLDEN = 2.39996;                       // radians; the golden angle
+  const pts = [];
+  for(let i = 0; i < dots; i++){
+    // i+1 so the first dot is already clear of the corner rather than on it
+    const t = (i + 1) / dots;
+    const r = reach * Math.sqrt(t);
+    const a = 0.5 + i * GOLDEN;                 // 0.5rad: start below-right, off the diagonal
+    pts.push([+(r * Math.cos(a)).toFixed(2), +(r * Math.sin(a)).toFixed(2)]);
+  }
+  /* THE EDGES ARE A CHAIN, NOT A MESH. One hairline from each dot to the next is
+     dots-1 lines; joining every pair would be quadratic and at nine dots would
+     draw 36 lines into a space eighteen units wide, which stops being faint. */
+  let d = "";
+  for(let i = 1; i < pts.length; i++){
+    d += `M${pts[i-1][0]} ${pts[i-1][1]}L${pts[i][0]} ${pts[i][1]}`;
+  }
+  const r = n > 12 ? 1.5 : n > 4 ? 1.3 : 1.15;
+  return (d? `<path class="mcmt-e" d="${d}"/>` : "")
+    + pts.map(([x, y]) => `<circle class="mcmt-d" cx="${x}" cy="${y}" r="${r}"/>`).join("");
+}
+
+/* THE COUNTS, ONE CLAIM AT A TIME BUT AFTER THE PAINT.
+   BoardSize is O(1) on chain — it is the board bptree's own Size — so the cost
+   here is not the realm's work, it is the ROUND TRIP: ~270ms per qeval, and a
+   map draws twenty of them. So this runs after the map is on screen, in chunks,
+   exactly as fillDocketRows fills the stake cells, and a slow chain delays a
+   decoration rather than the drawing.
+   NO REALM STATE FOR IT. A memoised counter on the claim would have to be kept
+   true at every site that adds, hides or purges a row — the note above
+   BoardHiddenCount makes that argument in full — and it would buy nothing,
+   because Size() is already constant time.
+   ZERO DRAWS NOTHING, and the group stays empty. Most claims have no comments;
+   filling every node and then emptying most of them is a flicker that tells a
+   reader the opposite of what this is for. */
+async function fillCommentClusters(s2, slug, claims, seq0){
+  await inChunks(claims, 6, async cl=>{
+    try{
+      if(renderSeq!==seq0) return;
+      const n = Number(await one(`BoardSize(${s2},${cl.id})`));
+      if(!Number.isFinite(n) || n < 1) return;
+      if(renderSeq!==seq0) return;
+      // Every surface this claim is drawn on, from one read — the map's own node
+      // and any other cell that asked for the same claim.
+      document.querySelectorAll(`[data-cmt="${slug}-${cl.id}"]`).forEach(g=>{
+        g.innerHTML = commentClusterSvg(n);
+      });
+    }catch(_){}
+  });
+}
 /* THE FILL EVERY DOCKET NEEDS, in one place because two pages draw the same row.
    docketRow emits two cells it cannot populate itself — `[data-pct]` for the
    stake figure and `#clk-<slug>-<id>` for the clock — and the court page filled
@@ -11781,6 +11871,25 @@ function mapSvg(L, data, slug){
     // The tooltip loses the mark for the same reason the label did: the node
     // already wears it as geometry, so repeating the codepoint here only puts a
     // tofu box in the hover text of a reader with no hieroglyph font.
+    /* WHERE THE COMMENTS ARE, AND ONLY THAT. A cluster of faint circles joined by
+       hairlines hangs off the node's bottom-right corner, outside the frame, and
+       its size stands for how many comments the claim carries. No text, no thread
+       shape, no counts: a reader scanning the map wants to know WHERE the talking
+       is, and a number would have to be read one node at a time.
+       OUTSIDE THE FRAME, PAST THE OVAL. The verdict badge already straddles this
+       corner — vbadge centres on the frame's bottom edge at the right — so the
+       cluster starts beyond both, down and to the right, where nothing else is
+       drawn and no label can reach.
+       EMPTY AT BUILD TIME. The count is a read per claim, so mapSvg cannot know
+       it: this is the cell, and fillCommentClusters populates the ones that have
+       comments after the map has painted. A claim with none keeps an empty group
+       and draws nothing, which is why the map does not flash a cluster on every
+       node and then take most of them away.
+       INSIDE THE ANCHOR, so it dims with the node under the map's own hover and
+       selection rules rather than needing a second set. */
+    out.push(`<g class="mcmt" data-cmt="${esc(slug)}-${n.id}" `
+      + `transform="translate(${(n.x + n.w).toFixed(1)} ${(n.y + fh).toFixed(1)})" `
+      + `aria-hidden="true"></g>`);
     out.push(`<title>#${n.id} · ${esc(pc.short)}${pc.side? " "+esc(pc.side):""} — ${esc(stripSetMark(cl.title))}</title></a>`);
   }
   out.push(`</svg>`);
@@ -12082,12 +12191,17 @@ function franchiseHtml(slug, pending, supply, hasMeta){
      true either way and is said either way; only the anchor is conditional. */
   const metaName = hasMeta
     ? `<a href="#/c/${esc(META_SLUG)}">meta court</a>` : "meta court";
+  /* THE REGISTER IS BURN AND RECEIVE, NEVER BUY — the owner's call, and
+     vocab_receive.js holds the rendered page to it: GNOT goes one way to a
+     keyless address and coin comes back, so "buy" would carry a seller, a price
+     and a way out at that price, and there is none of the three. This copy said
+     "buying", "purchase" and "buy into" in its first draft and the check caught
+     all three on the rendered page. */
   const rule = meta
-    ? `This court's coin is not bought — it is <b>earned</b>. Every purchase of any `
-      + `other court's coin burns GNOT, and that burn accrues to the buyer here, `
-      + `one for one.`
-    : `Buying this court's coin also earns you the ${metaName}'s coin — one for `
-      + `one with the GNOT you burn, on top of what you buy here.`;
+    ? `This court's coin is not received for GNOT — it is <b>earned</b>. Every burn `
+      + `for any other court's coin accrues here to whoever made it, one for one.`
+    : `Burning GNOT for this court's coin also earns you the ${metaName}'s coin — `
+      + `one for one with what you burn, on top of the coin you receive here.`;
   /* NOTHING IS MINTED UNTIL IT IS ASKED FOR, and that is the whole reason meta
      can read as empty. Said plainly, because "supply 0" next to a live
      entitlement is the exact thing that misleads. */
@@ -12106,8 +12220,8 @@ function franchiseHtml(slug, pending, supply, hasMeta){
       ? `<p class="fr-mine"><span class="fr-k">yours, waiting</span> `
         + `<b class="tnum">${gnotAmt(pending)}</b> of burn — claimable as `
         + `${esc(META_SLUG)} coin whenever you ask for it.</p>`
-      : `<p class="fr-mine muted">You have nothing waiting here yet — buy into any `
-        + `court and the GNOT you burn starts accruing.</p>`;
+      : `<p class="fr-mine muted">You have nothing waiting here yet — burn for any `
+        + `court's coin and it starts accruing.</p>`;
   return `<h2 class="sec-h">The meta franchise</h2>`
     /* "THIS COURT'S SUPPLY" WAS WRONG ON EVERY PAGE BUT ONE. The panel sits on
        covid's page and the supply it is talking about is META's, so "this
@@ -12844,6 +12958,20 @@ on(/^\/c\/([a-z0-9-]+)\/map$/, async (slug)=>{
   const ffocus = (QP.ffocus!=null && /^[0-9]+(\.[0-9]+)*$/.test(String(QP.ffocus).trim()))
     ? String(QP.ffocus).trim() : null;
   mountMap(slug, data, (mfocus!=null && validIds.has(mfocus))? mfocus : null, ffocus);
+  /* AND THE COMMENT CLUSTERS, AFTER THE MAP IS ON SCREEN. mapSvg drew an empty
+     group per claim; this is what puts circles in the ones that have comments.
+     It cannot run before mountMap — the groups it writes into do not exist yet —
+     and it must not be awaited, because a decoration may not hold up a drawing
+     that is already complete. Same shape as the court page's stake sweep.
+     LIVE ONLY: BoardSize is a chain read and the demo has no chain to ask, so a
+     demo map draws none — the branch every other live-only fact takes here.
+     `renderSeq` GUARDS IT, because these are chunked round trips: a reader who
+     clicks to another court before they land would otherwise get one court's
+     clusters written onto another's nodes, which share id numbers. */
+  if(isLive() && parsed.length){
+    const seq0 = renderSeq;
+    fillCommentClusters(gstr(slug), slug, parsed, seq0).catch(()=>{});
+  }
 });
 /* Map interactions: viewBox pan/zoom (one coordinate system), explicit text
    toggle (relayout, center preserved), CSS-only label LOD, hover/focus

@@ -35,7 +35,7 @@ const html = eval(fn("franchiseHtml") + "; franchiseHtml");
 const anon = html("covid", null, 5105763090, true);
 ok("the rule is stated with no wallet connected", /one for one/.test(anon), anon.slice(0, 90));
 ok("...and names the meta court as where it lands", /#\/c\/meta/.test(anon));
-ok("...and says the burn is what earns it", /GNOT you burn/.test(anon));
+ok("...and says the burn is what earns it", /one for one with what you burn/.test(anon));
 /* THE SENTENCE THAT RESOLVES THE CONTRADICTION. A reader looking at meta's zero
    supply needs to be told that minting is deferred, or the zero reads as "this
    does not work". */
@@ -53,7 +53,8 @@ ok("...naming the court whose supply that is, not the one being read",
 
 /* ---- the meta court's own page says it differently ------------------------ */
 const onMeta = html("meta", null, 0, true);
-ok("on meta's own page the coin is earned, not bought", /not bought/.test(onMeta) && /<b>earned<\/b>/.test(onMeta));
+ok("on meta's own page the coin is earned, not received for GNOT",
+   /not received for GNOT/.test(onMeta) && /<b>earned<\/b>/.test(onMeta));
 ok("...and it does not link the reader to the page they are on",
    !/#\/c\/meta/.test(onMeta), onMeta.slice(0, 120));
 ok("every court page carries the heading", /The meta franchise/.test(anon) && /The meta franchise/.test(onMeta));
@@ -69,9 +70,23 @@ ok("...and says it is claimable whenever they ask",
    because the page does not know anything about it. */
 const zero = html("covid", 0, 5105763090, true);
 ok("a connected wallet with nothing waiting is told how to start",
-   /nothing waiting here yet/.test(zero) && /starts accruing/.test(zero));
+   /nothing waiting here yet/.test(zero) && /burn for any court's coin/.test(zero));
 ok("...and an unconnected one is told nothing about itself",
    !/fr-mine/.test(anon), anon);
+
+/* THE REGISTER IS BURN AND RECEIVE, NEVER BUY. The owner's call, held over the
+   rendered page by vocab_receive.js: GNOT goes one way to a keyless address and
+   coin comes back, so "buy" would carry a seller, a price and a way out at that
+   price. This copy said "buying", "purchase" and "buy into" in its first draft
+   and the browser check caught all three. */
+for (const [what, t] of [["a court page", anon], ["meta's own page", onMeta],
+                         ["a wallet with nothing waiting", zero]])
+  /* A TAG BECOMES A SPACE, NOT NOTHING. Stripped to "", the heading runs
+     straight into the paragraph — "…franchiseBuying this court's coin…" — and
+     there is no word boundary left for `\bbuy` to find. Measured: the mutation
+     that puts "Buying" back SURVIVED this arm while the browser check caught it,
+     which is the arm quietly testing nothing. */
+  ok(`${what} never says buy`, !/\bbuy|\bpurchas/i.test(t.replace(/<[^>]*>/g, " ")), t);
 
 /* ---- the supply, when it is known ----------------------------------------- */
 ok("the claimed supply is shown when the read landed",
