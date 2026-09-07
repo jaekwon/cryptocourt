@@ -43,6 +43,13 @@ ok("...and says nothing is minted until it is claimed",
    /Nothing is minted at the moment of the burn/.test(anon) && /until the holder claims/.test(anon));
 ok("...and says what that makes the supply MEAN",
    /counts the people who came to use it/.test(anon), anon);
+/* AND NAMES WHOSE SUPPLY IT MEANS. This read "so this court's supply counts…"
+   on every page — and the panel sits on covid's page while the supply it is
+   describing is META's, so "this court" named the wrong one everywhere except
+   meta's own page, where the two readings coincide. That is why it survived
+   being written, and why it was only caught by reading the live page. */
+ok("...naming the court whose supply that is, not the one being read",
+   /the meta court's supply counts/.test(anon), anon);
 
 /* ---- the meta court's own page says it differently ------------------------ */
 const onMeta = html("meta", null, 0, true);
@@ -67,10 +74,18 @@ ok("...and an unconnected one is told nothing about itself",
    !/fr-mine/.test(anon), anon);
 
 /* ---- the supply, when it is known ----------------------------------------- */
-ok("the minted supply is shown when the read landed",
-   /minted so far/.test(anon) && /5105763090 CC:META/.test(anon));
-ok("...and omitted when it did not, rather than printed as zero",
-   !/minted so far/.test(html("covid", null, null, true)));
+ok("the claimed supply is shown when the read landed",
+   /claimed so far/.test(anon) && /5105763090 CC:META/.test(anon));
+ok("...and omitted when the read did not land",
+   !/claimed so far/.test(html("covid", null, null, true)));
+/* A ZERO IS NOT PRINTED AS A QUANTITY. "minted so far 0.00" beside a court that
+   has burned thirteen thousand GNOT is the sentence a reader disbelieves: it
+   reads as a measurement of a broken thing. "Nobody has claimed any yet" is a
+   different statement and the true one. */
+const none = html("covid", null, 0, true);
+ok("a supply of zero is said in words, not as a figure",
+   /Nobody has claimed any yet/.test(none) && !/claimed so far/.test(none), none);
+ok("...and says where it all is instead", /still waiting as an entitlement/.test(none));
 /* AND IT IS META'S SUPPLY, NOT THE COURT'S. The panel sits on covid's page and
    the figure it prints is the meta court's — printing covid's there would be the
    same confusion in a new place. */

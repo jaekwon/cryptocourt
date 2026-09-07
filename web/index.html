@@ -12091,9 +12091,16 @@ function franchiseHtml(slug, pending, supply, hasMeta){
   /* NOTHING IS MINTED UNTIL IT IS ASKED FOR, and that is the whole reason meta
      can read as empty. Said plainly, because "supply 0" next to a live
      entitlement is the exact thing that misleads. */
-  const held = Number.isFinite(supply)
-    ? `<span class="fr-k">minted so far</span> <span class="tnum">${cc(supply, META_SLUG)}</span>`
-    : "";
+  /* A ZERO HERE IS THE WHOLE CONFUSION, so zero does not get printed as a
+     quantity. "minted so far 0.00" beside a court that has burned thirteen
+     thousand GNOT is the sentence a reader disbelieves — it looks like a
+     measurement of a broken thing. Nothing has been CLAIMED is a different
+     statement and the true one, so it is the one made. */
+  const held = !Number.isFinite(supply) ? ""
+    : supply > 0
+      ? `<span class="fr-k">claimed so far</span> <span class="tnum">${cc(supply, META_SLUG)}</span>`
+      : `<span class="fr-k">Nobody has claimed any yet</span> — every burn so far `
+        + `is still waiting as an entitlement.`;
   const mine = pending == null ? ""
     : pending > 0
       ? `<p class="fr-mine"><span class="fr-k">yours, waiting</span> `
@@ -12102,10 +12109,15 @@ function franchiseHtml(slug, pending, supply, hasMeta){
       : `<p class="fr-mine muted">You have nothing waiting here yet — buy into any `
         + `court and the GNOT you burn starts accruing.</p>`;
   return `<h2 class="sec-h">The meta franchise</h2>`
+    /* "THIS COURT'S SUPPLY" WAS WRONG ON EVERY PAGE BUT ONE. The panel sits on
+       covid's page and the supply it is talking about is META's, so "this
+       court" named the wrong one — read live on kourt.xyz and fixed there. On
+       meta's own page both readings coincide, which is exactly why the mistake
+       survived being written. */
     + `<p class="small">${rule} Nothing is minted at the moment of the burn: it `
-    + `waits as an entitlement until the holder claims it, so this court's supply `
-    + `counts the people who came to use it rather than everyone who passed `
-    + `through.</p>`
+    + `waits as an entitlement until the holder claims it, so the ${esc(META_SLUG)} `
+    + `court's supply counts the people who came to use it rather than everyone `
+    + `who passed through.</p>`
     + (held? `<p class="small muted">${held}</p>` : "")
     + mine;
 }
