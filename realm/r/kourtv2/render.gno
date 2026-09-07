@@ -50,6 +50,12 @@ func render(path string) string {
 		if parts[0] == helpPath {
 			return renderHelp()
 		}
+		// Carved here for exactly the reason helpPath is, and safe by the same
+		// construction: this path is 12 characters and a slug is at most 11, so
+		// no court can ever shadow it.
+		if parts[0] == adminParamsPath {
+			return renderAdminParams()
+		}
 		return renderCourt(parts[0])
 	}
 	// The moderation log is a named sub-route, so it must be carved out BEFORE

@@ -63,6 +63,16 @@ type daoState struct {
 
 var globalDAO *daoState
 
+// The seat count and threshold a bootstrapped DAO starts with. Named because a
+// PURE read has to report them without calling ensureGlobalDAO — that function
+// allocates, and check-read-purity refuses an exported read that allocates,
+// since the first caller would change what the second one sees. Two literals in
+// two files would be two things to keep in step; adminparams.gno reads these.
+const (
+	daoBootstrapN = 1
+	daoBootstrapM = 1
+)
+
 // ensureGlobalDAO lazily migrates directoryAdmin into the DAO on first use.
 func ensureGlobalDAO() *daoState {
 	if globalDAO != nil {
@@ -85,8 +95,8 @@ func ensureGlobalDAO() *daoState {
 	d := &daoState{
 		admin:   directoryAdmin,
 		members: bptree.NewBPTree32(),
-		n:       1,
-		purgeM:  1,
+		n:       daoBootstrapN,
+		purgeM:  daoBootstrapM,
 		pending: bptree.NewBPTree32(),
 	}
 	d.members.Set(directoryAdmin.String(), true)
