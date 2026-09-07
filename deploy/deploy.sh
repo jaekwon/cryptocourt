@@ -164,9 +164,23 @@ if [ -z "$SKIP_CHECKS" ]; then
 	# 4.6 SECONDS FOR THE SOURCE SUITE, measured, against a Go cross-build that
 	# takes longer — there is no argument for leaving it out.
 	if command -v node >/dev/null 2>&1; then
-		node web/tests/run.js >/dev/null \
-			|| { echo "deploy: a source harness failed — run: node web/tests/run.js" >&2; exit 1; }
-		echo "    55 source harnesses pass"
+		# THE COUNT IS READ BACK, NOT WRITTEN HERE. This line said a literal 55
+		# while the suite had grown to 57, so a deploy could report a number that
+		# was never true and would have kept reporting it while coverage FELL —
+		# the same class of lie as a progress bar that does not measure anything.
+		# run.js prints its own total, so the total comes from run.js.
+		kout=$(node web/tests/run.js) \
+			|| { echo "$kout" | tail -3 >&2
+			     echo "deploy: a source harness failed — run: node web/tests/run.js" >&2; exit 1; }
+		# AND IF THE WORDING EVER MOVES, the suite's own last line is printed
+		# verbatim instead of a blank. A parse that quietly yields nothing would
+		# print "    source harnesses pass" — no number, still reassuring, which
+		# is the failure being fixed rather than a different shape of it. This
+		# does not block the deploy: run.js already exited 0, so the suite really
+		# did pass, and only the sentence about it is unrecognised.
+		kn=$(echo "$kout" | sed -n 's/^web-test: \([0-9]*\) harnesses pass\.$/\1/p')
+		if [ -n "$kn" ]; then echo "    $kn source harnesses pass"
+		else echo "    source suite passed: $(echo "$kout" | tail -1)"; fi
 		# AND THE THREE SURFACES THAT MUST NOT REGRESS, in a browser, because
 		# geometry is the one thing no static gate can read: route_crawl walks
 		# every internal link, map_draws is the map, eye_inline is the folder and
