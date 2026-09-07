@@ -91,7 +91,27 @@ SUSPECT = re.compile(
 # the curve; kourtv1's one is its burn. A third in kourtv2, or a first anywhere
 # else, is a redemption path and this refuses it.
 SENDCOINS = re.compile(r"\bSendCoins\s*\(")
-SENDCOINS_ALLOWED = {("kourtv1", "buy.gno"): 1, ("kourtv2", "buy.gno"): 2}
+SENDCOINS_ALLOWED = {("kourtv1", "buy.gno"): 1, ("kourtv2", "buy.gno"): 2,
+                     ("kourtv2", "courtburn.gno"): 1}
+
+# courtburn.gno's ONE send is an OWNER DECISION, and a count alone would be a
+# blank cheque for it — so the entry comes with a rule that keeps the property
+# being guarded actually checkable.
+#
+# The property is "no GNOT leaves this realm TO A USER". A send to the keyless
+# burn sink does not leave to anyone: nobody holds that key, by construction
+# (buy.gno's burnSinkPath note). So the court-creation burn is registered here,
+# and every SendCoins in a file listed below must name burnSinkPath as its
+# destination. Swap it for a user address and the count still reads 1 while the
+# realm has grown a redemption path — which is exactly the substitution this
+# rule refuses. buy.gno is NOT in this set: its second send is the buyer's dust
+# change, deliberately user-destined, and it predates and outranks this rule.
+#
+# Registered when the owner reversed the v0.8.2 "no GNOT creation fee" decision
+# (MODERATION.md §13.5). The creation payment burns in full and nothing is paid
+# back out, which is what let the refund path be deleted rather than exempted.
+SINK_ONLY = {("kourtv2", "courtburn.gno")}
+SINK_DEST = re.compile(r"burnSinkPath")
 
 # Exact names both patterns would otherwise trip on. WithdrawStake and
 # WithdrawBonus are the reason REDEEM needs a list at all: they return a holder's
@@ -124,6 +144,23 @@ def main() -> int:
             if n != want:
                 hits.append(("GNOT leaves the realm", realm, p.name, 0,
                              f"{n} SendCoins call(s), expected {want}"))
+            # A sink-only file's sends must each name the keyless sink. Checked
+            # per call rather than per file, so adding a second, user-destined
+            # send is caught by this even if the count were ever raised.
+            if (realm, p.name) in SINK_ONLY:
+                for m in SENDCOINS.finditer(src):
+                    # The destination sits in the call's own argument list; one
+                    # line of slack past the closing paren covers the wrapped
+                    # form the realm actually uses.
+                    tail = src[m.start(): m.start() + 400]
+                    stop = tail.find("\n\t}")
+                    if stop != -1:
+                        tail = tail[:stop]
+                    if not SINK_DEST.search(tail):
+                        line = src[: m.start()].count("\n") + 1
+                        hits.append(("GNOT leaves the realm", realm, p.name, line,
+                                     "a sink-only file sends somewhere that is "
+                                     "not burnSinkPath"))
 
     if hits:
         print("check-nontransferable: something that must not be movable "

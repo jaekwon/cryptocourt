@@ -772,6 +772,7 @@ func StartCourt(cur realm, slug, name string) string {
 	if !cur.IsCurrent() {
 		panic(errStaleRealm)
 	}
+	takeCourtCreationBurn(cur)
 	return startCourtUser(cur.Previous().Address(), cur.Address(), slug, name, 0)
 }
 
@@ -785,6 +786,7 @@ func StartCourtP(cur realm, slug, name string, stakeOpenDelay int64) string {
 	if !cur.IsCurrent() {
 		panic(errStaleRealm)
 	}
+	takeCourtCreationBurn(cur)
 	return startCourtUser(cur.Previous().Address(), cur.Address(), slug, name, stakeOpenDelay)
 }
 
