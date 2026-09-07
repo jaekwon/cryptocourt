@@ -141,11 +141,22 @@ const ROUTES = ["#/c/orem", "#/c/orem/f/0", "#/c/orem/f/1", "#/c/orem/11", "#/c/
       const a = document.querySelector(".main .actions");
       if (!a) return {none: true};
       const b = a.querySelector(".btn");
-      const sec = a.closest("section");
-      const dk = sec ? sec.querySelector(".docket, .empty") : null;
+      /* MEASURED AGAINST THE LAST LIST ON THE PAGE, not against one inside the
+         action's own section. This asked `a.closest("section")` for the list, and
+         that worked only while the set page wrapped its dockets and its actions
+         in one "Claims" section together. That wrapper went — the court page has
+         none, and it was printing the same count a third time — so the actions
+         block became a top-level child of main, closest("section") answered null,
+         and this check failed with belowList:null over a page whose action was
+         exactly where it should be. A test that reads the nesting breaks when the
+         nesting is fixed; the RULE is "under the list", so measure that.
+         THE LAST LIST, which is also stricter: the action may not sit between
+         Open and Recently settled either. */
+      const lists = [...document.querySelectorAll(".main .docket, .main .empty")];
+      const dk = lists[lists.length - 1] || null;
       return {label: b ? b.textContent.trim() : null,
               fn: b ? (b.dataset.fn || b.getAttribute("data-fn")) : null,
-              // it belongs under the list, not above it
+              lists: lists.length,
               belowList: dk ? dk.getBoundingClientRect().bottom <= a.getBoundingClientRect().top + 2 : null};
     });
     ok(`${r}: the set page offers a way to file a claim`, !act.none && /Open a claim/.test(act.label || ""),
