@@ -8152,11 +8152,31 @@ function folderRowHtml(slug,f,path,toggle){
      steps over, so following it does not tick the set instead. */
   const bornTail = f.born ? ` · <a class="foldopen" href="#/c/${esc(slug)}/${f.born}">affirmed by #${f.born}</a>` : "";
   const meta = `<span class="t">${safeInline(f.name)} <span class="m">${n} claim${n===1?"":"s"}${subTail}${bornTail}</span></span>`;
-  if(!toggle) return `<a class="crow folderrow" data-q="${esc(f.name + " " + (f.desc||""))}"
-    href="#/c/${esc(slug)}/f/${path}">
-    <span class="id">${EYE_CHAR}</span>
+  /* THE SAME ROW THE COURT PAGE DRAWS, and it used to be a different one — worse,
+     an INVALID one. This branch wrapped the whole row in an `<a>`, and `meta`
+     carries the born reference as a link, so the row shipped an anchor inside an
+     anchor. A parser cannot nest them: it closed the row early and hoisted
+     "affirmed by #4" and the pill OUT, so the Subsets section on a set page came
+     out three stacked lines per subset — name and a dangling "·", then the born
+     link on its own line, then a bare `set` pill — while the court page's rows,
+     which are a DIV and may hold links, stayed one tidy line. Reported as "what
+     is under SUBSETS isn't the same as how it is on the main court page".
+     A DIV IN BOTH, therefore, differing only where they must: the court page's
+     row is a checkbox and carries the two-eye filter box, this one is not and
+     carries the set's own mark. The way in is `open →` in both, which is also
+     what the reporter asked for — the `set` pill said what the row plainly is.
+     THE SET'S OWN MARK, not EYE_CHAR. That constant is D010 spelled in, so every
+     concealed subset wore the glyph for one that opens shown — the same defect
+     already fixed on the map node and the set heading, one surface later.
+     `mark` IS NAMED, because check-mark-font finds a glyph by matching a hole
+     that IS one; a ternary written inline into the template is invisible to it. */
+  if(!toggle){
+    const mark = f.focus ? SET_MARK : SHUT_MARK;
+    return `<div class="crow folderrow" data-q="${esc(f.name + " " + (f.desc||""))}">
+    <span class="id"><span class="wedjat" role="img" aria-label="${setOpensWords(f.focus)}">${mark}</span></span>
     ${meta}
-    <span class="pill void">set</span></a>`;
+    <a class="pill void foldopen" href="#/c/${esc(slug)}/f/${path}">open &rarr;</a></div>`;
+  }
   const keys = folderSubtree(f, path, []).join(" ");
   return `<div class="crow folderrow foldsel" role="checkbox" aria-checked="false" tabindex="0"
     data-q="${esc(f.name + " " + (f.desc||""))}" data-fold-keys="${esc(keys)}"${f.focus? ' data-fold-focus="1"':""}>

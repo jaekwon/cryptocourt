@@ -88,6 +88,11 @@ code += slice('const CHAIN_FOLDER_CAP', '/* ======').replace('const CHAIN_FOLDER
 code += slice('function resolveFolderPath(', 'function folderMeta(');
 code += 'const ICN_EYE_OPEN="<svg/>", ICN_EYE_SHUT="<svg/>";\n';   // the row needs the marks to exist, not to be drawn
 global.EYE_CHAR = '<span class="wedjat">\u{13080}</span>';   // the character, in the embedded face
+// The two marks and the words for them: the subset row draws the set's OWN mark
+// from f.focus, so a stub would let a row that always drew D010 pass.
+global.SET_MARK = "\u{13080}";
+global.SHUT_MARK = "\u{1307C}";
+code += slice('function setOpensWords(', '\n');
 // folderCount is the LENGTH of the transitive walk now, so the walk comes too.
 code += slice('function folderClaimEntries(', 'function folderCount(');
 code += slice('function folderCount(', 'function folderRowHtml');
@@ -255,6 +260,45 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
   const row = folderRowHtml("orem", (await chainFolders("orem")).folders[1], "2");
   ok("purged name escaped", row.includes("[purged:9.2]&lt;img") && !row.includes("<img src=x"));
   ok("chain fid path in href", row.includes('href="#/c/orem/f/2"'));
+
+  /* THE SUBSET ROW IS THE COURT PAGE'S ROW, and it was neither — it was invalid.
+     The untoggled branch wrapped the whole row in an <a>, and the row's meta
+     carries the born reference as a link, so it shipped an anchor inside an
+     anchor. No parser allows that: it closed the row early and hoisted "affirmed
+     by #4" and the pill out as siblings, so a set page's Subsets section came out
+     three stacked lines per subset while the court page's stayed one.
+     ASSERTED ON THE STRING, because that is where the fault is. A DOM would show
+     the browser's repair — the hoisted siblings — and not the cause; the invalid
+     nesting is only visible in what the page emits. */
+  {
+    const sub = {name:"Gain-of-function funding", claims:[10,22,24], folders:[],
+                 fid:4, born:4, focus:false, path:"4"};
+    const r = folderRowHtml("orem", sub, "4");
+    /* NESTING, NOT COUNTING. The row carries TWO anchors — the born reference and
+       the way in — and that is correct: they are siblings. What is illegal is one
+       INSIDE the other, so this walks the tags and checks the depth never passes
+       one. The first version of this assertion just looked for a second `<a`
+       anywhere after the first and failed on the fixed row. */
+    const depth = (() => {
+      let d = 0, max = 0;
+      for (const t of r.match(/<\/?a\b/g) || []) { d += t === "</a" ? -1 : 1; max = Math.max(max, d); }
+      return max;
+    })();
+    ok("a subset row is a div, so the links it carries are legal",
+       r.trim().startsWith("<div") && depth === 1);
+    ok("...with the born reference inline in the meta, not stranded after it",
+       /<span class="m">3 claims · <a class="foldopen" href="#\/c\/orem\/4">affirmed by #4<\/a><\/span>/.test(r));
+    ok("...and the way in is `open`, the same pill the court page uses",
+       /class="pill void foldopen" href="#\/c\/orem\/f\/4"/.test(r) && !/>set</.test(r));
+    /* THE SET'S OWN MARK. This drew EYE_CHAR, the D010 constant, so a subset the
+       court voted to open CONCEALED wore the glyph for one that opens shown —
+       the same defect already fixed on the map node and on the set heading. */
+    ok("...drawing the mark the set was filed under, not the shown one",
+       r.includes("\u{1307C}") && !r.includes("\u{13080}"));
+    const shown = folderRowHtml("orem", Object.assign({}, sub, {focus:true}), "4");
+    ok("...and the other mark when it opens shown",
+       shown.includes("\u{13080}") && !shown.includes("\u{1307C}"));
+  }
 
   // foldersFor precedence: local ?? chain ?? sample ?? none
   const chainF = await chainFolders("orem");
@@ -757,7 +801,9 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
      /aria-label="\$\{setOpensWords\(p\.shown\)\}"/.test(src));
   ok("...through the one place that phrase lives",
      /function setOpensWords\(shown\)\{ return "set that opens " \+ \(shown \? "shown" : "concealed"\); \}/.test(src)
-     && (src.match(/setOpensWords\(/g) || []).length === 5);
+     // Six sites now: the subset row on a set page draws the set's own mark too,
+     // and takes its label from the same phrase rather than spelling one.
+     && (src.match(/setOpensWords\(/g) || []).length === 6);
 
   /* THE CHAIN DECIDES WHETHER A TITLE IS A HEADING, not the page. isSetTitle
      gates the New panel and reads the page's OWN two marks — and the two can

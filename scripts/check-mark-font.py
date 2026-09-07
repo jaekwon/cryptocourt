@@ -95,7 +95,29 @@ MARK = re.compile("|".join(INSIDE))
 # was the fourth miss: an SVG <text> whose glyph follows a <title> child has two
 # more angle brackets in between, so a pattern demanding none after the tag found
 # nothing at all. Take every opener and keep the nearest.
-OPEN = re.compile(r"<(span|text)\b([^>]*)>", re.S)
+OPEN = re.compile(r"<(span|text)\b", re.S)
+# ...and its classes are looked for AFTER it rather than inside it, which is the
+# sixth version of the same lesson. The pattern used to be `<(span|text)\b([^>]*)>`
+# — the whole tag — and the map's mark stopped being covered the moment a comment
+# landed between that tag's name and its `>`:
+#
+#     + `<text class="mset wedjat" data-fid="${i}" x="..." `
+#       /* THE MARK IN ITS OWN TSPAN, ... without touching the <title> beside it */
+#       + `text-anchor="middle">`
+#
+# The comment contains `<title>`, so `[^>]*` could not reach the real `>`, no
+# opener was found within the window, and the site was SKIPPED — not failed.
+# Coverage fell from 7 sites to 6 and the total still read 7, because a new site
+# had just been added elsewhere. A guard that goes quiet is worse than one that
+# shouts, and a count that moves for two reasons at once hides it.
+CLASSATTR = re.compile(r'class="([^"]*)"')
+# HOW FAR BACK THE OPENING TAG MAY BE, and 400 was not far enough. The map's
+# mark sits 679 characters after its `<text` — the tag, two attribute fragments,
+# a six-line comment and a <title> child all come between — so the walk found
+# nothing and the site was skipped in silence. Measured, then rounded up; the
+# LAST opener before the glyph is the one taken, so a wider window only matters
+# when there is no nearer tag to find.
+BACK = 900
 
 
 def in_comment(src, i):
@@ -118,8 +140,15 @@ def in_comment(src, i):
     return src.rfind("/*", 0, i) > src.rfind("*/", 0, i)
 
 
-def classes(attrs):
-    m = re.search(r'class="([^"]*)"', attrs)
+def classes_after(after):
+    """The classes of the tag that opened just before the glyph.
+
+    `after` is everything between the tag's NAME and the glyph. The first
+    class attribute in it is that tag's, because a tag's own attributes come
+    before any child's — and a nested <tspan> that adds none simply leaves the
+    parent's found, which is right: font-family inherits.
+    """
+    m = CLASSATTR.search(after)
     return set((m.group(1) if m else "").split())
 
 
@@ -176,15 +205,17 @@ def main():
         for m in MARK.finditer(src):
             if in_comment(src, m.start()):
                 continue
-            # The nearest opening tag before it. 400 chars is generous for a tag
-            # plus an intervening <title>, and short enough that an unrelated span
-            # a page away cannot answer for this glyph.
-            opens = list(OPEN.finditer(src[max(0, m.start() - 400):m.start()]))
+            # The nearest opening tag before it, within BACK characters.
+            opens = list(OPEN.finditer(src[max(0, m.start() - BACK):m.start()]))
             if not opens:
                 continue
             back = opens[-1]
             drawn += 1
-            cls = classes(back.group(2))
+            # The first class attribute between the tag's name and the glyph. A
+            # tag is not always one fragment here — it is assembled from several
+            # strings with holes and comments in between — so this reads forward
+            # from the name rather than trying to bound the tag.
+            cls = classes_after(src[max(0, m.start() - BACK) + back.end():m.start()])
             if cls & ok_classes:
                 continue
             line = src.count("\n", 0, m.start()) + 1
