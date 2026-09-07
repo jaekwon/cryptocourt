@@ -828,6 +828,17 @@ a.card:hover{border-color:var(--line-2)}
    in it reads as a list of links with words between them. The reader's cue that
    "#19" goes somewhere is that it is a number with a hash — which is already how
    the page names claims — so the styling only has to confirm it on approach. */
+/* THE FRANCHISE PANEL. A quiet block rather than a stat strip: it is a RULE
+   plus, when there is one, a figure — and the rule is the part a reader has
+   never been told. Bordered on the accent side so it reads as an aside on the
+   court page and as the subject on meta's own. */
+.franchise{margin-top:18px; padding:10px 12px;
+  border-left:3px solid color-mix(in srgb, var(--accent) 55%, transparent);
+  background:color-mix(in srgb, var(--accent) 5%, transparent)}
+.franchise .sec-h{margin:0 0 6px}
+.franchise p{margin:4px 0}
+.fr-k{color:var(--muted); font-size:.92em}
+.fr-mine{margin-top:8px}
 .reflink{color:inherit; text-decoration:underline; text-decoration-style:dotted;
   text-underline-offset:2px; text-decoration-color:color-mix(in srgb, var(--accent) 55%, transparent)}
 .reflink:hover,.reflink:focus-visible{text-decoration-style:solid; color:var(--accent)}
@@ -4338,6 +4349,26 @@ async function positionOf(slug,id,addr){
 async function balanceOf(slug,addr){
   if(!isLive()) return (Object.hasOwn(DEMO.balances,slug)? DEMO.balances[slug] : 0);
   return one(`CoinBalanceOf(${gstr(slug)},${gstr(addr)})`);
+}
+/* WHAT BUYING ANY COURT'S COIN EARNS YOU IN THE META COURT.
+   THE TWIST, AND WHY IT LOOKED LIKE NOTHING WAS HAPPENING. Every Buy on any
+   court calls accrueFranchise(court, buyer, spent), which adds the GNOT burned
+   to that buyer's entitlement in the meta court — one for one, exactly. Nothing
+   is MINTED at that moment: ClaimMetaFranchise turns the entitlement into coin
+   when the holder asks for it, so meta's supply counts the people who came to
+   use it rather than everybody who ever passed through.
+   MEASURED ON kourt.xyz, and this is what made the design legible: covid had
+   burned 13,068,599,975 µGNOT, meta's supply read 0, and the seventeen covid
+   holders between them held 13,068,599,975 µGNOT of unclaimed entitlement — the
+   same number to the last unit. Nothing was missing; it was all unminted, and
+   the page said nothing about it anywhere.
+   ONE READ, and it is not court-scoped: the entitlement is a property of the
+   ADDRESS, earned across every court it has ever bought into. */
+const META_SLUG = "meta";
+async function franchiseOf(addr){
+  if(!addr) return 0;
+  if(!isLive()) return Object.hasOwn(DEMO.franchise||{}, addr)? DEMO.franchise[addr] : 0;
+  return one(`FranchiseOf(${gstr(addr)})`).catch(()=>null);
 }
 const rawRender = pth => isLive() ? qrender(pth) : demoRender(pth);
 
@@ -7859,6 +7890,9 @@ on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
   applyShow(QP.show);             // always: it also sets the chips' own pressed state
   if(QP.q){ const qi=document.getElementById("q"); if(qi){ qi.value=QP.q; applyQ(QP.q); } }
   if(isLive()) fillCourtFaces([slug]);
+  /* NOT GATED ON isLive(), unlike its neighbours: the rule this states is true of
+     the sample too, and the sample is what most readers see. */
+  fillFranchise(slug);
   if(isLive() && s.claims!=null) fillCourtRecord(slug, s.claims, s.minted);
   if(isLive()) fillJoinHeld(slug);
   if(isLive() && claims.length){
@@ -12025,6 +12059,72 @@ function statTile(k, v, sub, spark){
     + (spark || "")
     + (sub? `<div class="sub">${sub}</div>` : "") + `</div>`;
 }
+/* THE META FRANCHISE, SAID ON EVERY COURT PAGE — because it is earned on every
+   court page. Buying any court's coin burns GNOT, and that burn accrues to the
+   buyer as an entitlement to the META court's coin, one for one. It is the one
+   thing on this site that connects the courts to each other, and nothing on the
+   page mentioned it: a reader saw meta listed with a supply of zero next to a
+   court that had burned thirteen thousand GNOT, and concluded the twist was
+   broken. It was not — the entitlement was there and unclaimed, to the µGNOT.
+   A SLOT, FILLED AFTER THE READ. The pending figure is per-address and the
+   supply is a chain read, so the section renders as a shape the page can lay out
+   and is filled when the answers land. It says its piece with no wallet
+   connected too: what the rule IS does not depend on who is looking. */
+function franchiseSlotHtml(slug){
+  return `<section id="franchise" class="franchise" data-slug="${esc(slug)}"></section>`;
+}
+function franchiseHtml(slug, pending, supply, hasMeta){
+  const meta = slug === META_SLUG;
+  /* THE NAME IS A LINK ONLY WHERE THERE IS SOMETHING TO OPEN — the same rule the
+     page applies to a claim reference, and for the same reason. The offline
+     sample has no meta court, so a link there dead-ends on "No court by that
+     slug"; route_crawl found it the first time this shipped. The SENTENCE is
+     true either way and is said either way; only the anchor is conditional. */
+  const metaName = hasMeta
+    ? `<a href="#/c/${esc(META_SLUG)}">meta court</a>` : "meta court";
+  const rule = meta
+    ? `This court's coin is not bought — it is <b>earned</b>. Every purchase of any `
+      + `other court's coin burns GNOT, and that burn accrues to the buyer here, `
+      + `one for one.`
+    : `Buying this court's coin also earns you the ${metaName}'s coin — one for `
+      + `one with the GNOT you burn, on top of what you buy here.`;
+  /* NOTHING IS MINTED UNTIL IT IS ASKED FOR, and that is the whole reason meta
+     can read as empty. Said plainly, because "supply 0" next to a live
+     entitlement is the exact thing that misleads. */
+  const held = Number.isFinite(supply)
+    ? `<span class="fr-k">minted so far</span> <span class="tnum">${cc(supply, META_SLUG)}</span>`
+    : "";
+  const mine = pending == null ? ""
+    : pending > 0
+      ? `<p class="fr-mine"><span class="fr-k">yours, waiting</span> `
+        + `<b class="tnum">${gnotAmt(pending)}</b> of burn — claimable as `
+        + `${esc(META_SLUG)} coin whenever you ask for it.</p>`
+      : `<p class="fr-mine muted">You have nothing waiting here yet — buy into any `
+        + `court and the GNOT you burn starts accruing.</p>`;
+  return `<h2 class="sec-h">The meta franchise</h2>`
+    + `<p class="small">${rule} Nothing is minted at the moment of the burn: it `
+    + `waits as an entitlement until the holder claims it, so this court's supply `
+    + `counts the people who came to use it rather than everyone who passed `
+    + `through.</p>`
+    + (held? `<p class="small muted">${held}</p>` : "")
+    + mine;
+}
+async function fillFranchise(slug){
+  const slot = document.getElementById("franchise");
+  if(!slot) return;
+  try{
+    const [pending, supply] = await Promise.all([
+      CFG.addr? franchiseOf(CFG.addr) : Promise.resolve(null),
+      isLive()? one(`CoinSupply(${gstr(META_SLUG)})`).catch(()=>null)
+              : Promise.resolve((demoCourt(META_SLUG)||{}).supply),
+    ]);
+    /* THE COURT HAS TO BE THERE FOR THE NAME TO BE A LINK. Live: the supply read
+       answering at all is the proof. Demo: the sample either carries the court
+       or it does not. */
+    const hasMeta = isLive()? Number.isFinite(supply) : !!demoCourt(META_SLUG);
+    slot.innerHTML = franchiseHtml(slug, pending, supply, hasMeta);
+  }catch(_){ /* an unread franchise leaves the rest of the court page intact */ }
+}
 function courtStatsHtml(slug, s){
   const burnSer = parseSeries(s.burnHist);
   // Each figure carries its own history directly under it, so the shape and the
@@ -12229,6 +12329,7 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
      The pager stays with the docket: it pages claims, not folders. */
   return `<div class="cols"><div id="qscope">`
     + courtStatsHtml(slug, s)
+    + franchiseSlotHtml(slug)
     + foldersSec
     + searchHead
     + qBarHtml("title, set or #id", idleCap)
