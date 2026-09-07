@@ -13359,38 +13359,53 @@ on(/^\/c\/([a-z0-9-]+)\/f\/([0-9.]+)$/, async (slug,fpath)=>{
        ONE PAGER, ABOVE BOTH. The page window is the set's whole list in curated
        order; the split is a reading of that window, not a second pagination — two
        pagers over one slice would be two controls for one position. */
+    /* NO "CLAIMS" WRAPPER, because the court page has none and the one here was
+       saying the same number three times. It read "Claims 9 · 0 filed here
+       directly" over an "Open 4" and a "Recently settled 5" — and the pager
+       immediately under it already says "all 9 claims". This file's own rule,
+       written on the folder row: a count printed twice is not emphasis, it is
+       the row failing to decide where the count lives.
+       IT ALSO COST A HEADING LEVEL. The court page's two docket sections are
+       h2.sec-h siblings; nesting them under a wrapper made them h3, so the same
+       list was headed one way on one page and another way one click later.
+       SO THE WRAPPER GOES and the sections come up to the court page's level,
+       in the court page's order: pager, then Open, then Recently settled.
+       WHAT IS FILED DIRECTLY SURVIVES AS A SENTENCE, not a heading. It is the one
+       fact here the court page has no analogue for — a set can hold claims
+       through its subsets and none of its own — and it is worth saying once,
+       where a reader is about to read the list, rather than folded into a count
+       that then disagrees with the two below it. */
     + (()=>{
         const direct = (f.claims||[]).length, all = fentries.length;
-        const count = all===direct? fmtN(all)
-          : `${fmtN(all)} · ${fmtN(direct)} filed here directly`;
         const fopen = fwin.filter(cl=>!isDone(cl)), fdone = fwin.filter(isDone);
         const rows = list => `<div class="docket">${list.map(cl=>docketRow(slug,cl,metaOf[cl.id])).join("")}</div>`;
-        return `<section${subs?' style="margin-top:22px"':""}>`
-          + `<h2 class="sec-h">Claims <span class="count">${count}</span></h2>`
-          + fpager
-          + (!fwin.length
-              ? `<div class="empty"><div class="g">◌</div><p>No claims in this set yet.</p></div>`
-              /* THE OPEN SECTION IS ALWAYS DRAWN, AND SAYS SO WHEN IT IS EMPTY.
-                 It was rendered `hidden` with no rows, so a set whose claims are
-                 all settled simply had no "Open" heading — the reader was told
-                 nothing, and on page two of a paged set the heading vanished
-                 mid-list. The court page has never done that: it keeps the
-                 section and answers in it, and the two answers are different
-                 questions. "Nothing on this page" is a paging fact; "No open
-                 claims" is a fact about the set.
-                 NO BUTTON HERE, unlike the court page's empty state — the door
-                 is the actions block below, which also carries "propose a
-                 subset". One opener on the page, not two. */
-              : `<section><h3 class="sec-h">Open `
-                + secHelp("Claims this court has not settled yet — the ones you can still stake on. Settled claims move down to Recently settled.")
-                + `<span class="count">${fopen.length}</span></h3>`
-                + (fopen.length? rows(fopen)
-                    : pageOf()>1? `<p class="small muted">Nothing on this page.</p>`
-                    : `<div class="empty"><div class="g">◌</div><p>No open claims.</p></div>`)
-                + `</section>`
-                + (fdone.length? `<section style="margin-top:22px"><h3 class="sec-h">Recently settled `
-                    + `<span class="count">${fdone.length}</span></h3>` + rows(fdone) + `</section>` : ""))
-          + `</section>`; })()
+        const gap = subs? ' style="margin-top:22px"' : "";
+        if(!fwin.length)
+          return `<section${gap}><h2 class="sec-h">Claims <span class="count">${fmtN(all)}</span></h2>`
+            + fpager + `<div class="empty"><div class="g">◌</div><p>No claims in this set yet.</p></div></section>`;
+        return fpager
+          + (all!==direct
+              ? `<p class="small muted">${direct
+                  ? `${fmtN(direct)} of these are filed directly in this set; the rest are in its subsets.`
+                  : `None are filed directly in this set — all ${fmtN(all)} are in its subsets.`}</p>`
+              : "")
+          /* THE OPEN SECTION IS ALWAYS DRAWN, AND SAYS SO WHEN IT IS EMPTY. It
+             was rendered `hidden` with no rows, so a set whose claims are all
+             settled had no "Open" heading at all and the reader was told nothing.
+             Two answers, because they are two questions: "Nothing on this page"
+             is about paging, "No open claims" is about the set. Both the court
+             page's own wording.
+             NO BUTTON HERE, unlike the court page's empty state — the door is the
+             actions block below, which also carries "propose a subset". */
+          + `<section${gap}><h2 class="sec-h">Open `
+            + secHelp("Claims this court has not settled yet — the ones you can still stake on. Settled claims move down to Recently settled.")
+            + `<span class="count">${fopen.length}</span></h2>`
+            + (fopen.length? rows(fopen)
+                : pageOf()>1? `<p class="small muted">Nothing on this page.</p>`
+                : `<div class="empty"><div class="g">◌</div><p>No open claims.</p></div>`)
+            + `</section>`
+          + (fdone.length? `<section style="margin-top:22px"><h2 class="sec-h">Recently settled `
+              + `<span class="count">${fdone.length}</span></h2>` + rows(fdone) + `</section>` : ""); })()
     /* A WAY TO ACT, WHICH THIS PAGE DID NOT HAVE. It listed a set's claims and
        stopped: a reader who had just read three claims about the same thing and
        wanted to file a fourth had to find their way back to the court first.

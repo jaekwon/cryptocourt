@@ -312,12 +312,37 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
     const route = slice("on(/^\\/c\\/([a-z0-9-]+)\\/f\\/([0-9.]+)$/", "function docketRow(");
     ok("a set page splits its claims the way the court page does",
        /fwin\.filter\(cl=>!isDone\(cl\)\)/.test(route) && /fwin\.filter\(isDone\)/.test(route));
+    /* AT THE COURT PAGE'S HEADING LEVEL, and under no wrapper. The two docket
+       sections were nested inside a "Claims" section, which made them h3 while
+       the court page's are h2 — the same list headed one way and then another
+       one click later — and the wrapper's own count said 9 over an Open 4 and a
+       Recently settled 5, with the pager under it already saying "all 9 claims".
+       A count printed twice is not emphasis; this file says so on the folder row. */
     ok("...under the court page's own two headings",
-       />Open /.test(route) && />Recently settled /.test(route));
-    // Declared once and SPENT once: the window is one slice in curated order, so
-    // two pagers would be two controls for one position.
+       /<h2 class="sec-h">Open /.test(route) && /<h2 class="sec-h">Recently settled /.test(route));
+    ok("...with no Claims wrapper repeating the total over them",
+       !/<h2 class="sec-h">Claims <span class="count">\$\{count\}/.test(route)
+       && !/<h3 class="sec-h">/.test(route));
+    /* The one fact the court page has no analogue for survives as a sentence:
+       a set can hold claims through its subsets and none of its own. */
+    /* BOTH WORDINGS, because there are two: a set that holds some of its claims
+       itself and one that holds none. Matching the shared phrase alone passed
+       with either branch rewritten, since the other still carried it — verified
+       by mutation. */
+    ok("...and what is filed directly is still said, once, in words",
+       /of these are filed directly in this set/.test(route)
+       && /None are filed directly in this set/.test(route));
+    /* ONE PAGER REACHES THE PAGE. The window is one slice in curated order, so
+       two pagers would be two controls for one position.
+       ASSERTED AS AN INVARIANT, NOT A COUNT. This used to require exactly two
+       occurrences — one declaration, one use — and went red the moment the empty
+       case grew a return of its own, which emits the same single pager down a
+       different branch. Counting mentions measures the source; what matters is
+       that no ONE path emits two. */
     ok("...with one pager over the window, not one per section",
-       (route.match(/\bfpager\b/g) || []).length === 2);
+       /const fpager = pagerHtml\(/.test(route)
+       && route.split(/\breturn\b/).slice(1)
+               .every(seg => (seg.match(/\bfpager\b/g) || []).length <= 1));
     ok("...and the Subsets heading carries a count, as Sets does",
        /Subsets <span class="count">/.test(route));
     /* AND THE OPEN SECTION IS NEVER HIDDEN. It was rendered with `hidden` when
