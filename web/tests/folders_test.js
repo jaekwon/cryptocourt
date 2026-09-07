@@ -320,6 +320,14 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
        (route.match(/\bfpager\b/g) || []).length === 2);
     ok("...and the Subsets heading carries a count, as Sets does",
        /Subsets <span class="count">/.test(route));
+    /* AND THE OPEN SECTION IS NEVER HIDDEN. It was rendered with `hidden` when
+       nothing was open, so a set whose claims are all settled lost the heading
+       entirely and said nothing — while the court page keeps the section and
+       answers in it. Two answers, because they are different questions: a paging
+       fact and a fact about the set. */
+    ok("...the Open section is drawn even with nothing in it",
+       !/<section\$\{fopen\.length\?""/.test(route)
+       && /No open claims\./.test(route) && /Nothing on this page\./.test(route));
   }
 
   // foldersFor precedence: local ?? chain ?? sample ?? none

@@ -13370,10 +13370,24 @@ on(/^\/c\/([a-z0-9-]+)\/f\/([0-9.]+)$/, async (slug,fpath)=>{
           + fpager
           + (!fwin.length
               ? `<div class="empty"><div class="g">◌</div><p>No claims in this set yet.</p></div>`
-              : `<section${fopen.length?"":' hidden'}><h3 class="sec-h">Open `
+              /* THE OPEN SECTION IS ALWAYS DRAWN, AND SAYS SO WHEN IT IS EMPTY.
+                 It was rendered `hidden` with no rows, so a set whose claims are
+                 all settled simply had no "Open" heading — the reader was told
+                 nothing, and on page two of a paged set the heading vanished
+                 mid-list. The court page has never done that: it keeps the
+                 section and answers in it, and the two answers are different
+                 questions. "Nothing on this page" is a paging fact; "No open
+                 claims" is a fact about the set.
+                 NO BUTTON HERE, unlike the court page's empty state — the door
+                 is the actions block below, which also carries "propose a
+                 subset". One opener on the page, not two. */
+              : `<section><h3 class="sec-h">Open `
                 + secHelp("Claims this court has not settled yet — the ones you can still stake on. Settled claims move down to Recently settled.")
                 + `<span class="count">${fopen.length}</span></h3>`
-                + (fopen.length? rows(fopen) : "") + `</section>`
+                + (fopen.length? rows(fopen)
+                    : pageOf()>1? `<p class="small muted">Nothing on this page.</p>`
+                    : `<div class="empty"><div class="g">◌</div><p>No open claims.</p></div>`)
+                + `</section>`
                 + (fdone.length? `<section style="margin-top:22px"><h3 class="sec-h">Recently settled `
                     + `<span class="count">${fdone.length}</span></h3>` + rows(fdone) + `</section>` : ""))
           + `</section>`; })()
