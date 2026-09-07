@@ -1513,9 +1513,31 @@ ok("controls present", ["mt-titles","mt-ids","mz-in","mz-out","mz-fit","mz-slide
   /* PAST THE CAP THE FAN GROWS. Capping the dots alone drew 12, 25 and 40 as the
      same picture, which throws away the only thing the cluster is for: where the
      most talking is. */
-  ok("...but the fan still grows past the cap, and stays bounded",
+  /* THE CEILING IS THE LAYOUT'S OWN CLEARANCE. MAPK.sep is the gap every pair
+     of nodes is guaranteed, so a fan that reached past it could sit on top of a
+     neighbouring box. Tied to the constant rather than to the 17 that used to
+     be written here, which was a number with no reason and would not have
+     noticed sep changing underneath it. */
+  ok("...but the fan still grows past the cap, and stays inside the node's gap",
      reach(commentClusterSvg(25)) > reach(commentClusterSvg(12)) + 1
-     && reach(commentClusterSvg(4000)) < 17);
+     && reach(commentClusterSvg(4000)) < MAPK.sep);
+
+  /* AND THE FLOOR, WHICH IS THE BUG THAT SHIPPED. Seven comments drew a cluster
+     9.3 units wide beside a 230-unit node — 4.0% — and at the map's measured
+     fit scale of 0.87 px/unit that is a ~2px speck per dot at .30 opacity: not
+     subtle, invisible, which loses the one thing the cluster is for. Only a
+     rendered screenshot of the live map showed it; every assertion here passed
+     throughout, because each one asked WHERE the dots were and none asked
+     whether a reader could see them. */
+  ok("the cluster is a legible fraction of the node it annotates",
+     reach(commentClusterSvg(7)) > MAPK.node.titles.w * 0.05
+     && reach(commentClusterSvg(4000)) > MAPK.node.titles.w * 0.07);
+  /* A dot is a FILL, so it has no vector-effect:non-scaling-stroke to fall back
+     on the way the edges do — at the fit scale its radius IS its visibility. */
+  ok("...and a dot survives the default fit scale at every count",
+     [1,5,7,13,40,4000].every(n =>
+       [...commentClusterSvg(n).matchAll(/ r="([\d.]+)"/g)]
+         .every(m => +m[1] >= 1.5)));
 
   /* NO CROSSING EDGES. A chain through spiral points crossed itself constantly
      and read as a scribble. Checked as geometry rather than trusted to the
