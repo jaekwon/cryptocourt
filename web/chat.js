@@ -695,8 +695,21 @@ const CHATCSS = `
    swap. (No angle brackets in here: chat_test scans this stylesheet for them,
    on the reasoning that a stylesheet is as good a place to smuggle markup as
    any, and it caught this comment saying so.) */
+/* user-select:none, and it is the fix for "the cursor is not a finger over the
+   letters". Chrome and Safari set it on button elements in their UA stylesheets;
+   FIREFOX DOES NOT. (Spelled without angle brackets on purpose: the harness
+   forbids markup characters anywhere in this stylesheet, and it caught this very
+   comment naming the element the proper way — the second comment in this file to
+   be caught saying so.) So the label was selectable text, and the browser showed a
+   text I-beam over the glyphs while the padding around them still showed the
+   pointer — a control that looks dead exactly where a reader aims at it, since
+   they aim at the word. Reported that way, and it is not reproducible in Chrome
+   for the same reason it happens at all: the UA sheets disagree.
+   The label is a name, not a passage. Nobody needs to select four characters out
+   of a button they are about to click, so nothing is lost by declaring it. */
 .chatnamebtn{flex:0 1 4rem;min-width:3rem;font:inherit;color:inherit;
   padding:.35rem .5rem;border-radius:6px;cursor:pointer;
+  -webkit-user-select:none;user-select:none;
   border:1px solid rgba(128,128,128,.45);background:rgba(128,128,128,.18);
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .chatnamebtn:hover{background:rgba(128,128,128,.34);border-color:rgba(128,128,128,.8)}
@@ -716,7 +729,9 @@ const CHATCSS = `
    Neutral rather than accent-coloured: this file cannot see the page's colour
    tokens, and a hardcoded brand colour would be wrong on one theme or the
    other. A translucent grey reads as raised on both. */
+/* Same on send: same element type, same UA disagreement, same symptom. */
 .chatsend{flex:0 0 auto;font:inherit;font-weight:600;cursor:pointer;
+  -webkit-user-select:none;user-select:none;
   padding:.32rem .8rem;border-radius:4px;line-height:1.35;color:inherit;
   border:1px solid rgba(128,128,128,.45);background:rgba(128,128,128,.18)}
 .chatsend:hover{background:rgba(128,128,128,.32);border-color:rgba(128,128,128,.7)}
