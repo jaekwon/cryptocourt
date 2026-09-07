@@ -13330,7 +13330,11 @@ on(/^\/c\/([a-z0-9-]+)\/f\/([0-9.]+)$/, async (slug,fpath)=>{
     + `<p class="page-sub">${f.born
         ? `The court voted this set into existence — <a href="#/c/${esc(slug)}/${esc(String(f.born))}">claim #${esc(String(f.born))}</a> settled YES, and carrying it was a second act anyone could take. It holds no stake of its own; the claims below are ordinary claims of this court.`
         : "A set is moderator curation with zero economic weight — the claims below are ordinary claims of this court."} ${curF.source==="chain"? "Read live from the chain." : curF.source==="local"? CUR_LABEL+"." : "Read from the sample data."}${omitted? ` ${omitted} hidden or unreadable row${omitted===1?" is":"s are"} omitted.`:""}</p>`
-    + (subs? `<section><h2 class="sec-h">Subsets</h2><div class="docket">${subs}</div></section>` : "")
+    /* A COUNT ON THE HEADING, because the court page's Sets heading carries one
+       and this one did not — the same section, one click apart, counted on one
+       page and bare on the other. */
+    + (subs? `<section><h2 class="sec-h">Subsets <span class="count">${fmtN((f.folders||[]).length)}</span></h2>`
+             + `<div class="docket">${subs}</div></section>` : "")
     /* WHAT THIS COUNT COUNTS, when the two possible answers differ. The court
        page's folder row shows folderCount — the whole subtree — so Fauci reads
        "9 claims" there; this section lists only what is filed DIRECTLY in the
@@ -13346,13 +13350,33 @@ on(/^\/c\/([a-z0-9-]+)\/f\/([0-9.]+)$/, async (slug,fpath)=>{
        subtree — the same word carrying two numbers one click apart. The list is
        the subtree, so the heading is the subtree, and the split is a note about
        where they sit rather than an explanation for a missing list. */
-    + (()=>{ const direct = (f.claims||[]).length, all = fentries.length;
+    /* THE SAME DOCKET SPLIT THE COURT PAGE MAKES, from the same predicate. This
+       was one flat "Claims" list while the court page has read "Open" then
+       "Recently settled" for as long as it has had a docket — so the surface a
+       reader lands on after following a set put the claims they can still act on
+       in amongst the ones already decided. isDone is the court page's own test,
+       used here rather than a second rule about what "open" means.
+       ONE PAGER, ABOVE BOTH. The page window is the set's whole list in curated
+       order; the split is a reading of that window, not a second pagination — two
+       pagers over one slice would be two controls for one position. */
+    + (()=>{
+        const direct = (f.claims||[]).length, all = fentries.length;
         const count = all===direct? fmtN(all)
           : `${fmtN(all)} · ${fmtN(direct)} filed here directly`;
-        return `<section${subs?' style="margin-top:22px"':""}><h2 class="sec-h">Claims <span class="count">${count}</span></h2>`; })()
-    + fpager
-    + (fwin.length? `<div class="docket">${fwin.map(cl=>docketRow(slug,cl,metaOf[cl.id])).join("")}</div>`
-        : `<div class="empty"><div class="g">◌</div><p>No claims in this set yet.</p></div>`)
+        const fopen = fwin.filter(cl=>!isDone(cl)), fdone = fwin.filter(isDone);
+        const rows = list => `<div class="docket">${list.map(cl=>docketRow(slug,cl,metaOf[cl.id])).join("")}</div>`;
+        return `<section${subs?' style="margin-top:22px"':""}>`
+          + `<h2 class="sec-h">Claims <span class="count">${count}</span></h2>`
+          + fpager
+          + (!fwin.length
+              ? `<div class="empty"><div class="g">◌</div><p>No claims in this set yet.</p></div>`
+              : `<section${fopen.length?"":' hidden'}><h3 class="sec-h">Open `
+                + secHelp("Claims this court has not settled yet — the ones you can still stake on. Settled claims move down to Recently settled.")
+                + `<span class="count">${fopen.length}</span></h3>`
+                + (fopen.length? rows(fopen) : "") + `</section>`
+                + (fdone.length? `<section style="margin-top:22px"><h3 class="sec-h">Recently settled `
+                    + `<span class="count">${fdone.length}</span></h3>` + rows(fdone) + `</section>` : ""))
+          + `</section>`; })()
     /* A WAY TO ACT, WHICH THIS PAGE DID NOT HAVE. It listed a set's claims and
        stopped: a reader who had just read three claims about the same thing and
        wanted to file a fourth had to find their way back to the court first.

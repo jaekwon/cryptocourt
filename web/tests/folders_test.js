@@ -300,6 +300,28 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
        shown.includes("\u{13080}") && !shown.includes("\u{1307C}"));
   }
 
+  /* THE SET PAGE'S SECTIONS ARE THE COURT PAGE'S SECTIONS. Source-level, because
+     these are assembled inside the route rather than by a function a harness can
+     call. The court page has read "Open" then "Recently settled" for as long as
+     it has had a docket; the set page was one flat list, so a reader who followed
+     a set found the claims they can still stake on mixed in with the decided.
+     ONE PREDICATE. isDone is the court page's own test — asserted here as the
+     thing the set page calls, so a second rule about what "open" means cannot
+     grow beside it. */
+  {
+    const route = slice("on(/^\\/c\\/([a-z0-9-]+)\\/f\\/([0-9.]+)$/", "function docketRow(");
+    ok("a set page splits its claims the way the court page does",
+       /fwin\.filter\(cl=>!isDone\(cl\)\)/.test(route) && /fwin\.filter\(isDone\)/.test(route));
+    ok("...under the court page's own two headings",
+       />Open /.test(route) && />Recently settled /.test(route));
+    // Declared once and SPENT once: the window is one slice in curated order, so
+    // two pagers would be two controls for one position.
+    ok("...with one pager over the window, not one per section",
+       (route.match(/\bfpager\b/g) || []).length === 2);
+    ok("...and the Subsets heading carries a count, as Sets does",
+       /Subsets <span class="count">/.test(route));
+  }
+
   // foldersFor precedence: local ?? chain ?? sample ?? none
   const chainF = await chainFolders("orem");
   CFG.mode='live';
