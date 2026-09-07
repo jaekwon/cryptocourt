@@ -117,6 +117,38 @@ ok("with no meta court to open, the name is not a link", !/<a /.test(noMeta), no
 ok("...but the rule is still stated", /one for one/.test(noMeta) && /meta court/.test(noMeta));
 ok("...and with one, it is", /<a href="#\/c\/meta">meta court<\/a>/.test(anon));
 
+/* ---- and How it works explains it, once, in prose --------------------------
+   The panel on a court page states the rule where it is earned. This is the
+   place a reader goes when they want the whole shape, and it was the obvious
+   omission: the page described the one-way curve — burn GNOT, receive coin —
+   and then never mentioned that the same burn earns coin somewhere else too. */
+/* COLLAPSED TO ONE LINE FIRST. This is prose in a template literal, wrapped at
+   the file's own margin, so a phrase to match against may sit across a newline
+   and several spaces of indent — "…cannot be received for\n      GNOT directly".
+   Matching the source verbatim tests where the author happened to wrap. */
+const about = src.slice(src.indexOf("<h2>The meta court</h2>"),
+                        src.indexOf("<h2>Claims, and staking</h2>")).replace(/\s+/g, " ");
+ok("How it works has a section for the meta court", about.length > 200, String(about.length));
+ok("...saying every burn in every court earns it",
+   /Every burn, in every court, also earns you coin/.test(about));
+ok("...one for one with the GNOT burned", /One for one with the GNOT you burn/.test(about));
+ok("...and that nothing else earns it",
+   /cannot be received for GNOT directly/.test(about));
+/* THE SENTENCE THE WHOLE REPORT TURNED ON. A reader who has seen meta at zero
+   beside a court that burned thousands needs this said plainly, or the zero
+   reads as the feature being broken. */
+ok("...and that a burn does not mint it, so zero supply is owed rather than absent",
+   /It is not minted when you burn/.test(about) && /the coin is owed, not absent/.test(about));
+ok("...and that claiming is an ordinary transaction that can wait",
+   /the entitlement keeps until you make it/.test(about));
+/* THE REGISTER HOLDS HERE TOO. vocab_receive reads #/about among its routes, and
+   the first draft of this section said "what that BUYS the design" — caught on
+   the rendered page, not here, because this file reads the source where an HTML
+   comment is still present. */
+ok("...without ever saying buy",
+   !/\bbuy|\bpurchas/i.test(about.replace(/<!--[\s\S]*?-->/g, " ").replace(/<[^>]*>/g, " ")),
+   about.slice(0, 120));
+
 /* ---- the wiring ------------------------------------------------------------ */
 ok("the read is by ADDRESS, not by court — it is earned everywhere",
    /async function franchiseOf\(addr\)\{/.test(src)
