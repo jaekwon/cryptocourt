@@ -390,6 +390,22 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
        fill write a stake figure into the NEXT page's rows — same ids, different
        set. The court page guards its sweep the same way and says why: "fills die
        with their render — never write into a newer paint". */
+    /* ONE SWEEP, TWO CALLERS — the invariant the browser check cannot reach.
+       In demo mode a claim carries its own pools, so both pages print a stake
+       figure with no fill running at all and row_parity stays green with the set
+       page's call deleted. MEASURED. What actually went wrong was a sweep that
+       lived inside one route, so that is what is pinned here: defined once,
+       called by both.
+       WHAT IT CATCHES, EXACTLY: a lost caller, and a second definition under
+       this same name — which check-web-dupes refuses anyway. A parallel sweep
+       written under a DIFFERENT name is not catchable by counting, and saying
+       otherwise would be the overstatement this file keeps finding elsewhere.
+       Verified both ways by mutation. */
+    ok("...and fillDocketRows is defined once and called by both pages", (() => {
+      const defs = (src.match(/async function fillDocketRows\(/g) || []).length;
+      const calls = (src.match(/fillDocketRows\(/g) || []).length - defs;
+      return defs === 1 && calls === 2;
+    })());
     ok("...and a fill from a superseded render is dropped, not written",
        /if\(renderSeq!==seq0\) return;\s*\n\s*return fillDocketRows/.test(route));
     ok("...and an empty set is told apart from a page past its end",

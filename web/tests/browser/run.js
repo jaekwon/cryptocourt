@@ -114,7 +114,12 @@ const ALL = ["embed_layout.js", "tagrow_layout.js", "route_crawl.js",
              // laid-out page can answer: the branch emits a class name either way
              "verdict_notice.js",
              // the artifact deploy.sh actually uploads, with its comments gone
-             "stripped_boot.js"];
+             "stripped_boot.js",
+             // one claim's row fetched from the court page and from a set page
+             // and compared as strings: the three ways they drifted — an unfilled
+             // stake cell, an unfilled clock, a `~none` where fold keys belong —
+             // were each found by doing this by hand
+             "row_parity.js"];
 const only = (process.env.ONLY || process.argv.slice(2).join(",") || "").trim();
 const CHECKS = only
   ? ALL.filter(f => only.split(",").some(k => k && f.includes(k.trim())))
