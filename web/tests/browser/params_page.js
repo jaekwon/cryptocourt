@@ -74,6 +74,26 @@ const PACKED = [
   let fail = 0;
   const ok = (m, c, d) => { if (!c) { fail++; console.log("FAIL: " + m + (d ? "  " + d : "")); } else console.log("ok: " + m); };
 
+  // ---- IT IS REACHABLE. A page with no way in is a page nobody reads, and
+  // the route would keep passing every arm below while being unreachable from
+  // the interface. Clicked rather than merely queried, so a link covered by
+  // something else fails here too.
+  await page.goto(PAGE + '#/', {waitUntil: 'domcontentloaded'});
+  await new Promise(r => setTimeout(r, 900));
+  const nav = await page.$('.nav a[href="#/params"]');
+  ok("the nav offers a way to the parameters", !!nav);
+  if (nav) {
+    await nav.click();
+    await new Promise(r => setTimeout(r, 700));
+    const landed = await page.evaluate(() => ({
+      hash: location.hash,
+      h1: (document.querySelector('#main h1') || {}).textContent || '',
+    }));
+    ok("...and clicking it lands on the page",
+       landed.hash === '#/params' && /Realm parameters/.test(landed.h1),
+       JSON.stringify(landed));
+  }
+
   // ---- DEMO MODE tells the truth instead of inventing values.
   await page.goto(PAGE + '#/params', {waitUntil: 'domcontentloaded'});
   await new Promise(r => setTimeout(r, 900));

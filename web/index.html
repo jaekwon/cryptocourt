@@ -2788,6 +2788,15 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
     <a href="#/needs" data-k="needs"><span class="g">!</span> What needs you</a>
     <div class="sec">Reference</div>
     <a href="#/about" data-k="about"><span class="g">?</span> How it works</a>
+    <!-- UNDER REFERENCE, beside How it works, because that is what it is: a
+         reader checking what this chain is configured to, not an operator
+         about to change it. Nothing here can SET anything — the page is a
+         listing, every setter is an admin-gated transaction, and the row names
+         the verb so somebody who does hold the key knows what to call. Hiding
+         it behind a role the overlay cannot verify would only mean the people
+         who most need to audit the settings are the ones who cannot see
+         them. -->
+    <a href="#/params" data-k="params"><span class="g">≡</span> Realm parameters</a>
     <!-- CHAT IS A SECTION HEADING LIKE THE OTHERS, and it has to sit INSIDE the
          nav to look like one: the rule is `.nav .sec`, so the same div as a
          sibling of the nav got no styling at all and read as body text.
@@ -3551,6 +3560,24 @@ const DEMO_CHAIN = {
       burned:7_020_070_389_605,
       price:118, supply:118_500_000_000, emitted:8_900_000, reservoir:2_100_000, seniorOwed:640_000,
       claims:[1,2,3,4,5,6,7,8,9,10,11], },
+    /* THE META COURT, AND THE SAMPLE HAD NONE — so in demo mode, which is the
+       default and what most readers see, "the meta court" was a phrase with no
+       page behind it. The franchise panel had to withhold its own link, and
+       meta's own wording — this coin is not received for GNOT, it is earned —
+       had nowhere to appear at all.
+       SMALL BUT NOT EMPTY, on purpose. On the live chain meta reads zero across
+       the board because nobody has claimed yet, and a sample that copies that
+       shows the reader exactly the screen that confused them. A little claimed
+       supply gives the "claimed so far" line and the curve a case, and the panel
+       still says what is waiting elsewhere.
+       NO CLAIMS. Meta's docket is appeals against other courts' moderation, and
+       the sample has no moderation history to appeal — an invented one would be
+       a second story to keep true. An empty docket is also a real state and the
+       page has always drawn it. */
+    meta:{ name:"The Meta Court", tier:1,
+      burned:0,                                   // you do not burn FOR meta
+      price:2, supply:2_000_000_000, emitted:0, reservoir:0, seniorOwed:0,
+      claims:[], },
     annex:{ name:"The Annex", tier:0,
       burned:17_999_760_001,
       price:6, supply:6_000_000_000, emitted:40_000, reservoir:9_000, seniorOwed:0,
