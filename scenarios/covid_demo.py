@@ -518,7 +518,14 @@ dict(key="p3co", on=before_end(28), arc="dispute", shape=grind_at((6, 3, 3, 2, 1
        path=("Vaccine safety claims",),
        cast=("vaxsafety", "clinician", "statistician", "modeller"),
        body='Settles on cohort data against a population baseline. The final CDC analysis reports 10.79% across 12,097 vaccinated pregnancies, with no elevated risk week by week to twenty weeks; baseline is roughly 10 to 20%.',
-       title="COVID-19 vaccination during pregnancy increases the risk of miscarriage."),
+       # SPECIFIC ENOUGH TO SETTLE. The old title — "COVID-19 vaccination during
+       # pregnancy increases the risk of miscarriage" — named no platform, no
+       # window and no comparison, so a reader could not tell what the court had
+       # actually decided against. The body settles on the CDC cohort: mRNA doses,
+       # risk computed week by week to twenty, against a 10-20% population
+       # baseline. The title now says that, which is the proposition the stake
+       # was taken on and the one the evidence answers.
+       title="mRNA COVID-19 vaccination before 20 weeks of pregnancy raises the risk of miscarriage above the 10-20% population baseline."),
 ]
 
 # ------------------------------------------------------------------ relations
