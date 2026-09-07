@@ -38,7 +38,7 @@ global.btn = (label, func, args, cls, sub) =>
 const html = eval(fn("franchiseHtml") + "; franchiseHtml");
 
 /* ---- the rule is stated whether or not anyone is connected ---------------- */
-const anon = html("covid", null, 5105763090, true);
+const anon = html("covid", null, 5105763090, true, null);
 ok("the rule is stated with no wallet connected", /one for one/.test(anon), anon.slice(0, 90));
 ok("...and names the meta court as where it lands", /#\/c\/meta/.test(anon));
 ok("...and says the burn is what earns it", /one for one with what you burn/.test(anon));
@@ -58,7 +58,7 @@ ok("...naming the court whose supply that is, not the one being read",
    /the meta court's supply counts/.test(anon), anon);
 
 /* ---- the meta court's own page says it differently ------------------------ */
-const onMeta = html("meta", null, 0, true);
+const onMeta = html("meta", null, 0, true, null);
 ok("on meta's own page the coin is earned, not received for GNOT",
    /not received for GNOT/.test(onMeta) && /<b>earned<\/b>/.test(onMeta));
 ok("...and it does not link the reader to the page they are on",
@@ -66,11 +66,10 @@ ok("...and it does not link the reader to the page they are on",
 ok("every court page carries the heading", /The meta franchise/.test(anon) && /The meta franchise/.test(onMeta));
 
 /* ---- the reader's own entitlement ----------------------------------------- */
-const mine = html("covid", 554400000, 5105763090, true);
+const mine = html("covid", 554400000, 5105763090, true, null);
 ok("a pending entitlement is shown as the GNOT it came from",
    /554\.4 GNOT/.test(mine), mine.slice(mine.indexOf("fr-mine"), mine.indexOf("fr-mine") + 140));
-ok("...and says it is claimable whenever they ask",
-   /claimable/.test(mine) && /whenever you ask/.test(mine));
+ok("...and says it is claimable", /claimable as meta coin/.test(mine));
 /* AND A WAY TO TAKE IT. Telling a reader what is owed and offering no control is
    the same silence one step on — the entitlement is claimed by an ordinary
    transaction and there was nowhere on the site to make it. */
@@ -84,7 +83,7 @@ ok("the confirmation names the claim", /ClaimMetaFranchise: "your meta claim"/.t
 /* ZERO IS NOT THE SAME AS NOT CONNECTED. A connected wallet with nothing waiting
    gets told how to start; an unconnected one is told nothing about itself,
    because the page does not know anything about it. */
-const zero = html("covid", 0, 5105763090, true);
+const zero = html("covid", 0, 5105763090, true, null);
 ok("a connected wallet with nothing waiting is told how to start",
    /nothing waiting here yet/.test(zero) && /burn for any court's coin/.test(zero));
 /* NOT OFFERED WHEN THERE IS NOTHING TO CLAIM. A control that signs a no-op is a
@@ -108,16 +107,44 @@ for (const [what, t] of [["a court page", anon], ["meta's own page", onMeta],
      which is the arm quietly testing nothing. */
   ok(`${what} never says buy`, !/\bbuy|\bpurchas/i.test(t.replace(/<[^>]*>/g, " ")), t);
 
+/* ---- what you already hold, which is the other half of the question --------
+   "How much meta do people have" has an exact answer — the balance — and it was
+   missing entirely: the panel showed only what was WAITING. A reader who had
+   already claimed saw nothing about the coin they were holding. */
+const holds = html("covid", 0, 5105763090, true, 120000);
+ok("a holder is told what they hold", /you hold/.test(holds) && /120000 CC:META/.test(holds), holds);
+ok("...in meta's coin, not the court whose page this is", !/CC:COVID/.test(holds));
+ok("a zero balance is not printed as a holding",
+   !/you hold/.test(html("covid", 0, 5105763090, true, 0)));
+ok("...nor is an unread one", !/you hold/.test(zero));
+/* HOLDING AND WAITING ARE DIFFERENT THINGS and both can be true at once: coin
+   already claimed, plus burn accrued since. */
+const both = html("covid", 554400000, 5105763090, true, 120000);
+ok("holding and waiting are shown together when both are true",
+   /you hold/.test(both) && /yours, waiting/.test(both));
+ok("...and the claim control is still offered", /ClaimMetaFranchise/.test(both));
+
+/* THE ENTITLEMENT IS NOT QUOTED IN COIN, and that is deliberate rather than
+   lazy. ClaimMetaFranchise mints crv.Minted(position, owed) — what it is worth
+   depends on where meta's curve stands at the moment of the claim, and the curve
+   moves as it mints. Dividing by the current price would overstate it, and the
+   realm exposes no quote to read instead. So the figure shown is the one that is
+   true — GNOT burned — and the sentence says what turns it into coin. */
+ok("the waiting figure is stated in the units it is kept in",
+   /of burn/.test(mine) && !/of burn.{0,40}CC:META/.test(mine));
+ok("...and says the curve decides what it becomes",
+   /at whatever the curve stands at when you claim/.test(mine));
+
 /* ---- the supply, when it is known ----------------------------------------- */
 ok("the claimed supply is shown when the read landed",
    /claimed so far/.test(anon) && /5105763090 CC:META/.test(anon));
 ok("...and omitted when the read did not land",
-   !/claimed so far/.test(html("covid", null, null, true)));
+   !/claimed so far/.test(html("covid", null, null, true, null)));
 /* A ZERO IS NOT PRINTED AS A QUANTITY. "minted so far 0.00" beside a court that
    has burned thirteen thousand GNOT is the sentence a reader disbelieves: it
    reads as a measurement of a broken thing. "Nobody has claimed any yet" is a
    different statement and the true one. */
-const none = html("covid", null, 0, true);
+const none = html("covid", null, 0, true, null);
 ok("a supply of zero is said in words, not as a figure",
    /Nobody has claimed any yet/.test(none) && !/claimed so far/.test(none), none);
 ok("...and says where it all is instead", /still waiting as an entitlement/.test(none));
@@ -132,7 +159,7 @@ ok("the supply printed is the meta court's", /CC:META/.test(anon) && !/CC:COVID/
    every court page in demo mode. The SENTENCE is true either way and is said
    either way — only the anchor is conditional, which is the same rule the page
    applies to a claim reference. */
-const noMeta = html("covid", null, null, false);
+const noMeta = html("covid", null, null, false, null);
 ok("with no meta court to open, the name is not a link", !/<a /.test(noMeta), noMeta);
 ok("...but the rule is still stated", /one for one/.test(noMeta) && /meta court/.test(noMeta));
 ok("...and with one, it is", /<a href="#\/c\/meta">meta court<\/a>/.test(anon));
@@ -183,8 +210,10 @@ ok("...and it is filled in demo mode as well as live",
    /\n  fillFranchise\(slug\);/.test(src));
 ok("the fill decides on the link from whether the court answered",
    /const hasMeta = isLive\(\)\? Number\.isFinite\(supply\) : !!demoCourt\(META_SLUG\);/.test(src));
-ok("the fill asks for the reader's pending and meta's supply together",
-   /CFG\.addr\? franchiseOf\(CFG\.addr\)/.test(src) && /CoinSupply\(\$\{gstr\(META_SLUG\)\}\)/.test(src));
+ok("the fill asks for all three at once — pending, supply, and what is held",
+   /CFG\.addr\? franchiseOf\(CFG\.addr\)/.test(src)
+   && /CoinSupply\(\$\{gstr\(META_SLUG\)\}\)/.test(src)
+   && /CFG\.addr\? balanceOf\(META_SLUG, CFG\.addr\)/.test(src));
 ok("...and a failed read leaves the rest of the court page alone",
    /catch\(_\)\{ \/\* an unread franchise leaves the rest of the court page intact/.test(src));
 
