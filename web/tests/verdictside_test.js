@@ -50,6 +50,7 @@ eval(slice('function setOpensWords(', '\n'));
 eval(slice('function setTitleParts(', '\n}') + '}');   // the real parser
 global.ICN_EYE_OPEN = '<svg class="eye eyeopen"></svg>';   // drawn form; the harness needs it to exist, not to render
 global.EYE_CHAR = '<span class="wedjat">\u{13080}</span>';   // the character, in the embedded face
+eval(fn('setMarkSpan'));
 eval(fn('setMarkHtml'));
 eval(slice('function verdictSentence(', '\nfunction verdictBanner('));
 eval(fn('verdictBanner'));   // fn takes the closing brace with it
@@ -647,8 +648,14 @@ const run = async (rows, v, mode) => {
        call is that the mark should be the thing a reader can select and paste
        into a title. So the assertion is inverted deliberately: the codepoint
        SURVIVES, in a span that names the face which can always render it. */
+    /* A CLASS LIST, NOT ONE CLASS. `class="wedjat"` matched exactly, so the day
+       the span gained a second class — the nudge that puts the two marks' pupils
+       on one line — this went red while the mark was perfectly fine. The same
+       shape has cost this suite twice before: map_test extracted marks with an
+       exact `class="mtext mvs"` and found NO mark at all once one was added, and
+       the failure named the wrong thing both times. */
     ok("the mark is the character, in the face that renders it",
-       marked.includes(M) && /class="wedjat"/.test(marked));
+       marked.includes(M) && /class="wedjat[^"]*"/.test(marked));
     ok("...and it is not silently swapped for a drawing", !/<svg/.test(marked));
     ok("...while the name it prefixed survives intact", marked.includes("Lab leak evidence"));
     /* THE CLASS THESE THREE WATCH FOR IS THE ONE THAT IS DRAWN. They asked for

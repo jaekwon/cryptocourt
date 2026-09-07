@@ -93,6 +93,8 @@ global.EYE_CHAR = '<span class="wedjat">\u{13080}</span>';   // the character, i
 global.SET_MARK = "\u{13080}";
 global.SHUT_MARK = "\u{1307C}";
 code += slice('function setOpensWords(', '\n');
+// folderRowHtml prints the mark through the one span both inline sites share.
+code += slice('function setMarkSpan(', '\n}') + '\n}\n';
 // folderCount is the LENGTH of the transitive walk now, so the walk comes too.
 code += slice('function folderClaimEntries(', 'function folderCount(');
 code += slice('function folderCount(', 'function folderRowHtml');
@@ -298,6 +300,29 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
     const shown = folderRowHtml("orem", Object.assign({}, sub, {focus:true}), "4");
     ok("...and the other mark when it opens shown",
        shown.includes("\u{13080}") && !shown.includes("\u{1307C}"));
+
+    /* THE NAME OPENS THE SET. Reported as "clicking on subfolders in the SUBSETS
+       section does nothing", and it was literally true: the row is a plain div
+       there, and the only things in it that answered a click were the born
+       reference and the `open →` pill at the far right. A reader clicks the NAME
+       of the thing they want to open — and the named grandchildren beside it
+       were already links, so the row offered a way two levels down and none into
+       the set it was about. */
+    ok("...and the set's own name is the way in",
+       /<span class="t"><a class="foldopen setopen" href="#\/c\/orem\/f\/4">Gain-of-function funding<\/a>/.test(r),
+       r.slice(r.indexOf('class="t"'), r.indexOf('class="t"') + 90));
+    /* .foldopen IS LOAD-BEARING, not decoration: it is the class the toggle
+       row's own click handler steps over. Without it, the day this row becomes a
+       control the name would tick the parent instead of following the link —
+       which is the exact bug that carve-out exists for. */
+    ok("...marked the way every other link in this row is",
+       /class="foldopen setopen"/.test(r));
+    /* AND NOT ON THE COURT PAGE, where the same function draws a checkbox and a
+       click ticks the filter. A link in the name there would fight the control
+       it is part of, so the two branches pass their own name in. */
+    const tog = folderRowHtml("orem", sub, "4", true);
+    ok("...while the filter row's name stays plain text",
+       !/setopen/.test(tog) && /<span class="t">Gain-of-function funding /.test(tog));
   }
 
   /* THE SET PAGE'S SECTIONS ARE THE COURT PAGE'S SECTIONS. Source-level, because
@@ -897,8 +922,26 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
      is not a cosmetic slip; it is the page stating the opposite.
      Measured before and after: 𓁼 Origins rendered U+13080, and now U+1307C. */
   ok("a title keeps the mark it was filed with",
-     /\+ p\.mark \+ "<\/span> " \+ p\.name;/.test(src)
+     /return setMarkSpan\(p\.mark, p\.shown\) \+ " " \+ p\.name;/.test(src)
      && !/return EYE_CHAR \+ " " \+ p\.name;/.test(src));
+  /* AND THE SPAN PRINTS WHAT IT WAS HANDED. The dresser delegates now, so the
+     "not a constant" question moved with it: a setMarkSpan reaching for EYE_CHAR
+     would put 𓂀 on every concealed set again, from one layer further down. */
+  ok("...and the span that prints it prints the mark, not a constant",
+     /aria-label="\$\{setOpensWords\(shown\)\}">\$\{mark\}<\/span>/.test(src));
+  /* AND `wedjat` IS LITERAL AND FIRST IN THAT CLASS LIST. Written after the
+     conditional it reads, to a source scanner, as one token — and
+     check-mark-font stopped being able to find the class that lends this span
+     the embedded face. These are hieroglyphs: without the face they are tofu for
+     every reader not on a Mac, and look right to everyone who might notice. */
+  ok("...wearing the face's class unconditionally",
+     /<span class="wedjat \$\{shown\? "" : "shutmark"\}"/.test(src));
+  /* ONE SPAN, BOTH INLINE SITES — which is what the nudge needs. The offset that
+     puts the two marks' pupils on one line is a CLASS on that span, so a second
+     copy of the markup is a second place to leave it out, and the heading and
+     the row would sit at different heights again. */
+  ok("...and the set row prints its mark through the same span",
+     /<span class="id">\$\{setMarkSpan\(mark, f\.focus\)\}<\/span>/.test(src));
   /* AND THE LABEL SAYS WHICH, because a screen reader gets no glyph. `shown` is
      derived from the mark rather than stored beside it, so there is no second
      lookup and nothing to keep in step. */
@@ -913,12 +956,14 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
      quieter place — a badge describing a state that is over, to the one reader
      who cannot see the glyph and check. */
   ok("...and its label names which state it opens in",
-     /aria-label="\$\{setOpensWords\(p\.shown\)\}"/.test(src));
+     /aria-label="\$\{setOpensWords\(shown\)\}"/.test(src));
   ok("...through the one place that phrase lives",
      /function setOpensWords\(shown\)\{ return "set that opens " \+ \(shown \? "shown" : "concealed"\); \}/.test(src)
-     // Six sites now: the subset row on a set page draws the set's own mark too,
-     // and takes its label from the same phrase rather than spelling one.
-     && (src.match(/setOpensWords\(/g) || []).length === 6);
+     /* FIVE NOW, AND IT WENT DOWN. The heading and the subset row each built
+        their own <span> around the mark, so each also spelled its own label —
+        two sites for one job. They share setMarkSpan now, which is why the
+        count fell rather than rose: the same phrase, said in one fewer place. */
+     && (src.match(/setOpensWords\(/g) || []).length === 5);
 
   /* THE CHAIN DECIDES WHETHER A TITLE IS A HEADING, not the page. isSetTitle
      gates the New panel and reads the page's OWN two marks — and the two can

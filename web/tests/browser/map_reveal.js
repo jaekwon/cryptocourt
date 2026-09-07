@@ -119,61 +119,84 @@ const SHUT_MARK = "\u{1307C}";  // 𓁼 — concealed
     ok("this court filed nothing 𓂀, so it opens on nothing", a.lit.length === 0);
   }
 
-  /* 2. THE EYE SITS IN THE MIDDLE OF ITS RING, whichever mark is drawn.
-        Reported twice as "the eye sits a little lower in the circle", and both
-        times the code was adjusted rather than measured. So this measures.
-        TWO OBVIOUS PROBES BOTH LIE. getBBox() on SVG <text> returns the FONT's
-        line box, not the ink: 𓂀 and 𓁼 report byte-identical top and height and
-        differ only in advance width, so a bbox comparison cannot see the mark
-        move at all. And correlating the two glyphs' ink profiles finds the shift
-        that overlays their MASS, which for a tall glyph over a short one lands
-        the short one on the tall one's densest band — its brow — not its eye.
-        That measurement said 0.2154em and it is why the marks were a fifth of an
-        em apart while every check passed.
-        SO MEASURE EACH MARK AGAINST ITS OWN RING. Draw the glyph to a canvas at
-        sixteen times the em, take the middle of its inked box, and ask where
-        that lands relative to the circle the badge is drawn around. Zero is
-        centred. This is the reader's complaint, in a number. */
-  const ink = await page.evaluate(() => {
+  /* 2. THE PUPIL SITS IN THE MIDDLE OF ITS RING, whichever mark is drawn.
+        Reported three times as the eye being in the wrong place, and each of the
+        first two fixes anchored on something that is not the pupil.
+        WHY THE OBVIOUS PROBES ALL MISS IT.
+          - getBBox() on SVG <text> returns the FONT's line box, not the ink: 𓂀
+            and 𓁼 report byte-identical top and height, so it cannot see the mark
+            move at all.
+          - The middle of the INKED BOX is wrong for 𓂀, which hangs a tail well
+            below the eye — centring the box puts the tail in the middle and
+            lifts the eye out of it. That is the fix that shipped and was
+            reported again.
+          - Correlating the two glyphs' ink profiles finds the shift that best
+            overlays their MASS, which is dragged by that same tail.
+        SO FIND THE PUPIL ITSELF. Rendered at 400px and flood-filled inward from
+        the border, each glyph gives up its ENCLOSED regions — and both contain
+        the same round hole, aspect ratio 1.01, which is the pupil. Its centre is
+        the only landmark here that means what the reader means. */
+  const pupil = await page.evaluate(() => {
     const t = document.querySelector('.mapwrap svg text.mset');
     const cs = getComputedStyle(t);
-    const S = 16, px = Math.round(parseFloat(cs.fontSize) * S), N = px * 3, base = Math.round(N * 0.7);
+    const px = 400, N = px * 2, base = Math.round(N * 0.72);
     const c = document.createElement('canvas'); c.width = N; c.height = N;
     const x = c.getContext('2d');
-    const midOf = ch => {
+    const find = ch => {
       x.clearRect(0, 0, N, N); x.fillStyle = "#000";
       x.font = `${cs.fontWeight} ${px}px ${cs.fontFamily}`;
       x.textAlign = "center"; x.fillText(ch, N / 2, base);
-      const d = x.getImageData(0, 0, N, N).data;
-      let t0 = null, b0 = null;
-      for (let yy = 0; yy < N; yy++) { let s = 0;
-        for (let xx = 0; xx < N; xx++) s += d[(yy * N + xx) * 4 + 3];
-        if (s > 0) { if (t0 === null) t0 = yy; b0 = yy; } }
-      return t0 === null ? null : ((t0 + b0) / 2 - base) / px;   // ems from baseline
+      const d = x.getImageData(0, 0, N, N).data, ink = new Uint8Array(N * N);
+      for (let i = 0; i < N * N; i++) ink[i] = d[i * 4 + 3] > 60 ? 1 : 0;
+      // white reachable from the border is OUTSIDE; what is left is enclosed
+      const out = new Uint8Array(N * N), st = [];
+      for (let i = 0; i < N; i++) st.push(i, (N - 1) * N + i, i * N, i * N + N - 1);
+      while (st.length) { const q = st.pop();
+        if (q < 0 || q >= N * N || out[q] || ink[q]) continue;
+        out[q] = 1; const yy = (q / N) | 0, xx = q % N;
+        if (xx > 0) st.push(q - 1); if (xx < N - 1) st.push(q + 1);
+        if (yy > 0) st.push(q - N); if (yy < N - 1) st.push(q + N); }
+      const lab = new Uint8Array(N * N), holes = [];
+      for (let p0 = 0; p0 < N * N; p0++) {
+        if (ink[p0] || out[p0] || lab[p0]) continue;
+        const q = [p0]; lab[p0] = 1;
+        let n = 0, x0 = N, x1 = 0, y0 = N, y1 = 0;
+        while (q.length) { const r = q.pop(); n++;
+          const yy = (r / N) | 0, xx = r % N;
+          if (xx < x0) x0 = xx; if (xx > x1) x1 = xx;
+          if (yy < y0) y0 = yy; if (yy > y1) y1 = yy;
+          for (const t2 of [r - 1, r + 1, r - N, r + N]) {
+            if (t2 < 0 || t2 >= N * N || ink[t2] || out[t2] || lab[t2]) continue;
+            lab[t2] = 1; q.push(t2); } }
+        const w = x1 - x0 + 1, h = y1 - y0 + 1;
+        // Round, and a real feature rather than an antialiasing speck.
+        if (n > px * px / 400 && Math.abs(w / h - 1) < 0.15)
+          holes.push({area: n, mid: ((y0 + y1) / 2 - base) / px});
+      }
+      holes.sort((a, b) => b.area - a.area);
+      return holes.length ? holes[0].mid : null;
     };
-    return {open: midOf("\u{13080}"), shut: midOf("\u{1307C}")};
+    return {open: find("\u{13080}"), shut: find("\u{1307C}")};
   });
-  ok("both marks render as real ink in the page's own face",
-     ink.open !== null && ink.shut !== null);
+  ok("the pupil is findable in both marks, as an enclosed round hole",
+     pupil.open !== null && pupil.shut !== null, JSON.stringify(pupil));
 
-  /* THE OFFSET THE CODE APPLIES MUST BE THE NEGATED MIDDLE OF THE INK — that is
-     what "centred" means here. Checked against the constants the page ships, so
-     the day the face is swapped for one whose glyphs sit differently, this says
-     so instead of the reader having to. */
-  const coded = await page.evaluate(() => ({open: MSET_DY_OPEN, shut: MSET_DY_SHUT}));
+  /* THE CODED OFFSET IS THE PUPIL'S OWN DEPTH, so the baseline it produces puts
+     that pupil on the point the badge is drawn around. Checked against the
+     constants the page ships: the day the face changes, this says so. */
+  const coded = await page.evaluate(() => ({open: MSET_PUPIL_OPEN, shut: MSET_PUPIL_SHUT}));
   for (const which of ["open", "shut"]) {
-    const off = coded[which] + ink[which];    // 0 when the ink is centred on the ring
-    ok(`the ${which} mark is centred in its ring`, Math.abs(off) < 0.04,
+    const off = coded[which] + pupil[which];   // 0 when the pupil is on the ring centre
+    ok(`the ${which} mark's pupil is centred in its ring`, Math.abs(off) < 0.03,
        `${(off > 0 ? "+" : "")}${off.toFixed(4)}em off centre `
-       + `(code ${coded[which]}, ink middle ${ink[which].toFixed(4)})`);
+       + `(code ${coded[which]}, pupil at ${(-pupil[which]).toFixed(4)})`);
   }
-  /* AND THE TWO AGREE WITH EACH OTHER, which is the pupil-does-not-jump half:
-     if both are centred they are also in the same place, so opening the eye does
-     not move it. Stated separately because it is the property that was asked
-     for, and a check should fail on the words it was given. */
+  /* AND SO THE EYE DOES NOT MOVE AS IT OPENS, which is the property that was
+     asked for. It follows from both being centred, and is stated separately
+     because a check should fail on the words it was given. */
   ok("...so the eye does not jump as it opens",
-     Math.abs((coded.open + ink.open) - (coded.shut + ink.shut)) < 0.05,
-     `open ${(coded.open + ink.open).toFixed(4)} vs shut ${(coded.shut + ink.shut).toFixed(4)}`);
+     Math.abs((coded.open + pupil.open) - (coded.shut + pupil.shut)) < 0.04,
+     `open ${(coded.open + pupil.open).toFixed(4)} vs shut ${(coded.shut + pupil.shut).toFixed(4)}`);
 
   /* AND EVERY MARK ON THE PAGE IS ACTUALLY DRAWN THERE. The two checks above
      compare the constants against the ink; this one compares the DRAWN baseline

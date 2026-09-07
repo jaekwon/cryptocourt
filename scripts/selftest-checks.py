@@ -1536,9 +1536,13 @@ print("\ncheck-mark-font")
 # `span.chatmark` and computed -apple-system. Same glyph, two surfaces, one of
 # them a tofu box for every reader without an Egyptian font — and looking
 # perfect to everyone who could have noticed.
+# THE PLANT MOVED WITH THE MARKUP. The heading and the subset row each built
+# their own span around the mark; they share setMarkSpan now, so the one place
+# this arm can strip the class is there. An arm quoting the old site would plant
+# nothing and prove nothing, which is what check-control-anchors caught.
 control("a mark drawn in a span the stylesheet does not font", WEBPAGE,
-        '<span class="wedjat" role="img" aria-label="${setOpensWords(p.shown)}">',
-        '<span role="img" aria-label="${setOpensWords(p.shown)}">',
+        '<span class="wedjat ${shown? "" : "shutmark"}" role="img" ',
+        '<span role="img" ',
         "no class on it is one the stylesheet gives the embedded face to",
         argv=["python3", MARKFONT])
 # THE SECOND ARM IS THE STYLESHEET SIDE. "every mark wears a fonted class" is

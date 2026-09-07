@@ -805,11 +805,30 @@ a.card:hover{border-color:var(--line-2)}
    the reader's own — which still works on a machine that has one. */
 .wedjat{font-family:"wedjat-font",system-ui,sans-serif; font-feature-settings:normal;
   line-height:1; color:var(--accent)}
+/* THE TWO MARKS DO NOT PUT THEIR PUPIL IN THE SAME PLACE, so printed inline at
+   one baseline they read as two different heights: 𓂀 carries its eye high with
+   the tail below, 𓁼 is a bare eye sitting near the baseline. Reported as "the
+   eye next to 'Fauci' sits too low — put it where the other one would be".
+   0.21em, MEASURED: the pupil is an enclosed round hole in both glyphs, at
+   0.475em above the baseline in 𓂀 and 0.265em in 𓁼. Raising the shut one by
+   the difference puts the two pupils on one line, so a set that opens concealed
+   and one that opens shown sit at the same height in a heading or a row.
+   position/top RATHER THAN transform OR vertical-align: these are inline spans
+   inside a heading, and a transform does nothing to an inline box while a
+   vertical-align would grow the line it sits in. This shifts the ink and
+   nothing else. */
+.wedjat.shutmark{position:relative; top:-0.21em}
 .foldsel{cursor:pointer}
 /* A NAMED SUBSET, inline in its parent's meta line. Underlined on hover only:
    three links in a row that is already a control should read as text until you
    reach for one. */
 .folderrow .subname{color:var(--accent-2); text-decoration:none}
+/* AND THE ROW'S OWN NAME, on the page where it is a link. Styled like the row's
+   text rather than like a link: the whole row is a way in, so colouring the name
+   would make the one word look like the only thing that answers a click. It
+   underlines on hover, which is what tells a reader it does. */
+.folderrow .setopen{color:inherit; text-decoration:none}
+.folderrow .setopen:hover,.folderrow .setopen:focus-visible{text-decoration:underline}
 .folderrow .subname:hover{text-decoration:underline; text-underline-offset:2px}
 /* The note that something is nested inside a named subset. Quieter than the
    name it follows, because it is a hint about what you would find, not a thing
@@ -8168,7 +8187,18 @@ function folderRowHtml(slug,f,path,toggle){
      the verdict and the date. .foldopen is the class the row's own click handler
      steps over, so following it does not tick the set instead. */
   const bornTail = f.born ? ` · <a class="foldopen" href="#/c/${esc(slug)}/${f.born}">affirmed by #${f.born}</a>` : "";
-  const meta = `<span class="t">${safeInline(f.name)} <span class="m">${n} claim${n===1?"":"s"}${subTail}${bornTail}</span></span>`;
+  /* THE NAME IS THE WAY IN, on the page where the row is not a control.
+     Reported as "clicking on subfolders in the SUBSETS section does nothing",
+     and it was exactly true: the row is a plain DIV there, and the only things
+     in it that answered a click were "affirmed by #N" and the `open →` pill at
+     the far right. A reader clicks the NAME of the thing they want to open. The
+     named grandchildren beside it were already links, so the row offered a way
+     into a set two levels down and none into the one it was about.
+     NOT ON THE COURT PAGE, where the same row is a checkbox and a click ticks
+     the filter — a link in the name there would fight the control it is part of.
+     So the name is passed in rather than baked into `meta`, and each branch says
+     what its own name does. */
+  const metaWith = nameHtml => `<span class="t">${nameHtml} <span class="m">${n} claim${n===1?"":"s"}${subTail}${bornTail}</span></span>`;
   /* THE SAME ROW THE COURT PAGE DRAWS, and it used to be a different one — worse,
      an INVALID one. This branch wrapped the whole row in an `<a>`, and `meta`
      carries the born reference as a link, so the row shipped an anchor inside an
@@ -8190,15 +8220,15 @@ function folderRowHtml(slug,f,path,toggle){
   if(!toggle){
     const mark = f.focus ? SET_MARK : SHUT_MARK;
     return `<div class="crow folderrow" data-q="${esc(f.name + " " + (f.desc||""))}">
-    <span class="id"><span class="wedjat" role="img" aria-label="${setOpensWords(f.focus)}">${mark}</span></span>
-    ${meta}
+    <span class="id">${setMarkSpan(mark, f.focus)}</span>
+    ${metaWith(`<a class="foldopen setopen" href="#/c/${esc(slug)}/f/${path}">${safeInline(f.name)}</a>`)}
     <a class="pill void foldopen" href="#/c/${esc(slug)}/f/${path}">open &rarr;</a></div>`;
   }
   const keys = folderSubtree(f, path, []).join(" ");
   return `<div class="crow folderrow foldsel" role="checkbox" aria-checked="false" tabindex="0"
     data-q="${esc(f.name + " " + (f.desc||""))}" data-fold-keys="${esc(keys)}"${f.focus? ' data-fold-focus="1"':""}>
     <span class="id"><span class="foldbox">${EYE_CHAR}${ICN_EYE_SHUT}</span></span>
-    ${meta}
+    ${metaWith(safeInline(f.name))}
     <a class="pill void foldopen" href="#/c/${esc(slug)}/f/${path}">open →</a></div>`;
 }
 /* "all 19 claims and 3 sets" — TWO NOUNS, TWO NUMBERS. It read "all 22 claims
@@ -11353,19 +11383,15 @@ function mapSvg(L, data, slug){
              the other. Caught by map_draws: the ring assertion went red the pass
              after the nudge landed, with the glyph poking out of the top of its
              own outline on every concealed set. */
-          /* EACH MARK SITS ON ITS OWN BASELINE, MEASURED FROM THE FACE.
-             A single y with a nudge for the shut one was a hand-fit, and it put
-             𓂀 0.09em BELOW the middle of its ring and 𓁼 0.10em above — the eye
-             low in the circle, reported twice. These two numbers are where the
-             baseline has to be for each glyph's ink to be CENTRED on the ring:
-             the negated middle of its inked box, at 16x supersample, in the
-             page's own face. 𓂀 needs more because it hangs a tail below the
-             eye and 𓁼 does not.
-             AND THE PUPIL BARELY MOVES BETWEEN THEM — 0.03em, half a pixel at
-             the size the map draws these — which is the other half of the ask:
-             the eye opens and closes without jumping. The old pair moved it a
-             fifth of an em. */
-          const dyOf = f2 => es * (f2 ? MSET_DY_OPEN : MSET_DY_SHUT);
+          /* THE PUPIL GOES IN THE MIDDLE OF THE RING, whichever mark is drawn.
+             The baseline is therefore the pupil's own offset within the glyph,
+             which is what these two constants are — so both marks put their eye
+             on exactly the same point and the badge holds it dead centre.
+             THE TAIL OF 𓂀 JUST REACHES THE EDGE, by 0.05em on a ring of radius
+             0.66em. That is the right trade: the ring is a ground behind the
+             mark rather than a box containing it, and the alternative — fitting
+             the tail — is what put the eye off centre in the first place. */
+          const dyOf = f2 => es * (f2 ? MSET_PUPIL_OPEN : MSET_PUPIL_SHUT);
           const dy = dyOf(f.focus);
           /* THE RING DOES NOT MOVE. It used to chase the glyph, because the
              glyph was drawn off-centre and the outline had to follow it there.
@@ -12891,7 +12917,7 @@ function mountMap(slug, data, focusId, focusPath){
       // The same two offsets mapSvg drew it with, so the swap lands the new
       // glyph centred on the ring exactly as the first draw did.
       if(isFinite(cy) && isFinite(es))
-        t.setAttribute("y", (cy + es * (open ? MSET_DY_OPEN : MSET_DY_SHUT)).toFixed(1));
+        t.setAttribute("y", (cy + es * (open ? MSET_PUPIL_OPEN : MSET_PUPIL_SHUT)).toFixed(1));
     });
     if(!sel){
       undim();
@@ -15469,16 +15495,22 @@ function focusStakeSide(side){
    the chain does not consider a set — which is the more dangerous direction of
    the two, because it is the one a reader would believe. */
 const SET_MARK = "\u{13080}";
-/* WHERE EACH MARK'S BASELINE GOES, as a fraction of the em, for its inked box to
-   be centred on the point the badge is drawn around. Measured in the page's own
-   face by rendering each glyph at 16x and taking the negated middle of its ink:
-   𓂀 spans -0.743em to +0.218em about its baseline, 𓁼 -0.429em to -0.031em.
-   NOT A DESIGN CHOICE — a property of these two glyphs in this face, which is
-   why they are measured rather than tuned. The previous single baseline plus a
-   0.22em nudge put 𓂀 0.09em low in its ring and 𓁼 0.10em high; the eye sitting
-   low was reported twice before this was measured instead of adjusted. */
-const MSET_DY_OPEN = 0.2625;
-const MSET_DY_SHUT = 0.2299;
+/* WHERE THE PUPIL IS, in each mark, as a fraction of the em above its baseline.
+   THE PUPIL IS THE ANCHOR because it is what a reader looks at. Two earlier
+   attempts anchored on something else and each was reported: a hand-fit nudge,
+   and then the middle of the glyph's INKED BOX. The ink box is wrong for 𓂀 in
+   particular — it hangs a tail well below the eye, so centring the box drags the
+   eye upward and leaves the tail as the thing in the middle.
+   MEASURED, NOT TUNED, and by a method that finds the pupil rather than
+   approximating it: each glyph is rendered at 400px and flood-filled from the
+   border, which leaves its ENCLOSED regions. Both marks turn out to contain the
+   same three — two almond halves and a round hole of aspect 1.01 — and that
+   round hole is the pupil. It sits at 0.475em in 𓂀 and 0.265em in 𓁼.
+   SO THEY ARE 0.21em APART, which is the figure the very first hand-fit reached
+   (0.22em) by overlaying the two until the pupils coincided. Measuring agreed
+   with the eye; the arithmetic in between did not. */
+const MSET_PUPIL_OPEN = 0.475;
+const MSET_PUPIL_SHUT = 0.265;
 /* AND THE SECOND MARK, which this file did not have. The realm takes BOTH — 𓂀
    D010 opens the set shown, 𓁼 D007 opens it concealed, and parseSetTitle returns
    which — while every test here was `startsWith(SET_MARK + " ")`, five of them,
@@ -15575,8 +15607,27 @@ function setMarkHtml(escaped){
      AND THE LABEL SAYS WHICH, because a screen reader gets no glyph at all. `p`
      already carries `shown` — derived from the mark rather than stored beside it
      — so this needs no second lookup and no second constant to keep in step. */
-  return `<span class="wedjat" role="img" aria-label="${setOpensWords(p.shown)}">`
-    + p.mark + "</span> " + p.name;
+  return setMarkSpan(p.mark, p.shown) + " " + p.name;
+}
+/* ONE SPAN FOR BOTH MARKS, WHEREVER ONE IS PRINTED IN TEXT. The heading and the
+   subset row each built this themselves, which is how they came to disagree: the
+   class decides where the glyph sits, and a second copy is a second place to
+   forget the nudge.
+   `.shutmark` IS WHAT CARRIES THE NUDGE, and it has to be a class rather than a
+   CSS rule on .wedjat, because .wedjat holds EITHER glyph — no selector can ask
+   which character is inside it. The offset itself is in the stylesheet beside
+   the reason. */
+function setMarkSpan(mark, shown){
+  /* `wedjat` FIRST AND LITERAL, with the conditional after it. Written as
+     `class="wedjat${...}"` the class list reads, to anything scanning the source,
+     as one token called `wedjat${shown?` — and check-mark-font could no longer
+     find the class that lends this span the embedded face. That guard exists
+     because these are Egyptian hieroglyphs: without the face they are tofu boxes
+     for every reader not on a Mac, and correct-looking to everyone who might
+     have noticed. A literal class is also the honest shape — the face is not
+     conditional, only the nudge is. */
+  return `<span class="wedjat ${shown? "" : "shutmark"}" role="img" `
+    + `aria-label="${setOpensWords(shown)}">${mark}</span>`;
 }
 /* `tail` IS WHATEVER TRAILS THE VERDICT, and it rides INSIDE the oval's own
    unbreakable unit. The docket's figure was appended after this sentence and

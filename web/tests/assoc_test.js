@@ -38,6 +38,7 @@ global.SHUT_MARK = "\u{1307C}";   // 𓁼 — the second mark, opens concealed
 global.ICN_EYE_OPEN = '<svg class="eye eyeopen"></svg>';   // drawn form; the harness needs it to exist, not to render
 global.EYE_CHAR = '<span class="wedjat">\u{13080}</span>';   // the character, in the embedded face
 code += fn('setTitleParts');   // the real one — a stub could know one mark
+code += fn('setMarkSpan');
 code += fn('setMarkHtml');
 code += fn('verdictSentence');
 // verdictSentence delegates the oval to sideOval now, and the row builders ask

@@ -289,6 +289,7 @@ ok("A-I pass on live 50-claim ring (both modes)", livepass);
   global.SET_MARK = "\u{13080}";
 global.SHUT_MARK = "\u{1307C}";   // 𓁼 — the second mark, opens concealed
   global.ICN_EYE_OPEN = '<svg class="eye eyeopen"></svg>';   // drawn form; the harness needs it to exist, not to render
+  eval(fn('setMarkSpan'));
   eval(fn('setMarkHtml'));
   // The map draws the mark instead of writing it, so it needs the two
   // helpers that decide which titles carry one and strip it from the words.

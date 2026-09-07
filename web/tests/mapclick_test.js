@@ -135,6 +135,7 @@ eval(fn("setTitleParts"));   // the real parser — a stub could know one mark
 eval(slice('const TEMPLE_D =', '\n').replace('const ', 'global.'));
 eval(slice('const TEMPLE_VB =', '\n').replace('const ', 'global.'));
 global.ICN_EYE_OPEN = '<svg class="eye eyeopen"></svg>';   // drawn form; the harness needs it to exist, not to render
+eval(fn('setMarkSpan'));
 eval(fn('setMarkHtml'));
 // The map draws the mark instead of writing it, so it needs the two
 // helpers that decide which titles carry one and strip it from the words.

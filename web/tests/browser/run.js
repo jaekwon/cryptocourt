@@ -92,6 +92,8 @@ const ALL = ["embed_layout.js", "tagrow_layout.js", "route_crawl.js",
              "rowscope_layout.js", "map_draws.js", "map_type.js", "map_boing.js", "chat_all.js",
              // the two marks, and the pupil that must not move between them
              "map_reveal.js",
+             // a set's own page: the mark beside its name, and the way in
+             "set_page.js",
              "rail_sky.js",
              // folders as the court page's top knob: rows AND counts follow it
              "folder_filter.js",

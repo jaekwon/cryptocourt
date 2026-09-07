@@ -198,8 +198,27 @@ ok("...and nothing moves it afterwards", !/ring\.setAttribute\("cy"/.test(src));
 /* THE TWO BASELINES ARE MEASURED, NOT TUNED, and they are what makes each mark
    sit in the middle of its ring. Named constants because the browser check reads
    them back off the page and compares them against the ink it renders. */
-ok("each mark has its own measured baseline",
-   /const MSET_DY_OPEN = 0\.\d+;/.test(src) && /const MSET_DY_SHUT = 0\.\d+;/.test(src));
+/* THE PUPIL IS THE ANCHOR, and these two numbers are where it sits inside each
+   glyph. Measured by flood-filling the rendered mark and taking the round hole:
+   0.475em in 𓂀, 0.265em in 𓁼. Two earlier anchors were each reported as the eye
+   sitting wrong — a hand-fit nudge, then the middle of the glyph's inked box,
+   which for 𓂀 is dragged down by a tail that is not the part being looked at. */
+ok("each mark knows where its own pupil is",
+   /const MSET_PUPIL_OPEN = 0\.\d+;/.test(src) && /const MSET_PUPIL_SHUT = 0\.\d+;/.test(src));
+ok("...and the two are far enough apart to matter", (()=>{
+  const o = +(/const MSET_PUPIL_OPEN = (0\.\d+);/.exec(src)||[])[1];
+  const h = +(/const MSET_PUPIL_SHUT = (0\.\d+);/.exec(src)||[])[1];
+  return o > h && o - h > 0.1;      // 0.21em measured; a wrong anchor gave 0.03
+})());
+/* AND THE INLINE NUDGE IS THAT SAME DIFFERENCE. A heading and a map badge are
+   different surfaces with one rule between them: put the pupils on one line. The
+   CSS cannot read the constants, so the harness reads both and compares. */
+ok("the inline shut mark is raised by the gap between the two pupils", (()=>{
+  const o = +(/const MSET_PUPIL_OPEN = (0\.\d+);/.exec(src)||[])[1];
+  const h = +(/const MSET_PUPIL_SHUT = (0\.\d+);/.exec(src)||[])[1];
+  const css = +(/\.wedjat\.shutmark\{position:relative; top:-(0\.\d+)em\}/.exec(src)||[])[1];
+  return Math.abs(css - (o - h)) < 0.005;
+})());
 /* AND THE MAP PICKS PER MARK. This one is here rather than in the browser check
    on purpose: the sample draws only the OPEN mark at rest — its single born set
    is filed 𓂀 — so a mapSvg that used the open offset for both states renders
@@ -207,7 +226,7 @@ ok("each mark has its own measured baseline",
    survives there and dies here. The browser check owns whether the number is
    right; this owns whether both numbers are reachable. */
 ok("...and the map draws each mark on its own",
-   /const dyOf = f2 => es \* \(f2 \? MSET_DY_OPEN : MSET_DY_SHUT\);/.test(src));
+   /const dyOf = f2 => es \* \(f2 \? MSET_PUPIL_OPEN : MSET_PUPIL_SHUT\);/.test(src));
 ok("...and the node carries its ring centre for the swap", /data-cy="/.test(src));
 /* AND THE PUPIL DOES NOT MOVE THROUGH THE SWAP. 𓂀 and 𓁼 sit on different
    baselines in the font, so drawing them at one y makes the eye jump as it
@@ -215,8 +234,8 @@ ok("...and the node carries its ring centre for the swap", /data-cy="/.test(src)
    nudged up from it. */
 ok("the ring centre and the em are carried on the node",
    /data-cy="/.test(src) && /data-es="/.test(src));
-ok("...and onto the baseline measured for whichever mark it swapped to",
-   /setAttribute\("y", \(cy \+ es \* \(open \? MSET_DY_OPEN : MSET_DY_SHUT\)\)/.test(src));
+ok("...and onto the baseline its own pupil calls for",
+   /setAttribute\("y", \(cy \+ es \* \(open \? MSET_PUPIL_OPEN : MSET_PUPIL_SHUT\)\)/.test(src));
 
 console.log(fail ? "\n" + fail + " FAILURES" : "\nALL PASS");
 process.exit(fail ? 1 : 0);
