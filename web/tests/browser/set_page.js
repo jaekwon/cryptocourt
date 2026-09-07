@@ -179,6 +179,37 @@ const PUPIL_FINDER = `(ch, font) => {
   ok("...and the page that arrives is that set's", landed.heading.includes(subj.child),
      `heading "${landed.heading.slice(0, 50)}" should name "${subj.child}"`);
 
+  /* ---- 3. THE SAMPLE ANSWERS "DOES THIS EXIST HERE" ------------------------
+     References in a claim body, in a comment and in the chat all resolve through
+     two lookups — claimIsReal and setFidByName — and BOTH WRITERS WERE
+     LIVE-ONLY: one is called by courtStats' chain read, the other by
+     chainFolders. So in demo mode, which is the DEFAULT and what most readers
+     see, the ceiling stayed 0 and the name map stayed empty, and every "#19" and
+     every set name was dead text.
+     PROBED AS THE FUNCTIONS RATHER THAN AS RENDERED LINKS, because the sample
+     carries no claim bodies and no board — there is no prose in it to link. The
+     contract is what those two answer, so that is what is asked. */
+  await page.evaluate(s2 => { location.hash = "/c/" + s2.slug + "/1"; }, subj);
+  for (let i = 0; i < 20; i++) {
+    if (await page.evaluate(() => !!document.querySelector('h1.page-h'))) break;
+    await new Promise(r => setTimeout(r, 300));
+  }
+  await new Promise(r => setTimeout(r, 700));
+  const known = await page.evaluate(s2 => ({
+    real1: claimIsReal(s2.slug, 1),
+    // The sample's courts run 1..n with no gaps, so the count is the ceiling.
+    over: claimIsReal(s2.slug, 9999),
+    names: setNamesOf(s2.slug).length,
+    hasParent: setFidByName(s2.slug, s2.name) != null,
+    // A DIFFERENT court must answer no, which is the wrong answer that would
+    // look right: #1 here linking to #1 on somebody else's docket.
+    other: claimIsReal("not-a-court-in-the-sample", 1),
+  }), subj);
+  ok("a claim page in the sample knows its court's claims", known.real1, JSON.stringify(known));
+  ok("...and knows where they stop", !known.over);
+  ok("...and knows its court's set names", known.names > 0 && known.hasParent, JSON.stringify(known));
+  ok("...and refuses to answer for a court it has not read", !known.other);
+
   ok("the page threw nothing while doing all that", errs.length === 0, errs.join(" | "));
   await browser.close();
   console.log(fail ? "\n" + fail + " FAILURES" : "\nALL PASS");

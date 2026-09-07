@@ -823,6 +823,14 @@ a.card:hover{border-color:var(--line-2)}
    three links in a row that is already a control should read as text until you
    reach for one. */
 .folderrow .subname{color:var(--accent-2); text-decoration:none}
+/* A REFERENCE INSIDE A SENTENCE. Underlined rather than coloured, and only on
+   hover: a claim body is prose, and a paragraph with four accent-coloured spans
+   in it reads as a list of links with words between them. The reader's cue that
+   "#19" goes somewhere is that it is a number with a hash — which is already how
+   the page names claims — so the styling only has to confirm it on approach. */
+.reflink{color:inherit; text-decoration:underline; text-decoration-style:dotted;
+  text-underline-offset:2px; text-decoration-color:color-mix(in srgb, var(--accent) 55%, transparent)}
+.reflink:hover,.reflink:focus-visible{text-decoration-style:solid; color:var(--accent)}
 /* AND THE ROW'S OWN NAME, on the page where it is a link. Styled like the row's
    text rather than like a link: the whole row is a way in, so colouring the name
    would make the one word look like the only thing that answers a click. It
@@ -4788,12 +4796,84 @@ function clipText(t, n){
    field any stranger can fill. Paragraphs are all the structure a question of
    fact needs. Blank-line splitting matches the realm's own sanitize.Block, which
    is what normalised the breaks in the first place. */
-function claimBody(d){
+/* WHAT A COURT CAN BE REFERRED TO BY, in a claim's body and in its comments.
+   People write "#19" and "𓁼 Fauci" there because that is how the page itself
+   names those things, and until now it was dead text: following a reference
+   meant reading the number, going back to the docket, and finding it by hand.
+   THE COURT ANSWERS WHETHER IT EXISTS, and it already had to. claimIsReal and
+   setFidByName were built for the chat rail, which asks the identical question
+   about the identical two references — so this reuses them rather than walking
+   the folder tree a second time. One consequence matters: a claim page and the
+   chat panel beside it can never disagree about whether #19 is real here.
+   SILENCE IS NOT A LINK. Both lookups answer "no" for a court whose count or
+   folders were never read, and for a DIFFERENT court — the one wrong answer that
+   would look right is #19 here pointing at #19 somewhere else.
+   THE RENDERING STAYS HERE rather than calling chat.js's chatClaimRefs, because
+   that file is deliberately standalone — its own escaper, no chain reads — and
+   its link wears a class its own stylesheet paints. Reaching into it would make
+   this page's body text depend on whether the chat panel happened to mount. */
+
+/* The pattern is chat.js's, and check-ref-pattern.py holds the two together.
+   `[^&\w]` BEFORE THE HASH IS THE WHOLE SUBTLETY: this runs on ESCAPED text, so
+   an apostrophe in it is `&#39;` — and a pattern without that guard turns the
+   tail of an escaped quote into a link to claim 39. Found by reading chat.js's,
+   which already had it; the first version written here did not. */
+const CLAIM_REF_RE = /(^|[^&\w])#([1-9]\d{0,8})(?![\w#])/g;
+
+const reQuote = s => String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/* LINKS GO IN AFTER ESCAPING, NEVER BEFORE. The input is escaped text, so the
+   only markup in it is what this adds; and each pass runs only on the parts NOT
+   already inside an anchor, so a set name containing "#12" cannot be linked
+   twice or nested. */
+const refOnPlain = (html, fn) => html.split(/(<a\b[^>]*>[\s\S]*?<\/a>)/)
+  .map(part => part.slice(0, 2) === "<a" ? part : fn(part)).join("");
+
+function linkRefs(escaped, slug){
+  if(!slug || !escaped) return escaped;
+  let out = String(escaped);
+  /* SETS FIRST, LONGEST NAME FIRST. "Fauci" and "Fauci grants" can both be sets;
+     matched short-first, the longer reference comes out as a link to the shorter
+     one with the rest dangling as text. */
+  const names = typeof setNamesOf === "function" ? setNamesOf(slug) : null;
+  if(names && names.length){
+    const by = {};
+    for(const nm of names.slice().sort((x,y)=>y.length-x.length))
+      if(by[esc(nm)] == null) by[esc(nm)] = nm;
+    /* ESCAPED to match escaped text, then QUOTED for the regex — these names
+       come off the chain, so an unquoted one is a regex written by whoever filed
+       the set. */
+    /* BOTH MARKS, READ INSIDE THE FUNCTION AND NOT HOISTED OUT OF IT. A set is
+       referred to by whichever mark it was filed under, and a reader quoting the
+       page copies the glyph they saw — but SET_MARK and SHUT_MARK are declared
+       ten thousand lines below this, and a top-level `const REF_SET_MARKS =
+       [SET_MARK, SHUT_MARK]` runs at load, inside their temporal dead zone. It
+       threw on every page in the browser while every source harness passed,
+       because a harness sets the two as globals before evaluating this region.
+       AN ALTERNATION, NOT A CHARACTER CLASS. `[𓂀𓁼]` matches UTF-16 CODE UNITS
+       and both marks are astral — a surrogate PAIR — so the class matched a lone
+       high surrogate and the anchor opened in the MIDDLE of the glyph. Measured:
+       `as covered in \ud80c<a …>\udc7c Fauci</a>`. */
+    const re = new RegExp("(" + [SET_MARK, SHUT_MARK].map(reQuote).join("|") + ") ("
+      + Object.keys(by).map(reQuote).join("|") + ")", "g");
+    out = refOnPlain(out, part => part.replace(re, (m, mark, name) => {
+      const fid = setFidByName(slug, by[name]);
+      return fid == null ? m
+        : `<a class="reflink" href="#/c/${esc(slug)}/f/${esc(String(fid))}">${m}</a>`;
+    }));
+  }
+  if(typeof claimIsReal !== "function") return out;
+  return refOnPlain(out, part => part.replace(CLAIM_REF_RE, (all, pre, digits) =>
+    claimIsReal(slug, Number(digits))
+      ? `${pre}<a class="reflink" href="#/c/${esc(slug)}/${digits}">#${digits}</a>`
+      : all));
+}
+function claimBody(d, slug){
   const raw = d && typeof d.body === "string"? d.body.trim() : "";
   if(!raw) return "";
   const paras = raw.split(/\n\s*\n/).map(p=>p.trim()).filter(Boolean);
   if(!paras.length) return "";
-  return `<div class="claimbody">${paras.map(p=>`<p>${esc(p)}</p>`).join("")}</div>`;
+  return `<div class="claimbody">${paras.map(p=>`<p>${linkRefs(esc(p), slug)}</p>`).join("")}</div>`;
 }
 
 /* THE EVIDENCE, ON THE CARD AND ON THE CLAIM. A strip rather than a grid: seven
@@ -9435,6 +9515,18 @@ function setFidByName(slug, name){
   const fid = SETFID.names.get(String(name));
   return fid == null ? null : fid;
 }
+/* AND THE NAMES THEMSELVES, for the one caller that has to find a set name
+   INSIDE a sentence rather than check one it already has. The chat panel matches
+   a whole message against parseSetTitle's shape and then asks about that name; a
+   claim body says "as covered in 𓁼 Fauci" mid-paragraph, so the linker needs the
+   candidates to look for.
+   THE SAME SLUG GUARD, for the same reason: answering with the last court's
+   names would link a name to a set on the wrong docket. An empty list is the
+   honest answer for a court whose folders were never read, and it means no
+   links, which is the safe direction. */
+function setNamesOf(slug){
+  return SETFID.slug === String(slug) ? [...SETFID.names.keys()] : [];
+}
 /* AND THE SAME FAVOUR FOR A CLAIM NUMBER, so "#19" in the chat can become a way
    to go and read #19. One number does it: ids are 1-based and INCLUSIVE of the
    count — the realm increments nextID before assigning, which the docket scan
@@ -9451,6 +9543,34 @@ let CLAIMTOP = {slug: "", top: 0};
 function rememberClaims(slug, count){
   const n = Number(count);
   CLAIMTOP = {slug: String(slug), top: Number.isFinite(n) && n > 0 ? Math.floor(n) : 0};
+}
+/* THE SAMPLE KNOWS ALL OF THIS ALREADY, so demo mode fills both lookups from it.
+   BOTH WRITERS WERE LIVE-ONLY: rememberClaims is called by courtStats' chain
+   read and rememberSets by chainFolders, so in demo mode — which is the DEFAULT
+   mode, and what most readers see — the ceiling stayed 0, the name map stayed
+   empty, and every "#19" and every set name in a body, a comment or the chat was
+   dead text. The feature existed and the sample could not show it.
+   NO READS HERE, WHICH IS WHY IT IS SAFE: the sample is in the page. Contiguous
+   ids are a property of the sample rather than an assumption about courts — its
+   three courts are 1..11, 1..6 and 1..3 — and on a live chain this does nothing
+   at all, so a court with gaps is not this function's problem.
+   THE POSITIONAL PATH IS WHAT A DEMO SET IS REACHED BY, and it goes in the slot
+   a chain folder puts its fid in, because the only consumer builds
+   "/f/<that>" — which is the same string in both worlds. */
+function rememberDemoCourt(slug){
+  if(isLive()) return;
+  const c = demoCourt(slug);
+  if(!c) return;
+  rememberClaims(slug, (c.claims || []).length);
+  const pairs = [];
+  (function walk(fs, ppath){
+    (fs || []).forEach((f, i) => {
+      const path = f.path != null ? String(f.path) : (ppath != null ? ppath + "." + i : String(i));
+      if(f.name) pairs.push([f.name, path]);
+      walk(f.folders, path);
+    });
+  })((curationFor(slug) || {}).folders, null);
+  rememberSets(slug, pairs, true);
 }
 function claimIsReal(slug, id){
   if(CLAIMTOP.slug !== String(slug)) return false;
@@ -10806,7 +10926,7 @@ function mapSelCard(id, data, slug, L){
        on blank lines, never re-interpreted as markup.
        Absent until the read lands (mountMap fetches it on selection), and absent
        for good in demo mode, where the sample carries no bodies. */
-    + claimBody(c)
+    + claimBody(c, slug)
     + claimExhibits(c)
     + (o? `<p class="small muted">asserts: ${esc(o)}</p>` : "")
     + (i? `<p class="small muted">asserted about it: ${esc(i)}</p>` : "")
@@ -13671,6 +13791,9 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
   loading();
   const id = parseInt(idS,10);
   if(!isLive() && !demoCourt(slug)){ main.innerHTML = crumbs([{label:"Directory",href:"#/"}]) + notFound("No court by that slug."); return; }
+  // The sample's own claim ceiling and set names, so a reference in the body or
+  // in a comment links here exactly as it does on a live chain.
+  rememberDemoCourt(slug);
   let ccount = null;
   if(isLive()){
     const n = await one(`ClaimCount(${gstr(slug)})`).catch(()=>null);
@@ -13874,7 +13997,7 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
   const polish = polishLink(slug, id, d, mPurged, mRedacted, polishBlocks);
   main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:courtCrumb(slug, cs&&cs.name),href:"#/c/"+slug},{label:"Claim #"+id}])
     + claimTitleHtml(d)
-    + claimBody(d)
+    + claimBody(d, slug)
     /* THE EVIDENCE, ON THE PAGE THE CLAIM ACTUALLY LIVES ON. claimDetail has
        always read ClaimMedia into d.media — the round trip was already paid —
        and only the map's selection card ever drew it. So a claim's exhibits
@@ -13973,10 +14096,14 @@ on(/^\/c\/([a-z0-9-]+)\/(\d+)$/, async (slug,idS)=>{
    so re-reading a comment as markdown here would be a second, differently-shaped
    attack surface on a field any stranger can fill with 2000 bytes. This is the
    rule claimBody already applies to the claim's own statement. */
-function boardText(s){
+function boardText(s, slug){
   const paras = String(s == null ? "" : s).split(/\n\s*\n/).map(p => p.trim()).filter(Boolean);
   if(!paras.length) return `<p class="muted">(empty)</p>`;
-  return paras.map(p => `<p>${esc(p).replace(/\n/g, "<br>")}</p>`).join("");
+  /* THE SAME REFERENCES AS THE CLAIM'S OWN BODY. A comment is where people
+     actually cite each other — "see #19", "that belongs under 𓁼 Fauci" — and a
+     board full of dead numbers was the worst case of it. Linked AFTER escaping,
+     on the escaped text, like everywhere else here. */
+  return paras.map(p => `<p>${linkRefs(esc(p), slug).replace(/\n/g, "<br>")}</p>`).join("");
 }
 
 /* HIDDEN ROWS ARE NOT DRAWN, on any surface here.
@@ -14018,7 +14145,7 @@ function boardWhen(at, nowH){
 }
 function boardRowHtml(slug, id, r, meta, role, nowH){
   const link = esc(gnowebRow(slug, id, r.id));
-  const body = boardText(r.text);
+  const body = boardText(r.text, slug);
   return `<article class="boardrow" id="c${esc(String(r.id))}">`
     + `<div class="boardmeta"><span class="mono">${shortAddr(r.author)}</span>`
     + (role ? ` <span class="pill">${esc(role)}</span>` : "")
@@ -14383,6 +14510,9 @@ const BOARD_PAGE = 25;
 
 async function boardView(slug, idS, ranked){
   const id = parseInt(idS, 10);
+  // Same as the claim page: the sample's own ceiling and names, so a comment
+  // citing #19 or a set links on the board's own page too.
+  rememberDemoCourt(slug);
   const title = await claimTitleOf(slug, id);
   const crumb = crumbs([{label:"Directory",href:"#/"},{label:courtCrumb(slug),href:"#/c/"+slug},
     {label:"Claim #"+id, href:"#/c/"+slug+"/"+id},{label:"Comments"}]);

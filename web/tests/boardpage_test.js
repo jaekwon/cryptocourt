@@ -47,7 +47,25 @@ eval(V(slice('const NOW = 4_800_000', '\nconst DEMO_ME')));
 
 var CFG = {gnoweb:"https://gnoweb.example.test", mode:"demo"};
 function isLive(){ return false; }                       // the sample, never a node
+/* ...and this harness carries no sample COURTS, only rows. rememberDemoCourt
+   asks for one so it can fill the claim ceiling and set names that make a
+   reference in a comment a link; with none it returns before touching anything,
+   which is also what it does for a slug the sample has never heard of. */
+function demoCourt(){ return null; }
 eval(V(slice('const demoBoard = (slug, id)', '\n/* ============================ demo dataset')));
+// The two marks linkRefs looks for, as globals so the slice below sees them.
+global.SET_MARK = global.SET_MARK || "\u{13080}";    // 𓂀 opens shown
+global.SHUT_MARK = global.SHUT_MARK || "\u{1307C}";  // 𓁼 opens concealed
+/* linkRefs sits above these and they print through it. It answers with the text
+   unchanged unless the page has ALREADY read this court's claim ceiling and set
+   names — which a harness has not — so loading it here changes nothing these
+   assertions look at, and catches the day it stops being able to no-op. */
+eval(slice('const CLAIM_REF_RE', 'function claimBody(').replace(/^const /gm, 'var '));
+/* boardView calls this before its reads. In demo mode it fills the sample's
+   claim ceiling and set names so references in a comment link; a harness runs
+   with neither, and the real function returning early on isLive() is not
+   something to stub away — so it is loaded. */
+eval(slice('function rememberDemoCourt(', '\nfunction claimIsReal(').replace(/^const /gm, 'var '));
 eval(V(slice('function boardText(', '\non(/^\\/c\\/')));
 
 var painted = "";

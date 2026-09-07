@@ -123,6 +123,14 @@ eval(slice('function bornClaimIds(', 'function folderCount('));
 eval(slice('function phaseClass(', 'function statusPill('));
 eval(slice('function statusPill(', 'function docketRow('));
 // ...and the real body renderer, for the same reason: the card renders it.
+// The two marks linkRefs looks for, as globals so the slice below sees them.
+global.SET_MARK = global.SET_MARK || "\u{13080}";    // 𓂀 opens shown
+global.SHUT_MARK = global.SHUT_MARK || "\u{1307C}";  // 𓁼 opens concealed
+/* linkRefs sits above these and they print through it. It answers with the text
+   unchanged unless the page has ALREADY read this court's claim ceiling and set
+   names — which a harness has not — so loading it here changes nothing these
+   assertions look at, and catches the day it stops being able to no-op. */
+eval(slice('const CLAIM_REF_RE', 'function claimBody(').replace(/^const /gm, 'var '));
 eval(slice('function claimBody(', '/* ==='));
 // ...and the shared verdict-sentence builder, which mapSelCard's title goes
 // through: a decided claim's card strikes the sentence and rings the side.

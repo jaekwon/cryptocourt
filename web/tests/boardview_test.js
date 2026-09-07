@@ -20,6 +20,14 @@ const CFG = {gnoweb:"https://gnoweb.example.test/"};
 // `const` inside eval() is block-scoped to the eval and does not reach this
 // file; `function` declarations do. BOARD_TOMB, gnowebRow and the two meta
 // helpers are consts, so they need the same rewrite the other harnesses use.
+// The two marks linkRefs looks for, as globals so the slice below sees them.
+global.SET_MARK = global.SET_MARK || "\u{13080}";    // 𓂀 opens shown
+global.SHUT_MARK = global.SHUT_MARK || "\u{1307C}";  // 𓁼 opens concealed
+/* linkRefs sits above these and they print through it. It answers with the text
+   unchanged unless the page has ALREADY read this court's claim ceiling and set
+   names — which a harness has not — so loading it here changes nothing these
+   assertions look at, and catches the day it stops being able to no-op. */
+eval(slice('const CLAIM_REF_RE', 'function claimBody(').replace(/^const /gm, 'var '));
 eval(slice('function boardText(', '\non(/^\\/c\\/').replace(/^const /gm, 'var '));
 
 let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else console.log("ok:",n); };
