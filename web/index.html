@@ -7762,65 +7762,82 @@ on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
       const t = clockLine(nowHq, "proposed", h, null);
       if(t) el.textContent = t;
     });
-    await docketSeriesPreload(s2, claims.slice(0, 60).map(cl=>cl.id));
-    if(renderSeq!==seq0) return;
-    inChunks(claims, 6, async cl=>{
-      try{
-        if(renderSeq!==seq0) return;
-        const pcShort = phaseClass(cl.statusText).short;
-        if(pcShort==="proposed" || pcShort==="provisional" || pcShort==="in dispute"){
-          const q = pcShort==="proposed"? `SettleDeadline(${s2},${cl.id})`
-                  : pcShort==="provisional"? `EscrowUntil(${s2},${cl.id})`
-                  : `DisputeVoteCloses(${s2},${cl.id})`;
-          one(q).then(h=>{
-            if(renderSeq!==seq0) return;
-            const txt = clockLine(nowHq, pcShort, pcShort==="proposed"? h:null,
-                                  pcShort==="provisional"? h:null, pcShort==="in dispute"? h:null);
-            const ce = document.getElementById(`clk-${slug}-${cl.id}`);
-            if(ce && txt) ce.textContent = txt;
-          }).catch(()=>{});
-        }
-        /* srow, not row: six lines down `const row` is the DOM row, declared in
-           the same block, so naming this one `row` put the read of it inside the
-           temporal dead zone — a ReferenceError swallowed by the catch below,
-           and every sparkline silently stopped drawing. */
-        const srow = await docketSeriesRow(s2, cl.id);
-        if(!srow) return;
-        const ser = claimSeries(srow);
-        if(renderSeq!==seq0) return;
-        const inst = pctYes(srow.yesStake, srow.noStake);
-        // ONE MARKUP, EVERY LIST. The docket and the policing lists show the same
-        // measure — claimSeries puts ratios().inst at ser[2], and that is
-        // pctYes(yesStake,noStake), the figure the no-series branch prints — so
-        // they are filled from one place with one rendering rather than each
-        // being given its own.
-        const cells = document.querySelectorAll(`[data-pct="${slug}-${cl.id}"]`);
-        cells.forEach(el => {
-          /* THE SIDE RIDES THE CELL. This sweep fills every list the claim
-             appears in from one read and has no verdict in hand — docketRow does,
-             and wrote it onto the cell it built. Without it the fill would land
-             "staked YES" over a NO row's figure the moment the series arrived,
-             which is the same bug arriving a second later. */
-          el.innerHTML = docketSignal(ser, inst, el.getAttribute("data-side"));
-          // The sort key rides the row, and it is the INSTANT ratio either way —
-          // keying it off the spark meant a docket of young claims could not be
-          // sorted at all.
-          const k = ser ? ser[2] : inst;
-          const row = el.closest(".crow"); if(row && Number.isFinite(k)) row.dataset.yes = k;
-          /* The stake sorts ride the same fill. docketRow already set them from
-             a demo claim's own pools; live rows have nothing until this lands,
-             which is why applySort is re-run once the whole batch settles. */
-          if(row){ const tot = (Number(srow.yesStake)||0) + (Number(srow.noStake)||0);
-            if(tot > 0){ row.dataset.top = tot;
-              const sd = phaseClass(cl.statusText).side;
-              const against = sd==="YES"? (Number(srow.noStake)||0) : sd==="NO"? (Number(srow.yesStake)||0) : null;
-              if(against!=null) row.dataset.ctv = (against/tot).toFixed(6);
-              else delete row.dataset.ctv; } }
-        });
-      }catch(_){}
-    }).then(()=>{ if(renderSeq===seq0 && QP.sort) applySort(QP.sort); }); // one settle once every key landed
+    await fillDocketRows(s2, slug, claims, seq0, nowHq)
+      .then(()=>{ if(renderSeq===seq0 && QP.sort) applySort(QP.sort); });   // one settle once every key landed
   }
 });
+/* THE FILL EVERY DOCKET NEEDS, in one place because two pages draw the same row.
+   docketRow emits two cells it cannot populate itself — `[data-pct]` for the
+   stake figure and `#clk-<slug>-<id>` for the clock — and the court page filled
+   them from a sweep written inline in its own route. A set page draws that
+   identical row and ran nothing, so every claim under a set showed an empty
+   signal and an empty clock: the row PROMISED a figure the page never delivered.
+   MEASURED: claim #10 reads "82.4%" on the court page and, on /f/2 — the set
+   that same claim is filed in — read nothing at all.
+   EXTRACTED, NOT COPIED. A second sweep beside this one is how two pages come to
+   disagree about what one row says.
+   THE SORT RE-RUN STAYS AT THE CALL SITE. Only the court page has chips, so only
+   it has an order to re-apply once the keys land; a folder page's order is the
+   realm's and nothing here may touch it. */
+async function fillDocketRows(s2, slug, claims, seq0, nowHq){
+  await docketSeriesPreload(s2, claims.slice(0, 60).map(cl=>cl.id));
+  if(renderSeq!==seq0) return;
+  inChunks(claims, 6, async cl=>{
+    try{
+      if(renderSeq!==seq0) return;
+      const pcShort = phaseClass(cl.statusText).short;
+      if(pcShort==="proposed" || pcShort==="provisional" || pcShort==="in dispute"){
+        const q = pcShort==="proposed"? `SettleDeadline(${s2},${cl.id})`
+                : pcShort==="provisional"? `EscrowUntil(${s2},${cl.id})`
+                : `DisputeVoteCloses(${s2},${cl.id})`;
+        one(q).then(h=>{
+          if(renderSeq!==seq0) return;
+          const txt = clockLine(nowHq, pcShort, pcShort==="proposed"? h:null,
+                                pcShort==="provisional"? h:null, pcShort==="in dispute"? h:null);
+          const ce = document.getElementById(`clk-${slug}-${cl.id}`);
+          if(ce && txt) ce.textContent = txt;
+        }).catch(()=>{});
+      }
+      /* srow, not row: six lines down `const row` is the DOM row, declared in
+         the same block, so naming this one `row` put the read of it inside the
+         temporal dead zone — a ReferenceError swallowed by the catch below,
+         and every sparkline silently stopped drawing. */
+      const srow = await docketSeriesRow(s2, cl.id);
+      if(!srow) return;
+      const ser = claimSeries(srow);
+      if(renderSeq!==seq0) return;
+      const inst = pctYes(srow.yesStake, srow.noStake);
+      // ONE MARKUP, EVERY LIST. The docket and the policing lists show the same
+      // measure — claimSeries puts ratios().inst at ser[2], and that is
+      // pctYes(yesStake,noStake), the figure the no-series branch prints — so
+      // they are filled from one place with one rendering rather than each
+      // being given its own.
+      const cells = document.querySelectorAll(`[data-pct="${slug}-${cl.id}"]`);
+      cells.forEach(el => {
+        /* THE SIDE RIDES THE CELL. This sweep fills every list the claim
+           appears in from one read and has no verdict in hand — docketRow does,
+           and wrote it onto the cell it built. Without it the fill would land
+           "staked YES" over a NO row's figure the moment the series arrived,
+           which is the same bug arriving a second later. */
+        el.innerHTML = docketSignal(ser, inst, el.getAttribute("data-side"));
+        // The sort key rides the row, and it is the INSTANT ratio either way —
+        // keying it off the spark meant a docket of young claims could not be
+        // sorted at all.
+        const k = ser ? ser[2] : inst;
+        const row = el.closest(".crow"); if(row && Number.isFinite(k)) row.dataset.yes = k;
+        /* The stake sorts ride the same fill. docketRow already set them from
+           a demo claim's own pools; live rows have nothing until this lands,
+           which is why applySort is re-run once the whole batch settles. */
+        if(row){ const tot = (Number(srow.yesStake)||0) + (Number(srow.noStake)||0);
+          if(tot > 0){ row.dataset.top = tot;
+            const sd = phaseClass(cl.statusText).side;
+            const against = sd==="YES"? (Number(srow.noStake)||0) : sd==="NO"? (Number(srow.yesStake)||0) : null;
+            if(against!=null) row.dataset.ctv = (against/tot).toFixed(6);
+            else delete row.dataset.ctv; } }
+      });
+    }catch(_){}
+  });
+}
 /* ONLY THE TIERS THAT SAY SOMETHING. Listed is the ordinary state of every
    court a reader can reach by browsing, so a pill announcing it appeared on
    almost every court page and distinguished none of them. Hidden and Featured
@@ -13471,6 +13488,27 @@ on(/^\/c\/([a-z0-9-]+)\/f\/([0-9.]+)$/, async (slug,fpath)=>{
       + (f.fid != null ? proposeSetBtn(slug, f.fid, f.name) : "")
       + `</div><div id="courtcompose"></div>`
     + `</section>`;
+
+  /* AND THE ROWS GET FILLED, from the court page's own sweep. docketRow emits a
+     `[data-pct]` cell for the stake figure and a `#clk-<slug>-<id>` cell for the
+     clock, and this page drew them and left both empty — MEASURED: claim #10
+     reads "82.4%" on the court page and nothing at all here, on the set it is
+     filed in. The row was promising a figure the page never delivered.
+     ONE READ FOR THE WHOLE WINDOW. fillDocketRows preloads DocketSeries for the
+     ids about to be drawn, which is why this costs a query and not one per row.
+     LIVE ONLY, and only when there is something to fill: a curation set is held
+     in this browser and has no chain to ask, and chainHeight would be a /status
+     for nothing. Not awaited — the page is already painted and this settles into
+     it, exactly as it does on the court page.
+     NO applySort AFTER IT, unlike the court page: a folder page keeps the
+     realm's order and has no chips to re-apply. */
+  if(isLive() && fwin.length){
+    const seq0 = renderSeq;   // a fill that outlives its paint must not write into the next one
+    chainHeight().then(nowHq=>{
+      if(renderSeq!==seq0) return;
+      return fillDocketRows(gstr(slug), slug, fwin, seq0, nowHq);
+    }).catch(()=>{});
+  }
 });
 /* one classifier for every status surface — pills, docket rows, map dots agree */
 function phaseClass(statusText){

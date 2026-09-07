@@ -360,6 +360,29 @@ let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else conso
        the window rather than the total, so page 2 of a nine-claim set said "No
        claims in this set yet." above a pager reading "9 claims in all" — and
        returned before the bottom pager, so there was no way back either. */
+    /* THE ROWS ARE FILLED BY THE COURT PAGE'S OWN SWEEP. docketRow emits a
+       `[data-pct]` cell and a `#clk-` cell it cannot populate itself; this page
+       drew both and left them empty, so a claim read "82.4%" on the court page
+       and nothing on the set it is filed in. fillDocketRows is the extraction of
+       that sweep — asserted BY NAME, because a second copy of it beside this one
+       is how the two pages come to disagree about what one row says.
+       AND NO applySort BEHIND IT: a folder page keeps the realm's order. */
+    ok("...and its rows are filled by the same sweep the court page uses",
+       /fillDocketRows\(gstr\(slug\), slug, fwin, seq0, nowHq\)/.test(route)
+       && /const seq0 = renderSeq/.test(route)
+       // `applySort\(` — a CALL. The bare name is in the comment above the call
+       // site explaining that this page must not sort, so matching the word made
+       // the assertion fail on correct code.
+       && !/applySort\(/.test(route));
+    ok("...only when live and only with rows to fill",
+       /if\(isLive\(\) && fwin\.length\)/.test(route));
+    /* AND IT DIES WITH ITS PAINT. chainHeight is a round trip, so a reader who
+       clicks through to another set before it answers would otherwise have this
+       fill write a stake figure into the NEXT page's rows — same ids, different
+       set. The court page guards its sweep the same way and says why: "fills die
+       with their render — never write into a newer paint". */
+    ok("...and a fill from a superseded render is dropped, not written",
+       /if\(renderSeq!==seq0\) return;\s*\n\s*return fillDocketRows/.test(route));
     ok("...and an empty set is told apart from a page past its end",
        /if\(!all\)/.test(route) && !/if\(!fwin\.length\)/.test(route));
     ok("...the Open section is drawn even with nothing in it",
