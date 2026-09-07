@@ -17984,6 +17984,124 @@ async function embedCourtView(slug){
 on(/^\/embed\/([a-z0-9-]+)\/(\d+)$/, async (slug, id)=> embedClaimView(slug, id));
 on(/^\/embed\/([a-z0-9-]+)$/, async (slug)=> embedCourtView(slug));
 
+/* THE ADMIN PARAMETERS, on one page, because they were readable one at a time
+   and nowhere together. Asked for directly: "i want there to be a place where i
+   can see all the admin params".
+
+   IT READS AdminParams() AND NOTHING ELSE. The realm packs all seven into one
+   line and this parses that line — rather than making eight separate queries,
+   which would be eight chances to drift and eight round trips for a page nobody
+   loads often. The realm's own doc states the parse: split pairs on the FIRST
+   colon, because the media lists are comma-separated and a host could contain
+   one.
+
+   THE LABELS AND THE EXPLANATIONS LIVE HERE, THE VALUES DO NOT. Each row says
+   what the setting does and which verb changes it, since a name and a number
+   together still do not tell an administrator what turning it would do. But no
+   row carries a default: an overlay that remembers what the realm shipped with
+   is an overlay that lies the first time somebody sets one, and the realm has
+   the same table on its own /admin-params page for exactly this reason.
+
+   DEMO SAYS SO RATHER THAN INVENTING. There is no chain in demo mode, so there
+   are no live settings to show; the page says that and points at the Source
+   switch. Filling it with the realm's constants would put a second copy of them
+   in this file, which is the duplication check-web-constants exists to police,
+   and would show a reader numbers that are not their chain's. */
+const PARAM_ROWS = [
+  ["creationBurn", "Court creation burn", "gnot",
+   "The minimum GNOT to open a court. The whole payment is burned. 0 turns it off.",
+   "SetCourtCreationBurn"],
+  ["assocBond", "Association bond", "cc",
+   "What a stranger posts to attach an edge, in courts that set no override.",
+   "SetAssociationBondDefault"],
+  ["purgeM", "Purge threshold", "raw",
+   "How many global moderators must agree to purge.", "SetPurgeThreshold"],
+  ["ladder", "Posting ladder", "ladder",
+   "The default rungs a court inherits: the share earned at each tier, and the post counts that reach them.",
+   "SetLadderDefault"],
+  ["rates", "Standing rates", "rates",
+   "The default credit each act earns toward standing. Policing ranks above authorship, which ranks above staking.",
+   "SetCreditRatesDefault"],
+  ["domain", "Site domain", "text",
+   "The website this realm belongs to. Also allow-lists that domain for images.",
+   "SetSiteDomain"],
+  ["media", "Media hosts", "media",
+   "Where images may be loaded from: exact hosts, then permitted suffixes.",
+   "SetMediaHosts"],
+];
+
+/* Split each pair on the FIRST colon only — the rule AdminParams' own doc
+   states. A naive split(":") would truncate any value containing one. */
+function parseAdminParams(line){
+  const out = {};
+  for(const pair of String(line||"").split(";")){
+    const i = pair.indexOf(":");
+    if(i < 0) continue;
+    out[pair.slice(0,i)] = pair.slice(i+1);
+  }
+  return out;
+}
+
+function paramValueHtml(kind, p){
+  const n = k => parseInt(p[k]||"0", 10) || 0;
+  if(kind === "gnot")   return gnotAmt(n("creationBurn"));
+  if(kind === "cc")     return ccFig(n("assocBond")) + " CC";
+  if(kind === "raw")    return safeInline(p.purgeM || "?");
+  if(kind === "ladder") return `${n("t1")}/${n("t2")}/${n("t3")} bps at `
+                             + `${n("entry")}/${n("l2")}/${n("l3")} posts`;
+  if(kind === "rates")  return `flag ${n("flag")} · dispute ${n("dispute")} · `
+                             + `author ${n("authorHigh")} · conviction ${n("conviction")} · `
+                             + `unadjudicated ${n("unadjudicated")} bps`;
+  if(kind === "text")   return p.domain? safeInline(p.domain) : `<span class="dim">not set</span>`;
+  if(kind === "media"){
+    const list = raw => raw? raw.split(",").filter(Boolean)
+      .map(h=>`<code>${safeInline(h)}</code>`).join(" ") : `<span class="dim">none</span>`;
+    return `${list(p.mediaExact)}<br><span class="dim">suffixes</span> ${list(p.mediaSuffix)}`;
+  }
+  return `<span class="dim">?</span>`;
+}
+
+on(/^\/params$/, async ()=>{
+  const head = crumbs([{label:"Directory",href:"#/"},{label:"Realm parameters"}])
+    + `<h1 class="page-h">Realm parameters</h1>`;
+  if(!isLive()){
+    main.innerHTML = head + `<div class="prose" style="margin-top:16px">
+      <p>These are settings held on the chain, so there are none to show while
+      you are reading the sample data. Switch <b>Source</b> in the left rail to a
+      live node and this page will read them from it.</p>
+      <p>The same table is served by the realm itself at
+      <code>/admin-params</code>, for anyone without this page.</p></div>`;
+    return;
+  }
+  main.innerHTML = head + `<div class="dim" style="margin-top:16px">Reading…</div>`;
+  let p = null, err = "";
+  try { p = parseAdminParams(await one("AdminParams()")); }
+  catch(e){ err = String(e && e.message || e); }
+  if(!p || !p.admin){
+    main.innerHTML = head + `<div class="notice refuse" style="margin-top:16px">
+      <span class="g">✕</span> Could not read the parameters from this node.
+      ${err? `<br><span class="dim">${safeInline(err)}</span>` : ""}</div>`;
+    return;
+  }
+  main.innerHTML = head
+    + `<div class="prose" style="margin-top:16px"><p>Everything the global DAO
+       admin can set, and what it is set to now. A court's moderators set their
+       own court's bond, ladder and standing rates — those are on the court's
+       page, not here.</p></div>
+       <div class="kv" style="margin:12px 0"><span class="dim">Admin</span>
+         <code>${safeInline(p.admin)}</code></div>
+       <table class="tbl paramtbl"><thead><tr>
+         <th>Setting</th><th>Now</th><th>What it does</th><th>Set with</th>
+       </tr></thead><tbody>`
+    + PARAM_ROWS.map(([key,label,kind,what,verb])=>`<tr>
+         <td><b>${safeInline(label)}</b></td>
+         <td class="pval">${paramValueHtml(kind, p)}</td>
+         <td class="dim">${safeInline(what)}</td>
+         <td><code>${safeInline(verb)}</code></td>
+       </tr>`).join("")
+    + `</tbody></table>`;
+});
+
 on(/^\/about$/, async ()=>{
   main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:"How it works"}])
     + `<h1 class="page-h">How a court works</h1>
