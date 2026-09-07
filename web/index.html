@@ -7710,7 +7710,21 @@ on(/^\/$/, async ()=>{
     try{
       const s = await courtStats(c.slug);
       const el = document.getElementById("cp-"+c.slug);
-      if(el&&s) el.innerHTML = `<b>${priceText(s.price, s.minted)}</b><small>µGNOT/unit · ${cc(s.supply,c.slug)}</small>`;
+      /* WHAT THE COURT HAS, NOT WHAT A UNIT COSTS. This cell led with the coin
+         price and put the supply in the small line under it, which asks the
+         reader of a DIRECTORY to compare courts by unit price — a number that
+         says nothing about a court on its own, and that reads as a market quote
+         on a page for choosing what to read.
+         SIZE ABOVE, COST BELOW. The supply is how much of this court's coin
+         exists, and the burn is what was spent to bring it about. Both are
+         totals, both grow, and between two rows they compare honestly: a court
+         with more of each has had more done in it. The price is on the court's
+         own page, where a reader who wants to buy is already standing.
+         gnotAmt, NOT ugnot, because this shares a narrow column with a name and
+         a pill: "13053599975 µGNOT" does not fit and reads worse than the same
+         figure in GNOT anyway. It falls back to µGNOT on dust by itself. */
+      if(el&&s) el.innerHTML = `<b>${cc(s.supply, c.slug)}</b>`
+        + `<small>${Number.isFinite(s.burned)? gnotAmt(s.burned)+" burned" : "burn unread"}</small>`;
       if(s && c.claims==null){
         // a featured court occupying a deep-window slot: the render skips it
         // in the listed section without backfilling — hide the row likewise

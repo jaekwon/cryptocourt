@@ -74,6 +74,52 @@ const PAGE = 'file://' + path.join(__dirname, '..', '..', 'index.html');
   ok("...and opens on the link", modal && modal.after === true, JSON.stringify(modal));
   ok("...saying what starting one actually involves", modal && modal.says === true);
 
+  /* WHAT EACH ROW SAYS ABOUT ITS COURT. The cell led with the coin's unit price
+     and put the supply in the small line beneath, which asks the reader of a
+     DIRECTORY to compare courts by unit price — a number that says nothing about
+     a court on its own and reads as a market quote on a page for choosing what
+     to read. It is the court's SIZE above and what was BURNED to build it below.
+     MEASURED IN A BROWSER because this cell is filled asynchronously, after
+     courtStats lands: the rendered row ships "reading…" and a source assertion
+     alone cannot tell that the fill ever replaced it. */
+  const cells = await page.evaluate(async () => {
+    for (let i = 0; i < 30; i++) {
+      const el = document.querySelector('.courtrow .px');
+      if (el && !/reading…/.test(el.textContent)) break;
+      await new Promise(r => setTimeout(r, 200));
+    }
+    return [...document.querySelectorAll('.courtrow')].slice(0, 4).map(row => {
+      const px = row.querySelector('.px');
+      const id = row.querySelector('.id');
+      return px ? {big: (px.querySelector('b') || {}).textContent || "",
+                   small: (px.querySelector('small') || {}).textContent || "",
+                   // the row's own slug, to tell a COIN AMOUNT from a bare price
+                   slug: ((id ? id.textContent : "").match(/\/([a-z0-9-]+)/) || [])[1] || ""}
+                : null;
+    }).filter(Boolean);
+  });
+  ok("every court row carries a figure for its court", cells.length > 0, JSON.stringify(cells));
+  ok("...still reading, or filled — not stuck on the placeholder",
+     cells.every(c => c.big || /reading|unavailable/.test(c.small)), JSON.stringify(cells));
+  const filled = cells.filter(c => c.big);
+  ok("at least one row filled from the sample", filled.length > 0, JSON.stringify(cells));
+  /* THE COIN ON TOP, AND NAMED. cc() prints the amount with the court's own coin
+     symbol, which a directory needs — every row is a different coin.
+     THE SYMBOL IS ALSO WHAT TELLS THIS APART FROM A PRICE, and the first version
+     of this arm missed that: it accepted any digits, so putting priceText back
+     on top passed. A price is a bare number; a supply names what it counts. */
+  ok("...leading with how much of the court's coin exists, named",
+     filled.every(c => /\d/.test(c.big) && c.slug
+                       && c.big.toLowerCase().includes(c.slug.toLowerCase())),
+     JSON.stringify(filled));
+  ok("...and the burn underneath, in GNOT",
+     filled.every(c => /GNOT/.test(c.small) && /burn/.test(c.small)), JSON.stringify(filled));
+  /* AND NO PRICE. The unit price is on the court's own page, where a reader who
+     wants to buy is already standing. "µGNOT/unit" was the old cell's caption
+     and is the string that would come back if this were reverted. */
+  ok("...and no unit price anywhere in the row",
+     filled.every(c => !/\/unit/.test(c.big + c.small)), JSON.stringify(filled));
+
   ok("no page errors on the directory", errs.length === 0, errs.slice(0, 2).join(" | "));
   console.log(fail ? "\n" + fail + " FAILURES" : "\nALL PASS");
   await browser.close();
