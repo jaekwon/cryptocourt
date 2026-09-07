@@ -385,13 +385,14 @@ function chatPanelHtml(slug, moniker, note, heading) {
     + '<div class="chatstate"></div>'
     + '<form class="chatform" autocomplete="off">'
     +   '<button class="chatnamebtn" type="button" aria-label="your name — click to change">'
-    +     chatEsc(moniker || CHATDEFAULTNAME) + "</button>"
+    +     '<span class="chatbtnface">' + chatEsc(moniker || CHATDEFAULTNAME)
+    +     "</span></button>"
     +   '<input class="chatmoniker" hidden maxlength="' + CHATMONIKERUNITS
     +     '" placeholder="' + chatEsc(CHATDEFAULTNAME) + '"'
     +     ' aria-label="your name" value="' + chatEsc(moniker) + '">'
     +   '<input class="chatinput" maxlength="' + CHATLIMITS.body + '" placeholder="say something"'
     +     ' aria-label="message">'
-    +   '<button class="chatsend" type="submit">send</button>'
+    +   '<button class="chatsend" type="submit"><span class="chatbtnface">send</span></button>'
     + "</form>"
     + '<div class="chatnote">' + chatEsc(note || "") + "</div>";
 }
@@ -695,6 +696,23 @@ const CHATCSS = `
    swap. (No angle brackets in here: chat_test scans this stylesheet for them,
    on the reasoning that a stylesheet is as good a place to smuggle markup as
    any, and it caught this comment saying so.) */
+/* THE LABEL CANNOT BE HIT, SO THE BUTTON ALWAYS IS. Reported twice: over the
+   padding of the name chip and of send you get a finger and a working click,
+   and directly over the LETTERS you get neither. Something on the reporter's
+   machine intercepts pointer events at the text — an extension that wraps text
+   nodes is the usual cause, and Brave with Shields is a plausible one — and it
+   is not reproducible here: in headless Chromium the button is topmost at every
+   sampled point across its width, reports cursor:pointer, and has zero elements
+   covering it.
+   SO THIS FIXES IT WITHOUT KNOWING WHICH. pointer-events INHERITS, so declaring
+   none on the label makes the label and anything a third party wraps around it
+   transparent to hit testing; the event lands on the button underneath, which
+   is the only thing that should ever have been receiving it. Cause-agnostic by
+   construction, and inert where there is no problem.
+   Two earlier attempts reasoned from the code instead of from the reporter's
+   machine and were wrong. This one changes what is possible rather than what is
+   likely. */
+.chatbtnface{pointer-events:none}
 /* user-select:none, and it is the fix for "the cursor is not a finger over the
    letters". Chrome and Safari set it on button elements in their UA stylesheets;
    FIREFOX DOES NOT. (Spelled without angle brackets on purpose: the harness
@@ -817,7 +835,12 @@ function mountChat(el, opts) {
   const nameBtn = el.querySelector(".chatnamebtn");
   const nameShown = () => (nameEl.value.trim() || CHATDEFAULTNAME);
   const closeName = () => {
-    nameBtn.textContent = nameShown();
+    // THE FACE, NOT THE BUTTON. Writing textContent on the button would replace
+    // its children and take the un-hittable wrapper with them — the bug would
+    // come back the first time the field was closed, which is worse than never
+    // having fixed it.
+    const face = nameBtn.querySelector(".chatbtnface");
+    if (face) face.textContent = nameShown(); else nameBtn.textContent = nameShown();
     nameEl.hidden = true; nameBtn.hidden = false;
   };
   const openName = () => {
