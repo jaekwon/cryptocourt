@@ -1536,6 +1536,27 @@ ok("controls present", ["mt-titles","mt-ids","mz-in","mz-out","mz-fit","mz-slide
   }
   ok("no two edges cross, at any count", tangled === 0, "crossings: "+tangled);
 
+  /* THE FILL ASKS ABOUT THE CELLS THAT EXIST, not the claims the route loaded.
+     MEASURED on kourt.xyz: the route held 24 claims and the map had drawn 21
+     nodes, so three reads asked about claims with no cluster to fill — a claim
+     the court voted into a SET is drawn as the set and its node dropped, which
+     mapSvg decides and the route cannot know. Reading the work list off the DOM
+     makes the read count equal the cell count by construction. Source-level,
+     because the list is a querySelectorAll the harness has no map DOM for. */
+  {
+    const fn = slice('async function fillCommentClusters(', '\n}\n');
+    ok("the cluster fill reads one count per cell, not per loaded claim",
+       // The chunk width is deliberately NOT pinned: six is a tuning choice, and
+       // an assertion on it would fail a future tuning without a defect.
+       /querySelectorAll\(`\[data-cmt\^="\$\{slug\}-"\]`\)/.test(fn)
+       && /inChunks\(ids,/.test(fn));
+    ok("...and it takes no claim list, so the two cannot disagree",
+       /async function fillCommentClusters\(s2, slug, seq0\)/.test(fn));
+    // A fill that outlives its paint must not write into the next one.
+    ok("...and drops a fill from a superseded render",
+       (fn.match(/if\(renderSeq!==seq0\) return;/g) || []).length >= 2);
+  }
+
   // Two draws of the same claim must be the same picture, or the map flickers.
   ok("the same count always draws the same cluster",
      commentClusterSvg(7) === commentClusterSvg(7) && commentClusterSvg(13) === commentClusterSvg(13));
