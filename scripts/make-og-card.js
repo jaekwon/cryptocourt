@@ -72,7 +72,6 @@ const CARD = `<!doctype html><meta charset="utf-8"><style>
   <h1>Kourt</h1>
   <div class="rule"></div>
   <p>Let Truth be told.</p>
-  <div class="foot"><span>kourt.xyz</span><span class="said">The seat is empty.</span></div>
 </div>`;
 
 (async () => {
