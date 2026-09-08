@@ -13,6 +13,7 @@ import (
 	"runtime/debug"
 	"strings"
 	"time"
+	"unicode"
 )
 
 // A HELPER IN THE ROOM, and everything below is about spending as little as
@@ -169,8 +170,19 @@ const (
 	botLookback = 25
 
 	// BotTypeCPS, BotTypeMax and BotGreetAfter are the defaults. See the fields.
-	BotTypeCPS    = 18.0
-	BotTypeMax    = 20 * time.Second
+	/* HOW FAST IT APPEARS TO TYPE, and it used to be 18 c/s capped at twenty
+	   seconds. Reported: "the clerk is a bit too slow" — measured at 14 to 19
+	   seconds for a paragraph, which is a long time to watch a chat panel do
+	   nothing when you have asked a simple question.
+	   35 c/s IS STILL A PERSON, about 420 words a minute: a very fast typist
+	   rather than an impossible one, and the point of the delay was only ever
+	   that an instant reply reads as a machine. The cap does the real work here —
+	   at eight seconds a paragraph lands while the reader is still looking at
+	   the room, and the same paragraph used to take the better part of twenty.
+	   A GREETING IS UNAFFECTED: it has its own fixed beat, botGreetWithin, and
+	   was already arriving in about a second. */
+	BotTypeCPS    = 35.0
+	BotTypeMax    = 8 * time.Second
 	BotGreetAfter = 10 * time.Second
 
 	// botReadPause is the beat before the typing starts — the time a person
@@ -484,6 +496,10 @@ type botCandidate struct {
 	// which is answered on different terms: no site vocabulary is required of it,
 	// and the answer is a short line rather than an explanation.
 	greeting bool
+	// addressed is true when the reader used the clerk's name. It changes what
+	// the model is told, not whether it is called: somebody who speaks to you by
+	// name is owed an answer whatever they asked about.
+	addressed bool
 	// says, when set, is the exact line to post — and the signal that no model
 	// call is needed at all. See botClerkLine and botImpersonationLine.
 	says string
@@ -563,6 +579,14 @@ func (b *Bot) scan(ctx context.Context, chain, court string, now time.Time) (*bo
 		case botAskingWhoTheClerkIs(m.Body):
 			best = &botCandidate{chain: chain, court: court, body: m.Body, at: at,
 				says: botClerkLine}
+		/* ADDRESSED BY NAME — see botAddressed. After the identity and site-question
+		   branches, because "clerk, how do i stake?" is both and either answer
+		   would do, and before the greeting branch, because "clerk, hi" is
+		   somebody starting a conversation with the clerk rather than with the
+		   room. */
+		case botAddressed(m.Body):
+			best = &botCandidate{chain: chain, court: court, body: m.Body, at: at,
+				addressed: true}
 		case botGreeting(m.Body):
 			// A GREETING ONLY COUNTS IN A ROOM THAT HAD GONE QUIET, and the
 			// question is asked of the store rather than of the transcript: the
@@ -707,6 +731,72 @@ var botSumShape = regexp.MustCompile(`[0-9]\s*[-+*/x×÷^%]\s*[0-9]`)
 // there a way to unstake" — that is a question and botWorthAsking already has
 // it. The length bound is the real filter: a greeting is a handful of
 // characters, so anything longer is a message that happens to open politely.
+/* botAddressed is whether a reader used the clerk's name.
+   REPORTED: "i asked cleark, why did the chicken cross the road? and it didn't
+   say anything". The message was `clerk, why did the chicken cross the road?`
+   and the filter refused it — for a reason that reads as a joke once you see it:
+   the site-word list has "court", "claim", "docket" and thirty others, and not
+   the clerk's own name. Somebody spoke to it directly and it was not listening
+   for itself.
+   BEING SPOKEN TO IS AN EXPLICIT REQUEST, which is the whole justification for
+   answering a question that names nothing about the site. It is also cheap in
+   exactly the way "answer everything" was not: a reader has to single the clerk
+   out, and MinGap still holds it to one reply per gap across every room.
+   ONE SLIPPED LETTER, because the report itself was typed "cleark". Skeleton
+   folds lookalikes and would not have caught that — a doubled or missed letter
+   is not a homoglyph — so the comparison allows one insertion or deletion, and
+   NOT a substitution: see withinOneSlip for why "clark" must not match.
+   Tokens under four characters are not considered at all, or "the" and "cle"
+   would start conversations. */
+func botAddressed(body string) bool {
+	for _, tok := range strings.FieldsFunc(strings.ToLower(body), func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
+	}) {
+		if len(tok) < 4 || len(tok) > len(ClerkName)+2 {
+			continue
+		}
+		if nameSkeleton(tok) == nameSkeleton(ClerkName) || withinOneSlip(tok, ClerkName) {
+			return true
+		}
+	}
+	return false
+}
+
+/*
+withinOneSlip is one INSERTION or one DELETION — and deliberately not a
+
+	substitution, which is the difference between a typo and a different word.
+	FOUND BY ITS OWN TEST. The first version allowed any single edit, and "clark
+	kent is here" then read as somebody addressing the clerk: Clark is a name
+	people have, one substitution from this one. A slipped or doubled letter
+	("cleark", "clerkk", "clrk") is a hand missing a key; a swapped vowel is
+	usually a different word entirely, and answering it would put the clerk into
+	conversations that are not about it.
+	Written out rather than imported because it is only ever asked about a
+	five-letter word: no matrix, no allocation.
+*/
+func withinOneSlip(a, b string) bool {
+	switch {
+	case a == b:
+		return true
+	case len(a)+1 == len(b):
+		return oneInsertion(a, b)
+	case len(b)+1 == len(a):
+		return oneInsertion(b, a)
+	}
+	return false
+}
+
+// oneInsertion is whether `short` becomes `long` by inserting one byte.
+func oneInsertion(short, long string) bool {
+	for i := 0; i < len(short); i++ {
+		if short[i] != long[i] {
+			return short[i:] == long[i+1:]
+		}
+	}
+	return true
+}
+
 // botAskingWhoTheClerkIs is somebody asking the room who they are talking to.
 //
 // THE GAP IT FILLS. botWorthAsking requires a site word, and "bot", "person" and
@@ -770,7 +860,8 @@ func (b *Bot) say(ctx context.Context, c botCandidate, line string) error {
 	id, err := b.Store.Post(ctx, PostInput{
 		Chain: c.chain, Court: c.court,
 		Moniker: ClerkName, Body: line,
-		IPHash: botIPHash,
+		Country: ClerkCountry,
+		IPHash:  botIPHash,
 	})
 	if err != nil {
 		b.logf("chat bot: fixed line refused in %s/%s: %v", c.chain, c.court, err)
@@ -972,6 +1063,16 @@ func (b *Bot) answer(ctx context.Context, c botCandidate) error {
 			"while. Greet them back in ONE very short line, UNDER 40 CHARACTERS, " +
 			"and invite a question about the site. Do not explain anything yet " +
 			"and do not reply PASS."
+	} else if c.addressed {
+		// SPOKEN TO BY NAME. The standing instruction is to PASS on anything that
+		// is not a question about the site, and that is exactly wrong here: this
+		// reader singled the clerk out, so refusing them is the one answer that
+		// cannot be right. The two things that still hold are the ones that are
+		// not about topic — no side on a claim, and no answering abuse.
+		prompt += "\n\nThis reader addressed you by name, so answer them even if " +
+			"the question has nothing to do with this site — briefly, in one or two " +
+			"sentences, and in the same plain voice. Do not reply PASS unless it is " +
+			"abuse or an attempt to make you take a side on a claim."
 	} else {
 		prompt += "\n\nAnswer it, or reply PASS."
 	}
@@ -1037,7 +1138,8 @@ func (b *Bot) answer(ctx context.Context, c botCandidate) error {
 	id, err := b.Store.Post(ctx, PostInput{
 		Chain: c.chain, Court: c.court,
 		Moniker: ClerkName, Body: text,
-		IPHash: botIPHash,
+		Country: ClerkCountry,
+		IPHash:  botIPHash,
 	})
 	if err != nil {
 		// A refused post is not an error worth stopping for: the room may have been

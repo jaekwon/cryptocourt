@@ -160,10 +160,14 @@ func TestBotDelayGrowsWithTheReplyAndIsCapped(t *testing.T) {
 	if long <= short {
 		t.Fatalf("a long reply must take longer: short=%s long=%s", short, long)
 	}
-	// AS IF A FAST TYPER WROTE IT: 300 characters at 18 c/s is about 17 seconds,
-	// so the delay has to be in that neighbourhood and not a token gesture.
-	if long < 10*time.Second {
-		t.Fatalf("300 characters should take a typist real time, got %s", long)
+	/* AS IF A FAST TYPER WROTE IT, and the numbers moved when the owner said "the
+	   clerk is a bit too slow": 300 characters at 35 c/s is about 8.6 seconds,
+	   which the cap trims to 8. So the assertion is no longer "about seventeen
+	   seconds" — it is that the delay is REAL TIME and no more than the cap. A
+	   floor of four seconds still fails a build where the wait became a token
+	   gesture, which is what this arm was written for. */
+	if long < 4*time.Second || long > BotTypeMax {
+		t.Fatalf("300 characters should take real time up to the cap, got %s", long)
 	}
 	if capped := botDelay(strings.Repeat("a", 100000), 18, BotTypeMax); capped != BotTypeMax {
 		t.Fatalf("the wait must be capped, got %s", capped)
@@ -524,6 +528,9 @@ func TestBotAnswersASiteQuestionAsTheClerkAndRecordsWhatItSpent(t *testing.T) {
 	reply := msgs[len(msgs)-1]
 	// AS anon, LIKE EVERYBODY ELSE. Asked for, and the reason the bot cannot know
 	// itself by name.
+	if reply.Country != ClerkCountry {
+		t.Errorf("an answered question must fly the clerk's flag too, got %q", reply.Country)
+	}
 	if reply.Moniker != ClerkName {
 		t.Errorf("the bot must post as the clerk, got %q", reply.Moniker)
 	}
@@ -1360,6 +1367,15 @@ func TestTheClerkSaysWhoItIsWithoutAskingAModel(t *testing.T) {
 	if got[1].Moniker != ClerkName || got[1].Body != botClerkLine {
 		t.Errorf("the clerk should say who it is, as itself: %+v", got[1])
 	}
+	/* AND UNDER ITS OWN FLAG. gno.land is a jurisdiction rather than a place, so
+	   the clerk's rows carry a code that is deliberately not a country and
+	   web/chat.js draws it as a plain black flag. Asserted on the STORED row,
+	   because the country on a bot row is set by the poster and not by the geo
+	   lookup that fills it in for everybody else — nothing else would notice if
+	   it went missing. */
+	if got[1].Country != ClerkCountry {
+		t.Errorf("the clerk should fly its own flag, got %q", got[1].Country)
+	}
 }
 
 /*
@@ -1415,5 +1431,76 @@ func TestAnImpersonatorIsCalledOutAndTheClerkDoesNotAccuseItself(t *testing.T) {
 	}
 	if after, _ := s.Recent(ctx, "dev", "orem", 0, 50); len(after) != 2 {
 		t.Fatalf("the clerk answered its own callout: %+v", after)
+	}
+}
+
+/*
+SPEAK TO THE CLERK BY NAME AND IT ANSWERS, whatever you asked about.
+
+	REPORTED: "i asked cleark, why did the chicken cross the road? and it didn't
+	say anything". The message in the room was `clerk, why did the chicken cross
+	the road?`, and the filter refused it for a reason that reads as a joke once
+	seen: the site-word list carries "court", "claim", "docket" and thirty
+	others, and not the clerk's own name. Somebody spoke to it directly and it
+	was not listening for itself.
+	THE TYPO IS IN THE TABLE BECAUSE IT WAS IN THE REPORT. "cleark" is a
+	transposition, not a homoglyph, so Skeleton would never have caught it —
+	hence one edit of slack, and hence a case for it here.
+*/
+func TestTheClerkAnswersWhenItIsSpokenToByName(t *testing.T) {
+	for _, s := range []string{
+		"clerk, why did the chicken cross the road?",
+		"cleark, why did the chicken cross the road?", // the reported typo
+		"hey clerk what year is it",
+		"why did the chicken cross the road, clerk?",
+		"CLERK help",
+		"clerk",
+		"clrk you there",   // one deletion
+		"clerkk you there", // one insertion
+	} {
+		if !botAddressed(s) {
+			t.Errorf("the clerk was spoken to and did not notice: %q", s)
+		}
+	}
+	/* AND IT DOES NOT ANSWER TO EVERYTHING. A SUBSTITUTED LETTER IS SOMEBODY
+	   ELSE'S WORD, which this table found: the first version allowed any single
+	   edit and "clark kent is here" read as an address, because Clark is a name
+	   people have and is one substitution from this one. A short token must not
+	   start a conversation either — without the length floor "the" and "cle"
+	   would. These are the cases that keep "addressed" from becoming "any
+	   message at all". */
+	for _, s := range []string{
+		"the docket is long", "clark kent is here", "clerical work",
+		"cle", "why did the chicken cross the road?", "",
+		"is there a way to unstake",
+	} {
+		if botAddressed(s) {
+			t.Errorf("nobody addressed the clerk here: %q", s)
+		}
+	}
+
+	// AND THE MODEL IS TOLD, or its standing instruction to PASS on anything
+	// that is not a site question refuses the very message it was woken for.
+	s, clock := newStore(t)
+	ctx := context.Background()
+	m := &fakeModel{reply: "To get to the other side.", in: 80, out: 8}
+	b := newBot(t, s, m)
+	*clock = clock.Add(time.Hour)
+	if _, err := post(t, s, "orem", "ip-chicken",
+		"clerk, why did the chicken cross the road?"); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.once(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if m.calls != 1 {
+		t.Fatalf("a message addressed to the clerk must reach the model (%d calls)", m.calls)
+	}
+	if !strings.Contains(m.prompt, "addressed you by name") {
+		t.Errorf("the prompt must say it was addressed: %q", m.prompt)
+	}
+	got, _ := s.Recent(ctx, "dev", "orem", 0, 50)
+	if len(got) != 2 || got[1].Body != "To get to the other side." {
+		t.Fatalf("the answer should be in the room: %+v", got)
 	}
 }
