@@ -8012,11 +8012,31 @@ on(/^\/$/, async ()=>{
      court's burn is entitlement meta earned; meta's curve position is the part
      of it that has been claimed. Neither is knowable from one row alone. */
   let BURN_ELSEWHERE = 0, META_CLAIMED = null;
-  const metaRowLine = claimed =>
-    claimed == null ? "earned by burning on other courts"
-    : BURN_ELSEWHERE > claimed
-      ? `${gnotAmt(claimed)} claimed of ${gnotAmt(BURN_ELSEWHERE)} earned`
-      : `${gnotAmt(claimed)} claimed`;
+  /* ONE FIGURE UNLESS THE TWO DIFFER ON SCREEN, which is the whole of the fix.
+     The two-figure form exists to show a GAP — the comment further down records
+     the case it was built for, "2,016 is claimed, 11,038 is still owed" — and it
+     was taken whenever BURN_ELSEWHERE exceeded the claimed figure by ANY amount,
+     including a rounding remainder of a few micro-units. Once the whole
+     franchise had been claimed that is all that was left, so the row printed
+     "13,054 GNOT claimed of 13,054 GNOT earned": the same number twice, which
+     reads as a mistake rather than a total. Reported that way, and fairly —
+     with covid's own line above it, one figure appeared three times on a page.
+     So the comparison is between the RENDERED strings rather than the raw
+     amounts. gnotAmt is the only formatter in play, so comparing its output
+     compares exactly what the eye gets; if a reader would see the same number
+     twice, the row says it in words instead.
+     THE SUPPLY IS NOT REPEATED EITHER. The report asked for the line to name
+     what the burn represents — "5,110 META tokens" — and that figure already
+     opens this same cell in bold, so naming it again would be the duplication
+     one clause over. What this line adds is WHERE the coin came from, which a
+     supply figure cannot say. */
+  const metaRowLine = claimed => {
+    if(claimed == null) return "earned by burning on other courts";
+    const got = gnotAmt(claimed), all = gnotAmt(BURN_ELSEWHERE);
+    return got === all
+      ? `${all} burned on other courts, all of it claimed`
+      : `${got} claimed of ${all} burned on other courts`;
+  };
   const visible = (page===1? featured:[]).concat(listed);
   // ONE read for every face on the page, not one per court: CourtImages skips
   // the courts with no picture, so this costs a query whether the directory has
