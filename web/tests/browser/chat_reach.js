@@ -413,6 +413,17 @@ const HEIGHTS = [1000, 900, 800, 760, 700, 620];
       await new Promise(r => setTimeout(r, 250));
     };
 
+    /* THE SEAM SAYS IT IS DRAGGABLE BEFORE IT IS TOUCHED. It was drawn only on
+       hover, which asks the reader to already suspect the line is a handle. A
+       grip at rest is the difference between a control and a secret. */
+    const grip = () => page.evaluate(() => {
+      const cs = getComputedStyle(document.getElementById('railchathead'), '::before');
+      return {rest: +cs.opacity, w: Math.round(parseFloat(cs.width) || 0)};
+    });
+    const gr = await grip();
+    ok(`the seam carries a visible grip at rest (opacity ${gr.rest}, ${gr.w}px)`,
+       gr.rest >= 0.3 && gr.w > 10, JSON.stringify(gr));
+
     const a0 = await size();
     ok(`the seam is a separator a keyboard can reach (role=${a0.role} tabindex=${a0.tab})`,
        a0.role === "separator" && a0.tab === "0", JSON.stringify(a0));
