@@ -3,6 +3,8 @@ package chat
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -501,6 +503,75 @@ func TestTheKindColumnBackfillsAnOlderDatabase(t *testing.T) {
 	st, _ = s.BotStats(ctx)
 	if st.Undelivered != 1 || st.Passes != 1 {
 		t.Errorf("a second migration rewrote a considered kind: %+v", st)
+	}
+}
+
+/*
+A REAL HELD POLL SHOWS UP IN THE COUNT, and this is the arm that was missing.
+
+	WHAT WAS TESTED BEFORE. holdGauge as a bare object, and here() with the gauge
+	nudged by the test itself — both of which confirm the counter counts and say
+	nothing about whether the handler is attached to it. MEASURED: removing
+	s.hold.enter and s.hold.leave from the messages handler entirely failed ZERO
+	tests, so the active-connections number could have become permanently 0 with
+	the suite green.
+	THROUGH REAL REQUESTS, because that is the only thing that can tell. Two
+	readers hold a poll; the count is then read the way the page reads it.
+*/
+func TestARealHeldPollIsCountedAsAConnection(t *testing.T) {
+	srv, s, _ := newServer(t)
+	ctx := context.Background()
+	if _, err := post(t, s, "orem", "ip-a", "something to poll past"); err != nil {
+		t.Fatal(err)
+	}
+	msgs, err := s.Recent(ctx, "dev", "orem", 0, 50)
+	if err != nil || len(msgs) == 0 {
+		t.Fatal(err)
+	}
+	top := msgs[len(msgs)-1].ID
+
+	ts := httptest.NewServer(srv.Routes())
+	defer ts.Close()
+
+	const wait = 4 * time.Second
+	const readers = 2
+	done := make(chan struct{}, readers)
+	for i := 0; i < readers; i++ {
+		go func() {
+			defer func() { done <- struct{}{} }()
+			r, err := http.Get(fmt.Sprintf("%s/api/chat/dev/orem?wait=%d&seen=%d",
+				ts.URL, int(wait.Seconds()), top))
+			if err == nil {
+				io.Copy(io.Discard, r.Body)
+				r.Body.Close()
+			}
+		}()
+	}
+	// Long enough for both to be inside the wait, well short of the wait itself.
+	time.Sleep(500 * time.Millisecond)
+
+	d := diagOf(t, srv)
+	if d["holding"] != float64(readers) {
+		t.Errorf("two readers holding a poll should read as %d, got %v — "+
+			"if this is 0 the handler is not attached to the gauge at all",
+			readers, d["holding"])
+	}
+	if d["holding_peak"] != float64(readers) {
+		t.Errorf("the peak should have seen them too: %v", d["holding_peak"])
+	}
+
+	/* AND THEY STOP COUNTING WHEN THEY LEAVE. A gauge that only goes up is a
+	   gauge that says nothing after an hour of traffic — and `leave` is a
+	   separate line from `enter`, so it can be lost on its own. */
+	for i := 0; i < readers; i++ {
+		<-done
+	}
+	after := diagOf(t, srv)
+	if after["holding"] != float64(0) {
+		t.Errorf("both polls ended, so nothing is held: %v", after["holding"])
+	}
+	if after["holding_peak"] != float64(readers) {
+		t.Errorf("...but the peak remembers them: %v", after["holding_peak"])
 	}
 }
 
