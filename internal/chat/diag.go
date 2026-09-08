@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -83,7 +84,31 @@ type botStats struct {
 	InTokens   int64 `json:"in_tokens"`
 	OutTokens  int64 `json:"out_tokens"`
 	CostMicros int64 `json:"cost_micros"`
+
+	// Failures is calls the model refused or never answered, and it is here
+	// because without it this page could not do the one job it has.
+	//
+	// MEASURED with a deliberately wrong key: after five consecutive rejected
+	// calls the payload read enabled=true, replies=0, passes=0, in_tokens=0,
+	// cost_micros=0 — which is byte-for-byte what a perfectly healthy helper that
+	// nobody has asked anything looks like. An operator had no way to tell the
+	// two apart, on the page whose whole purpose is telling them apart.
+	//
+	// FailKind is a fixed word from this file's own vocabulary — "refused" or
+	// "unreachable" — and NEVER the vendor's message. A 401 body can echo request
+	// detail, and this payload is public; a coarse class is what an operator needs
+	// anyway, because the two point at different things to go and look at.
+	Failures   int64  `json:"failures"`
+	LastFailAt int64  `json:"last_fail_at,omitempty"`
+	FailKind   string `json:"fail_kind,omitempty"`
 }
+
+// The two words FailKind may take. A closed set, so nothing the vendor said can
+// reach the page through this field.
+const (
+	BotFailRefused     = "refused"     // the vendor answered, and said no
+	BotFailUnreachable = "unreachable" // no answer at all
+)
 
 // ------------------------------------------------------------------ storage --
 
@@ -112,6 +137,72 @@ CREATE INDEX IF NOT EXISTS bot_replies_when ON bot_replies(created_at);
 
 // botKeyMetaK is the meta row the key lives in.
 const botKeyMetaK = "bot_api_key"
+
+// The failure tally lives in meta rather than in a table of its own.
+//
+// A ROW PER FAILURE WOULD BE UNBOUNDED. A key that has been revoked fails on
+// every tick — four times a minute, near six thousand rows a day — for a fault
+// that three numbers describe completely. Counters cannot say WHEN each failure
+// happened, and nothing here needs that: what an operator does with this is
+// compare "failing now" against "last answered", which two timestamps give.
+const (
+	botFailCountK = "bot_fail_count"
+	botFailAtK    = "bot_fail_at"
+	botFailKindK  = "bot_fail_kind"
+)
+
+// RecordBotFailure counts a call that produced nothing, and remembers which kind.
+//
+// NO TOKENS AND NO COST, deliberately: a refused call was not billed, and adding
+// a zero-cost row to bot_replies would inflate the count of calls that were.
+func (s *Store) RecordBotFailure(ctx context.Context, kind string) error {
+	if kind != BotFailRefused && kind != BotFailUnreachable {
+		// A caller inventing a word is a bug, and letting it through would put
+		// arbitrary text on a public page. Recorded as the coarser of the two
+		// rather than dropped, because the COUNT still matters.
+		kind = BotFailUnreachable
+	}
+	if _, err := s.w.ExecContext(ctx,
+		`INSERT INTO meta(k,v) VALUES(?, '1')
+		   ON CONFLICT(k) DO UPDATE SET v = CAST(v AS INTEGER) + 1`,
+		botFailCountK); err != nil {
+		return err
+	}
+	for k, v := range map[string]string{
+		botFailAtK:   strconv.FormatInt(s.Now().Unix(), 10),
+		botFailKindK: kind,
+	} {
+		if _, err := s.w.ExecContext(ctx,
+			`INSERT INTO meta(k,v) VALUES(?,?) ON CONFLICT(k) DO UPDATE SET v=excluded.v`,
+			k, v); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// metaInt reads a counter, treating absence as zero.
+func (s *Store) metaInt(ctx context.Context, k string) (int64, error) {
+	var v sql.NullString
+	err := s.r.QueryRowContext(ctx, `SELECT v FROM meta WHERE k=?`, k).Scan(&v)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, err
+	}
+	n, _ := strconv.ParseInt(v.String, 10, 64)
+	return n, nil
+}
+
+func (s *Store) metaStr(ctx context.Context, k string) (string, error) {
+	var v sql.NullString
+	err := s.r.QueryRowContext(ctx, `SELECT v FROM meta WHERE k=?`, k).Scan(&v)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", nil
+	}
+	return v.String, err
+}
 
 // SetBotKeyOnce stores the bot's API key IF THERE IS NOT ONE ALREADY, and
 // reports whether this call was the one that set it.
@@ -229,6 +320,15 @@ func (s *Store) BotStats(ctx context.Context) (botStats, error) {
 		return st, err
 	}
 	st.Replies, st.Passes, st.LastAt = spoke.Int64, passed.Int64, last.Int64
+	if st.Failures, err = s.metaInt(ctx, botFailCountK); err != nil {
+		return st, err
+	}
+	if st.LastFailAt, err = s.metaInt(ctx, botFailAtK); err != nil {
+		return st, err
+	}
+	if st.FailKind, err = s.metaStr(ctx, botFailKindK); err != nil {
+		return st, err
+	}
 	st.InTokens, st.OutTokens, st.CostMicros = in.Int64, out.Int64, cost.Int64
 	st.Model = model.String
 	return st, nil

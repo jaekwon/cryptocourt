@@ -26,6 +26,7 @@ const PAYLOAD = {
     enabled: true, model: "claude-haiku-4-5-20251001",
     replies: 9, passes: 4, last_at: 1757000000,
     in_tokens: 12345, out_tokens: 678, cost_micros: 15735,
+    failures: 6, last_fail_at: 1757000900, fail_kind: "refused",
   },
 };
 
@@ -97,6 +98,7 @@ const SECRET = "sk-ant-must-never-be-rendered-0001";
   const wants = {
     "Holding now": "4", "Most at once": "11", "Rooms active": "2",
     "Messages, last hour": "37", "Answered": "9", "Passed on": "4",
+    "Calls failed": "6 · refused",
   };
   for (const [label, want] of Object.entries(wants)) {
     ok(`"${label}" reads ${want}`, cells[label] === want,
@@ -117,6 +119,15 @@ const SECRET = "sk-ant-must-never-be-rendered-0001";
   ok("...and the tokens are reported as counted, both directions",
      /12,345 in/.test(cells["Tokens"] || "") && /678 out/.test(cells["Tokens"] || ""),
      JSON.stringify(cells["Tokens"]));
+
+  /* A FAILING HELPER IS VISIBLE AS ONE. Without this row a refused key read
+     exactly like an idle helper — every other number zero — on the page whose
+     only job is telling those apart. */
+  ok("a failing helper says so, and says which kind",
+     /^6 · (refused|unreachable)$/.test(cells["Calls failed"] || ""),
+     JSON.stringify(cells["Calls failed"]));
+  ok("...and the row explains where to look",
+     /key/i.test(Object.keys(cells).length ? seen.text : ""), "");
 
   /* THE PAGE MUST NOT SHOW WHAT IT CANNOT KNOW, asked of the TABLE and not of
      the whole page. The prose above it promises that nothing here names a person

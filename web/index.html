@@ -18772,6 +18772,16 @@ function diagRows(d){
     rows.push(["Spent", diagCost(b.cost_micros),
       "At the prices this deployment was configured with. Those are operator "
       + "settings and not facts — the token counts above them are the reliable half."]);
+    /* THE FAILURES, AND THEY EARN THEIR PLACE. Without this row a helper whose
+       key has been refused reads exactly like one nobody has asked anything —
+       MEASURED: five rejected calls left every other number on this page at
+       zero, which is what healthy and idle also looks like. The kind is one of
+       two words the service chooses from and never anything the vendor said. */
+    if(b.failures > 0) rows.push(["Calls failed",
+      `${Number(b.failures).toLocaleString()}${b.fail_kind? " · " + safeInline(b.fail_kind) : ""}`,
+      b.fail_kind === "refused"
+        ? "The model answered and said no — the key is the first thing to check."
+        : "No answer came back at all — a network or the service being down."]);
     if(b.model) rows.push(["Model", safeInline(b.model), "As most recently used."]);
   }
   return `<table class="tbl"><tbody>` + rows.map(([k,v,why])=>`<tr>

@@ -610,6 +610,20 @@ func (b *Bot) answer(ctx context.Context, c botCandidate) error {
 	}
 	body, in, out, err := b.ask(ctx, prompt)
 	if err != nil {
+		/* COUNTED, because a helper that fails every call looked exactly like one
+		   nobody had asked anything: MEASURED with a wrong key, five rejected
+		   calls in a row left the page reading replies=0 passes=0 cost=0, which
+		   is what a healthy idle helper reads. The count is what tells them
+		   apart. Recorded before the error is returned, so a failure to record
+		   cannot swallow the failure itself. */
+		var bf botFail
+		kind := BotFailUnreachable
+		if errors.As(err, &bf) {
+			kind = bf.Kind
+		}
+		if rerr := b.Store.RecordBotFailure(ctx, kind); rerr != nil {
+			b.logf("chat bot: could not record a failed call: %v", rerr)
+		}
 		return err
 	}
 	text := strings.TrimSpace(body)
@@ -782,6 +796,21 @@ func (s *Store) recordBotSpend(ctx context.Context, model string, in, out, cost 
 	return err
 }
 
+/*
+botFail carries WHICH KIND of nothing came back, so the diagnostics page can
+
+	say something an operator can act on without ever carrying the vendor's own
+	words to a public page. The wrapped error is for the log, which is private;
+	only Kind reaches the payload.
+*/
+type botFail struct {
+	Kind string
+	Err  error
+}
+
+func (e botFail) Error() string { return e.Kind + ": " + e.Err.Error() }
+func (e botFail) Unwrap() error { return e.Err }
+
 // ask makes the one call.
 func (b *Bot) ask(ctx context.Context, prompt string) (text string, in, out int64, err error) {
 	ep := b.Endpoint
@@ -808,21 +837,26 @@ func (b *Bot) ask(ctx context.Context, prompt string) (text string, in, out int6
 	}
 	res, err := cl.Do(req)
 	if err != nil {
-		return "", 0, 0, err
+		// No answer at all: a network, a DNS or a timeout. Distinct from a refusal
+		// because they send an operator to different places to look.
+		return "", 0, 0, botFail{BotFailUnreachable, err}
 	}
 	defer res.Body.Close()
 	raw, err := io.ReadAll(io.LimitReader(res.Body, 1<<20))
 	if err != nil {
-		return "", 0, 0, err
+		return "", 0, 0, botFail{BotFailUnreachable, err}
 	}
 	if res.StatusCode != http.StatusOK {
 		// THE KEY IS NEVER IN AN ERROR. The body may echo request detail, so only
 		// the status travels; a log line is a place operators paste from.
-		return "", 0, 0, fmt.Errorf("model returned %d", res.StatusCode)
+		return "", 0, 0, botFail{BotFailRefused,
+			fmt.Errorf("model returned %d", res.StatusCode)}
 	}
 	var parsed botAPIResp
 	if err := json.Unmarshal(raw, &parsed); err != nil {
-		return "", 0, 0, err
+		// An answer that is not the shape we asked for is a refusal in effect:
+		// something at the other end is not the API we think it is.
+		return "", 0, 0, botFail{BotFailRefused, err}
 	}
 	var sb strings.Builder
 	for _, c := range parsed.Content {

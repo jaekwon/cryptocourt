@@ -1,6 +1,7 @@
 package chat
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -55,6 +56,7 @@ func TestDiagPublishesCountsAndNothingElse(t *testing.T) {
 	botAllowed := map[string]bool{
 		"enabled": true, "model": true, "replies": true, "passes": true,
 		"last_at": true, "in_tokens": true, "out_tokens": true, "cost_micros": true,
+		"failures": true, "last_fail_at": true, "fail_kind": true,
 	}
 	if bot, ok := out["bot"].(map[string]any); ok {
 		for k := range bot {
@@ -293,6 +295,104 @@ func TestANonRunningHelperIsNotCounted(t *testing.T) {
 	srv.BotEnabled = BotRunnable(true, true)
 	if got := srv.here(); got != 2 {
 		t.Errorf("a running helper is one more, got %d", got)
+	}
+}
+
+/*
+A HELPER THAT IS FAILING DOES NOT LOOK LIKE ONE NOBODY HAS ASKED ANYTHING.
+
+	MEASURED with a deliberately wrong key: five consecutive rejected calls left
+	the payload reading enabled=true, replies=0, passes=0, in_tokens=0,
+	cost_micros=0 — byte-for-byte what a healthy idle helper reads. An operator
+	had no way to tell them apart on the page whose only job is telling them
+	apart.
+*/
+func TestAFailingHelperIsDistinguishableFromAnIdleOne(t *testing.T) {
+	srv, s, clock := newServer(t)
+	srv.BotEnabled = true
+	ctx := context.Background()
+
+	idle := diagOf(t, srv)["bot"].(map[string]any)
+	if idle["failures"] != float64(0) {
+		t.Fatalf("an idle helper has failed nothing: %v", idle)
+	}
+	if _, present := idle["fail_kind"]; present {
+		t.Errorf("an idle helper should not name a failure kind: %v", idle)
+	}
+
+	dead := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// A body that would be a leak if it ever reached the page.
+		w.WriteHeader(http.StatusUnauthorized)
+		w.Write([]byte(`{"error":{"message":"invalid x-api-key sk-ant-LEAK"}}`))
+	}))
+	defer dead.Close()
+	b := &Bot{Store: s, Key: "sk-ant-wrong-key-000000", Model: "m",
+		Endpoint: dead.URL, Chains: map[string]bool{"dev": true},
+		TypeCPS: 1e9, TypeMax: time.Nanosecond, MinGap: time.Minute}
+
+	for i := 0; i < 3; i++ {
+		if _, err := post(t, s, "orem", "ip-a", "how do i stake on a claim?"); err != nil {
+			t.Fatal(err)
+		}
+		_ = b.once(ctx)
+		*clock = clock.Add(2 * time.Minute)
+	}
+
+	rec := do(t, srv, httptest.NewRequest(http.MethodGet, "/api/chat/diag", nil))
+	body := rec.Body.String()
+	var out map[string]any
+	if err := json.Unmarshal([]byte(body), &out); err != nil {
+		t.Fatal(err)
+	}
+	bot := out["bot"].(map[string]any)
+	if bot["failures"] != float64(3) {
+		t.Errorf("three rejected calls should be three failures: %v", bot)
+	}
+	// REFUSED, NOT UNREACHABLE: the vendor answered and said no, which sends an
+	// operator to the key rather than to the network.
+	if bot["fail_kind"] != BotFailRefused {
+		t.Errorf("a 401 is a refusal, got %v", bot["fail_kind"])
+	}
+	if bot["last_fail_at"] == nil || bot["last_fail_at"] == float64(0) {
+		t.Errorf("a failure has a time: %v", bot)
+	}
+	// AND A REFUSAL IS NOT BILLED, so it must not appear in the cost — the tokens
+	// stay at zero while the failures climb.
+	if bot["cost_micros"] != float64(0) || bot["in_tokens"] != float64(0) {
+		t.Errorf("a refused call was never billed: %v", bot)
+	}
+	if bot["replies"] != float64(0) || bot["passes"] != float64(0) {
+		t.Errorf("a refused call neither spoke nor passed: %v", bot)
+	}
+
+	/* AND NOTHING THE VENDOR SAID REACHES THE PAGE. The 401 body above carries a
+	   string shaped like a key on purpose; the payload may contain the class of
+	   failure and nothing else. */
+	for _, leak := range []string{"sk-ant", "LEAK", "invalid x-api-key", "401"} {
+		if strings.Contains(body, leak) {
+			t.Errorf("the vendor's message reached the public payload (%q): %s", leak, body)
+		}
+	}
+}
+
+// THE KIND IS A CLOSED SET, so a caller inventing a word cannot put arbitrary
+// text on a public page.
+func TestAFailureKindIsOneOfTwoWords(t *testing.T) {
+	s, _ := newStore(t)
+	ctx := context.Background()
+	if err := s.RecordBotFailure(ctx, "<script>alert(1)</script>"); err != nil {
+		t.Fatal(err)
+	}
+	st, err := s.BotStats(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.FailKind != BotFailUnreachable && st.FailKind != BotFailRefused {
+		t.Errorf("an invented kind reached the page: %q", st.FailKind)
+	}
+	// ...and the count still moved, because the number is the part that matters.
+	if st.Failures != 1 {
+		t.Errorf("the failure was dropped rather than recorded coarsely: %+v", st)
 	}
 }
 
