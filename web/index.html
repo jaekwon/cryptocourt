@@ -7854,8 +7854,20 @@ on(/^\/$/, async ()=>{
          gnotAmt, NOT ugnot, because this shares a narrow column with a name and
          a pill: "13053599975 µGNOT" does not fit and reads worse than the same
          figure in GNOT anyway. It falls back to µGNOT on dust by itself. */
+      /* THE META COURT'S BURN IS ALWAYS ZERO, AND SAYING SO IS A LIE BY OMISSION.
+         Its supply does not arrive through Buy — it arrives through
+         ClaimMetaFranchise, which records no burn because the GNOT was already
+         burned into whichever court the claimant bought. So "0.00 GNOT burned"
+         beside covid's thirteen thousand is a structural zero printed as a
+         measurement, and it is the exact line that produced the report this
+         whole thread came from: "how can there be no meta tokens when there
+         were tokens burned for covid?"
+         THE ROW SAYS WHAT IS TRUE OF IT INSTEAD. Every other court's second line
+         is what was spent to build it; meta's is where its coin comes from. */
       if(el&&s) el.innerHTML = `<b>${cc(s.supply, c.slug)}</b>`
-        + `<small>${Number.isFinite(s.burned)? gnotAmt(s.burned)+" burned" : "burn unread"}</small>`;
+        + `<small>${c.slug === META_SLUG
+            ? "earned by burning on other courts"
+            : (Number.isFinite(s.burned)? gnotAmt(s.burned)+" burned" : "burn unread")}</small>`;
       if(s && c.claims==null){
         // a featured court occupying a deep-window slot: the render skips it
         // in the listed section without backfilling — hide the row likewise

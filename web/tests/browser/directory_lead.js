@@ -112,8 +112,24 @@ const PAGE = 'file://' + path.join(__dirname, '..', '..', 'index.html');
      filled.every(c => /\d/.test(c.big) && c.slug
                        && c.big.toLowerCase().includes(c.slug.toLowerCase())),
      JSON.stringify(filled));
-  ok("...and the burn underneath, in GNOT",
-     filled.every(c => /GNOT/.test(c.small) && /burn/.test(c.small)), JSON.stringify(filled));
+  /* THE BURN UNDERNEATH — FOR EVERY COURT WHOSE SUPPLY WAS BURNED FOR. The meta
+     court's was not: its coin arrives through ClaimMetaFranchise, which records
+     no burn because the GNOT was already burned into whichever court the
+     claimant bought. Its burn is therefore a structural zero, and "0.00 GNOT
+     burned" beside a court that burned thousands is the exact line that produced
+     the report — "how can there be no meta tokens when there were tokens burned
+     for covid?". That row says where its coin comes from instead. */
+  const burners = filled.filter(c => c.slug !== "meta");
+  ok("...and the burn underneath, in GNOT, for every court burned for",
+     burners.length > 0 && burners.every(c => /GNOT/.test(c.small) && /burn/.test(c.small)),
+     JSON.stringify(filled));
+  const metaRow = filled.find(c => c.slug === "meta");
+  if (metaRow) {
+    ok("...while the meta court says where its coin comes from",
+       /earned by burning on other courts/.test(metaRow.small), JSON.stringify(metaRow));
+    ok("...and does not print its structural zero as a measurement",
+       !/GNOT burned/.test(metaRow.small), JSON.stringify(metaRow));
+  }
   /* AND NO PRICE. The unit price is on the court's own page, where a reader who
      wants to buy is already standing. "µGNOT/unit" was the old cell's caption
      and is the string that would come back if this were reverted. */

@@ -193,6 +193,7 @@ CHATALL = "web/tests/browser/chat_all.js"
 WEBPAGE = "web/index.html"
 WEBCONST = "scripts/check-web-constants.py"
 MARKFONT = "scripts/check-mark-font.py"
+TDZ = "scripts/check-tdz.py"
 MEDIAHOSTS = "scripts/check-media-hosts.py"
 MEDIAGNO = "realm/r/kourtv2/media.gno"
 BLOCKTIME = "scripts/check-block-time.py"
@@ -1540,6 +1541,19 @@ print("\ncheck-mark-font")
 # their own span around the mark; they share setMarkSpan now, so the one place
 # this arm can strip the class is there. An arm quoting the old site would plant
 # nothing and prove nothing, which is what check-control-anchors caught.
+# A TOP-LEVEL CONST BUILT FROM ONE DECLARED BELOW IT throws "Cannot access 'X'
+# before initialization" on load and takes the whole script with it. Twice in one
+# week before check-tdz existed, both reaching a deployed page — and invisible to
+# every source harness, because a harness evaluates a SLICE and sets the names it
+# needs as globals first, so the ordering the browser enforces is the one thing it
+# cannot test.
+# PLANTED AS THE FIRST OF THOSE TWO, verbatim: an array literal reading SET_MARK,
+# which is declared ten thousand lines further down.
+control("a top-level const built from a name declared below it", WEBPAGE,
+        "const reQuote = s =>",
+        "const TDZ_ARM = [SET_MARK];\nconst reQuote = s =>",
+        "built from a name declared below",
+        argv=["python3", TDZ])
 control("a mark drawn in a span the stylesheet does not font", WEBPAGE,
         '<span class="wedjat ${shown? "" : "shutmark"}" role="img" ',
         '<span role="img" ',
