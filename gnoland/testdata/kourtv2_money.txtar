@@ -30,7 +30,13 @@ env USER_ADDR=g1jg8mtutu9khhfwc4nxmuhcpftf0pajdhfvsqf5
 # A fresh realm is NOT empty: the meta (appeals) court is deployed at init under
 # the reserved slug, so the appeals layer exists before anyone starts a court.
 gnokey query vm/qrender --data "gno.land/r/kourt/kourtv2:"
-stdout 'Review Court'
+# THE DIRECTORY ROW, not the bare name. This read 'Review Court' and had been
+# red since 6af4c4e renamed the meta court to Meta — a rename that updated the
+# realm, the seed and the pages, and left this expectation behind. A bare 'Meta'
+# would be the wrong repair: the word is in KOURT:META and in the meta court's
+# own description, so the arm would pass on a directory that had stopped listing
+# the court at all, which is the one thing it is here to catch.
+stdout '\[Meta\]\(/r/kourt/kourtv2:meta\)'
 stdout 'principal always returns'
 ! stdout '[Bb]acking'
 
