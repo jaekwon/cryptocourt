@@ -742,6 +742,14 @@ const CHATCSS = `
    on the box it sits over. */
 .chathere{flex:0 0 auto; text-align:right; font-size:.82em; opacity:.55;
   margin:0 .15rem .15rem}
+/* UNDERLINED ON HOVER AND NOT BEFORE, which is the whole affordance asked for:
+   at rest it reads as the quiet fact it is, and it announces itself as clickable
+   under the pointer. Inherits colour rather than taking the link colour, because
+   a blue count beside the composer reads as a call to action and this is not
+   one. Focus gets the same underline, or the affordance exists only for people
+   using a mouse. */
+.chatherelink{color:inherit; text-decoration:none}
+.chatherelink:hover,.chatherelink:focus-visible{text-decoration:underline}
 .chatage{flex:0 0 auto;opacity:.45;font-size:.85em}
 .chatempty{opacity:.55;padding:.3rem 0}
 .chatstate{margin:.4rem 0;padding:.35rem .5rem;border-radius:4px;
@@ -932,12 +940,26 @@ function mountChat(el, opts) {
      count of held connections can support — and it is people, not sessions, that
      a reader is asking about. Zero or missing hides the line rather than
      printing a number we do not have. */
+  /* A LINK, TO WHERE THOSE PEOPLE ARE. Asked for: underlined on hover, and it
+     goes to a page showing the distribution around the world.
+     AN <a href> AND NOT A CLICK HANDLER, so it behaves like every other link on
+     the site — middle-click, open in a new tab, and a visible target in the
+     status bar. The href is built here rather than in the markup because the
+     element is painted before there is a count to put in it.
+     textContent, NOT innerHTML: the count is a number this code formatted, but
+     the habit is what matters in a panel that renders strangers' text. */
   function showHere(n) {
     if (!hereEl) return;
     const k = Number(n || 0);
     if (!(k > 0)) { hereEl.hidden = true; return; }
     hereEl.hidden = false;
-    hereEl.textContent = k === 1 ? "1 here" : k + " here";
+    hereEl.textContent = "";
+    const a = document.createElement("a");
+    a.className = "chatherelink";
+    a.href = "#/here";
+    a.textContent = k === 1 ? "1 here" : k + " here";
+    a.title = "where the people reading this are";
+    hereEl.appendChild(a);
   }
   /* THE NAME IS A BUTTON UNTIL YOU PRESS IT.
    *

@@ -190,6 +190,9 @@ func (s *Server) Routes() *http.ServeMux {
 	// registering them after reads as though order mattered. It does not; they are
 	// listed first because that is the order a reader needs them in.
 	mux.HandleFunc("/api/chat/diag", s.diag)
+	// Presence for readers, carrying no word about the site's own answerer —
+	// see herePayload for why that is a different endpoint and not a field.
+	mux.HandleFunc("/api/chat/here", s.herePresence)
 	mux.HandleFunc("/api/chat/botkey", s.botkey)
 	mux.HandleFunc("/api/chat/", s.messages)
 	return mux
