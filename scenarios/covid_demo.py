@@ -1548,10 +1548,23 @@ for _who, _funds, _ in ACTORS:
 # on chain, not custom site language". Written by the seed so a reseed keeps it.
 # ONE PARAGRAPH, 240 CHARACTERS: mustCourtDesc refuses a newline and anything
 # longer, so this is measured rather than assumed.
+# "ONE FOR ONE" IS GONE FROM HERE TOO, and this was the LAST place it survived
+# — the one the overlay could not fix. A reader asked whether being first into a
+# new court, where their GNOT buys the most of that court's coin, would also earn
+# them more META. It would not: accrueFranchise banks the GNOT SPENT, so equal
+# GNOT earns equal credit in any court at any time, and what the credit becomes
+# is settled by meta's price on the day it is claimed. "One for one" reads as
+# token-for-token and says neither half.
+# THE OVERLAY COULD NOT REACH IT because a court page prefers the chain's own
+# description over its built-in sentence — deliberately, "on chain, not custom
+# site language" — so this text WINS on meta's page and the overlay's rewrite
+# was invisible there. Checked on the live chain after deploying the overlay
+# rewrite: /c/meta still read "one for one" while every other surface had
+# changed, which is what sent me here.
 s.call(DEPLOYER, "SetCourtDesc", ["meta",
-       "This court's coin is not received for GNOT \u2014 it is earned. Every burn "
-       "for any other court's coin accrues here to whoever made it, one for one, "
-       "and waits as an entitlement until they claim it."])
+       "This court's coin is not received for GNOT \u2014 it is earned. Every GNOT "
+       "burned for any other court's coin is credited here to whoever burned it, "
+       "and waits until they claim it."])
 
 relations = []
 for a, b, kind, stance in REL:
