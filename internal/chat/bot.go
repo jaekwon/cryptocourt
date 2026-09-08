@@ -608,13 +608,18 @@ func (b *Bot) scan(ctx context.Context, chain, court string, now time.Time) (*bo
 		   store said the clerk had not spoken last, and the branch set nothing —
 		   so botGreeting below was never reached and two greeting tests went red.
 		   A case that matches on half a condition eats the branches under it. */
-		followUp := false
-		if botFollowUp(m.Body) {
+		followUp, thanked := false, false
+		if botFollowUp(m.Body) || botThanks(m.Body) {
+			// ONE LOOKUP FOR BOTH SHAPES. They ask the store the same question —
+			// was the clerk the previous voice — and the two matchers cannot both
+			// be true, since a thank-you carries no question mark and every shape
+			// botFollowUp accepts either has one or is on its own short list.
 			mine, err := b.Store.clerkSpokeLast(ctx, chain, court, m.ID)
 			if err != nil {
 				return nil, err
 			}
-			followUp = mine
+			followUp = mine && botFollowUp(m.Body)
+			thanked = mine && botThanks(m.Body)
 		}
 		switch {
 		/* SOMEBODY IS WEARING THE CLERK'S NAME. The handler refuses the name, so
@@ -660,6 +665,21 @@ func (b *Bot) scan(ctx context.Context, chain, court string, now time.Time) (*bo
 		case followUp:
 			best = &botCandidate{chain: chain, court: court, body: m.Body, at: at,
 				followUp: true}
+		/* SOMEBODY SAID THANK YOU, AND SILENCE IS THE WRONG ANSWER TO IT.
+		   Reported as: "i said brilliant! ... it should respond graciously". The
+		   standing instruction is to PASS on small talk and praise IS small talk,
+		   so a reader who was helped and said so got nothing back — which reads
+		   as the helper not noticing rather than as the helper being disciplined.
+		   THE CLERK MUST HAVE SPOKEN LAST, which is what keeps this from
+		   answering praise aimed at a person. "brilliant!" after somebody else's
+		   argument is not addressed to the clerk and is none of its business.
+		   A FIXED LINE, NOT A MODEL CALL. There is one right length for this and
+		   the model cannot be relied on to keep to it — a paragraph of thanks for
+		   thanks is worse than silence. It costs no tokens, and it still waits
+		   its turn through the typing pause like any other message. */
+		case thanked:
+			best = &botCandidate{chain: chain, court: court, body: m.Body, at: at,
+				says: botThanksLine}
 		case botGreeting(m.Body):
 			// A GREETING ONLY COUNTS IN A ROOM THAT HAD GONE QUIET, and the
 			// question is asked of the store rather than of the transcript: the
@@ -876,6 +896,47 @@ func botFollowUp(body string) bool {
 		"say more", "go on", "explain", "explain more", "why", "how so",
 		"example", "for example", "an example", "and", "meaning",
 		"i don't get it", "i dont get it", "not following", "again", "once more",
+	} {
+		if bare == c {
+			return true
+		}
+	}
+	return false
+}
+
+// botThanksLine is what the clerk says when it is thanked. Short on purpose:
+// the reader has what they came for and the room does not need a second
+// paragraph about it.
+const botThanksLine = "Glad that helped."
+
+// botThanks is a message that is ONLY an acknowledgement — thanks, or praise for
+// the answer just given.
+//
+// SHORT, AND NOTHING BUT. "thanks!" is one; "thanks, and how do i stake?" is a
+// question and is served by the branch above this one, which is why the length
+// cap is tight and why a message carrying a question mark is refused outright.
+//
+// NEGATION IS REFUSED, and it is not hypothetical: "not helpful" and "no thanks"
+// both contain a word from the list, and answering either with "Glad that
+// helped" would be the worst sentence available in the room.
+func botThanks(body string) bool {
+	s := strings.ToLower(strings.TrimSpace(body))
+	if s == "" || len(s) > 40 || strings.Contains(s, "?") {
+		return false
+	}
+	for _, no := range []string{"not ", "n't", "no ", "never", "un"} {
+		if strings.HasPrefix(s, no) {
+			return false
+		}
+	}
+	bare := strings.Trim(s, " .!,;:~-")
+	for _, c := range []string{
+		"thanks", "thank you", "thanks a lot", "thanks so much", "many thanks",
+		"ty", "thx", "cheers", "brilliant", "nice", "nice one", "great",
+		"great stuff", "perfect", "excellent", "awesome", "amazing", "cool",
+		"lovely", "wonderful", "well done", "good bot", "love it", "beautiful",
+		"helpful", "very helpful", "that helps", "makes sense", "got it",
+		"gotcha", "understood", "clear", "appreciate it", "much appreciated",
 	} {
 		if bare == c {
 			return true

@@ -1935,3 +1935,68 @@ func TestAGreetingWithAQuestionMarkIsNotSwallowedByTheFollowUpBranch(t *testing.
 		}
 	}
 }
+
+/*
+SOMEBODY SAID THANK YOU AND THE CLERK SAID NOTHING.
+
+	Reported as: "i said brilliant! ... it should respond graciously". The
+	standing instruction is to PASS on small talk, praise IS small talk, and so a
+	reader who was helped and said so got silence — which reads as the helper not
+	noticing rather than as the helper being disciplined.
+
+	TWO HALVES, AND NEITHER IS ENOUGH ALONE, exactly as for a follow-up. The shape
+	says "this is an acknowledgement"; clerkSpokeLast says "of MINE". "brilliant!"
+	after somebody else's argument is not the clerk's business.
+
+	AND A NEGATION IS NOT A THANK-YOU. "not helpful" and "no thanks" both carry a
+	word from the list, and answering either with "Glad that helped" would be the
+	worst sentence available in the room.
+*/
+func TestTheClerkAcknowledgesThanksForItsOwnMessage(t *testing.T) {
+	for _, s := range []string{
+		"brilliant!", "brilliant", "thanks", "thank you", "ty", "thx", "cheers",
+		"nice one", "perfect", "got it", "makes sense", "much appreciated",
+		"GREAT", "  thanks.  ",
+	} {
+		if !botThanks(s) {
+			t.Errorf("should read as thanks: %q", s)
+		}
+	}
+	for _, s := range []string{
+		"", "not helpful", "no thanks", "thanks, but how do i stake?",
+		"thanks?", "brilliant argument, but the docket says otherwise",
+		"nice try", "thanks for nothing i guess, this whole thing is broken",
+	} {
+		if botThanks(s) {
+			t.Errorf("should NOT read as thanks: %q", s)
+		}
+	}
+
+	// THE CLERK SPOKE LAST, so the thanks is acknowledged — with the fixed line
+	// and no model call.
+	s, clock := newStore(t)
+	_ = clock
+	if _, err := s.Post(context.Background(), PostInput{
+		Chain: "dev", Court: "orem", Moniker: ClerkName, Body: "A court is a category for claims.",
+		IPHash: botIPHash, NetHash: "n",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Post(context.Background(), PostInput{
+		Chain: "dev", Court: "orem", Moniker: "reader", Body: "brilliant!",
+		IPHash: "ip-r", NetHash: "n2",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	b := &Bot{Store: s, MaxAge: time.Hour}
+	c, err := b.scan(context.Background(), "dev", "orem", s.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c == nil {
+		t.Fatal("thanks after the clerk's own message should be answered")
+	}
+	if c.says != botThanksLine {
+		t.Fatalf("should use the fixed line and skip the model, got says=%q", c.says)
+	}
+}
