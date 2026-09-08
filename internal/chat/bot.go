@@ -272,14 +272,17 @@ func (b *Bot) once(ctx context.Context) error {
 	}
 
 	// THE THROTTLE IS CHECKED BEFORE THE MODEL AND AFTER THE SCAN, deliberately.
+	// Before the model, so a throttled pass costs nothing at all.
 	// The scan is what advances the watermarks, and it must run every pass: if it
 	// were skipped while throttled, the questions that arrived during the wait
 	// would still be waiting when the gap expired and the bot would answer the
 	// oldest of them, which is the behaviour MaxAge exists to prevent.
-	last, err := b.Store.BotLastReplyAt(ctx)
+	last, err := b.Store.BotLastCallAt(ctx)
 	if err != nil {
 		return err
 	}
+	// A CALL, NOT A REPLY. See Store.BotLastCallAt: a refused call left no trace
+	// the throttle could see, so a broken key called once per incoming message.
 	maySpeak := last.IsZero() || now.Sub(last) >= b.gap()
 
 	var pick *botCandidate

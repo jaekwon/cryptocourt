@@ -363,19 +363,43 @@ func (s *Store) BotStats(ctx context.Context) (botStats, error) {
 	return st, nil
 }
 
-// BotLastReplyAt is the throttle's only question: when did we last speak, in any
-// room. Read from the same table the accounting comes from, so a restart cannot
-// hand the bot a fresh allowance — a counter held in memory would.
-func (s *Store) BotLastReplyAt(ctx context.Context) (time.Time, error) {
+// BotLastCallAt is the throttle's only question: when did we last SPEND A CALL,
+// whatever became of it.
+//
+// A CALL AND NOT A REPLY, and that distinction is the whole point. It used to
+// read bot_replies alone, which holds the calls that produced something — so a
+// call the vendor REFUSED left no trace the throttle could see and did not count
+// against it. MEASURED with a broken key: ten messages arriving in a room
+// produced ten calls to the vendor over thirty seconds, and the one-per-minute
+// throttle held back none of them. Every message posted anywhere wakes this bot,
+// so a revoked key turned it into an unthrottled loop against somebody else's
+// API.
+//
+// The throttle exists so that tokens are not burned. A refused call burns a
+// round trip rather than tokens, but it is still a call this process chose to
+// make, and "one a minute" is a promise about calls or it is not a promise.
+//
+// READ FROM THE DATABASE, both halves, so a restart cannot hand the bot a fresh
+// allowance — a crash loop against a failing vendor is exactly the shape that
+// would otherwise call on every start.
+func (s *Store) BotLastCallAt(ctx context.Context) (time.Time, error) {
 	var at sql.NullInt64
 	if err := s.r.QueryRowContext(ctx,
 		`SELECT max(created_at) FROM bot_replies`).Scan(&at); err != nil {
 		return time.Time{}, err
 	}
-	if !at.Valid {
+	failedAt, err := s.metaInt(ctx, botFailAtK)
+	if err != nil {
+		return time.Time{}, err
+	}
+	last := at.Int64
+	if failedAt > last {
+		last = failedAt
+	}
+	if last == 0 {
 		return time.Time{}, nil
 	}
-	return time.Unix(at.Int64, 0), nil
+	return time.Unix(last, 0), nil
 }
 
 // ActiveRooms lists the rooms with a visible message since a cutoff — the bot's

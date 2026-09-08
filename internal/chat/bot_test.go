@@ -408,6 +408,65 @@ func TestBotSpeaksOncePerGapAcrossEveryRoom(t *testing.T) {
 	}
 }
 
+/*
+A CALL THE VENDOR REFUSED STILL COUNTS AGAINST THE THROTTLE.
+
+	MEASURED with a broken key: ten messages arriving in a room produced TEN calls
+	over thirty seconds of clock, and the one-per-minute throttle held back none of
+	them — because it read bot_replies, which only holds calls that produced
+	something. Every message posted anywhere wakes this bot, so a revoked key made
+	it an unthrottled loop against somebody else's API. After: one call.
+	ONE A MINUTE IS THE RIGHT STEADY STATE for a dead key, deliberately, rather
+	than an escalating backoff: it is already a trickle, and a long backoff would
+	have to be waited out after somebody fixes the key.
+*/
+func TestARefusedCallCountsAgainstTheThrottle(t *testing.T) {
+	s, clock := newStore(t)
+	ctx := context.Background()
+	var calls int
+	dead := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer dead.Close()
+	b := &Bot{Store: s, Key: "sk-ant-wrong-key", Model: "m", Endpoint: dead.URL,
+		Chains:  map[string]bool{"dev": true},
+		TypeCPS: 1e9, TypeMax: time.Nanosecond, MinGap: time.Minute}
+
+	// A room having a conversation: ten questions over thirty seconds. On the
+	// live site every one of them wakes the bot.
+	for i := 0; i < 10; i++ {
+		if _, err := post(t, s, "orem", "ip-a", "how do i stake on a claim?"); err != nil {
+			t.Fatal(err)
+		}
+		if err := b.once(ctx); err != nil && calls == 0 {
+			t.Fatal(err)
+		}
+		*clock = clock.Add(3 * time.Second)
+	}
+	if calls != 1 {
+		t.Errorf("thirty seconds of clock and a one-minute throttle is one call, got %d", calls)
+	}
+	st, err := s.BotStats(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Failures != 1 {
+		t.Errorf("one call, one recorded failure: %+v", st)
+	}
+
+	// PAST THE GAP IT TRIES AGAIN, which is what keeps a fixed key from needing a
+	// restart to be noticed.
+	*clock = clock.Add(2 * time.Minute)
+	if _, err := post(t, s, "orem", "ip-a", "and where is the docket?"); err != nil {
+		t.Fatal(err)
+	}
+	_ = b.once(ctx)
+	if calls != 2 {
+		t.Errorf("past the gap it should try once more, got %d calls", calls)
+	}
+}
+
 // THE THROTTLE IS READ FROM THE DATABASE, so a restart cannot hand the bot a
 // fresh allowance. Asserted by building a second Bot — a new process, as far as
 // this state is concerned — and watching it stay quiet.
