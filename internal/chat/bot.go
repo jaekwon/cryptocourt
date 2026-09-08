@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"runtime/debug"
 	"strings"
 	"time"
 )
@@ -269,19 +270,7 @@ func (b *Bot) Run(ctx context.Context) {
 	defer t.Stop()
 	b.logf("chat bot: watching, model=%s gap=%s", b.Model, b.gap())
 	for {
-		// RE-SUBSCRIBED EVERY ITERATION, and taken BEFORE the pass rather than
-		// after it. The channel is replaced on each fire, so a handle kept across
-		// iterations is a handle to a signal that has already gone; and a post
-		// landing during the pass must wake the NEXT one rather than being
-		// swallowed by a subscription taken afterwards. Same discipline the long
-		// poll follows — see pulse.watch.
-		var woke <-chan struct{}
-		if b.Subscribe != nil {
-			woke = b.Subscribe()
-		}
-		if err := b.once(ctx); err != nil && !errors.Is(err, context.Canceled) {
-			b.logf("chat bot: %v", err)
-		}
+		woke := b.pass(ctx)
 		select {
 		case <-ctx.Done():
 			return
@@ -290,6 +279,52 @@ func (b *Bot) Run(ctx context.Context) {
 		case <-t.C:
 		}
 	}
+}
+
+/*
+ONE ITERATION, AND A PANIC IN IT MUST NOT END THE SERVICE.
+
+	THERE IS NO OTHER recover IN THIS REPOSITORY and that is deliberate almost
+	everywhere: a panic is how a bug gets found, and the realm panics on purpose
+	to abort a transaction. This is the exception, and the reason is what shares
+	the process. Run is a bare goroutine inside kourtchat, so a panic here does
+	not fail the helper — it kills the process that is serving chat to everybody
+	and the media archive besides. MEASURED: a misbehaving hook took Run down and
+	the panic reached the top of its goroutine.
+	THE HELPER IS ALSO THE LEAST TRUSTWORTHY CODE IN THAT PROCESS. It is optional,
+	it talks to a third party, and it parses what comes back. Optional decoration
+	must not be able to end the thing it decorates.
+	NOT SWALLOWED, THOUGH. The stack goes to the log and the pass is counted as a
+	failure, so the diagnostics page shows something wrong rather than a helper
+	that has quietly stopped answering — and because failures feed the throttle, a
+	pass that panics every time is held to one a minute rather than spinning.
+*/
+func (b *Bot) pass(ctx context.Context) (woke <-chan struct{}) {
+	defer func() {
+		r := recover()
+		if r == nil {
+			return
+		}
+		b.logf("chat bot: PANIC, recovered: %v\n%s", r, debug.Stack())
+		actx, done := acctCtx(ctx)
+		defer done()
+		if err := b.Store.RecordBotFailure(actx, BotFailInternal); err != nil {
+			b.logf("chat bot: could not record the panic: %v", err)
+		}
+	}()
+	// RE-SUBSCRIBED EVERY ITERATION, and taken BEFORE the pass rather than
+	// after it. The channel is replaced on each fire, so a handle kept across
+	// iterations is a handle to a signal that has already gone; and a post
+	// landing during the pass must wake the NEXT one rather than being
+	// swallowed by a subscription taken afterwards. Same discipline the long
+	// poll follows — see pulse.watch.
+	if b.Subscribe != nil {
+		woke = b.Subscribe()
+	}
+	if err := b.once(ctx); err != nil && !errors.Is(err, context.Canceled) {
+		b.logf("chat bot: %v", err)
+	}
+	return woke
 }
 
 func (b *Bot) gap() time.Duration {

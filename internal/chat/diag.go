@@ -94,8 +94,8 @@ type botStats struct {
 	// nobody has asked anything looks like. An operator had no way to tell the
 	// two apart, on the page whose whole purpose is telling them apart.
 	//
-	// FailKind is a fixed word from this file's own vocabulary — "refused" or
-	// "unreachable" — and NEVER the vendor's message. A 401 body can echo request
+	// FailKind is a fixed word from this file's own vocabulary — "refused",
+	// "unreachable" or "internal" — and NEVER the vendor's message, nor a panic's. A 401 body can echo request
 	// detail, and this payload is public; a coarse class is what an operator needs
 	// anyway, because the two point at different things to go and look at.
 	Failures   int64  `json:"failures"`
@@ -115,6 +115,7 @@ type botStats struct {
 const (
 	BotFailRefused     = "refused"     // the vendor answered, and said no
 	BotFailUnreachable = "unreachable" // no answer at all
+	BotFailInternal    = "internal"    // this code broke, not the vendor
 )
 
 // ------------------------------------------------------------------ storage --
@@ -181,7 +182,7 @@ const (
 // NO TOKENS AND NO COST, deliberately: a refused call was not billed, and adding
 // a zero-cost row to bot_replies would inflate the count of calls that were.
 func (s *Store) RecordBotFailure(ctx context.Context, kind string) error {
-	if kind != BotFailRefused && kind != BotFailUnreachable {
+	if kind != BotFailRefused && kind != BotFailUnreachable && kind != BotFailInternal {
 		// A caller inventing a word is a bug, and letting it through would put
 		// arbitrary text on a public page. Recorded as the coarser of the two
 		// rather than dropped, because the COUNT still matters.

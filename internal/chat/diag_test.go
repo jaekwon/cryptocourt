@@ -379,8 +379,9 @@ func TestAFailingHelperIsDistinguishableFromAnIdleOne(t *testing.T) {
 }
 
 // THE KIND IS A CLOSED SET, so a caller inventing a word cannot put arbitrary
-// text on a public page.
-func TestAFailureKindIsOneOfTwoWords(t *testing.T) {
+// text on a public page. Three words now: a recovered panic is "internal",
+// which is this code breaking rather than the vendor.
+func TestAFailureKindIsOneOfTheClosedSet(t *testing.T) {
 	s, _ := newStore(t)
 	ctx := context.Background()
 	if err := s.RecordBotFailure(ctx, "<script>alert(1)</script>"); err != nil {
@@ -390,7 +391,8 @@ func TestAFailureKindIsOneOfTwoWords(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if st.FailKind != BotFailUnreachable && st.FailKind != BotFailRefused {
+	if st.FailKind != BotFailUnreachable && st.FailKind != BotFailRefused &&
+		st.FailKind != BotFailInternal {
 		t.Errorf("an invented kind reached the page: %q", st.FailKind)
 	}
 	// ...and the count still moved, because the number is the part that matters.

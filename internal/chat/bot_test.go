@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -294,6 +295,68 @@ func TestAPostWakesTheRunningHelper(t *testing.T) {
 		time.Sleep(100 * time.Millisecond)
 	}
 	t.Fatal("no reply in six seconds, with a one-hour tick: the post did not wake it")
+}
+
+/*
+A PANIC IN THE HELPER MUST NOT END THE SERVICE.
+
+	MEASURED before the guard: a misbehaving hook took Run down and the panic
+	reached the top of its goroutine. In production Run IS a bare goroutine inside
+	kourtchat, so that is not a failed helper — it is the process serving chat to
+	everybody, and the media archive besides, gone. Optional decoration must not
+	be able to end the thing it decorates.
+	Subscribe is the injection point because it is a hook the helper calls on
+	every iteration, so a bad one is a realistic fault rather than a contrived
+	one.
+*/
+func TestAPanicInTheHelperDoesNotEndTheService(t *testing.T) {
+	s, _ := newStore(t)
+	m := &fakeModel{reply: "PASS", in: 1, out: 1}
+	b := newBot(t, s, m)
+	b.Tick = 40 * time.Millisecond
+	var hits int64
+	b.Subscribe = func() <-chan struct{} {
+		atomic.AddInt64(&hits, 1)
+		panic("a hook went wrong")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 400*time.Millisecond)
+	defer cancel()
+	escaped := make(chan any, 1)
+	go func() {
+		defer func() { escaped <- recover() }()
+		b.Run(ctx)
+	}()
+
+	select {
+	case r := <-escaped:
+		if r != nil {
+			t.Fatalf("the panic escaped Run and would kill kourtchat: %v", r)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("Run neither returned nor panicked")
+	}
+	// IT KEPT GOING, rather than being contained by returning. A guard that
+	// caught the panic and then stopped looping would satisfy the check above
+	// while leaving a helper that is permanently silent.
+	if n := atomic.LoadInt64(&hits); n < 2 {
+		t.Errorf("the loop should have carried on past the panic, got %d passes", n)
+	}
+
+	/* AND IT IS NOT SWALLOWED. A panic nobody can see is worse than a crash: the
+	   crash at least gets noticed. It is counted as a failure, which is what puts
+	   it on the diagnostics page, and classed "internal" — this code broke, not
+	   the vendor, which is a different thing to go and look at. */
+	st, err := s.BotStats(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Failures < 1 {
+		t.Errorf("a recovered panic must still be counted: %+v", st)
+	}
+	if st.FailKind != BotFailInternal {
+		t.Errorf("a panic is our fault, not the vendor's: %q", st.FailKind)
+	}
 }
 
 // ---- the key: write-once, and never readable -------------------------------
