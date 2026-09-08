@@ -172,5 +172,20 @@ func renderAdminParams() string {
 	b.WriteString("| Media hosts | " + hosts + " | Where images may be loaded " +
 		"from: exact hosts before the bar, suffixes after it. | " +
 		"`SetMediaHosts` |\n")
+
+	/* THE EVIDENCE FOR THE ONE CLAIM THIS PAGE MAKES. The creation-burn row
+	   says the payment "is burned", which a reader has no way to check from
+	   anything else on the page — and a page whose whole job is showing what is
+	   true should not be the one place making an unverifiable assertion. So the
+	   destination is named and the running total is shown: both are already
+	   published (BurnSink, BurnedGNOT) precisely so anyone can reconcile them
+	   against bank balances.
+	   BELOW THE TABLE, NOT IN IT. Neither figure is a parameter and nobody can
+	   set them; putting them in a table of settings, under a "Set with" column,
+	   would misrepresent what they are. */
+	b.WriteString("\nBurned to date, across every court and every creation: **" +
+		ugnotAmt(BurnedGNOT()) + " GNOT**, held at `" + BurnSink().String() +
+		"` — an address derived from a sub-realm identity that is never created, " +
+		"so no key to it exists and nothing can ever be spent from it.\n")
 	return b.String()
 }

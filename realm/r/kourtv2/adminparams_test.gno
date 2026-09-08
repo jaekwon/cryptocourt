@@ -107,6 +107,24 @@ func TestAdminParamsFollowsTheSetters(cur realm, t *testing.T) {
 	if !strings.Contains(page, admin.String()) {
 		t.Fatal("the page must name the admin it is describing")
 	}
+	/* THE PAGE SHOWS ITS EVIDENCE. The creation-burn row asserts the payment is
+	   burned; below the table the destination and the running total say where
+	   and how much, so the claim is checkable against bank balances rather than
+	   taken on trust. Asserted for the SINK ADDRESS specifically — a total on
+	   its own could be any number, and the address is what makes it
+	   reconcilable. */
+	if !strings.Contains(page, BurnSink().String()) {
+		t.Fatal("the page must name the address the burn goes to")
+	}
+	if !strings.Contains(page, "Burned to date") {
+		t.Fatal("the page must show what has been burned so far")
+	}
+	// And it is NOT presented as a setting: nobody can set either figure, and a
+	// row in the settings table would say they could.
+	if strings.Contains(page, "| Burned to date") {
+		t.Fatal("the burn total is not a parameter and must not sit in the table")
+	}
+
 	// Each setting names the verb that changes it — the question after "what is
 	// it" is always "how do I change it".
 	for _, verb := range []string{

@@ -35,7 +35,7 @@
 // a naive split(":") truncates it and the arm below is what notices.
 //
 // ABLATED against a CONTROL run of the unmodified page, which fires nothing at
-// 17 arms — without that control "3 arms fired" is not evidence, since a copy
+// 24 arms — without that control "3 arms fired" is not evidence, since a copy
 // broken for its own reasons reports the same. Counts below are what ACTUALLY
 // fired, and two of them are not what this comment first predicted:
 //   - point the burn cell at assocBond -> 1, not the 2 predicted. It reads
@@ -44,6 +44,16 @@
 //     discrimination distinct fixture values buy.
 //   - drop one PARAM_ROWS entry -> 3, not 2: the row count (6), that row's
 //     value ("no such row"), and the verb arm, since its verb goes with it.
+//   - drop the sink from the burn footnote -> 1: the address arm. The total
+//     still prints, which is the point of asserting the ADDRESS: a number on
+//     its own is not reconcilable against anything.
+//   - MOVING THE FOOTNOTE INTO THE TABLE needed two attempts, and the first
+//     one is worth recording. Deleting `</table>` fired NOTHING: the HTML
+//     parser auto-closes the table and the footnote ends up a sibling anyway,
+//     so the mutation did not do what its name said. Nesting it properly, as a
+//     `<tr><td class="burnfoot">` inside the body, does fire the outside-the-
+//     table arm. A mutation that the platform silently repairs is not evidence
+//     either way.
 //   - split pairs on every colon instead of the first -> 1: the colon arm,
 //     reading a domain truncated to "kourt.example".
 // A fourth mutation — making demo mode render the live table — is NOT recorded
@@ -113,16 +123,25 @@ const PACKED = [
     CFG.mode = "live";
     CFG.rpc = "http://stub.invalid/";   // never actually contacted
     const realFetch = window.fetch;
-    let asked = 0, sentExpr = "";
+    let asked = 0;
+    const askedFor = [];
+    /* ANSWERS PER EXPRESSION, not one canned reply for everything. The page
+       reads three things now — the params, the burn sink and the burn total —
+       and a stub that returned the packed line for all of them put that line
+       into the footnote as an address. Recording what was ASKED keeps every arm
+       below honest about the question the page actually posed. */
     window.fetch = async (url, opts) => {
       asked++;
-      // Record what the page ASKED for, so the arms below cannot pass against a
-      // stub that answered a question the page never posed.
-      try { sentExpr = atob(JSON.parse(opts.body).params.data); } catch (e) { sentExpr = "<unparsable>"; }
-      const payload = btoa('("' + packed + '" string)');
+      let expr = "<unparsable>";
+      try { expr = atob(JSON.parse(opts.body).params.data); } catch (e) {}
+      askedFor.push(expr.split("\n").pop());
+      const val = /AdminParams/.test(expr) ? '("' + packed + '" string)'
+        : /BurnSink/.test(expr)   ? '("g1sinkfixture000000000000000000000000" address)'
+        : /BurnedGNOT/.test(expr) ? '(13053599976 int64)'
+        : '("" string)';
       return {ok: true, status: 200, json: async () => ({
         jsonrpc: "2.0", id: "cc",
-        result: {response: {ResponseBase: {Data: payload}}}})};
+        result: {response: {ResponseBase: {Data: btoa(val)}}}})};
     };
     try {
       await render();
@@ -133,7 +152,10 @@ const PACKED = [
         verb: tr.children[3].textContent.trim(),
       }));
       return {cells, admin: (document.querySelector('.kv code') || {}).textContent || '',
-              asked, sentExpr,
+              asked, askedFor,
+              foot: (() => { const f = document.querySelector('.burnfoot');
+                return f ? f.textContent.replace(/\s+/g, " ").trim() : "<none>"; })(),
+              footInTable: !!document.querySelector('.paramtbl .burnfoot'),
               // What the page SAID, for when there are no rows to inspect.
               text: (document.getElementById('main').textContent || '').slice(0, 300)};
     } finally { window.fetch = realFetch; CFG.mode = "demo"; }
@@ -143,9 +165,17 @@ const PACKED = [
   // would pass against a stub answering a question nobody asked — which is how
   // the previous version of this file reported ten failures while the page was
   // working: the read never happened at all.
-  ok("the page makes exactly one chain read", live.asked === 1, `${live.asked} reads`);
-  ok("...and it asks for AdminParams", /AdminParams\(\)/.test(live.sentExpr || ""),
-     live.sentExpr);
+  // THREE READS, and named ones. The count alone would drift silently as the
+  // page grows; naming them is what makes "it asked for the right things" a
+  // fact rather than an assumption — and without this every value arm below
+  // could pass against a stub answering questions nobody posed.
+  ok("the page reads the params and the burn evidence", live.asked === 3,
+     `${live.asked} reads: ${(live.askedFor || []).join(", ")}`);
+  for (const want of ["AdminParams()", "BurnSink()", "BurnedGNOT()"]) {
+    ok(`...it asks for ${want}`,
+       (live.askedFor || []).some(e => e.indexOf(want) >= 0),
+       (live.askedFor || []).join(", "));
+  }
 
   ok("live mode draws every parameter", live.cells.length === 7,
      `${live.cells.length} rows: ${live.cells.map(c => c.label).join(", ")} | page said: ${live.text}`);
@@ -195,6 +225,16 @@ const PACKED = [
   ok("every row explains what it does",
      live.cells.length > 0 && live.cells.every(c => c.what.length > 20),
      JSON.stringify(live.cells.map(c => c.what.length)));
+
+  /* THE FOOTNOTE IS THE EVIDENCE FOR THE TABLE'S ONE CLAIM. The creation row
+     says the payment is burned; this says where and how much, so a reader can
+     reconcile it against bank balances instead of trusting the sentence. */
+  ok("the page names the address the burn goes to",
+     /g1sinkfixture/.test(live.foot || ""), live.foot);
+  ok("...and shows what has been burned so far",
+     /13,054 GNOT|13053\.599976/.test(live.foot || ""), live.foot);
+  ok("...outside the settings table, since neither is settable",
+     live.footInTable === false, String(live.footInTable));
 
   ok("no page errors", errs.length === 0, errs.slice(0, 2).join(" | "));
 

@@ -1972,12 +1972,27 @@ tr.youare .mono{font-weight:600}
 .mcmt-d{fill:var(--muted); opacity:.42}
 .mcmt-e{stroke:var(--muted); stroke-width:.7; fill:none; opacity:.30;
   vector-effect:non-scaling-stroke}
+/* BRIGHTER WHEN SMALLER, RATHER THAN GONE. This used to be
+   `.mapsvg.far .mcmt{display:none}`, following .mtitle and .mthumb on the
+   grounds that a cluster beside every node reads as noise. Two things make that
+   wrong here. A cluster is not a title: only claims that HAVE comments get one —
+   fillCommentClusters skips a zero — so they are sparse rather than one per box.
+   And the zoomed-out view is the one where "where is the talking" is the whole
+   question, so hiding them exactly when the overview appears inverts what they
+   are for.
+   MEASURED, which is why this changed: on a 1440x900 laptop the covid map had
+   no zoom at which a cluster could be seen. On arrival the two commented claims
+   sat at y=1311 and y=1350, below a 900px viewport that does not scroll; one
+   click of FIT brought them on screen and set .far, which blanked them. Both
+   states, nothing visible, feature deployed and working.
+   OPACITY AND NOT SIZE, deliberately: the dots shrink with the zoom, so they are
+   made brighter instead of bigger. Growing them would break the one bound that
+   keeps a fan off its neighbour — reach under MAPK.sep — which holds in user
+   units and would stop holding the moment the geometry moved. */
+.mapsvg.far .mcmt-d{opacity:.62}
+.mapsvg.far .mcmt-e{opacity:.45}
 .mnode-a:hover .mcmt-d,.mnode-a:focus .mcmt-d,.mnode-a.selected .mcmt-d{opacity:.75}
 .mnode-a:hover .mcmt-e,.mnode-a:focus .mcmt-e,.mnode-a.selected .mcmt-e{opacity:.55}
-/* GONE WHEN THE TITLES GO. Zoomed out to boxes the nodes are a few pixels wide
-   and a cluster beside each one reads as noise on the drawing rather than as a
-   fact about a claim — the same rule .mtitle and .mthumb already follow. */
-.mapsvg.far .mcmt{display:none}
 /* THE PICKED NODE GROWS, so its label is readable without leaving the map.
    Scaled on the <a> that wraps the box AND its text, so the words grow with the
    box rather than staying put inside a bigger frame.
@@ -18235,7 +18250,25 @@ on(/^\/params$/, async ()=>{
   }
   main.innerHTML = head + `<div class="dim" style="margin-top:16px">Reading…</div>`;
   let p = null, err = "";
-  try { p = parseAdminParams(await one("AdminParams()")); }
+  /* THE EVIDENCE FOR THE CLAIM THE TABLE MAKES, fetched beside it. The creation
+     row says the payment "is burned", which nothing else on the page lets a
+     reader check — so the destination and the running total come too, both
+     already published for exactly this purpose. Fetched together rather than
+     after, so the page renders once instead of twice.
+     FAILING SOFT AND SEPARATELY: a node that answers AdminParams but not the
+     bank reads still gets a full table, minus a footnote. Losing the whole page
+     over a footnote would be the wrong trade. */
+  let sink = "", burned = null;
+  try {
+    const got = await Promise.all([
+      one("AdminParams()"),
+      one("BurnSink()").catch(()=>""),
+      one("BurnedGNOT()").catch(()=>null),
+    ]);
+    p = parseAdminParams(got[0]);
+    sink = String(got[1] || "");
+    burned = got[2];
+  }
   catch(e){ err = String(e && e.message || e); }
   if(!p || !p.admin){
     main.innerHTML = head + `<div class="notice refuse" style="margin-top:16px">
@@ -18259,7 +18292,19 @@ on(/^\/params$/, async ()=>{
          <td class="dim">${safeInline(what)}</td>
          <td><code>${safeInline(verb)}</code></td>
        </tr>`).join("")
-    + `</tbody></table>`;
+    + `</tbody></table>`
+    /* BELOW THE TABLE, NOT IN IT. Neither figure is a setting and nobody can
+       change them; a row under a "Set with" column would say otherwise. Shown
+       only when the node answered — an empty footnote asserting nothing is
+       worse than no footnote. */
+    + ((sink || burned !== null)
+       ? `<p class="small muted burnfoot" style="margin-top:14px">Burned to date,
+          across every court and every creation:
+          <b>${burned !== null ? gnotAmt(burned) : "unknown"}</b>${sink
+            ? `, held at <code>${safeInline(sink)}</code> — an address derived
+               from a sub-realm identity that is never created, so no key to it
+               exists and nothing can ever be spent from it.` : `.`}</p>`
+       : "");
 });
 
 on(/^\/about$/, async ()=>{
