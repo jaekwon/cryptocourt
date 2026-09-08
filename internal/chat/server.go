@@ -163,6 +163,19 @@ func (s *Server) Wake(chain, court string) { s.pulse().fire(pulseKey(chain, cour
 // WakeAll is the same for a change that names no single court.
 func (s *Server) WakeAll() { s.pulse().fireAll() }
 
+// WithdrawCommand is what somebody types to take back their last message.
+const WithdrawCommand = "/delete"
+
+// isWithdrawCommand recognises the command and nothing near it.
+//
+// EXACT, AFTER TRIMMING, AND CASE-INSENSITIVE. "/delete this please" is a
+// sentence about deleting and must stay a message — a reader who types it has
+// said something, and silently swallowing it would look like the chat had eaten
+// their words. Case-insensitive because typing is typing.
+func isWithdrawCommand(body string) bool {
+	return strings.EqualFold(strings.TrimSpace(body), WithdrawCommand)
+}
+
 var (
 	courtRe = regexp.MustCompile(`^[a-z0-9-]{1,32}$`)
 	chainRe = regexp.MustCompile(`^[A-Za-z0-9._-]{1,32}$`)
@@ -745,6 +758,37 @@ func (s *Server) post(w http.ResponseWriter, r *http.Request, chain, court strin
 	body, err := SanitizeBody(in.Body)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, refusalText(fieldBody, err))
+		return
+	}
+
+	/* /delete — TAKE BACK THE MESSAGE YOU JUST SENT.
+	   Intercepted here, after sanitising and before anything is stored, so the
+	   command never becomes a message of its own: a transcript with "/delete"
+	   sitting in it would be a transcript reporting the mechanism instead of the
+	   conversation.
+	   THE RULE IS THE STORE'S, not this handler's — Store.WithdrawOwnLatest —
+	   because it has to be one transaction: read the newest row, check it is
+	   yours and visible, hide it. Split across two statements here, two people
+	   typing /delete at once could each hide the other's message.
+	   AND EVERY BROWSER SCRUBS IT WITHOUT BEING TOLD ANYTHING SPECIAL. The panel
+	   re-reads the whole window on each poll and paints it wholesale, which is
+	   the same mechanism that makes a moderator's hide vanish from a screen
+	   already showing it — see pulse.go. So the wake below is all the
+	   propagation this needs; there is no delete message to interpret and no
+	   client-side bookkeeping to get wrong.
+	   ONE BIT BACK, and deliberately: the id if something was withdrawn, zero if
+	   the rule said no. A caller learns whether their own last message went, and
+	   nothing about anybody else's. */
+	if isWithdrawCommand(body) {
+		gone, err := s.Store.WithdrawOwnLatest(r.Context(), chain, court, ipHash)
+		if err != nil {
+			writeErr(w, http.StatusInternalServerError, "could not withdraw")
+			return
+		}
+		if gone != 0 {
+			s.Wake(chain, court)
+		}
+		writeJSON(w, http.StatusOK, map[string]int64{"deleted": gone})
 		return
 	}
 

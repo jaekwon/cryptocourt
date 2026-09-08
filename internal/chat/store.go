@@ -165,12 +165,15 @@ CREATE TABLE IF NOT EXISTS messages (
   country    TEXT    NOT NULL DEFAULT '',
   suffix     TEXT    NOT NULL DEFAULT '',
   created_at INTEGER NOT NULL,
-  -- hidden: 0 visible, 1 hidden by a consequence, 2 hidden as a disclosed secret.
+  -- hidden: 0 visible, 1 hidden by a consequence, 2 hidden as a disclosed secret,
+  -- 3 withdrawn by whoever wrote it (/delete).
   --
   -- Every read tests hidden=0, so any non-zero value hides. The distinction matters to Revoke
-  -- alone: it RECOMPUTES 1 from the consequences still standing, and must leave 2 exactly where
-  -- it is. A secret was never a punishment, so an appeal about something else cannot be a reason
-  -- to republish it -- measured, reversing an unrelated kick did.
+  -- alone: it RECOMPUTES 1 from the consequences still standing, and must leave 2 AND 3 exactly
+  -- where they are. A secret was never a punishment, so an appeal about something else cannot be
+  -- a reason to republish it -- measured, reversing an unrelated kick did. Nor was a withdrawal:
+  -- 3 is somebody taking their own words back, and no appeal about a consequence is a reason to
+  -- put them back in the room.
   hidden     INTEGER NOT NULL DEFAULT 0,
   scan_state INTEGER NOT NULL DEFAULT 0,
   attempts   INTEGER NOT NULL DEFAULT 0,
@@ -626,6 +629,66 @@ func throttleTx(ctx context.Context, tx *sql.Tx, in PostInput, now time.Time) er
 	return nil
 }
 
+// HiddenWithdrawn is the `hidden` value for a message its author took back.
+const HiddenWithdrawn = 3
+
+// WithdrawOwnLatest is /delete: take back the message you just sent.
+//
+// THE WHOLE RULE IS "THE NEWEST ROW IN THE ROOM, IF IT IS YOURS AND STILL
+// VISIBLE", and each clause of that is doing work:
+//
+//	the NEWEST ROW, not the newest visible one. That is what makes it work once
+//	  and only once: withdrawing sets hidden, so a second /delete finds the
+//	  newest row already hidden and refuses. Asking for the newest VISIBLE row
+//	  instead would walk backwards through the transcript, one message per
+//	  /delete, which is the cascade this must not be.
+//	if it is YOURS, by ip_hash — the same identity the throttle and the
+//	  consequences already use. Everybody in that room is "anon", so the name
+//	  cannot be the test, and hiding somebody else's words is a moderator's
+//	  business with an infractions trail and an appeal route behind it.
+//	and still VISIBLE, so a message a moderator has hidden or a consequence has
+//	  caught cannot be quietly converted into a withdrawal by its author.
+//
+// hidden=3 rather than a DELETE, because the row is evidence: the scanner may
+// have classified it, a consequence may cite it, and prune is what eventually
+// removes rows. A withdrawal is about what a reader can see.
+//
+// Returns the id it withdrew, or 0 when the rule said no — which is not an
+// error. There is exactly one thing a caller may learn and it is that.
+func (s *Store) WithdrawOwnLatest(ctx context.Context, chain, court, ipHash string) (int64, error) {
+	tx, err := s.w.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	var id int64
+	var owner string
+	var hidden int
+	err = tx.QueryRowContext(ctx,
+		`SELECT id, ip_hash, hidden FROM messages
+		  WHERE chain=? AND court=? ORDER BY id DESC LIMIT 1`,
+		chain, court).Scan(&id, &owner, &hidden)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, nil // an empty room
+	}
+	if err != nil {
+		return 0, err
+	}
+	if hidden != 0 || owner != ipHash {
+		return 0, nil
+	}
+	if _, err := tx.ExecContext(ctx,
+		`UPDATE messages SET hidden=? WHERE id=? AND hidden=0`,
+		HiddenWithdrawn, id); err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+	return id, nil
+}
+
 // Status is what a caller is told about themselves, so the composer can be
 // disabled before anyone types into a box that will refuse them.
 type Status struct {
@@ -900,9 +963,20 @@ func (s *Store) Consequence(ctx context.Context, c Infraction) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
+	/* ONLY WHAT IS VISIBLE, and the `hidden = 0` is load-bearing.
+	   Without it this statement overwrites every non-zero value it touches,
+	   which is exactly what the column's own comment says must not happen: a
+	   consequence would relabel a disclosed secret (2) or a withdrawal (3) as
+	   an ordinary punishment, and Revoke's recompute would then set it to 0 and
+	   put it back in the room. MEASURED with /delete: withdraw a message, take
+	   an unrelated kick against the same address, reverse the kick — and the
+	   withdrawn words were public again.
+	   A message already hidden by a consequence stays hidden either way, so the
+	   clause costs nothing it was doing on purpose. */
 	if _, err := tx.ExecContext(ctx, `UPDATE messages SET hidden=1
-	   WHERE (ip_hash = ? AND created_at > ?)
-	      OR (id = ? AND ip_hash = ?)`,
+	   WHERE hidden = 0
+	     AND ((ip_hash = ? AND created_at > ?)
+	          OR (id = ? AND ip_hash = ?))`,
 		c.IPHash, now.Add(-HideWindow).Unix(), evID, c.IPHash); err != nil {
 		return 0, err
 	}
@@ -1002,7 +1076,7 @@ func (s *Store) Revoke(ctx context.Context, id int64, by string) error {
 	// decision was wrong; expiry says it is served, which is why an expired kick keeps its
 	// evidence out of sight and only `unban` brings it back.
 	if _, err := tx.ExecContext(ctx, `
-	  UPDATE messages SET hidden = CASE WHEN hidden = 2 THEN 2 WHEN EXISTS (
+	  UPDATE messages SET hidden = CASE WHEN hidden IN (2, 3) THEN hidden WHEN EXISTS (
 	      SELECT 1 FROM infractions i
 	       WHERE i.revoked_at IS NULL
 	         AND i.ip_hash = messages.ip_hash

@@ -97,6 +97,9 @@ const ALL = ["embed_layout.js", "tagrow_layout.js", "route_crawl.js",
              "chat_scroll.js",
              // how many are in the room, above the box you type into
              "chat_here.js",
+             // /delete scrubs the message from every tab, because the server
+             // stopped sending it
+             "chat_delete.js",
              "court_burn_pay.js",
              "vote_commit.js",
              // the two marks, and the pupil that must not move between them
