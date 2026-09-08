@@ -555,9 +555,27 @@ async function chatPost(base, chain, court, moniker, body) {
   let d = null;
   try { d = await r.json(); } catch (e) { /* an error page is not JSON */ }
   if (r.ok) return {ok: true, id: d && d.id};
+  /* A BODY THAT IS NOT JSON MEANS THIS NEVER REACHED THE CHAT, and saying so is
+     the difference between a fixable message and a mystery. Reported as: "when
+     i typed '/delete' it didn't delete my line above but said 403 could not
+     send". The service had answered 200 on loopback; nginx refused the request
+     with an HTML error page, because ModSecurity's CRS rule 942360 reads a body
+     opening with punctuation plus a SQL keyword as an injection attempt and
+     `/delete` is a slash and the word delete.
+     THE RULE IS GONE FOR THIS ENDPOINT NOW (see deploy/nginx.conf), but the
+     panel still has to be honest about the class: any proxy, WAF or gateway in
+     front of the service can refuse a write, and every one of them answers HTML
+     rather than the {"error": ...} this reads. The old wording spent the one
+     line a reader gets on a status code, which tells them nothing they can act
+     on, and pointed the blame at the chat — the one component that was working.
+     `d === null` IS THE TEST, not the status: it is exactly "the JSON parse
+     threw", which no app response ever does. Keeping 429 and 410 above it means
+     a proxy's own rate limit still reads as one. */
   const msg = (d && d.error) ? d.error
     : r.status === 429 ? "you are sending too fast — wait a moment"
     : r.status === 410 ? "this court is no longer served"
+    : d === null ? "blocked before it reached the chat (" + r.status
+        + ") — try rewording that message"
     : "could not send (" + r.status + ")";
   return {ok: false, status: r.status, error: msg, you: d && d.you};
 }

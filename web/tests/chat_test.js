@@ -795,6 +795,43 @@ function mkDoc() {
        bare.error.length > 0);
   }
 
+  /* A REFUSAL THAT NEVER REACHED THE SERVICE SAYS SO. Reported as: "when i typed
+     '/delete' it didn't delete my line above but said 403 could not send".
+     Measured at the time: the service answered 200 on 127.0.0.1:8788 and nginx
+     answered 403 with an HTML page, because ModSecurity's CRS rule 942360 reads
+     a body opening with punctuation plus a SQL keyword as an injection attempt,
+     and /delete is a slash and the word delete. The rule is excluded for this
+     endpoint now, but the CLASS survives every WAF, proxy and gateway: they all
+     answer HTML, so d.error is absent and the panel used to spend its one line
+     on a status code while blaming the chat.
+     THE STUB THROWS FROM json(), which is what an HTML body does to it — not a
+     403 carrying an empty object, which is the case below and must keep the old
+     fallback. That difference is the whole assertion: "not JSON" is the signal,
+     the status is not. */
+  {
+    FETCH = async (url, init) => (init && init.method === "POST")
+      ? {ok: false, status: 403, json: async () => { throw new Error("Unexpected token '<'"); }}
+      : {ok: true, json: async () => ({messages: [], you: {state: "ok"}, next: 0})};
+    const waf = await chatPost("http://x", "dev", "orem", "alice", "/delete");
+    ok("an HTML 403 says the message never reached the chat",
+       /never reached|before it reached/.test(waf.error), waf.error);
+    ok("...and tells the reader what they can do about it",
+       /reword/i.test(waf.error), waf.error);
+    ok("...and does not blame the chat with a bare status",
+       !/^could not send/.test(waf.error), waf.error);
+    ok("...and still reports failure", waf.ok === false && waf.status === 403);
+
+    // THE PAIRED CASE, so the arm above is about a body that is not JSON rather
+    // than about 403 being special-cased: same status, parseable body, no error
+    // field — the generic fallback is right there and must stay.
+    FETCH = async (url, init) => (init && init.method === "POST")
+      ? {ok: false, status: 403, json: async () => ({})}
+      : {ok: true, json: async () => ({messages: [], you: {state: "ok"}, next: 0})};
+    const empty = await chatPost("http://x", "dev", "orem", "alice", "x");
+    ok("a JSON 403 with no sentence keeps the plain fallback",
+       /could not send \(403\)/.test(empty.error), empty.error);
+  }
+
 
   /* ---- how the page decides there is a chat service at all -----------------
      This file evaluates chat.js whole and does not otherwise read index.html;
