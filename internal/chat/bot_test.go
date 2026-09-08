@@ -1559,3 +1559,159 @@ func TestTheSystemPromptStatesTheNoLossRule(t *testing.T) {
 		}
 	}
 }
+
+/*
+THE CLERK CAN SEE HOW MANY CLAIMS THE ROOM HAS.
+
+	REPORTED TWICE, in the same words: "the clerk doesn't answer anything related
+	to the court, like 'how many claims are there in the court?'". Measured then:
+	botWorthAsking ACCEPTED that question — it names the site — so it reached the
+	model, which had no data and could only hedge or refuse. The gap was the
+	facts, not the filter.
+	A STUB, NEVER A NODE. The interface exists so this test can be a function
+	call: what is asserted is that the number reaches the PROMPT, which is the
+	only thing this package can be responsible for.
+*/
+type fakeFacts struct {
+	n     uint64
+	err   error
+	calls int
+	slug  string
+}
+
+func (f *fakeFacts) ClaimCount(ctx context.Context, court string) (uint64, error) {
+	f.calls++
+	f.slug = court
+	return f.n, f.err
+}
+
+func TestTheClerkQuotesTheCourtsClaimCount(t *testing.T) {
+	s, clock := newStore(t)
+	ctx := context.Background()
+	m := &fakeModel{reply: "This court has 26 claims.", in: 90, out: 9}
+	ff := &fakeFacts{n: 26}
+	b := newBot(t, s, m)
+	b.Facts = ff
+	/* MinGap OF A SECOND, and the reason is the arm below rather than
+	   impatience. The default is a minute, and the cache TTL is thirty seconds —
+	   so a test that waits out the throttle to ask a second question has also
+	   waited out the cache, and "the cached count was reused" can never be true.
+	   MEASURED: the first version of this test advanced two minutes and read
+	   reads=2, which looked like a broken cache and was a broken clock. */
+	b.MinGap = time.Second
+	*clock = clock.Add(time.Hour)
+
+	if _, err := post(t, s, "orem", "ip-count", "how many claims are there in this court?"); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.once(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if ff.calls != 1 {
+		t.Fatalf("the clerk should have read the court once, got %d", ff.calls)
+	}
+	if ff.slug != "orem" {
+		t.Errorf("it must ask about the room it is in, asked about %q", ff.slug)
+	}
+	if !strings.Contains(m.prompt, "26 claims") {
+		t.Errorf("the number must reach the prompt: %q", m.prompt)
+	}
+	// THE SINGULAR, because "1 claims" in the prompt is the kind of thing a model
+	// repeats back verbatim to a reader.
+	{
+		one := &fakeFacts{n: 1}
+		b2 := newBot(t, s, m)
+		b2.Facts = one
+		if got := b2.courtFacts(ctx, "dev", "orem"); !strings.Contains(got, "1 claim.") {
+			t.Errorf("one claim is not plural: %q", got)
+		}
+	}
+
+	/* AND THE SECOND QUESTION COSTS NO SECOND READ, within the TTL. A busy room
+	   would otherwise put one chain query behind every reply for a number that
+	   changes when somebody files a claim, not when somebody asks about it. */
+	*clock = clock.Add(3 * time.Second)
+	if _, err := post(t, s, "orem", "ip-count2", "and how many claims now?"); err != nil {
+		t.Fatal(err)
+	}
+	*clock = clock.Add(2 * time.Second) // past MinGap, well inside the fact TTL
+	if err := b.once(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if ff.calls != 1 {
+		t.Errorf("the cached count should have been reused, reads=%d", ff.calls)
+	}
+	// ...AND IS READ AGAIN ONCE THE TTL HAS PASSED, or the clerk would quote a
+	// number from an hour ago as "just now".
+	*clock = clock.Add(botFactsTTL + time.Second)
+	if got := b.courtFacts(ctx, "dev", "orem"); !strings.Contains(got, "26 claims") || ff.calls != 2 {
+		t.Errorf("a stale fact must be re-read: reads=%d got=%q", ff.calls, got)
+	}
+}
+
+/*
+A NODE THAT IS DOWN COSTS THE FACT, NOT THE ANSWER. This is the arm that
+
+	decides whether the feature is safe to have: if a chain read can take a
+	reader's reply with it, then adding facts made the clerk worse.
+	THE FAILURE IS CACHED TOO, and that is asserted by the read COUNT: without
+	it, every reply in a room would wait out the timeout again while the node
+	stays down.
+*/
+func TestAFactThatCannotBeReadIsSimplyNotMentioned(t *testing.T) {
+	s, clock := newStore(t)
+	ctx := context.Background()
+	m := &fakeModel{reply: "Claims are filed by anyone and settled by the court.", in: 90, out: 9}
+	ff := &fakeFacts{err: context.DeadlineExceeded}
+	b := newBot(t, s, m)
+	b.Facts = ff
+	b.MinGap = time.Second // see the note in the test above: the TTL is 30s
+	*clock = clock.Add(time.Hour)
+
+	if _, err := post(t, s, "orem", "ip-down", "how many claims are there?"); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.once(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if m.calls != 1 {
+		t.Fatalf("the reader must still get an answer (%d model calls)", m.calls)
+	}
+	if strings.Contains(m.prompt, "Live fact") {
+		t.Errorf("a failed read must leave the prompt alone: %q", m.prompt)
+	}
+	got, _ := s.Recent(ctx, "dev", "orem", 0, 50)
+	if len(got) != 2 {
+		t.Fatalf("the answer should be in the room: %+v", got)
+	}
+	if _, err := post(t, s, "orem", "ip-down2", "how many claims are there now?"); err != nil {
+		t.Fatal(err)
+	}
+	*clock = clock.Add(2 * time.Second)
+	if err := b.once(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if ff.calls != 1 {
+		t.Errorf("a node that is down must not be re-asked per reply, reads=%d", ff.calls)
+	}
+}
+
+// AND WITH NO NODE CONFIGURED AT ALL, nothing changes: this is the shape every
+// other optional half of the command has, and the clerk explained mechanics
+// perfectly well without any numbers before this existed.
+func TestWithoutFactsTheClerkStillAnswers(t *testing.T) {
+	s, clock := newStore(t)
+	ctx := context.Background()
+	m := &fakeModel{reply: "Anyone can file a claim.", in: 80, out: 8}
+	b := newBot(t, s, m) // Facts deliberately unset
+	*clock = clock.Add(time.Hour)
+	if _, err := post(t, s, "orem", "ip-nofacts", "how many claims are there?"); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.once(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if m.calls != 1 || strings.Contains(m.prompt, "Live fact") {
+		t.Errorf("no facts means no fact line and still an answer: calls=%d", m.calls)
+	}
+}

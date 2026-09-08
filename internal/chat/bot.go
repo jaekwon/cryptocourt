@@ -151,9 +151,46 @@ type Bot struct {
 	// window changes WHICH message gets answered, not how many.
 	GreetAfter time.Duration
 
+	// Facts, when set, is how the clerk learns what the room it is in actually
+	// contains. Optional: without it the clerk explains mechanics and knows no
+	// numbers, which is what it did until now.
+	Facts CourtFacts
+
+	// facts caches what Facts answered, per room. Read and written only from the
+	// single goroutine that runs the passes, so it needs no lock — see Run.
+	facts map[string]botFact
+
 	// Endpoint is overridable so tests can point at a local server. Empty means
 	// the real one.
 	Endpoint string
+}
+
+/*
+CourtFacts is the live state the clerk may quote about the room it is in.
+
+	REPORTED TWICE, in the same words: "the clerk doesn't answer anything related
+	to the court, like 'how many claims are there in the court?'". Measured, the
+	filter ACCEPTED that question — it names the site — so it reached the model,
+	which has no data and could only hedge or refuse. The gap was never the
+	filter.
+	AN INTERFACE DECLARED HERE AND IMPLEMENTED ELSEWHERE. *archive.Chain already
+	has this exact method, for backfill, so kourtchat is what puts the two
+	together and this package imports nothing new. Declaring the dependency where
+	it is USED, rather than importing the media archive from the chat helper, is
+	what keeps that edge from existing at all.
+	ONE NUMBER, AND THE ONE THAT WAS ASKED FOR. It is also the number the
+	directory shows a reader, so the clerk cannot disagree with the page beside
+	it. More facts mean more reads on every reply; each should earn its place the
+	way this one did.
+*/
+type CourtFacts interface {
+	ClaimCount(ctx context.Context, court string) (uint64, error)
+}
+
+type botFact struct {
+	n  uint64
+	at time.Time
+	ok bool
 }
 
 const (
@@ -243,6 +280,13 @@ const (
 	botImpersonationLine = "That's not me, I'm me! Anyone can type a name in a box — " +
 		"nobody's fooled, and it won't be funnier the second time."
 
+	// How long a court's facts are reused, and how long the clerk will wait for
+	// them. THE TIMEOUT IS THE IMPORTANT ONE: a node that has gone away must
+	// cost a reply two seconds, not the reply itself — the fact is dropped and
+	// the answer goes out without it.
+	botFactsTTL     = 30 * time.Second
+	botFactsTimeout = 2 * time.Second
+
 	botGreetGrace   = 12
 	botGreetHardMax = botGreetMaxChars + botGreetGrace
 )
@@ -281,6 +325,8 @@ type BotOptions struct {
 	InPerMTok, OutPerMTok        int64
 	Chains                       map[string]bool
 	Log                          func(string, ...any)
+	// Facts is optional; see Bot.Facts and CourtFacts.
+	Facts CourtFacts
 }
 
 // NewBot builds the helper AND CONNECTS IT to the server it will speak through,
@@ -310,7 +356,8 @@ func NewBot(store *Store, srv *Server, key string, o BotOptions) *Bot {
 		Chains: o.Chains, MinGap: o.MinGap,
 		Site: o.Site, Repo: o.Repo, ChainDocs: o.ChainDocs,
 		InPerMTok: o.InPerMTok, OutPerMTok: o.OutPerMTok,
-		Log: o.Log,
+		Log:   o.Log,
+		Facts: o.Facts,
 		// THE TWO HOOKS, and the whole reason this function exists.
 		Subscribe: srv.Subscribe,
 		Wake:      srv.Wake,
@@ -731,23 +778,66 @@ var botSumShape = regexp.MustCompile(`[0-9]\s*[-+*/x×÷^%]\s*[0-9]`)
 // there a way to unstake" — that is a question and botWorthAsking already has
 // it. The length bound is the real filter: a greeting is a handful of
 // characters, so anything longer is a message that happens to open politely.
-/* botAddressed is whether a reader used the clerk's name.
-   REPORTED: "i asked cleark, why did the chicken cross the road? and it didn't
-   say anything". The message was `clerk, why did the chicken cross the road?`
-   and the filter refused it — for a reason that reads as a joke once you see it:
-   the site-word list has "court", "claim", "docket" and thirty others, and not
-   the clerk's own name. Somebody spoke to it directly and it was not listening
-   for itself.
-   BEING SPOKEN TO IS AN EXPLICIT REQUEST, which is the whole justification for
-   answering a question that names nothing about the site. It is also cheap in
-   exactly the way "answer everything" was not: a reader has to single the clerk
-   out, and MinGap still holds it to one reply per gap across every room.
-   ONE SLIPPED LETTER, because the report itself was typed "cleark". Skeleton
-   folds lookalikes and would not have caught that — a doubled or missed letter
-   is not a homoglyph — so the comparison allows one insertion or deletion, and
-   NOT a substitution: see withinOneSlip for why "clark" must not match.
-   Tokens under four characters are not considered at all, or "the" and "cle"
-   would start conversations. */
+/* courtFacts is the line about this room that goes into the prompt, or "" when
+   there is nothing trustworthy to say.
+   FAILURE IS SILENCE, NOT AN ERROR. A node that is slow, down or answering
+   nonsense must not cost the reader their answer — the fact is left out, and
+   the standing instruction not to invent numbers is what covers the gap.
+   THE FAILURE IS CACHED TOO, which is the half that matters when a node is
+   down: without it every reply would wait the whole timeout again.
+   PER ROOM AND PER CHAIN, because a court on dev and a court of the same name
+   on kourt-1 are different rooms with different numbers. */
+func (b *Bot) courtFacts(ctx context.Context, chain, court string) string {
+	if b.Facts == nil {
+		return ""
+	}
+	if b.facts == nil {
+		b.facts = map[string]botFact{}
+	}
+	key := chain + "/" + court
+	f, hit := b.facts[key]
+	if !hit || b.now().Sub(f.at) >= botFactsTTL {
+		fctx, cancel := context.WithTimeout(ctx, botFactsTimeout)
+		n, err := b.Facts.ClaimCount(fctx, court)
+		cancel()
+		f = botFact{n: n, at: b.now(), ok: err == nil}
+		b.facts[key] = f
+		if err != nil {
+			b.logf("chat bot: no facts for %s/%s: %v", chain, court, err)
+		}
+	}
+	if !f.ok {
+		return ""
+	}
+	claims := "claims"
+	if f.n == 1 {
+		claims = "claim"
+	}
+	return fmt.Sprintf("\n\nLive fact about THIS court, read from the chain just now: "+
+		"it has %d %s. That is the same number the court's own page shows. Quote it if "+
+		"asked, and do not derive any other number from it.", f.n, claims)
+}
+
+/*
+botAddressed is whether a reader used the clerk's name.
+
+	REPORTED: "i asked cleark, why did the chicken cross the road? and it didn't
+	say anything". The message was `clerk, why did the chicken cross the road?`
+	and the filter refused it — for a reason that reads as a joke once you see it:
+	the site-word list has "court", "claim", "docket" and thirty others, and not
+	the clerk's own name. Somebody spoke to it directly and it was not listening
+	for itself.
+	BEING SPOKEN TO IS AN EXPLICIT REQUEST, which is the whole justification for
+	answering a question that names nothing about the site. It is also cheap in
+	exactly the way "answer everything" was not: a reader has to single the clerk
+	out, and MinGap still holds it to one reply per gap across every room.
+	ONE SLIPPED LETTER, because the report itself was typed "cleark". Skeleton
+	folds lookalikes and would not have caught that — a doubled or missed letter
+	is not a homoglyph — so the comparison allows one insertion or deletion, and
+	NOT a substitution: see withinOneSlip for why "clark" must not match.
+	Tokens under four characters are not considered at all, or "the" and "cle"
+	would start conversations.
+*/
 func botAddressed(body string) bool {
 	for _, tok := range strings.FieldsFunc(strings.ToLower(body), func(r rune) bool {
 		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
@@ -1075,6 +1165,7 @@ func (b *Bot) answer(ctx context.Context, c botCandidate) error {
 	prompt := "The court is \"" + c.court + "\" on " + b.Site + ".\n" +
 		"Recent messages, oldest first:\n" + strings.Join(c.transcript, "\n") +
 		"\n\nThe message to consider is the last one from a reader: " + c.body
+	prompt += b.courtFacts(ctx, c.chain, c.court)
 	if c.greeting {
 		// A DIFFERENT ERRAND, said explicitly, because the standing instruction is
 		// to PASS on anything that is not a question about the site — and a bare

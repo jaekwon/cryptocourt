@@ -312,7 +312,27 @@ func main() {
 	   effect at the next restart, which the page says rather than papering over:
 	   re-reading it every tick would mean a process that starts spending because
 	   somebody filled in a form, with nothing in the log to say when. */
+	/* THE CLERK CAN SEE THE ROOM IT IS IN, when there is a node to ask. Reported
+	   twice: "the clerk doesn't answer anything related to the court, like 'how
+	   many claims are there in the court?'" — the filter always accepted that
+	   question, and the model simply had no data behind it.
+	   THE SAME CLIENT AND THE SAME FLAG the archive uses, built once here rather
+	   than twice: one endpoint is one operator decision. chat declares the
+	   interface it needs (chat.CourtFacts) and *archive.Chain already satisfies
+	   it, so neither package imports the other and this line is the whole seam.
+	   NIL WHEN THERE IS NO --archive-rpc, which is the same shape as every other
+	   optional half of this command: the clerk then explains mechanics and knows
+	   no numbers, exactly as it did before. */
+	var courtChain *archive.Chain
+	if *archiveRPC != "" {
+		courtChain = &archive.Chain{RPC: *archiveRPC, PkgPath: *archiveRealm}
+	}
+	var facts chat.CourtFacts
+	if courtChain != nil {
+		facts = courtChain
+	}
 	helper := chat.NewBot(store, srv, botKey, chat.BotOptions{
+		Facts:   facts,
 		Enabled: *bot, Model: *botModel,
 		Site: *botSite, Repo: *botRepo, ChainDocs: *botDocs,
 		MinGap: *botGap, InPerMTok: *botIn, OutPerMTok: *botOut,
@@ -349,8 +369,8 @@ func main() {
 	}
 	// Same flag the chat uses: the operator numbers are one decision, not two.
 	asrv := archive.NewServer(astore, lg, archiveClient).WithHealthDetail(*healthDetail)
-	if *archiveRPC != "" {
-		asrv = asrv.WithChain(&archive.Chain{RPC: *archiveRPC, PkgPath: *archiveRealm})
+	if courtChain != nil {
+		asrv = asrv.WithChain(courtChain)
 	} else {
 		// Said out loud, because the failure is silent otherwise: with no chain
 		// to ask, nothing is ever promoted and every upload expires within the
