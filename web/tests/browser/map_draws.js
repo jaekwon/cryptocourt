@@ -491,16 +491,22 @@ const {PAGE, demoPage} = require('./harness');
       groups: gs.length, nodes,
       inNodeAnchor: !!a,
       // the corner it names must be the node's own bottom-right
-      atCorner: !!(r && tr
-        && Math.abs(+tr[1] - (+r.getAttribute("x") + +r.getAttribute("width"))) < 0.6
-        && Math.abs(+tr[2] - (+r.getAttribute("y") + +r.getAttribute("height"))) < 0.6),
+      /* BOTTOM-CENTRE, and it was bottom-right until a reader said the cluster
+         belonged "center bottom dangling out the claim node, because there's
+         the most space there". Centred horizontally on the node's own frame,
+         and at or below its full height — the node paints a thumbnail row and a
+         vote row under the frame, so anchoring at the frame alone started the
+         fan inside the node. */
+      atBottomCentre: !!(r && tr
+        && Math.abs(+tr[1] - (+r.getAttribute("x") + +r.getAttribute("width") / 2)) < 0.6
+        && +tr[2] >= +r.getAttribute("y") + +r.getAttribute("height") - 0.6),
       emptyInDemo: gs.every(x => x.children.length === 0),
     };
   });
   ok("every claim node carries a comment-cluster cell", cmt.groups === cmt.nodes && cmt.groups > 0,
      JSON.stringify(cmt));
-  ok("...inside the node's own anchor, at its bottom-right corner",
-     cmt.inNodeAnchor === true && cmt.atCorner === true, JSON.stringify(cmt));
+  ok("...inside the node's own anchor, centred under its bottom edge",
+     cmt.inNodeAnchor === true && cmt.atBottomCentre === true, JSON.stringify(cmt));
   /* THE SAMPLE DRAWS THEM NOW, and this assertion used to say the opposite:
      "empty in demo, where there is no chain to count comments". That was true
      of BoardSize and never true of the fixture — DEMO.claims carries each
@@ -534,6 +540,7 @@ const {PAGE, demoPage} = require('./harness');
      JSON.stringify(cmtSaid));
   ok("...and the cell no longer calls itself decoration, now that it says something",
      cmtSaid.every(c => c.hidden === null), JSON.stringify(cmtSaid));
+
 
   /* AND THE CLUSTER SURVIVES THE ZOOM-OUT, asked of the CASCADE rather than of
      the stylesheet — a source test can read the rule, but only a browser can say
@@ -579,6 +586,130 @@ const {PAGE, demoPage} = require('./harness');
   ok("...and brighter out there than up close, since it shrinks with the zoom",
      !far.err && far.far.dotOp > far.near.dotOp && far.far.edgeOp > far.near.edgeOp,
      JSON.stringify(far));
+
+  /* THE CARD SAYS IT TOO, which is the surface that was asked for and the one a
+     hover tooltip cannot serve — a title vanishes when the pointer moves, and
+     the card is where a reader looks after clicking. It reads the map's own
+     preload, so it costs no query: a card that fired its own read would spend
+     one on every click for a number the map already has. */
+  const card = await page.evaluate(async () => {
+    const g = [...document.querySelectorAll("g.mcmt")].filter(x => x.children.length)[0];
+    if(!g) return {err: "no filled cluster to click"};
+    const said = g.querySelector("title").textContent.trim();
+    /* CANCELABLE, or this navigates instead of selecting. The node is a real
+       <a href="#/c/slug/id">, and the map's handler selects by calling
+       preventDefault on the click. A MouseEvent without cancelable:true cannot
+       BE prevented, so the browser followed the href, replaced the map with the
+       claim page, and the card this asserts on no longer existed — the
+       assertion failed against a card that was correct all along. */
+    g.closest("a.mnode-a").dispatchEvent(
+      new MouseEvent("click", {bubbles: true, cancelable: true}));
+    await new Promise(z => setTimeout(z, 500));
+    /* #mapsel, an ID and not a class — mountMap holds it with
+       getElementById and the class names in the stylesheet are its children
+       (.mapsel-h, .mapsel-t). Selecting ".mapsel" found nothing and the card
+       assertion failed against a card that was in fact correct. */
+    const sel = document.getElementById("mapsel");
+    const link = sel && [...sel.querySelectorAll("a.tlink")]
+      .find(a => /comment/.test(a.textContent));
+    return {said, onCard: link ? link.textContent.replace(/\u2192|→/g, "").trim() : null,
+            href: link ? link.getAttribute("href") : null};
+  });
+  ok("the card repeats what the cluster said, word for word",
+     !card.err && card.onCard === card.said, JSON.stringify(card));
+  ok("...and it is a link to the board, where the talking actually is",
+     !card.err && /\/board$/.test(String(card.href)), JSON.stringify(card));
+
+  /* WHERE THE CLUSTER HANGS, and how big it is. Reported as "i can barely see
+     it", with the ask that it belong "center bottom dangling out the claim
+     node, because there's the most space there" — which measurement bore out:
+     nodes are 230x61 units and the clearance BELOW one is 58 at the tightest,
+     178 median, while the old fan hung off the bottom-RIGHT corner into the gap
+     beside the node.
+     MEASURED AGAINST WHAT THE NODE PAINTS, not against its anchor. The cluster
+     lives inside that anchor, so comparing the two is self-referential and
+     returns minus the cluster's own height whatever the truth is — which is
+     exactly the false reading that sent me looking for an overlap that was not
+     there. The comparison here is against every rect, text and image the node
+     draws. */
+  const fan = await page.evaluate(() => {
+    const svg = document.querySelector("svg.mapsvg");
+    const gs = [...document.querySelectorAll("g.mcmt")].filter(g => {
+      try { return g.getBBox().width > 0; } catch (e) { return false; }
+    });
+    if (!gs.length) return {none: true};
+    return gs.map(g => {
+      const id = String(g.dataset.cmt || "").split("-").pop();
+      const dot = svg.querySelector(`[data-owner="c${id}"]`);
+      const a = dot ? dot.closest("a") : null;
+      if (!a) return {id, noOwner: true};
+      const painted = [...a.querySelectorAll("rect,text,image")]
+        .map(e => e.getBoundingClientRect()).filter(R => R.width > 0 && R.height > 0);
+      const bottom = Math.max(...painted.map(R => R.bottom));
+      const left = Math.min(...painted.map(R => R.left));
+      const right = Math.max(...painted.map(R => R.right));
+      const C = g.getBoundingClientRect();
+      const others = [...document.querySelectorAll("a.mnode-a")].filter(x => x !== a)
+        .map(x => x.getBoundingClientRect());
+      return {id,
+        clears: +(C.top - bottom).toFixed(1),
+        offCentre: +Math.abs((C.left + C.width / 2) - ((left + right) / 2)).toFixed(1),
+        w: +C.width.toFixed(1), h: +C.height.toFixed(1),
+        insideWidth: C.left >= left - 1 && C.right <= right + 1,
+        overlaps: others.filter(R => !(C.right <= R.left || C.left >= R.right ||
+                                       C.bottom <= R.top || C.top >= R.bottom)).length};
+    });
+  });
+  ok("the map draws at least one comment cluster to measure", !fan.none,
+     JSON.stringify(fan).slice(0, 120));
+  if (!fan.none) {
+    const bad = fan.filter(f => f.noOwner);
+    ok("every cluster is matched to the claim node it belongs to", bad.length === 0,
+       JSON.stringify(bad).slice(0, 160));
+    const good = fan.filter(f => !f.noOwner);
+    ok("every cluster hangs BELOW everything its node paints",
+       good.every(f => f.clears >= 0),
+       JSON.stringify(good.map(f => [f.id, f.clears])));
+    ok("...centred under it, not off a corner",
+       good.every(f => f.offCentre <= 1),
+       JSON.stringify(good.map(f => [f.id, f.offCentre])));
+    ok("...within the node's own width, so it reads as that claim's",
+       good.every(f => f.insideWidth),
+       JSON.stringify(good.map(f => [f.id, f.insideWidth])));
+    ok("...and the cluster spans at least 16px",
+       good.every(f => f.w >= 16 && f.h >= 12),
+       JSON.stringify(good.map(f => [f.id, f.w, f.h])));
+    // The reason the old fan avoided this quadrant. Still checked.
+    ok("...without landing on a neighbouring node",
+       good.every(f => f.overlaps === 0),
+       JSON.stringify(good.map(f => [f.id, f.overlaps])));
+  }
+
+  /* THE DOT ITSELF, which is what "i can barely see it" was about. The arm
+     above measures the cluster's BOX, and that box is set by the sweep and the
+     reach — so shrinking every dot back to the old radius left it entirely
+     unmoved and passing. Measured, not assumed: reverting r to 2.1/2.2/2.6
+     fired NOTHING until this arm existed. The radius is read off the drawn
+     circle, so it is the ink a reader sees rather than a constant in the
+     source. 3.0 sits above the old ceiling of 2.6 and below the shipped floor
+     of 3.4. */
+  const dotR = await page.evaluate(() => {
+    const ds = [...document.querySelectorAll("circle.mcmt-d")];
+    if (!ds.length) return {none: true};
+    const rs = ds.map(d => parseFloat(d.getAttribute("r")) || 0);
+    return {min: Math.min(...rs), max: Math.max(...rs), n: rs.length};
+  });
+  ok("a comment dot is drawn big enough to see", !dotR.none && dotR.min >= 3.0,
+     JSON.stringify(dotR));
+  ok("...and the fill is not near-invisible either",
+     await page.evaluate(() => {
+       const d = document.querySelector("circle.mcmt-d");
+       return d ? parseFloat(getComputedStyle(d).opacity) >= 0.55 : false;
+     }),
+     await page.evaluate(() => {
+       const d = document.querySelector("circle.mcmt-d");
+       return d ? getComputedStyle(d).opacity : "<no dot>";
+     }));
 
   ok("no page errors on the map route", errs.length === 0, errs.slice(0, 2).join(" | "));
 

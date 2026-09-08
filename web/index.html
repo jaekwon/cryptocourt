@@ -8358,6 +8358,12 @@ async function fillCommentClusters(s2, slug, seq0){
      browser shows. */
   const paint = (id, rows, threads) => {
     if(!(rows > 0)) return;
+    /* THE CARD READS WHAT WAS PAINTED, so the fallback has to leave its answer
+       here too. Without this line the card showed nothing at all on a realm
+       without BoardCounts: the clusters were drawn from the per-node reads, and
+       BCOUNTS — the only thing mapSelComments looks at — stayed empty. The
+       packed path has already filled it; writing it again is the same value. */
+    BCOUNTS.set(bcountsKey(slug, id), {rows, threads});
     const words = commentCountLabel(rows, threads);
     document.querySelectorAll(`[data-cmt="${slug}-${id}"]`).forEach(g=>{
       g.innerHTML = `<title>${esc(words)}</title>` + commentClusterSvg(rows);

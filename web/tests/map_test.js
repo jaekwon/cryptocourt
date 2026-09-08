@@ -1502,14 +1502,24 @@ ok("controls present", ["mt-titles","mt-ids","mz-in","mz-out","mz-fit","mz-slide
   ok("one comment is one dot and no edge",
      dots(commentClusterSvg(1)) === 1 && !/<path/.test(commentClusterSvg(1)));
 
-  /* THE QUADRANT INVARIANT, at every count. Strictly positive: a dot at x=0 sits
-     on the node's own right edge, which is the line the frame is drawn on. */
+  /* BELOW THE NODE, AT EVERY COUNT — a half-plane now and not a quadrant. The
+     fan hangs from bottom-CENTRE, so x is symmetric about zero and a negative x
+     is correct; what must never happen is a dot at or above y=0, which is the
+     line the node's own bottom edge is drawn on. */
   let outside = true;
   for(let n = 1; n <= 60; n++){
-    const g = commentClusterSvg(n), X = cx(g), Y = cy(g);
-    if(!X.every(v=>v>0) || !Y.every(v=>v>0)) { outside = false; break; }
+    const g = commentClusterSvg(n), Y = cy(g);
+    if(!Y.every(v=>v>0)) { outside = false; break; }
   }
-  ok("every dot at every count is right of and below the node's corner", outside);
+  ok("every dot at every count is below the node's bottom edge", outside);
+  /* AND THE SWEEP IS SYMMETRIC, which is what "centred" means: an asymmetric
+     fan under a centred anchor drifts to one side and reads as pointing at the
+     neighbour on that side. */
+  {
+    const g = commentClusterSvg(9), X = cx(g);
+    ok("...and the fan is symmetric about straight down",
+       Math.abs(Math.max(...X) + Math.min(...X)) < 0.2);
+  }
 
   ok("the dot count is capped, so a busy claim is not a smudge",
      dots(commentClusterSvg(9)) === 9 && dots(commentClusterSvg(40)) === 9
@@ -1531,11 +1541,32 @@ ok("controls present", ["mt-titles","mt-ids","mz-in","mz-out","mz-fit","mz-slide
   const extent = svg => { const X = cx(svg), Y = cy(svg);
     const rr = [...svg.matchAll(/ r="([\d.]+)"/g)].map(m => +m[1]);
     const pad = Math.max(...rr);
-    return {x: Math.max(...X) + pad, y: Math.max(...Y) + pad}; };
-  ok("...but the fan still grows past the cap, and stays inside the node's gap",
-     reach(commentClusterSvg(25)) > reach(commentClusterSvg(12)) + 1
-     && extent(commentClusterSvg(4000)).x < MAPK.sep
-     && extent(commentClusterSvg(4000)).y < MAPK.sep);
+    return {x: Math.max(...X) + pad, y: Math.max(...Y) + pad,
+            minX: Math.min(...X) - pad}; };
+  /* THE BOUNDS MOVED WITH THE CLUSTER, and both directions now mean different
+     things. The fan used to hang off the bottom-RIGHT corner, where the only
+     thing between it and the next box was MAPK.sep, so sep bounded both axes.
+     It hangs straight DOWN from bottom-centre now — asked for, because that is
+     where the room is — and the two axes are no longer the same question.
+     SIDEWAYS it must stay under its OWN claim: a fan wider than the node it
+     belongs to starts reading as a comment on the box beside it. Half the node
+     width is the honest limit and the measured spread is +/-20 against 115.
+     DOWNWARD it is bounded by the clearance below a node, and this is the part
+     worth saying plainly: at 32.2 units the fan now reaches PAST MAPK.sep (22),
+     which is the clearance the layout GUARANTEES in any direction. It fits
+     because the clearance below a claim measures 58 at the tightest and 178 at
+     the median on the maps this suite builds — actual spacing, not guaranteed
+     spacing. So this is pinned to the measurement, and if the layout ever packs
+     nodes tighter vertically the number below is what fails first. */
+  const NW = MAPK.node.titles.w;
+  const CMT_BELOW_MEASURED = 58;   // tightest vertical clearance under a claim
+  ok("...but the fan still grows past the cap",
+     reach(commentClusterSvg(25)) > reach(commentClusterSvg(12)) + 1);
+  ok("...and stays narrower than the claim it hangs under",
+     extent(commentClusterSvg(4000)).x < NW / 2
+     && -extent(commentClusterSvg(4000)).minX < NW / 2);
+  ok("...and shallower than the room measured below one",
+     extent(commentClusterSvg(4000)).y < CMT_BELOW_MEASURED);
 
   /* AND THE FLOOR, WHICH IS THE BUG THAT SHIPPED. Seven comments drew a cluster
      9.3 units wide beside a 230-unit node — 4.0% — and at the map's measured
@@ -1571,9 +1602,17 @@ ok("controls present", ["mt-titles","mt-ids","mz-in","mz-out","mz-fit","mz-slide
      zero; prose about a rule is indented. */
   ok("a cluster is not hidden when the map zooms out",
      !/^\.mapsvg\.far[^{]*\.mcmt\b[^{]*\{[^}]*display:none/m.test(src));
-  ok("...and is drawn brighter there, since the dots shrink with the zoom",
-     /\.mapsvg\.far \.mcmt-d\{opacity:\.(\d+)\}/.test(src)
-     && +RegExp.$1 > 42);   // the base .mcmt-d opacity, in the same hundredths
+  /* BOTH OPACITIES READ FROM THE FILE AND COMPARED AS NUMBERS. This captured
+     the digits after the dot and compared them to a hardcoded 42, so when the
+     rules became .62 and .8 it read "8 > 42" and failed a stylesheet that was
+     correct — .8 is eight tenths, not eight hundredths. Nothing here should
+     know what either value is; the invariant is only that far is brighter. */
+  {
+    const baseOp = /^\.mcmt-d\{[^}]*opacity:(\.?\d*\.?\d+)\}/m.exec(src);
+    const farOp  = /^\.mapsvg\.far \.mcmt-d\{opacity:(\.?\d*\.?\d+)\}/m.exec(src);
+    ok("...and is drawn brighter there, since the dots shrink with the zoom",
+       !!baseOp && !!farOp && Number(farOp[1]) > Number(baseOp[1]));
+  }
 
   /* NO CROSSING EDGES. A chain through spiral points crossed itself constantly
      and read as a scribble. Checked as geometry rather than trusted to the
@@ -1616,6 +1655,16 @@ ok("controls present", ["mt-titles","mt-ids","mz-in","mz-out","mz-fit","mz-slide
        /boardCountsPreload\(s2, slug, ids\)/.test(fn)
        && /inChunks\(missed,/.test(fn)
        && !/inChunks\(ids,/.test(fn));
+    /* THE FALLBACK MUST FEED THE CARD TOO, and this is asked of the SOURCE
+       because no browser here can reach it. mapSelComments reads BCOUNTS and
+       nothing else, so on a realm without BoardCounts — which is every realm
+       until the next seed — the clusters would be drawn from the per-node reads
+       while the card stayed blank. The demo cannot show it: the sample answers
+       from its fixture, which is the packed path, so BCOUNTS is always already
+       full there and deleting this line fails nothing in a browser. MEASURED,
+       by deleting it. Said out loud rather than left as a passing suite. */
+    ok("...and the per-node fallback still leaves its answer where the card looks",
+       /BCOUNTS\.set\(bcountsKey\(slug, id\), \{rows, threads\}\)/.test(fn));
     ok("...and it takes no claim list, so the two cannot disagree",
        /async function fillCommentClusters\(s2, slug, seq0\)/.test(fn));
     // A fill that outlives its paint must not write into the next one.
