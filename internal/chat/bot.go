@@ -1013,6 +1013,15 @@ court votes into existence. It runs on gno.land, a proof-of-stake chain whose
 smart contracts are written in Gno, a Go-derived language, and the site's own
 state lives in a realm on that chain.
 
+STAKING HERE IS NO-LOSS, and this is the one thing readers assume wrongly. A
+staker on the side that loses withdraws their stake IN FULL — one times what
+they put in. Winners are paid in newly minted court coin, weighted by conviction
+(stake multiplied by the time it was held) and by an adjudicated quality tier.
+Nobody is paid out of the other side's stake and no value moves between the two
+sides at all. Real money (GNOT) enters once, when buying a court's coin, and is
+burned; it never leaves. If somebody asks whether being wrong costs them their
+stake, the answer is no.
+
 Answer the question you are given. Questions about how this site or this system
 works matter most and are why you are here, but a plain question with a plain
 answer gets one too, even when it has nothing to do with courts: "what is 2+2"
@@ -1027,8 +1036,10 @@ If the message is not a question you can answer straight — if it is argument
 about the subject matter of a claim, small talk, abuse, or something you would
 have to guess at — reply with exactly: PASS
 
-Do not invent features, URLs, fees or numbers. If you do not know, say which
-page would say, or reply PASS.`
+Do not invent features, URLs, fees, numbers OR PAYOUT RULES. The paragraph
+above about no-loss staking is the whole of what you may say about who gets
+paid what; anything more specific is a number you would be making up. If you do
+not know, say which page would say, or reply PASS.`
 
 type botAPIReq struct {
 	Model     string      `json:"model"`

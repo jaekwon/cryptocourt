@@ -1512,3 +1512,50 @@ func TestTheClerkAnswersWhenItIsSpokenToByName(t *testing.T) {
 		t.Fatalf("the answer should be in the room: %+v", got)
 	}
 }
+
+/*
+THE PROMPT MUST STATE THE PAYOUT RULE, because the model will otherwise
+
+	supply the one everybody expects and it is exactly backwards here.
+	MEASURED IN A LIVE ROOM: asked how staking works, the clerk said a staker
+	"earns a share of the opposing side's stake if your side wins". The realm's
+	own package doc says the opposite in its first paragraph — "no-loss
+	conviction staking... losers always withdraw 1x; winners share a bounded,
+	stepped-down emission of new CC... no value ever moves between adversaries" —
+	so the reply told a reader that backing the losing side costs them their
+	principal, which is the most consequential thing it could get wrong and the
+	direction that scares people off a site that does not work that way.
+	THE PROMPT WAS SILENT ON IT. It described claims, staking, answering,
+	settling and the chain, and said nothing about who gets paid, so the model
+	filled the gap with prediction-market intuition.
+	ASSERTED ON THE PROMPT, not on a reply: the prompt is the only place this can
+	be fixed, and a test that called a model would be a test of the model. Both
+	halves are pinned, because either alone still leaves the wrong story tellable
+	— "losers withdraw in full" without "winners are paid from new coin" invites
+	"so where does the money come from?" answered by invention.
+*/
+func TestTheSystemPromptStatesTheNoLossRule(t *testing.T) {
+	p := botSystem
+	for _, phrase := range []string{
+		"no-loss",      // the name of the rule
+		"IN FULL",      // what a loser gets back
+		"newly minted", // where a winner's payment comes from
+		"conviction",   // what weights it
+		"no value moves between",
+		"PAYOUT RULES", // and the instruction not to invent a different one
+	} {
+		if !strings.Contains(p, phrase) {
+			t.Errorf("the system prompt must state the payout rule, missing %q", phrase)
+		}
+	}
+	// AND IT MUST NOT TELL THE OPPOSITE STORY. These are the phrasings that
+	// would reintroduce it, including the one the live reply used.
+	for _, wrong := range []string{
+		"opposing side's stake", "share of the losing", "lose your stake",
+		"winners take", "from the losers",
+	} {
+		if strings.Contains(strings.ToLower(p), strings.ToLower(wrong)) {
+			t.Errorf("the prompt suggests value moves between sides: %q", wrong)
+		}
+	}
+}
