@@ -578,11 +578,24 @@ func scaleBps(base, bps int64) int64 {
 //     REASON the base is what it is outlives the mechanism that forced it, but
 //     nothing here is a function you can still go and read.)
 //
-// So the base is what the act DESTROYED, which is also what the bounty is
+// So the base was what the act DESTROYED, which is also what the bounty was
 // capped against.
-func creditFlagSlash(c *Court, who address, burned int64) {
-	creditStanding(c, who, scaleBps(burned, creditRatesFor(c).flag), standingCatFlag)
-}
+//
+// THE FUNCTION IS GONE, and with it the only production path that ever paid a
+// flag credit. Its single caller was settleSlash, which went with the quality
+// lane; verified before removing — `creditFlagSlash` appeared nowhere in the
+// realm but its own declaration.
+//
+// TWO THINGS OUTLIVE IT AND ARE NOT TIDY. standingCatFlag stays, because a
+// standing record's per-category counters are part of StandingOf's exported
+// string and dropping one changes a shape readers parse. And the `flag` RATE
+// stays settable through SetCreditRatesDefault and SetCourtCreditRates, is
+// reported by CreditRates and AdminParams, and is still constrained by
+// mustCreditRates below — so an administrator can be REFUSED for setting
+// authorship above a rate that now credits nobody. Removing it means changing
+// two exported signatures and a packed output shape, which is an owner's call
+// rather than a cleanup; it is filed, and until then the parameters page says
+// the rate is inert instead of implying it pays.
 
 // creditDisputeResolved pays whichever party a DECIDED round vindicated.
 //

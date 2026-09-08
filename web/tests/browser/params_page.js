@@ -202,6 +202,18 @@ const PACKED = [
      /unadjudicated 5555/.test(cell("Standing rates")),
      cell("Standing rates"));
 
+  /* THE INERT RATE IS MARKED, on the value AND in the explanation. Nothing has
+     credited the flag rate since the quality lane went, yet it is still settable
+     and still bounds what authorship may be set to — so a page listing it among
+     "the credit each act earns" tells an administrator a knob works when it does
+     not. Both halves are pinned: the marker beside the number, and the sentence
+     that says what to do about it, because "(inert)" on its own is a puzzle. */
+  ok("the flag rate is marked inert beside its number",
+     /flag 1111 \(inert\)/.test(cell("Standing rates")), cell("Standing rates"));
+  const ratesWhat = (live.cells.find(c => c.label === "Standing rates") || {}).what || "";
+  ok("...and the row explains that nothing credits it",
+     /no path credits it/.test(ratesWhat), ratesWhat.slice(0, 200));
+
   // THE DOCUMENTED PARSE RULE. The fixture's domain contains a colon; split on
   // every colon and this arrives truncated to "kourt.example".
   ok("a value containing a colon survives the parse",

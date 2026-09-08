@@ -152,11 +152,19 @@ func renderAdminParams() string {
 		n(l.postsT3()) + " posts | The default rungs a court inherits: the share " +
 		"earned at each tier and the post counts that reach them. | " +
 		"`SetLadderDefault` |\n")
-	b.WriteString("| Standing rates | flag " + n(r.flag) + ", dispute " +
+	/* THE FLAG RATE IS INERT AND THE PAGE SAYS SO. Every other rate here is
+	   paid by a live path; flag's was creditFlagSlash, which went with the
+	   quality lane, so nothing in the realm credits it today. Listing it under
+	   "the credit each act earns" without that word would tell an administrator
+	   a knob works when it does not — and it is worse than a dead constant,
+	   because mustCreditRates still refuses authorship set above it. */
+	b.WriteString("| Standing rates | flag " + n(r.flag) + " (inert), dispute " +
 		n(r.dispute) + ", author " + n(r.authorHigh) + ", conviction " +
 		n(r.conviction) + ", unadjudicated " + n(r.unadjudicated) +
 		" bps | The default credit each act earns toward standing. Policing " +
-		"ranks above authorship, which ranks above staking. | " +
+		"ranks above authorship, which ranks above staking. The flag rate is " +
+		"still settable and still bounds what authorship may be set to, but no " +
+		"path credits it since the quality lane was removed. | " +
 		"`SetCreditRatesDefault` |\n")
 	dom := siteDomain
 	if dom == "" {

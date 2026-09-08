@@ -1,6 +1,7 @@
 package kourtv2
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 
@@ -101,6 +102,8 @@ func TestAdminParamsFollowsTheSetters(cur realm, t *testing.T) {
 	// global and nothing above would notice. 7.5 is the trimmed decimal
 	// ugnotAmt produces for 7_500_000.
 	page := renderAdminParams()
+	r := creditRatesDefault
+	n := func(v int64) string { return strconv.FormatInt(v, 10) }
 	if !strings.Contains(page, "7.5 GNOT") {
 		t.Fatalf("the page must show the live burn: %q", page[:min(len(page), 400)])
 	}
@@ -123,6 +126,19 @@ func TestAdminParamsFollowsTheSetters(cur realm, t *testing.T) {
 	// row in the settings table would say they could.
 	if strings.Contains(page, "| Burned to date") {
 		t.Fatal("the burn total is not a parameter and must not sit in the table")
+	}
+
+	/* THE INERT RATE IS MARKED INERT. Nothing has credited the flag rate since
+	   creditFlagSlash went with the quality lane, but it is still settable and
+	   mustCreditRates still refuses authorship set above it — so a page that
+	   lists it among "the credit each act earns" tells an administrator a knob
+	   works when it does not. Pinned because it is a claim about the realm that
+	   only a human reading the page would otherwise catch. */
+	if !strings.Contains(page, "flag "+n(r.flag)+" (inert)") {
+		t.Fatal("the standing-rates row must mark the flag rate inert")
+	}
+	if !strings.Contains(page, "no path credits it") {
+		t.Fatal("...and say why, since 'inert' alone does not tell an admin what to do")
 	}
 
 	// Each setting names the verb that changes it — the question after "what is

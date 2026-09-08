@@ -18453,8 +18453,13 @@ const PARAM_ROWS = [
   ["ladder", "Posting ladder", "ladder",
    "The default rungs a court inherits: the share earned at each tier, and the post counts that reach them.",
    "SetLadderDefault"],
+  /* The flag rate is marked inert deliberately — nothing has credited it since
+     the quality lane went, but it is still settable AND still bounds what
+     authorship may be set to, so an administrator needs to know it is both
+     live-as-a-constraint and dead-as-a-payment. The realm's own page carries
+     the same wording. */
   ["rates", "Standing rates", "rates",
-   "The default credit each act earns toward standing. Policing ranks above authorship, which ranks above staking.",
+   "The default credit each act earns toward standing. Policing ranks above authorship, which ranks above staking. The flag rate is inert — still settable, and it still bounds authorship, but no path credits it since the quality lane was removed.",
    "SetCreditRatesDefault"],
   ["domain", "Site domain", "text",
    "The website this realm belongs to. Also allow-lists that domain for images.",
@@ -18483,7 +18488,7 @@ function paramValueHtml(kind, p){
   if(kind === "raw")    return safeInline(p.purgeM || "?");
   if(kind === "ladder") return `${n("t1")}/${n("t2")}/${n("t3")} bps at `
                              + `${n("entry")}/${n("l2")}/${n("l3")} posts`;
-  if(kind === "rates")  return `flag ${n("flag")} · dispute ${n("dispute")} · `
+  if(kind === "rates")  return `flag ${n("flag")} (inert) · dispute ${n("dispute")} · `
                              + `author ${n("authorHigh")} · conviction ${n("conviction")} · `
                              + `unadjudicated ${n("unadjudicated")} bps`;
   if(kind === "text")   return p.domain? safeInline(p.domain) : `<span class="dim">not set</span>`;
