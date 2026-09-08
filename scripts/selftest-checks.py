@@ -194,6 +194,8 @@ WEBPAGE = "web/index.html"
 WEBCONST = "scripts/check-web-constants.py"
 MARKFONT = "scripts/check-mark-font.py"
 TDZ = "scripts/check-tdz.py"
+SEEDASSETS = "scripts/check-seed-assets.py"
+SEEDPY = "scenarios/covid_demo.py"
 MEDIAHOSTS = "scripts/check-media-hosts.py"
 MEDIAGNO = "realm/r/kourtv2/media.gno"
 BLOCKTIME = "scripts/check-block-time.py"
@@ -1549,6 +1551,16 @@ print("\ncheck-mark-font")
 # cannot test.
 # PLANTED AS THE FIRST OF THOSE TWO, verbatim: an array literal reading SET_MARK,
 # which is declared ten thousand lines further down.
+# A SEED MEDIA LINE IS AN ADDRESS. Change the bytes and the line still files the
+# old digest: the archive has no blob there, the mirror serves something whose
+# hash does not match, and the filing SUCCEEDS — nothing on the chain is wrong,
+# the address simply describes bytes that no longer exist. The picture is broken
+# for every reader and every other check is green.
+control("a seed media line whose digest is not the committed file's", SEEDPY,
+        "|756a9d89538b94c4368a33c1bf77d554114867d9135da9742df7b6e17c162ddc",
+        "|000a9d89538b94c4368a33c1bf77d554114867d9135da9742df7b6e17c162ddc",
+        "do not describe the committed bytes",
+        argv=["python3", SEEDASSETS])
 control("a top-level const built from a name declared below it", WEBPAGE,
         "const reQuote = s =>",
         "const TDZ_ARM = [SET_MARK];\nconst reQuote = s =>",

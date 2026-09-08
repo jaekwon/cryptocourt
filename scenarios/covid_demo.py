@@ -904,6 +904,32 @@ for _path in SET_PATHS:
                [SLUG, str(FOLDER_ID[_path]), str(FOLDER_ID[_path[:-1]])])
 FAUCI = ("Fauci",)
 
+# THE FAUCI SET'S PICTURE, FILED BY THE SEED. It was set by hand through the
+# composer once and vanished with the next chain reset — the bytes lived only in
+# the archive's blob store, and the archive serves a blob only while the chain
+# still references it. Reported as "fauci image is gone, in the map"; the answer
+# is that a picture the demo is supposed to have belongs in the thing that builds
+# the demo.
+#
+# THE MIRROR IS NOT DECORATION. A media item on chain must name a host on the
+# realm's allowlist (media.gno, defaultMediaHostsExact / …Suffixes) — a digest
+# alone is not a location, and the realm refuses one with "a media item needs
+# somewhere to find it". .githubusercontent.com is on that list and this
+# repository is public, so the file committed at scenarios/assets/fauci.jpg is
+# its own mirror and cannot go missing with a chain.
+#
+# THE DIGEST IS THE ADDRESS. Change the bytes and this line must change with
+# them, or the realm stores an address that describes something else — which is
+# why check-seed-assets compares the two rather than trusting this comment.
+FAUCI_IMG = (
+    "img"
+    "|756a9d89538b94c4368a33c1bf77d554114867d9135da9742df7b6e17c162ddc"
+    "|image/jpeg|960|1344|184593"
+    "|Anthony S. Fauci, NIAID director (NIAID, CC BY 2.0)"
+    "|https://raw.githubusercontent.com/jaekwon/cryptocourt/main/scenarios/assets/fauci.jpg"
+)
+s.call(DEPLOYER, "SetFolderImage", [SLUG, str(FOLDER_ID[FAUCI]), FAUCI_IMG])
+
 def unit(n):
     """Whole coin, in the realm's smallest unit."""
     return n * 1_000_000
@@ -1483,6 +1509,26 @@ def tree():
         node["claims"].append(ids[c["key"]])
     return roots
 
+
+# EVERYBODY CLAIMS THEIR META FRANCHISE, at the end, once every burn has landed.
+#
+# WHY THIS IS IN THE SEED AT ALL. Every Buy on any court accrues the GNOT burned
+# to the buyer as an entitlement to the META court's coin, one for one — and
+# nothing is minted until the holder asks. A seeded chain where nobody ever asks
+# shows a meta court with a supply of zero beside a covid court that has burned
+# thirteen thousand GNOT, which reads as the feature being broken. It was
+# reported exactly that way, twice.
+#
+# CLAIMING PUTS THE TWO SIDE BY SIDE. Both courts are on the same curve, so the
+# same burn mints the same coin: measured on kourt.xyz after every holder
+# claimed, covid stood at 13,054 GNOT / 5,103 coin and meta at 13,054 / 5,110.
+# That is the picture the design is actually making, and a demo that cannot show
+# it is arguing against itself.
+#
+# EVERY ACTOR, not a chosen few: a partial sweep leaves an unclaimed remainder
+# and the reader is back to wondering which number is wrong.
+for _who, _funds, _ in ACTORS:
+    s.call(accounts[_who], "ClaimMetaFranchise", [])
 
 relations = []
 for a, b, kind, stance in REL:
