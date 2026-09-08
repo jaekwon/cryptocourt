@@ -30,7 +30,25 @@ const PAGE = 'file://' + path.join(__dirname, '..', '..', 'index.html');
   });
   await page.setViewport({width: 1280, height: 1100});
   await page.goto(PAGE + '#/c/orem', {waitUntil: 'networkidle0'});
-  await new Promise(r => setTimeout(r, 900));
+  /* WAIT FOR THE PAGE, NOT FOR A DURATION. This was a flat 900ms and it made
+     this file fail roughly one run in three — measured: three back-to-back runs
+     on an unchanged tree gave pass, FAIL, pass, always on the first arm, always
+     with every field null or zero. That is not a folder problem, it is the
+     snapshot being taken before render() had written anything.
+     A flake in this file is expensive out of proportion to itself: `make
+     deploy` gates on the browser suite, so a third of deploys failed for no
+     reason — and that trains whoever is deploying to re-run until green, which
+     is exactly how a REAL failure gets waved through. It nearly did here.
+     networkidle0 above is not enough on its own: the overlay renders from
+     localStorage in demo mode, so there is no request whose completion marks
+     the page as ready. The condition is the readiness signal. */
+  await page.waitForFunction(
+    () => document.querySelectorAll(".foldsel").length >= 2 &&
+          document.querySelectorAll(".docket a.crow.claimrow").length > 0,
+    {timeout: 20000},
+  ).catch(() => { throw new Error(
+    "the court page never rendered its folders and claims within 20s — " +
+    "that is a real failure, not the old timing flake"); });
 
   const snap = () => page.evaluate(() => {
     const shown = [...document.querySelectorAll(".docket a.crow.claimrow")]
@@ -217,7 +235,12 @@ const PAGE = 'file://' + path.join(__dirname, '..', '..', 'index.html');
      Dedupe had to leave that standing, or the fix would have deleted the only
      rows that were ever worth showing. */
   await page.goto(PAGE + '#/c/annex', {waitUntil: 'networkidle0'});
-  await new Promise(r => setTimeout(r, 800));
+  // Same substitution, same reason: this second navigation carried its own flat
+  // 800ms and its own chance of measuring an unrendered page.
+  await page.waitForFunction(
+    () => document.querySelectorAll(".docket a.crow.claimrow").length > 0,
+    {timeout: 20000},
+  ).catch(() => { throw new Error("the annex court never rendered its claims within 20s"); });
   const annex = await page.evaluate(async () => {
     const idsOf = e => [...e].map(r => (r.getAttribute("href") || "").split("/").pop());
     const all = idsOf(document.querySelectorAll("#qscope .crow.claimrow"));
