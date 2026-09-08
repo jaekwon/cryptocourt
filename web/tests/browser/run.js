@@ -95,6 +95,8 @@ const ALL = ["embed_layout.js", "tagrow_layout.js", "route_crawl.js",
              "diag_page.js",
              // the chat opens at the newest message, which it sometimes did not
              "chat_scroll.js",
+             // how many are in the room, above the box you type into
+             "chat_here.js",
              "court_burn_pay.js",
              "vote_commit.js",
              // the two marks, and the pupil that must not move between them

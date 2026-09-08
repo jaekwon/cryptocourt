@@ -967,6 +967,33 @@ function mkDoc() {
        && (MAP.match(/"\\u\{1[0-9A-F]{4}\}"/g) || []).length === 2);
   }
 
+  /* THE ROOM'S COUNT, AND THE ONE BRANCH A BROWSER CANNOT REACH.
+     showHere prints the total the server sends above the composer. Its zero
+     guard is what keeps a lone reader from being told "0 here" while plainly
+     being in the room — and it is unreachable from the browser harness, because
+     showHere is a closure inside mountChat and the sample always supplies a
+     count. chat_here.js says so where it would otherwise have faked it; this is
+     the pin it points at.
+     ASSERTED ON THE SOURCE, deliberately and with its limits admitted: this
+     shows the guard is WRITTEN, not that it runs. That is weaker than a
+     behavioural check and it is what is available. */
+  {
+    const FN = PANELSRC.slice(PANELSRC.indexOf("function showHere("),
+                              PANELSRC.indexOf("function showHere(") + 500);
+    ok("the room's count hides itself rather than printing a zero",
+       /if \(!\(k > 0\)\) \{ *hereEl\.hidden = true; *return; *\}/.test(FN), FN.slice(0, 200));
+    /* AND IT PRINTS WHAT IT WAS GIVEN, with no arithmetic of its own. The total
+       already includes the site's own answerer, counted server-side; a page that
+       added or subtracted anything here would be a second opinion about how many
+       people are in a room it cannot see — and a place the answerer could be
+       inferred from. */
+    ok("...and does no arithmetic on the total",
+       !/[-+]\s*1\b/.test(FN.slice(0, FN.indexOf("}"))), FN.slice(0, 200));
+    ok("...and the label claims only presence, not identity",
+       /"1 here"/.test(FN) && / \+ " here"/.test(FN)
+       && !/(bot|helper|assistant|online|connected)/i.test(FN), FN.slice(0, 200));
+  }
+
   console.log(fail ? `\n${fail} FAILURES` : "\nALL PASS");
   process.exit(fail ? 1 : 0);
 })();
