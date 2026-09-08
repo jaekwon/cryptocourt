@@ -923,6 +923,76 @@ function mkDoc() {
     }
     stop2();
 
+    /* A REFUSAL MUST OUTLIVE THE NEXT POLL. Reported as: "when i can't delete
+       anymore, a message flashes about why i can't delete it but it disappears
+       before i can really read it." The poll ends every successful read with a
+       clear, so the sentence lived until the next one — nought to six seconds,
+       and a poll already in flight made it nought.
+       THE ARM IS A POLL AFTER THE REFUSAL, which is the thing that used to wipe
+       it. Asserting the note merely appears would pass on the broken build: it
+       did appear, and that was the complaint. */
+    FETCHES = [];
+    FETCH = async (url, init) => (init && init.method === "POST")
+      ? {ok: true, json: async () => ({deleted: 0})}
+      : {ok: true, json: async () => ({messages: [row(9, "somebody else")],
+                                       you: {state: "ok"}, next: 9})};
+    // interval:5 so REAL polls land inside the sleeps below, which is the idiom
+    // the outage test above uses — the wipe under test happens in a poll, so a
+    // poll has to actually run.
+    const el3 = mkRoot();
+    const stop3 = mountChat(el3, {cfg: {mode: "live", chat: "http://x"},
+                                  court: "orem", chain: "dev", interval: 5});
+    await tickMicro(); await tickMicro();
+    el3.k[".chatinput"].value = "/delete";
+    el3.k[".chatform"].fire("submit");
+    await tickMicro(); await tickMicro(); await tickMicro();
+    const refused = el3.k[".chatnote"].textContent;
+    ok("the refusal is on screen", /nothing to take back/i.test(refused), refused);
+    await new Promise(r => setTimeout(r, 40));   // roughly eight polls
+    ok("...and the polls landing on top of it do not wipe it",
+       el3.k[".chatnote"].textContent === refused,
+       JSON.stringify(el3.k[".chatnote"].textContent));
+    // AND THE READER'S OWN NEXT SEND CLEARS IT, so a hold cannot strand a stale
+    // sentence: note("") with no hold resets the floor.
+    FETCH = async (url, init) => (init && init.method === "POST")
+      ? {ok: true, json: async () => ({id: 10})}
+      : {ok: true, json: async () => ({messages: [row(10, "sent")],
+                                       you: {state: "ok"}, next: 10})};
+    el3.k[".chatinput"].value = "an ordinary line";
+    el3.k[".chatform"].fire("submit");
+    await tickMicro(); await tickMicro(); await tickMicro();
+    ok("...and the reader's next send clears it at once",
+       el3.k[".chatnote"].textContent === "",
+       JSON.stringify(el3.k[".chatnote"].textContent));
+    stop3();
+
+    /* AND "UNREACHABLE" IS NOT HELD, which is the other half of the same rule.
+       That note is about the SERVICE, not about anything the reader did, and it
+       must go the moment a read succeeds — a panel claiming to be unreachable
+       while painting fresh messages is worse than one that says nothing. Giving
+       every note a floor would have broken exactly this, so it is asserted
+       rather than assumed. */
+    let down = true;
+    FETCHES = [];
+    FETCH = async () => {
+      if (down) { throw new Error("connection refused"); }
+      return {ok: true, json: async () => ({messages: [row(11, "back up")],
+                                            you: {state: "ok"}, next: 11})};
+    };
+    const el4 = mkRoot();
+    const stop4 = mountChat(el4, {cfg: {mode: "live", chat: "http://x"},
+                                  court: "orem", chain: "dev", interval: 5});
+    await new Promise(r => setTimeout(r, 40));
+    ok("a failed read says the service is unreachable",
+       /unreachable/i.test(el4.k[".chatnote"].textContent),
+       JSON.stringify(el4.k[".chatnote"].textContent));
+    down = false;
+    await new Promise(r => setTimeout(r, 40));
+    ok("...and the next successful read clears that immediately",
+       el4.k[".chatnote"].textContent === "",
+       JSON.stringify(el4.k[".chatnote"].textContent));
+    stop4();
+
     // The plumbing under both, asserted directly: an ordinary message answers
     // {"id": N} and carries no `deleted` key at all, which is what lets the
     // handler tell the two shapes apart.

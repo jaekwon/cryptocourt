@@ -1032,7 +1032,33 @@ function mountChat(el, opts) {
     if (n > 0) serverSkew = n - Math.floor((o.now ? o.now() : Date.now()) / 1000);
   };
   const nowSec = () => Math.floor((o.now ? o.now() : Date.now()) / 1000) + serverSkew;
-  const note = t => { if (live()) noteEl.textContent = t || ""; };
+  /* A REFUSAL HAS TO OUTLIVE THE NEXT POLL. Reported as: "when i can't delete
+     anymore, a message flashes about why i can't delete it but it disappears
+     before i can really read it."
+     THE POLL WAS WIPING IT. Every successful read ends with note(""), which is
+     right for "Chat is unreachable right now." — that one must go the moment the
+     service answers again — and wrong for everything the reader themselves
+     caused. So a note that explains a refusal is given a floor in
+     MILLISECONDS, and the poll's clear respects it. The reader's own next send
+     still clears it immediately, because note("") with no hold resets the floor:
+     an explicit clear always wins, so this cannot leave a stale sentence on
+     screen.
+     TWELVE SECONDS, because the longest of these sentences is about a hundred
+     characters and a poll can land a hundred milliseconds after the refusal.
+     A HOLD IS NOT A TIMER: nothing is scheduled, and the note simply stops
+     being protected once the floor has passed — the poll after that clears it.
+     A setTimeout would have to be cancelled on unmount, remount and every
+     subsequent note, which is three ways to leak for no gain. */
+  const NOTEHOLD = 12000;
+  let noteFloor = 0;
+  const note = (t, holdMs) => {
+    if (!live()) return;
+    noteEl.textContent = t || "";
+    noteFloor = (t && holdMs) ? ((o.now ? o.now() : Date.now()) + holdMs) : 0;
+  };
+  const noteClear = () => {
+    if ((o.now ? o.now() : Date.now()) >= noteFloor) note("");
+  };
 
   /* WRITING THE LOG HAS TO PRESERVE THE READER'S SCROLL POSITION, or someone
      reading back through a thread gets yanked to the bottom every few seconds.
@@ -1222,7 +1248,8 @@ function mountChat(el, opts) {
       learnSkew(d);
       paint(d.messages, d.you);
       showHere(d.here);
-      note("");
+      // NOT note("") — a refusal the reader caused is held for NOTEHOLD; see note.
+      noteClear();
     } catch (e) {
       if (!live()) return;
       // The service being down must not blank a transcript already on screen, and
@@ -1252,7 +1279,7 @@ function mountChat(el, opts) {
     const typed = nameEl.value.trim();
     const m = typed || CHATDEFAULTNAME, b = bodyEl.value;
     const bad = chatValidate(m, b);
-    if (bad) { note(bad); return; }
+    if (bad) { note(bad, NOTEHOLD); return; }
     sendEl.disabled = true;
     // ...and neither is the prefilled default typed back at us: the button opens
     // the field already reading "anon", so a reader who opens it and changes
@@ -1302,7 +1329,8 @@ function mountChat(el, opts) {
       if (r.deleted !== undefined) {
         if (!r.deleted) {
           note("nothing to take back — /delete removes the room's newest "
-             + "message, and only when it is yours and not already withdrawn");
+             + "message, and only when it is yours and not already withdrawn",
+             NOTEHOLD);
           return;
         }
         first = true;
@@ -1311,7 +1339,7 @@ function mountChat(el, opts) {
       return;
     }
     // A refusal carries the reason, and ONLY the state is repainted — see paintState.
-    note(r.error);
+    note(r.error, NOTEHOLD);
     if (r.you) paintState(r.you);
   });
 
