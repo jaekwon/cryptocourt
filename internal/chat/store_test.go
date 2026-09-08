@@ -2536,3 +2536,108 @@ func TestPreviewExposesTooFewWordsToRebuildAPhrase(t *testing.T) {
 		t.Errorf("a truncated preview must say it was truncated, got %q", p)
 	}
 }
+
+// OPENING A ROOM SHOWS ITS NEWEST MESSAGES, NOT ITS OLDEST.
+//
+// THE DEFECT, EXACTLY. Recent's query was `id > since ORDER BY id LIMIT ?`, and
+// the panel opens every room with since=0 — it sends no cursor and re-reads the
+// whole window on each poll, deliberately, because that full re-read is what
+// makes a moderator's hide vanish from a screen already showing it. With since=0
+// that query returns the OLDEST `limit` rows. Under fifty messages the two are
+// the same set and everything looked correct; past fifty the transcript froze
+// forever. Messages were accepted, stored, and shown to nobody.
+//
+// Measured on the live covid room at ninety-odd messages: the panel's own
+// request came back with ids 11–62 while the newest message in the room was 103.
+// A post returned 200, the composer cleared, the long poll kept answering 200,
+// and nothing ever appeared. Reported three times as "the chat doesn't work",
+// and every layer checked out on its own, because every layer was fine.
+//
+// WHY NOTHING CAUGHT IT. Every existing fixture posts a handful of messages and
+// asks for fifty, where head and tail are the same rows. The bug needs MORE
+// messages than the limit to exist at all, and no test had ever crossed it.
+func TestOpeningARoomShowsTheNewestMessages(t *testing.T) {
+	s, _ := newStore(t)
+	ctx := context.Background()
+	// PAST THE LIMIT ON PURPOSE. This is the whole condition for the defect, and
+	// the reason a hundred existing fixtures never saw it.
+	const total, limit = 60, 20
+	for i := 1; i <= total; i++ {
+		if _, err := s.Post(ctx, PostInput{
+			Chain: "dev", Court: "orem", Moniker: "anon",
+			Body:   fmt.Sprintf("message number %d in the room", i),
+			IPHash: fmt.Sprintf("ip-%d", i), NetHash: "net",
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	got, err := s.Recent(ctx, "dev", "orem", 0, limit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != limit {
+		t.Fatalf("want %d rows, got %d", limit, len(got))
+	}
+	// THE LAST ROW IS THE LAST THING SAID. Without this the transcript can be
+	// full, current-looking and twenty messages behind.
+	if want := fmt.Sprintf("message number %d in the room", total); got[len(got)-1].Body != want {
+		t.Errorf("the newest message must be in the window\n got %q\nwant %q",
+			got[len(got)-1].Body, want)
+	}
+	// ...and the window is the TAIL of the room, not its head.
+	if want := fmt.Sprintf("message number %d in the room", total-limit+1); got[0].Body != want {
+		t.Errorf("the window should start at the tail\n got %q\nwant %q", got[0].Body, want)
+	}
+	// STILL ASCENDING, because every caller renders in order and the fix reads
+	// the tail by sorting DESC internally. A reversed transcript would satisfy
+	// both assertions above.
+	for i := 1; i < len(got); i++ {
+		if got[i].ID <= got[i-1].ID {
+			t.Fatalf("rows must stay in ascending id order: %d after %d", got[i].ID, got[i-1].ID)
+		}
+	}
+}
+
+// AND A CURSOR STILL WALKS FORWARD FROM WHERE IT WAS.
+//
+// The other half of the same query, and the half that must NOT change: a client
+// that has fallen behind receives the OLDEST of what it is missing, because that
+// is the only order in which a cursor can advance without skipping rows. A fix
+// that returned the tail to everybody would hand a lagging client the newest
+// rows, move its cursor to the end, and silently drop the gap.
+func TestACursorStillReceivesTheOldestItIsMissing(t *testing.T) {
+	s, _ := newStore(t)
+	ctx := context.Background()
+	const total, limit = 60, 20
+	for i := 1; i <= total; i++ {
+		if _, err := s.Post(ctx, PostInput{
+			Chain: "dev", Court: "orem", Moniker: "anon",
+			Body:   fmt.Sprintf("message number %d in the room", i),
+			IPHash: fmt.Sprintf("ip-%d", i), NetHash: "net",
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	all, err := s.Recent(ctx, "dev", "orem", 0, total)
+	if err != nil || len(all) != total {
+		t.Fatalf("setup: %d rows, %v", len(all), err)
+	}
+	// A cursor a long way back: everything after the tenth row is missing.
+	from := all[9].ID
+	got, err := s.Recent(ctx, "dev", "orem", from, limit)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != limit {
+		t.Fatalf("want %d rows, got %d", limit, len(got))
+	}
+	if got[0].ID != all[10].ID {
+		t.Errorf("a cursor must resume at the row after it: got id %d, want %d",
+			got[0].ID, all[10].ID)
+	}
+	if got[len(got)-1].ID != all[10+limit-1].ID {
+		t.Errorf("and walk forward from there: got id %d, want %d",
+			got[len(got)-1].ID, all[10+limit-1].ID)
+	}
+}

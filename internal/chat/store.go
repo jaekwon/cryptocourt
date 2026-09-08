@@ -880,10 +880,45 @@ func (s *Store) Recent(ctx context.Context, chain, court string, since int64, li
 	return out, nil
 }
 
+// recentFrom serves two different questions with one row shape.
+//
+// OPENING A ROOM ASKS FOR ITS TAIL. A CURSOR ASKS FOR WHAT FOLLOWS IT. Both
+// answer in ascending id order, because every caller renders them in order, and
+// that shared shape is what hid the difference for so long.
+//
+// THE BUG THIS FIXES MADE THE CHAT LOOK DEAD, and it is worth stating exactly.
+// `id > since ORDER BY id LIMIT 50` with since=0 is the OLDEST fifty rows, not
+// the newest. The panel opens every room that way — it sends no cursor and
+// re-reads the whole window each poll, deliberately, because that full re-read
+// is what makes a moderator's hide vanish from a screen already showing it. So
+// for a room's first fifty messages everything looked right, and from the
+// fifty-first onward the transcript froze: new messages were accepted, stored,
+// and never shown to anybody.
+//
+// Measured on the live covid room, which had ninety-odd messages: the panel's
+// own request returned ids 11–62 while the newest message was 103. A posted
+// message returned 200, the composer cleared, the poll kept answering 200, and
+// the message never appeared. Reported as "chat doesn't work" three times, and
+// every layer looked healthy when checked on its own — because every layer WAS.
+//
+// The cursor path is untouched. A client that has fallen behind still receives
+// the oldest of what it is missing and walks forward, which is the only order in
+// which a cursor can advance without skipping rows.
 func (s *Store) recentFrom(ctx context.Context, chain, court string, since int64, limit int) ([]Message, error) {
-	rows, err := s.r.QueryContext(ctx, `SELECT id, moniker, body, country, suffix, created_at
+	q := `SELECT id, moniker, body, country, suffix, created_at
 	  FROM messages WHERE chain=? AND court=? AND id > ? AND hidden=0
-	  ORDER BY id LIMIT ?`, chain, court, since, limit)
+	  ORDER BY id LIMIT ?`
+	if since == 0 {
+		// THE NEWEST `limit`, THEN TURNED BACK INTO ASCENDING ORDER. The inner
+		// DESC is what picks the tail; the outer ORDER BY is what lets every
+		// caller keep reading oldest-first, so nothing above this had to change.
+		q = `SELECT id, moniker, body, country, suffix, created_at FROM (
+		       SELECT id, moniker, body, country, suffix, created_at
+		         FROM messages WHERE chain=? AND court=? AND id > ? AND hidden=0
+		         ORDER BY id DESC LIMIT ?
+		     ) ORDER BY id`
+	}
+	rows, err := s.r.QueryContext(ctx, q, chain, court, since, limit)
 	if err != nil {
 		return nil, err
 	}
