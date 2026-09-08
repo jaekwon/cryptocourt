@@ -1970,6 +1970,14 @@ tr.youare .mono{font-weight:600}
    readable exactly when a reader is asking about that claim, and invisible the
    rest of the time. */
 .mcmt-d{fill:var(--muted); opacity:.62}
+/* THE ELLIPSIS IS TEXT, NOT A CIRCLE, and white rather than the dots' muted
+   grey — asked for that way, and right: a circle in this figure means one
+   thread, and "more than these" is not one thread. Brighter than the circles
+   because it is the thing a reader is meant to notice when the figure has had
+   to stop counting. */
+.mcmt-x{fill:#fff; opacity:.72; font-family:var(--sans); font-weight:600}
+.mapsvg.far .mcmt-x{opacity:.9}
+.mnode-a:hover .mcmt-x,.mnode-a:focus .mcmt-x,.mnode-a.selected .mcmt-x{opacity:.95}
 .mcmt-e{stroke:var(--muted); stroke-width:.7; fill:none; opacity:.30;
   vector-effect:non-scaling-stroke}
 /* BRIGHTER WHEN SMALLER, RATHER THAN GONE. This used to be
@@ -8301,138 +8309,92 @@ on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
    NO RANDOMNESS. Two draws of the same claim must be the same picture, or the
    map flickers on every repaint and a reader learns nothing from the shape. */
 const CMT_MAX_DOTS = 9;
-function commentClusterSvg(count){
-  const n = Math.max(0, Math.floor(count));
-  if(n < 1) return "";
-  const dots = Math.min(CMT_MAX_DOTS, n);
-  /* A FAN INTO THE ONE QUADRANT THAT IS OUTSIDE THE NODE. The group is
-     translated to the node's bottom-right corner, so in this frame +x is right
-     of the node and +y is below it — and only the 0..90 degree quadrant is
-     outside both edges. The first version swept the whole circle on a golden
-     angle, which put half the dots UP AND LEFT, inside the frame, crossing the
-     title. Seen in a preview render, which is the only way to see it.
-     RINGS, AND EDGES ALONG THEM. A chain through spiral points crosses itself
-     constantly, because consecutive points on a golden-angle spiral are far
-     apart in angle — at seven dots it read as a scribble. Dots go in arcs at
-     growing radius, joined to their neighbour IN THE SAME ARC and each arc to
-     the next at its first dot: a fan whose lines never cross whatever the count.
-     THE FIRST DOT SITS ON THE DIAGONAL, close in, so a single comment reads as
-     something attached to that corner rather than a speck of dust nearby. */
-  /* PAST THE DOT CAP THE FAN GROWS INSTEAD. Nine dots is the ceiling — more
-     would be a smudge, and nobody counts dots on a map — but capping there alone
-     made 12, 25 and 40 comments draw the SAME picture, which throws away the one
-     thing a reader wants from this: where the most talking is. So beyond the cap
-     the reach grows as sqrt(n/dots), which is visible between a dozen and forty
-     and bounded at 1.4x so a busy claim's cluster cannot walk into its
-     neighbour — the layout's own minimum gap between nodes is about 17 units and
-     the widest fan here reaches under 16. */
-  /* THE SPREAD CAP CAME DOWN WITH THE DOTS. It exists to open the fan when there
-     are more comments than dots drawn, and it multiplies the whole reach — which
-     was affordable while a dot was 3.4 units and is not now. At 1.15 the deepest
-     dot sits 49.4 units below the node against a measured clearance of 58; at
-     the old 1.4 it would have been 54.6, and three units of slack is not a
-     margin, it is a coincidence waiting to be reported.
-     NOT LOWER THAN 1.25, EITHER. sqrt(12/9) is already 1.155, so a cap of 1.15
-     binds at twelve comments and the fan stops growing exactly where the map
-     starts needing it to — which is what "the fan still grows past the cap"
-     exists to catch, and did. */
-  const spread = Math.min(1.25, Math.sqrt(n / dots));
-  /* SIZED AGAINST THE NODE IT SITS BESIDE, because the first numbers here were
-     picked in isolation and MEASURED far too small. On kourt.xyz claim #22's
-     seven comments drew a cluster 9.3 units wide beside a 230-unit node — 4.0%
-     of it — and at the map's default fit scale of 0.87 px/unit that is a ~2px
-     speck per dot at .30 opacity on a near-black field. Subtle was the ask;
-     invisible was not, and the point is knowing WHERE the talking is without
-     reading anything. The ratio is what matters, not the pixels: cluster and
-     node scale together, so 4% stayed 4% at both zooms measured.
-     THE CEILING IS MAPK.sep, not a taste. That is the clearance the layout
-     guarantees between every pair of nodes, so a fan reaching further could
-     cross the gap and land on a neighbour — which no assertion here would see
-     and every reader would. At the busiest count these reach 19.6 against a
-     sep of 22, so the fan stays inside the gap its own node was given.
-     AND MOST OF THE LEGIBILITY IS THE DOT, NOT THE REACH: a 2px speck is
-     unreadable because of what it is, not where it is, which is why the radius
-     below roughly doubled while the reach grew by only half. */
-  /* STRAIGHT DOWN, CENTRED, AND BIGGER — reported as "i can barely see it", and
-     that it belongs "center bottom dangling out the claim node, because there's
-     the most space there". Measured before moving it, because the note this
-     replaces warned that a longer reach can cross into a neighbour: nodes are
-     230x61 units and the clearance BELOW one is 58 at the tightest, 178 median.
-     So the space really is underneath, and a fan reaching ~28 at its widest
-     spread has ~30 units of slack even in the worst case on this map.
-     The sweep is symmetric about pi/2 rather than the old 17..73 degrees, which
-     hung the whole cluster off the bottom-RIGHT corner. Half-sweep 0.60rad puts
-     the horizontal spread at about +/-11 units at full reach — comfortably
-     inside a 230-wide node, so the fan stays under its own claim and cannot
-     read as belonging to the one beside it. */
-  /* BIGGER DOTS AND MORE ROOM BETWEEN THE RINGS, reported as "make the comments
-     figure under claim nodes in the map bigger circles than they are now".
-     THE STEP HAD TO GROW WITH THE RADIUS, AND BY MORE THAN IT LOOKS. At r=3.4
-     against a 5.5 step the rings already touched; enlarging the dot alone would
-     have merged the fan into a blob, which is a smaller figure to read rather
-     than a bigger one. The binding case is NOT the biggest fan: `spread` scales
-     the step but not the dot, so the tightest packing is a mid-sized count at
-     spread 1 — nine comments, r=4.9, needing 9.8 between rings. 10.5 clears
-     that, and 14.7 at the 1.4 spread cap against a 5.6 radius.
-     (Measured, not reasoned: 7.5 was tried first and the ring-gap assertion in
-     map_test failed on exactly that case.)
-     AND THE REACH STILL FITS. CMT_MAX_DOTS is 9 and PER is 3, so there are three
-     rings: the outermost sits at R0 + 2*RSTEP = 31, times the 1.4 spread cap is
-     43.4, plus a 5.6 radius is 49 units below the node. The clearance measured
-     underneath a node on this map is 58 at the tightest and 178 median. */
-  const PER = 3, R0 = 16.0 * spread, RSTEP = 10.0 * spread;
-  /* THE SWEEP HAD TO WIDEN WITH THE DOT, and this is the one that was missed.
-     Neighbours in a RING are separated by an arc, not by the ring step: at R0=10
-     and a half-sweep of 0.60 the gap between two of three dots is 10*0.60 = 6
-     units against a 9.8 diameter, so the ring drew as one lump. The between-ring
-     assertion passed the whole time — it measured the wrong pair.
-     BUT IT CANNOT WIDEN FREELY, and 0.95 was too far. A ring holding only TWO
-     dots joins them with a straight chord across the whole sweep, and that chord
-     cuts INWARD: it sits at R*cos(sweep), so a wide enough sweep drops it behind
-     the ring above and the two edges cross. Ring counts of two happen at five
-     comments and at eight. The binding case is the outer ring at eight —
-     36*cos(h) must clear 26 — which caps the half-sweep at about 0.775.
-     0.70 keeps 1.5 units of clearance there and still gives 11.2 of arc between
-     neighbours in the first ring, against a 9.8 diameter. Found by the
-     no-crossing assertion, which had been green through every earlier tuning. */
-  const CMT_HALF_SWEEP = 0.70;                // radians either side of straight down
-  const A0 = Math.PI / 2 - CMT_HALF_SWEEP, A1 = Math.PI / 2 + CMT_HALF_SWEEP;
-  const pts = [], first = [];
-  for(let i = 0; i < dots; i++){
-    const ring = Math.floor(i / PER), k = i % PER;
-    const inRing = Math.min(PER, dots - ring * PER);
-    // one dot in a ring sits on the diagonal; more spread across the fan
-    const a = inRing === 1 ? (A0 + A1) / 2 : A0 + (A1 - A0) * (k / (inRing - 1));
-    const r = R0 + ring * RSTEP;
-    const pt = [+(r * Math.cos(a)).toFixed(2), +(r * Math.sin(a)).toFixed(2)];
-    pts.push(pt);
-    if(k === 0) first.push(pt);
+/* THE FIGURE UNDER A CLAIM IS ITS THREADS, and every line in it says the same
+   one thing: this thread is on this claim.
+   WHAT IT WAS BEFORE. Dots were comments, arranged in rings, joined ring to ring
+   and neighbour to neighbour by edges that meant nothing — a dot next to a dot
+   was not related to it, and the line between them said it was. Asked to make
+   "the shape of the comment node/circle and edges between them have real meaning
+   of association", and the honest reading is that most of those edges had to go
+   rather than be re-labelled.
+   SO: ONE CIRCLE PER THREAD, each on its own stem from the claim's own edge, and
+   NO edges between circles. Threads are not associated with each other and the
+   figure no longer claims they are. The count of circles is a fact the page
+   read — BoardThreads — not a shape chosen to look busy.
+   WHAT IS DELIBERATELY NOT DRAWN: which reply belongs to which thread. The map
+   reads two numbers per claim, rows and threads, and the split of replies across
+   threads is not among them. Drawing a reply under a particular thread would be
+   inventing the one thing this rewrite is about. It is condensed instead. */
+const CMT_MAX_THREADS = 5;     // circles before the rest becomes an ellipsis
+// How wide "…" draws, as a fraction of its em, in the page's own --sans.
+// Measured with measureText at 100px: 56.1px of ink against a 65.1px advance.
+const CMT_ELL_INK = 0.561;
+/* AND HOW WIDE ITS BOX IS, which is a different number and the one that decides
+   where the row sits. getBBox on the drawn <text> reports 16 units at an em of
+   18.54 — 0.863 — because a box carries the glyph's side bearings and the ink
+   does not. So the ellipsis slot is wider than a circle slot even when its INK
+   matches, the group's bounding box runs further right than left, and the fan
+   reads as hung off-centre. Measured at 1.4 units on the sample map, which is
+   what map_draws' centring assertion caught. */
+const CMT_ELL_BOX = 0.863;
+
+function commentClusterSvg(count, threadCount){
+  const rows = Math.max(0, Math.floor(count));
+  if(rows < 1) return "";
+  /* THREADS DEFAULT TO ROWS when the caller does not know: an older caller, or a
+     board whose thread count never read. One circle per comment is then wrong in
+     the same way the rings were, but it is wrong in the direction of saying LESS
+     — a flat row of unconnected circles claims no structure at all. */
+  const threads = Math.max(1, Math.min(rows, Math.floor(threadCount) || rows));
+  const shown = Math.min(CMT_MAX_THREADS, threads);
+  /* AN ELLIPSIS WHEN THERE IS MORE THAN THE CIRCLES SAY, and that is both cases:
+     threads past the cap, and replies that cannot be placed under any particular
+     thread. Asked for as "'...' in white font not encircled" — not a circle,
+     because a circle here means one thread and this is not one thread. */
+  const more = threads > shown || rows > threads;
+
+  /* A ROW, NOT A FAN. Circles hang side by side under the claim because that is
+     what they are: siblings, each reaching the claim directly and nothing else.
+     The old fan's depth encoded ring index, which encoded nothing. */
+  const r = shown > 3 ? 4.6 : 5.2;
+  const GAP = 2.6;                             // ink between neighbours
+  const step = 2 * r + GAP;
+  const drop = 15;                             // how far below the node they sit
+  const slots = shown + (more ? 1 : 0);
+  /* CENTRED ON WHAT IT DRAWS, not on its slots. The ellipsis's box overhangs a
+     circle's by half the difference between them, and only on the right, because
+     it is always the last slot — so centring the slots leaves the figure hanging
+     to the right of the claim by half that overhang. Taken off the origin here
+     rather than fudged per slot: every slot keeps its own spacing and the whole
+     row moves. */
+  const ellPad = more ? ((CMT_ELL_BOX / CMT_ELL_INK) - 1) * r : 0;
+  const x0 = -((slots - 1) * step) / 2 - ellPad / 2;
+
+  let d = "", dots = "", ell = "";
+  for(let i = 0; i < slots; i++){
+    const x = +(x0 + i * step).toFixed(2);
+    // THE STEM IS THE ASSOCIATION: claim edge -> this thread. It is the only
+    // edge in the figure, and it is the only relation the page actually read.
+    d += `M0 0L${x} ${drop}`;
+    if(i < shown){
+      dots += `<circle class="mcmt-d" cx="${x}" cy="${drop}" r="${r}"/>`;
+    }else{
+      /* THE THREE DOTS TOGETHER ARE ONE CIRCLE WIDE, which is the size asked
+         for — so the em is the circle's DIAMETER divided by how wide the glyph
+         actually draws in this face.
+         0.561 IS MEASURED, NOT GUESSED. The first version assumed 0.9 and the
+         ellipsis came out at 62% of a circle: measureText on the page's own
+         --sans at 100px reports an ink width of 56.1px and an advance of 65.1,
+         and it is the INK that has to match, because that is what a reader
+         compares against the circle beside it.
+         Centred on the circles' own line rather than on a text baseline, which
+         would hang it low. */
+      const em = +((2 * r) / CMT_ELL_INK).toFixed(2);
+      ell = `<text class="mcmt-x" x="${x}" y="${drop}" font-size="${em}" `
+        + `text-anchor="middle" dominant-baseline="central">\u2026</text>`;
+    }
   }
-  /* A STEM FROM THE NODE TO THE FIRST RING, which is the whole of "i don't see
-     any edges from the claim nodes to the comments". The fan drew edges between
-     its own dots and nothing joining it to the claim, so it read as a separate
-     little constellation that happened to sit nearby rather than as something
-     hanging off the node.
-     ONE STEM PER DOT IN THE FIRST RING, not a single line to the middle. A ring
-     of two has no dot on the vertical, so one central stem would end in empty
-     space; drawn to each, the fan reads as stalks and is right for one, two or
-     three. The origin is the node's bottom-centre, so (0,0) is on its edge. */
-  let d = "";
-  for(let i = 0; i < Math.min(PER, pts.length); i++){
-    d += `M0 0L${pts[i][0]} ${pts[i][1]}`;
-  }
-  for(let i = 1; i < pts.length; i++){
-    if(i % PER === 0) continue;               // ring boundary: joined below instead
-    d += `M${pts[i-1][0]} ${pts[i-1][1]}L${pts[i][0]} ${pts[i][1]}`;
-  }
-  for(let i = 1; i < first.length; i++){
-    d += `M${first[i-1][0]} ${first[i-1][1]}L${first[i][0]} ${first[i][1]}`;
-  }
-  /* A dot is a FILL, so unlike the edges it has no vector-effect:non-scaling-
-     stroke to fall back on — at the fit scale its radius IS its visibility. */
-  const r = n > 12 ? 5.6 : n > 4 ? 4.9 : 4.6;
-  return (d? `<path class="mcmt-e" d="${d}"/>` : "")
-    + pts.map(([x, y]) => `<circle class="mcmt-d" cx="${x}" cy="${y}" r="${r}"/>`).join("");
+  return `<path class="mcmt-e" d="${d}"/>` + dots + ell;
 }
 
 /* THE COUNTS, ONE CLAIM AT A TIME BUT AFTER THE PAINT.
@@ -8482,7 +8444,7 @@ async function fillCommentClusters(s2, slug, seq0){
     BCOUNTS.set(bcountsKey(slug, id), {rows, threads});
     const words = commentCountLabel(rows, threads);
     document.querySelectorAll(`[data-cmt="${slug}-${id}"]`).forEach(g=>{
-      g.innerHTML = `<title>${esc(words)}</title>` + commentClusterSvg(rows);
+      g.innerHTML = `<title>${esc(words)}</title>` + commentClusterSvg(rows, threads);
     });
   };
 

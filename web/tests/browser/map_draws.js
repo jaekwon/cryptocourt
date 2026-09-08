@@ -643,7 +643,15 @@ const {PAGE, demoPage} = require('./harness');
       const dot = svg.querySelector(`[data-owner="c${id}"]`);
       const a = dot ? dot.closest("a") : null;
       if (!a) return {id, noOwner: true};
+      /* WHAT THE NODE PAINTS, NOT WHAT THE CLUSTER PAINTS. The cluster lives
+         INSIDE the node's anchor, so a querySelectorAll for text collects the
+         cluster's own ellipsis — and then "does the cluster clear everything the
+         node paints" is asked partly about the cluster, which is the
+         self-referential metric this file's own note warns about two comments
+         up. It went red the moment the overflow marker became a <text> instead
+         of another circle: clears came back at -64, i.e. minus the cluster. */
       const painted = [...a.querySelectorAll("rect,text,image")]
+        .filter(e => !e.closest("g.mcmt"))
         .map(e => e.getBoundingClientRect()).filter(R => R.width > 0 && R.height > 0);
       const bottom = Math.max(...painted.map(R => R.bottom));
       const left = Math.min(...painted.map(R => R.left));

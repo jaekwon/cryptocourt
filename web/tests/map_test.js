@@ -1513,13 +1513,24 @@ ok("controls present", ["mt-titles","mt-ids","mz-in","mz-out","mz-fit","mz-slide
   ok("...and no edge between dots, because there is only one",
      (commentClusterSvg(1).match(/M(?!0 0L)/g) || []).length === 0,
      commentClusterSvg(1).slice(0, 90));
-  /* ONE STEM PER DOT IN THE FIRST RING, not one line to the middle: a ring of
-     two has no dot on the vertical, so a single central stem would end in empty
-     space. Capped at the ring, so a big fan does not sprout a stem per dot. */
-  ok("two comments hang on two stems",
-     (commentClusterSvg(2).match(/M0 0L/g) || []).length === 2);
-  ok("...and a large fan still hangs on exactly the first ring",
-     (commentClusterSvg(20).match(/M0 0L/g) || []).length === 3);
+  /* ONE STEM PER CIRCLE, and the stem IS the association: claim edge -> this
+     thread. It is the only edge in the figure now, because it is the only
+     relation the map actually read. Two threads, two stems. */
+  ok("two threads hang on two stems",
+     (commentClusterSvg(2, 2).match(/M0 0L/g) || []).length === 2);
+  /* AND NO EDGES BETWEEN CIRCLES. That is the whole of "make the shape and edges
+     have real meaning of association": dots used to be joined ring-to-ring and
+     neighbour-to-neighbour by lines that meant nothing — a dot beside a dot was
+     not related to it and the line said it was. Threads are siblings; the figure
+     no longer claims otherwise. */
+  ok("...and nothing joins one thread to another",
+     (commentClusterSvg(9, 3).match(/M(?!0 0L)/g) || []).length === 0,
+     commentClusterSvg(9, 3).slice(0, 120));
+  /* THE CIRCLES ARE THREADS, NOT COMMENTS, which is what makes the count mean
+     something a reader can check against the hover text. */
+  ok("a claim with nine comments in three threads draws three circles",
+     dots(commentClusterSvg(9, 3)) === 3);
+  ok("...and one comment draws one", dots(commentClusterSvg(1, 1)) === 1);
 
   /* THE DOT IS BIG ENOUGH TO BE A CIRCLE. Reported twice — "i can barely see
      it", then "make the comments figure under claim nodes in the map bigger
@@ -1528,42 +1539,24 @@ ok("controls present", ["mt-titles","mt-ids","mz-in","mz-out","mz-fit","mz-slide
      visibility. Held as a floor rather than an exact value, so tuning upward is
      free and tuning back down is not. */
   const rOf = svg => +(svg.match(/ r="([\d.]+)"/) || [])[1];
-  ok("a comment dot is at least 4.5 units across the radius",
-     rOf(commentClusterSvg(1)) >= 4.5, String(rOf(commentClusterSvg(1))));
-  ok("...and grows with the count", rOf(commentClusterSvg(20)) > rOf(commentClusterSvg(1)));
+  ok("a comment circle is at least 4.5 units across the radius",
+     rOf(commentClusterSvg(1, 1)) >= 4.5, String(rOf(commentClusterSvg(1, 1))));
+  /* IT SHRINKS AS THE ROW FILLS, not grows: the circles sit side by side under a
+     node 230 wide, so a fifth one has to take its room from somewhere. It never
+     goes below the floor above. */
+  ok("...and never below that floor, however many threads",
+     rOf(commentClusterSvg(40, 9)) >= 4.5, String(rOf(commentClusterSvg(40, 9))));
   /* AND THE RINGS STAY APART. At the old 5.5 step a 3.4 radius already touched
      the next ring; enlarging the dot without the step would merge the fan into
      a blob, which is a smaller figure to read rather than a bigger one. */
-  /* AND NEIGHBOURS WITHIN A RING STAY APART, which the ring test does NOT cover
-     and which is how the fan shipped as a lump: two dots in the same ring are
-     separated by an ARC, and at R0=10 with a 0.60 half-sweep that arc was 6
-     units against a 9.8 diameter. The between-ring assertion passed the whole
-     time — it was measuring the wrong pair. Found by rendering the figure and
-     looking at it. */
-  ok("...and neighbours in a ring do not overlap either", (() => {
-    const svg = commentClusterSvg(9), X = cx(svg), Y = cy(svg), rr = rOf(svg);
-    const by = new Map();
-    X.forEach((x, i) => {
-      const k = Math.round(Math.hypot(x, Y[i]));   // one ring, to the unit
-      (by.get(k) || by.set(k, []).get(k)).push([x, Y[i]]);
-    });
-    for (const ring of by.values()) {
-      ring.sort((a, b) => a[0] - b[0]);
-      for (let i = 1; i < ring.length; i++)
-        if (Math.hypot(ring[i][0] - ring[i-1][0], ring[i][1] - ring[i-1][1]) < 2 * rr) return false;
-    }
-    return true;
-  })());
-  ok("...without the rings merging into one blob", (() => {
-    const svg = commentClusterSvg(20), Y = cy(svg), X = cx(svg);
-    /* GROUPED WITH A TOLERANCE, not by a rounded string. Dots in one ring differ
-       in radius by hundredths — the coordinates are rounded to two places before
-       the radius is taken — so `toFixed(1)` split a single ring into two "rings"
-       0.1 apart and this arm failed on geometry that was correct. */
-    const rad = X.map((x, i) => Math.hypot(x, Y[i])).sort((a, b) => a - b);
-    const rings = rad.filter((v, i) => i === 0 || v - rad[i - 1] > 1);
-    for (let i = 1; i < rings.length; i++)
-      if (rings[i] - rings[i - 1] < 2 * rOf(svg)) return false;
+  /* NEIGHBOURS IN THE ROW DO NOT OVERLAP. There are no rings any more — the
+     circles are siblings on one line — so the only spacing question left is
+     between adjacent ones, which is the pair the old ring assertion never
+     measured and which is how the fan shipped as a lump. */
+  ok("...and neighbouring circles do not overlap", (() => {
+    const svg = commentClusterSvg(12, 5), X = cx(svg).slice().sort((a, b) => a - b);
+    const rr = rOf(svg);
+    for (let i = 1; i < X.length; i++) if (X[i] - X[i - 1] < 2 * rr) return false;
     return true;
   })());
   /* AND THE WHOLE FAN STILL FITS UNDER THE NODE. The clearance measured beneath
@@ -1593,9 +1586,8 @@ ok("controls present", ["mt-titles","mt-ids","mz-in","mz-out","mz-fit","mz-slide
      edge, a fan narrower than its own claim, a depth inside the measured room.
      This one arm waits for the geometry it describes. */
 
-  ok("the dot count is capped, so a busy claim is not a smudge",
-     dots(commentClusterSvg(9)) === 9 && dots(commentClusterSvg(40)) === 9
-     && dots(commentClusterSvg(4000)) === 9);
+  ok("the circle count is capped, so a busy claim is not a smudge",
+     dots(commentClusterSvg(40, 9)) === 5 && dots(commentClusterSvg(4000, 900)) === 5);
   /* PAST THE CAP THE FAN GROWS. Capping the dots alone drew 12, 25 and 40 as the
      same picture, which throws away the only thing the cluster is for: where the
      most talking is. */
@@ -1632,8 +1624,39 @@ ok("controls present", ["mt-titles","mt-ids","mz-in","mz-out","mz-fit","mz-slide
      nodes tighter vertically the number below is what fails first. */
   const NW = MAPK.node.titles.w;
   const CMT_BELOW_MEASURED = 58;   // tightest vertical clearance under a claim
-  ok("...but the fan still grows past the cap",
-     reach(commentClusterSvg(25)) > reach(commentClusterSvg(12)) + 1);
+  /* PAST THE CAP AN ELLIPSIS SAYS SO, rather than the figure growing. Asked for
+     as "'...' in white font not encircled" — not a circle, because a circle in
+     this figure means one thread and "more than these" is not one thread.
+     IT ALSO APPEARS WHEN THERE ARE REPLIES the figure cannot place. The map reads
+     two numbers per claim, rows and threads; which reply belongs to which thread
+     is not among them, and drawing one under a particular thread would invent the
+     one thing this figure was rewritten to stop inventing. */
+  ok("more threads than fit are condensed into an ellipsis",
+     /class="mcmt-x"/.test(commentClusterSvg(40, 9))
+     && /\u2026/.test(commentClusterSvg(40, 9)));
+  ok("...and so are replies, which cannot be placed under a thread",
+     /class="mcmt-x"/.test(commentClusterSvg(4, 2)));
+  ok("...while a claim whose every comment is its own thread needs none",
+     !/mcmt-x/.test(commentClusterSvg(3, 3)));
+  /* THE THREE DOTS TOGETHER ARE ONE CIRCLE WIDE, which is the size asked for.
+     Checked as ink, not as em: "…" draws 0.561 of its em in the page's own sans
+     (measureText, 56.1px at 100px), and the first version assumed 0.9 and came
+     out at 62% of a circle. */
+  ok("...and the ellipsis is exactly one circle wide", (() => {
+    const svg = commentClusterSvg(40, 9);
+    const em = +(svg.match(/font-size="([\d.]+)"/) || [])[1];
+    return Math.abs(em * 0.561 - 2 * rOf(svg)) < 0.3;
+  })(), String((+(commentClusterSvg(40, 9).match(/font-size="([\d.]+)"/) || [])[1] * 0.561).toFixed(2)));
+  /* AND THE FILL HANDS IT THE THREAD COUNT. Everything above calls the function
+     directly with both numbers, so none of it can see a caller that passes only
+     one — and the caller HAD both in hand and passed only rows, which is how the
+     figure came to mean comments in the first place. */
+  ok("the cluster fill passes the thread count, not only the row count",
+     /commentClusterSvg\(rows, threads\)/.test(src));
+  ok("...and is not encircled", (() => {
+    const svg = commentClusterSvg(40, 9);
+    return (svg.match(/<circle/g) || []).length === 5;   // the five threads, and no sixth
+  })());
   ok("...and stays narrower than the claim it hangs under",
      extent(commentClusterSvg(4000)).x < NW / 2
      && -extent(commentClusterSvg(4000)).minX < NW / 2);
