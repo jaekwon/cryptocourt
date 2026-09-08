@@ -8116,8 +8116,16 @@ on(/^\/$/, async ()=>{
          there is nothing to report. */
       const coinGone = s && [s.minted, s.emitted, s.supply].every(Number.isFinite)
         ? Math.max(0, s.minted + s.emitted - s.supply) : 0;
+      /* PARENTHESISED AND KEPT ON THE LINE. It read " and 6.82 burned", which
+         wrapped onto its own line in the narrow supply column and then looked
+         like a separate fact rather than a qualifier on the number above it.
+         nowrap because the clause is only meaningful ATTACHED: broken across
+         lines, "6.82 burned" sitting under "5,103 Kourt:COVID" invites the
+         reading that 6.82 is a second holding, which is the opposite of what it
+         says. It is short enough to keep whole. */
       const goneClause = parseFloat(ccFig(coinGone)) > 0
-        ? `<span class="dim"> and ${ccFig(coinGone)} burned</span>` : "";
+        ? `<span class="dim" style="white-space:nowrap"> (${ccFig(coinGone)} burned)</span>`
+        : "";
       if(el&&s) el.innerHTML = `<b>${cc(s.supply, c.slug)}</b>${goneClause}`
         + `<small>${c.slug === META_SLUG
             ? metaRowLine(metaBurnFromCurve(s.minted))

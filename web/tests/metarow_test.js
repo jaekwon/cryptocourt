@@ -80,6 +80,13 @@ ok("...floored at zero, so a rounding artefact cannot print a negative burn",
 // carries no clause while covid reads 6.82 and does.
 ok("...and shown only when the rendered figure is non-zero",
    /parseFloat\(ccFig\(coinGone\)\) > 0/.test(src));
+// The visible form the reporter asked for: parenthesised, attached, and not
+// allowed to wrap — " and 6.82 burned" broke onto its own line in that column
+// and read as a second holding rather than as a qualifier.
+ok("...parenthesised and held on one line",
+   /\(\$\{ccFig\(coinGone\)\} burned\)/.test(src) &&
+   /white-space:nowrap/.test(src.slice(src.indexOf("goneClause") - 400,
+                                       src.indexOf("goneClause") + 400)));
 ok("...as a clause on the supply, not a second line",
    /\$\{cc\(s\.supply, c\.slug\)\}<\/b>\$\{goneClause\}/.test(src));
 
