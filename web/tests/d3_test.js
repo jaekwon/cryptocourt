@@ -195,8 +195,15 @@ ok("zoom from the LOD line, clamped", src.includes('z=Math.min(MAPK.zMax, Math.m
   ok("...and no clamp is left holding the old literal 8",
      !/Math\.min\(8, Math\.max\(/.test(src));
   // Every clamp on the way in, not just the one d3_test happened to name.
+  /* COUNTED WITH WHITESPACE TOLERANCE. This split on the literal
+     "Math.min(MAPK.zMax, " — trailing space and all — so the count fell to three
+     the moment one of the four was wrapped onto its own line, and the arm read
+     as a missing clamp when nothing had been unclamped. An assertion about how
+     many clamps exist must not also be an assertion about where the author put
+     their newlines. */
   ok("...with all four zoom clamps on the constant",
-     src.split('Math.min(MAPK.zMax, ').length - 1 === 4);
+     (src.match(/Math\.min\(MAPK\.zMax,\s/g) || []).length === 4,
+     String((src.match(/Math\.min\(MAPK\.zMax,\s/g) || []).length));
 }
 /* TWO FLOORS, THREE DECISIONS, AND NO BARE NUMBERS. All three zoom decisions
    once spelled their target as its own literal 9, so raising it meant finding
