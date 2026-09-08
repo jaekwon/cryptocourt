@@ -96,6 +96,8 @@ const ALL = ["embed_layout.js", "tagrow_layout.js", "route_crawl.js",
              "map_reveal.js",
              // a set's own page: the mark beside its name, and the way in
              "set_page.js",
+             // the meta franchise, as it actually reaches a reader
+             "franchise_panel.js",
              "rail_sky.js",
              // folders as the court page's top knob: rows AND counts follow it
              "folder_filter.js",
