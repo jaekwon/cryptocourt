@@ -658,6 +658,16 @@ section{margin-top:34px}
    from the count. */
 /* THREE ACROSS: price, supply, burn. The three figures a reader is comparing,
    so they belong on one line — and the burn history costs no extra row. */
+/* AND LEVEL WITH THE PANEL BESIDE IT. This is the FIRST thing in its column and
+   `section{margin-top:34px}` is the gap BETWEEN sections, so here it was spacing
+   away from nothing and pushing the whole strip below the aside — MEASURED at
+   1440px: the panel began at 250 and this at 284.
+   SIX RATHER THAN ZERO, because what a reader compares is the text, not the box.
+   The panel's 18px padding puts its heading 19px down; a tile's 12px padding
+   puts its label 13px down. Aligning the boxes would leave the labels 6px ABOVE
+   the heading, so the six is exactly that difference and the two rows of small
+   caps sit on one line. */
+.courtstats{margin-top:6px}
 .courtstats .grid.stats{grid-template-columns:repeat(3,minmax(0,1fr))}
 .courtstats .grid.stats>div:nth-child(3n+1){border-left:0}
 .courtstats .grid.stats>div:nth-child(n+4){border-top:1px solid var(--rule)}
@@ -12548,7 +12558,7 @@ function joinPanel(slug, s){
      Filled after the paint, because it needs the chain and the panel must not
      wait on it. Hidden until it has an answer: a row reading "—" where a balance
      should be is worse than no row. */
-  return `<div class="panel" id="join" tabindex="-1"><h2>Burn your conviction</h2>
+  return `<div class="panel" id="join" tabindex="-1"><h2>Join this court</h2>
         <div class="kv oneline" id="joinheld" hidden><div class="k">You have</div><div class="v tnum" id="joinheldv"></div></div>
         ${body}
        </div>`;   /* the worst-case paragraph moved into #help-buy too */
