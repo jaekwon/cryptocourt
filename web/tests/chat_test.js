@@ -886,10 +886,21 @@ function mkDoc() {
        el.k[".chatinput"].value === "");
     stop();
 
-    // AND A REFUSAL IS NOT SILENCE. deleted:0 is the server's "the rule said no"
-    // — the newest row is somebody else's, or already hidden, or already
-    // withdrawn — and saying nothing there is indistinguishable from the bug
-    // above, which is the state this was reported in.
+    /* AND A REFUSAL DESCRIBES THE RULE. deleted:0 is the server's "the rule said
+       no" — the newest ROW is somebody else's, or already withdrawn, or the room
+       is empty — and it deliberately says which of those it is NOT, so a caller
+       learns only about their own message.
+       THE FIRST WORDING WAS "nothing of yours to take back" AND IT WAS FALSE.
+       Reported as: "it says nothing of yours to take back but the last chat was
+       from a previous deployment from me". Measured in the store: all six of the
+       room's newest rows were that reader's, and the three newest were already
+       withdrawn, so the newest row was a tombstone and the rule refused without
+       walking backwards — correctly, since a cascade would let anybody erase
+       their whole side of a conversation one command at a time. The refusal was
+       right and the sentence claimed the one thing that was not true.
+       SO THE ARM IS ABOUT WHAT THE SENTENCE TEACHES, not that a note appeared:
+       it must name the RULE — newest, yours, not already withdrawn — and must
+       not assert that nothing there belongs to the reader. */
     FETCHES = [];
     FETCH = async (url, init) => (init && init.method === "POST")
       ? {ok: true, json: async () => ({deleted: 0})}
@@ -902,9 +913,14 @@ function mkDoc() {
     el2.k[".chatinput"].value = "/delete";
     el2.k[".chatform"].fire("submit");
     await tickMicro(); await tickMicro(); await tickMicro();
-    ok("a withdrawal that took nothing back says so",
-       /nothing of yours/i.test(el2.k[".chatnote"].textContent),
-       el2.k[".chatnote"].textContent);
+    {
+      const said = el2.k[".chatnote"].textContent;
+      ok("a withdrawal that took nothing back says so", /nothing to take back/i.test(said), said);
+      ok("...and states the rule: newest, yours, not already withdrawn",
+         /newest/i.test(said) && /yours/i.test(said) && /withdrawn/i.test(said), said);
+      ok("...without claiming none of it belongs to the reader",
+         !/nothing of yours/i.test(said), said);
+    }
     stop2();
 
     // The plumbing under both, asserted directly: an ordinary message answers
