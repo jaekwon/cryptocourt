@@ -1328,8 +1328,15 @@ function mountChat(el, opts) {
          it asserts nothing the client cannot know. */
       if (r.deleted !== undefined) {
         if (!r.deleted) {
-          note("nothing to take back — /delete removes the room's newest "
-             + "message, and only when it is yours and not already withdrawn",
+          /* NO NUMBER IN HERE, DELIBERATELY. The window is WithdrawWindow in
+             internal/chat/store.go, and chat.js cannot import a Go constant —
+             web/README.md promises no build step — so a figure written here
+             would be a second copy free to drift from the one that decides.
+             check-web-constants pins mirrors of REALM constants only, and this
+             is not one. "a few minutes" is true for any value the owner picks;
+             "10 minutes" would be true only until they change it. */
+          note("nothing to take back — /delete only removes your own last "
+             + "message, and only for a few minutes after you send it",
              NOTEHOLD);
           return;
         }

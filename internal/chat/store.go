@@ -68,6 +68,11 @@ const (
 	DupCourts      = 2
 	DupWindow      = 10 * time.Minute
 
+	// WithdrawWindow is how long /delete can reach back. "Take back what I just
+	// said" is a different act from editing the record, and this is the line
+	// between them — see Store.WithdrawOwnLatest for the other bound.
+	WithdrawWindow = 10 * time.Minute
+
 	// The enforcer's clamp. An automated consequence cannot outlive this however
 	// it was written, so a scanner bug or a future edit cannot manufacture a
 	// permanent ban out of a very long kick.
@@ -664,19 +669,43 @@ func (s *Store) WithdrawOwnLatest(ctx context.Context, chain, court, ipHash stri
 
 	var id int64
 	var owner string
-	var hidden int
+	var created int64
+	/* THE NEWEST VISIBLE ROW, WHICH IS NOT THE NEWEST ROW. This used to read the
+	   newest row of any kind and refuse when it was hidden, so a tombstone
+	   BLOCKED the message beneath it: after taking back one line you could never
+	   take back the one before, even seconds later and with nothing else in the
+	   room.
+	   REPORTED THREE TIMES, and the third time with the rows in hand: 147 was
+	   visible and its author's, 148 and 149 were the same author's and already
+	   withdrawn, and /delete refused because 149's tombstone was newest. From the
+	   reader's side their own last message was simply undeletable, for no reason
+	   they could see.
+	   WHAT STOPS IT WALKING BACKWARDS IS STILL HERE, and it is what the old rule
+	   was really protecting: the newest visible row must be YOURS. Somebody
+	   else's line ends the run, so this can only ever remove from the visible
+	   TAIL of your own words and never reach behind another person's message to
+	   leave their reply answering nothing.
+	   AND A WINDOW, on the owner's decision, because "take back what I just
+	   said" is not "edit the record": older than WithdrawWindow and the answer is
+	   no. Bounded twice over, so the griefing case the original comment names —
+	   one message per command, all the way back — is impossible in both
+	   directions. */
 	err = tx.QueryRowContext(ctx,
-		`SELECT id, ip_hash, hidden FROM messages
-		  WHERE chain=? AND court=? ORDER BY id DESC LIMIT 1`,
-		chain, court).Scan(&id, &owner, &hidden)
+		`SELECT id, ip_hash, created_at FROM messages
+		  WHERE chain=? AND court=? AND hidden=0 ORDER BY id DESC LIMIT 1`,
+		chain, court).Scan(&id, &owner, &created)
 	if errors.Is(err, sql.ErrNoRows) {
-		return 0, nil // an empty room
+		return 0, nil // an empty room, or nothing visible left in it
 	}
 	if err != nil {
 		return 0, err
 	}
-	if hidden != 0 || owner != ipHash {
-		return 0, nil
+	if owner != ipHash {
+		return 0, nil // somebody else has the last word
+	}
+	// s.Now() rather than time.Now(), so a test drives this with its own clock.
+	if s.Now().Unix()-created > int64(WithdrawWindow/time.Second) {
+		return 0, nil // said too long ago to be taken back
 	}
 	if _, err := tx.ExecContext(ctx,
 		`UPDATE messages SET hidden=? WHERE id=? AND hidden=0`,

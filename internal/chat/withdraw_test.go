@@ -11,11 +11,20 @@ import (
 
 // /delete — TAKE BACK THE MESSAGE YOU JUST SENT.
 //
-// The rule is "the newest row in the room, if it is yours and still visible",
-// and each arm below is one clause of that. What makes this worth testing
-// carefully is that the obvious implementation — hide the newest VISIBLE
-// message — walks backwards through the transcript one message per /delete,
-// which is a griefing tool rather than an undo.
+// The rule is "the newest VISIBLE row in the room, if it is yours and said
+// within WithdrawWindow", and each arm below is one clause of that.
+//
+// IT USED TO READ THE NEWEST ROW OF ANY KIND, which made a tombstone block the
+// message beneath it: after taking back one line you could never take back the
+// one before. Reported three times; the third time with the rows in hand.
+//
+// WHAT THAT OLD READING WAS REALLY PROTECTING IS STILL PROTECTED, by two bounds
+// rather than by accident. The newest visible row must be YOURS, so somebody
+// else's line ends the run and this can never reach behind another person's
+// message to leave their reply answering nothing; and the window means "take
+// back what I just said" cannot become "edit the record". The griefing case —
+// one message per command, all the way back through a transcript — is
+// impossible in both directions.
 
 func withdrawReq(court, ip string) *http.Request {
 	return sayReq(court, ip, WithdrawCommand)
@@ -94,16 +103,88 @@ func TestDeleteTakesBackYourOwnLastMessage(t *testing.T) {
 		t.Fatalf("only B's message should have gone: %v", got)
 	}
 
-	/* AND ONCE, NOT REPEATEDLY. This is the arm that matters most: the rule looks
-	   at the newest ROW rather than the newest VISIBLE row, so a second /delete
-	   finds a row already hidden and refuses. Looking at the newest visible one
-	   instead would eat A's message next, then the one before, one per command. */
+	/* AND IT STOPS AT SOMEBODY ELSE'S WORDS. B's own line is gone, so the newest
+	   visible row is now A's — and B's second /delete finds a row that is not
+	   theirs and refuses. This assertion is unchanged from when the rule read the
+	   newest row of ANY kind, but the reason it holds is different and is the
+	   reason that matters: what stops a walk backwards is the other person, not a
+	   tombstone. A run of B's OWN trailing messages CAN now be taken back one at
+	   a time, which is the next arm. */
 	rec = do(t, srv, withdrawReq("orem", "192.0.2.2"))
 	if !strings.Contains(rec.Body.String(), `"deleted":0`) {
 		t.Fatalf("a second /delete must do nothing: %s", rec.Body.String())
 	}
 	if got := visibleBodies(t, s, "orem"); len(got) != 1 || got[0] != "first from A" {
 		t.Fatalf("the second /delete cascaded: %v", got)
+	}
+}
+
+/*
+A TOMBSTONE MUST NOT BLOCK THE MESSAGE UNDER IT, which is the report this rule
+
+	changed for. Measured on the live site: rows 147 (visible, the author's), 148
+	and 149 (the same author's, already withdrawn), and /delete refused because
+	149 was newest. The author's own visible last line was undeletable.
+
+	THREE OF YOUR OWN IN A ROW, taken back newest-first, with nobody else in the
+	room — the exact shape that was stuck. Each command removes exactly one, and
+	the fourth has nothing left to take.
+*/
+func TestATombstoneDoesNotBlockYourOwnMessageBeneathIt(t *testing.T) {
+	srv, s, clock := newServer(t)
+	say := func(body string) {
+		if rec := do(t, srv, sayReq("orem", "192.0.2.7", body)); rec.Code != http.StatusOK {
+			t.Fatalf("post %q: %d %s", body, rec.Code, rec.Body.String())
+		}
+		*clock = clock.Add(3 * time.Second)
+	}
+	say("this is a test of the chat bot system.")
+	say("please respond.")
+	say("this is a test of the chatbot system")
+
+	for i, want := range []int{2, 1, 0} {
+		rec := do(t, srv, withdrawReq("orem", "192.0.2.7"))
+		if strings.Contains(rec.Body.String(), `"deleted":0`) {
+			t.Fatalf("/delete %d of 3 refused: %s", i+1, rec.Body.String())
+		}
+		if got := visibleBodies(t, s, "orem"); len(got) != want {
+			t.Fatalf("after /delete %d, %d visible, want %d: %v", i+1, len(got), want, got)
+		}
+	}
+	if rec := do(t, srv, withdrawReq("orem", "192.0.2.7")); !strings.Contains(rec.Body.String(), `"deleted":0`) {
+		t.Errorf("a fourth /delete has nothing to take: %s", rec.Body.String())
+	}
+}
+
+// AND ONLY WHAT WAS SAID RECENTLY. The window is the other bound: it is what
+// keeps this an undo rather than a way to go back through an old thread and
+// remove your side of it. Driven with the fake clock, one second either side of
+// WithdrawWindow, so the arm is about the boundary and not about a round number.
+func TestDeleteWillNotReachPastTheWindow(t *testing.T) {
+	srv, s, clock := newServer(t)
+	if rec := do(t, srv, sayReq("orem", "192.0.2.8", "said a while ago")); rec.Code != http.StatusOK {
+		t.Fatal(rec.Body.String())
+	}
+
+	*clock = clock.Add(WithdrawWindow + time.Second)
+	if rec := do(t, srv, withdrawReq("orem", "192.0.2.8")); !strings.Contains(rec.Body.String(), `"deleted":0`) {
+		t.Errorf("past the window it must refuse: %s", rec.Body.String())
+	}
+	if got := visibleBodies(t, s, "orem"); len(got) != 1 {
+		t.Fatalf("nothing should have gone: %v", got)
+	}
+
+	// The control: the same message, the same room, one second INSIDE the window.
+	srv2, s2, clock2 := newServer(t)
+	if rec := do(t, srv2, sayReq("orem", "192.0.2.8", "said a moment ago")); rec.Code != http.StatusOK {
+		t.Fatal(rec.Body.String())
+	}
+	*clock2 = clock2.Add(WithdrawWindow - time.Second)
+	if rec := do(t, srv2, withdrawReq("orem", "192.0.2.8")); strings.Contains(rec.Body.String(), `"deleted":0`) {
+		t.Errorf("inside the window it must go: %s", rec.Body.String())
+	}
+	if got := visibleBodies(t, s2, "orem"); len(got) != 0 {
+		t.Fatalf("it should have gone: %v", got)
 	}
 }
 

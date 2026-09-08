@@ -916,8 +916,13 @@ function mkDoc() {
     {
       const said = el2.k[".chatnote"].textContent;
       ok("a withdrawal that took nothing back says so", /nothing to take back/i.test(said), said);
-      ok("...and states the rule: newest, yours, not already withdrawn",
-         /newest/i.test(said) && /yours/i.test(said) && /withdrawn/i.test(said), said);
+      /* AND IT STATES BOTH CONDITIONS OF THE RULE. They are what a refused
+         reader needs: it has to be their OWN last message, and /delete only
+         reaches back a few minutes. The window's value is not asserted — the
+         number lives in Go, and a figure in this sentence would be a copy free
+         to drift from the one that decides. */
+      ok("...and states the rule: your own last message, and only for a while",
+         /your own/i.test(said) && /last message/i.test(said) && /minutes/i.test(said), said);
       ok("...without claiming none of it belongs to the reader",
          !/nothing of yours/i.test(said), said);
     }
