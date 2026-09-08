@@ -6,6 +6,11 @@ const src = fs.readFileSync(require('path').join(__dirname,'..','index.html'),'u
 
 const { slice } = require("./srcslice");
 // curve block through the recompute wiring (stop before courtBody)
+/* buyActionsHtml gates on the meta court's second acknowledgement, so the slug
+   it compares against has to be in scope. Loaded rather than stubbed: which
+   court gets the extra warning is exactly what an assertion about the gate is
+   about. */
+global.META_SLUG = "meta";
 const curve = slice('const CURVE_D', 'function courtBody');
 // helpers the panel needs
 // cc() became TWO lines in round 16 when the unit changed from a generic

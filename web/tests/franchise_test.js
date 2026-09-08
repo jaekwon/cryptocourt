@@ -123,6 +123,12 @@ const both = html("covid", 554400000, 5105763090, true, 120000);
 ok("holding and waiting are shown together when both are true",
    /you hold/.test(both) && /yours, waiting/.test(both));
 ok("...and the claim control is still offered", /ClaimMetaFranchise/.test(both));
+/* AND WHATEVER FIGURE THE PANEL DOES PRINT IS META'S, NOT THE COURT'S. It sits
+   on covid's page and everything it counts belongs to the meta court — the held
+   balance, the entitlement — so a figure carrying the viewed court's symbol
+   would be the same confusion in a new place. */
+ok("no figure in the panel wears the viewed court's coin", !/CC:COVID/.test(anon), anon);
+ok("...and the ones that are shown wear meta's", /CC:META/.test(holds));
 
 /* THE ENTITLEMENT IS NOT QUOTED IN COIN, and that is deliberate rather than
    lazy. ClaimMetaFranchise mints crv.Minted(position, owed) — what it is worth
@@ -136,22 +142,26 @@ ok("...and says the curve decides what it becomes",
    /at whatever the curve stands at when you claim/.test(mine));
 
 /* ---- the supply, when it is known ----------------------------------------- */
-ok("the claimed supply is shown when the read landed",
-   /claimed so far/.test(anon) && /5105763090 CC:META/.test(anon));
-ok("...and omitted when the read did not land",
-   !/claimed so far/.test(html("covid", null, null, true, null)));
-/* A ZERO IS NOT PRINTED AS A QUANTITY. "minted so far 0.00" beside a court that
-   has burned thirteen thousand GNOT is the sentence a reader disbelieves: it
-   reads as a measurement of a broken thing. "Nobody has claimed any yet" is a
-   different statement and the true one. */
+/* THE SUPPLY IS NOT REPEATED IN THE PANEL. It is the coin supply, and the stat
+   strip three inches above already carries it — a panel restating the number
+   beside it asks the reader to check whether the two agree. Removed on the
+   owner's call: "that's already on the top 3-bar in the middle". */
+ok("the panel does not restate the coin supply",
+   !/claimed so far/.test(anon) && !/5105763090/.test(anon), anon);
+/* AND SAYS NOTHING ABOUT CLAIMING WHEN THERE IS A SUPPLY. The zero sentence is
+   the answer to "why does this court look empty"; printed beside a supply of
+   five billion it is simply false. */
+ok("...nor claims nobody has claimed, when somebody plainly has",
+   !/Nobody has claimed/.test(anon), anon);
+/* THE ZERO CASE IS KEPT, though, and it is the one that is not a figure. A court
+   showing nothing minted, next to courts that have burned thousands, reads as
+   broken rather than as unclaimed — which is the report this whole thread came
+   from. That sentence answers it; the supply figure never did. */
 const none = html("covid", null, 0, true, null);
 ok("a supply of zero is said in words, not as a figure",
    /Nobody has claimed any yet/.test(none) && !/claimed so far/.test(none), none);
 ok("...and says where it all is instead", /still waiting as an entitlement/.test(none));
-/* AND IT IS META'S SUPPLY, NOT THE COURT'S. The panel sits on covid's page and
-   the figure it prints is the meta court's — printing covid's there would be the
-   same confusion in a new place. */
-ok("the supply printed is the meta court's", /CC:META/.test(anon) && !/CC:COVID/.test(anon));
+
 
 /* ---- the link is offered only where it lands ------------------------------
    route_crawl found this the first time the panel shipped: the offline sample
@@ -290,6 +300,39 @@ ok("...and it is ceil, so a part-unit of burn is never rounded away",
 ok("a court at position zero has burned nothing", burn(0) === 0);
 ok("...and an unread position gives no figure rather than a wrong one",
    burn(null) === null && burn(undefined) === null);
+
+/* ---- the second acknowledgement, on meta's buy panel only ------------------
+   Meta's coin is the one coin on this site nobody needs to burn for: every burn
+   on every OTHER court earns it, one for one, and waits to be claimed. A reader
+   who arrives at meta's buy panel and burns GNOT has paid for something they
+   were already owed for nothing — and the panel said so nowhere, because it is
+   the same panel every court gets. The curve is one way, so that mistake cannot
+   be undone. */
+ok("meta's buy panel carries a second acknowledgement",
+   /I understand that receiving \$\{sym\} here is not necessary/.test(src));
+ok("...saying where the coin comes from instead",
+   /every burn on `\s*\n\s*\+ `any other court earns \$\{sym\}, one for one/.test(src));
+/* ONLY THERE. Every other court's coin has to be burned for, so this warning
+   would be false on any of them — and a checkbox that is false is worse than no
+   checkbox, because it trains the reader to tick without reading. */
+ok("...and only on meta, where it is true",
+   /const ack2 = slug === META_SLUG\s*\n\s*\? `<label class="ack small">/.test(src));
+/* AND IT GATES. Advisory would not do: the panel already carries one tick, so a
+   second one that changed nothing would read as the same kind of formality. */
+ok("...and it gates the button, rather than merely being said",
+   /const acked2 = slug !== META_SLUG \|\| !!buyFormFor\(slug\)\.ack2;/.test(src)
+   && /!acked \|\| !acked2/.test(src));
+ok("...remembered across a repaint, like the first tick",
+   /function rememberBuyAck2\(el\)\{/.test(src)
+   && /ev\.target\.id==="buyack2"/.test(src));
+ok("...and it starts unticked", /const ack2Attr = form\.ack2\? " checked" : "";/.test(src));
+/* AND BOTH BUY PANELS ACTUALLY PRINT IT. There are two — one for a live quote
+   and one for the no-quote fallback — and building the label without inserting
+   it leaves every assertion above green and the panel unchanged. Measured:
+   deleting `${ack2}` from the markup survived this file until this arm existed. */
+ok("...and both buy panels render it, not just build it",
+   (src.match(/\n        \$\{ack2\}\n/g) || []).length === 2,
+   String((src.match(/\n        \$\{ack2\}\n/g) || []).length));
 
 /* ---- the wiring ------------------------------------------------------------ */
 ok("the read is by ADDRESS, not by court — it is earned everywhere",
