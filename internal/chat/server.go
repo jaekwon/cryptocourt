@@ -550,24 +550,37 @@ func (s *Server) get(w http.ResponseWriter, r *http.Request, chain, court, ipHas
 		here, anywhere := s.pulse().watch(pulseKey(chain, court))
 		fresh, err := s.Store.HasSince(r.Context(), chain, court, seen)
 		if err == nil && !fresh {
-			timer := time.NewTimer(wait)
-			// COUNTED ONLY AROUND THE WAIT, which is what makes the number mean
-			// "readers holding a connection" rather than "requests being served".
-			// A read that answers immediately — the first poll of a busy court,
-			// every request from a client that sends no wait — is not a held
-			// connection and must not inflate the gauge.
-			s.hold.enter()
-			select {
-			case <-here:
-			case <-anywhere:
-			case <-r.Context().Done():
-				timer.Stop()
-				s.hold.leave()
+			/* COUNTED ONLY AROUND THE WAIT, which is what makes the number mean
+			   "readers holding a connection" rather than "requests being served".
+			   A read that answers immediately — the first poll of a busy court,
+			   every request from a client that sends no wait — is not a held
+			   connection and must not inflate the gauge. Hence a closure: a
+			   defer in the handler would keep counting through the store read and
+			   the response write.
+
+			   AND `leave` IS DEFERRED, so every exit is covered including any
+			   added later. It used to be written twice, once before `return` on
+			   the hung-up path and once after the select — and MEASURED, deleting
+			   the first failed no test at all. That path is not exotic: every
+			   navigation aborts an in-flight poll, so a leak there would make
+			   this number climb monotonically and mean nothing within an hour. */
+			hungUp := func() bool {
+				s.hold.enter()
+				defer s.hold.leave()
+				timer := time.NewTimer(wait)
+				defer timer.Stop()
+				select {
+				case <-here:
+				case <-anywhere:
+				case <-r.Context().Done():
+					return true
+				case <-timer.C:
+				}
+				return false
+			}()
+			if hungUp {
 				return // the client hung up; there is nobody to answer
-			case <-timer.C:
 			}
-			s.hold.leave()
-			timer.Stop()
 		}
 	}
 	msgs, err := s.Store.Recent(r.Context(), chain, court, since, limit)

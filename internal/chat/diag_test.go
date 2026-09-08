@@ -577,6 +577,110 @@ func TestARealHeldPollIsCountedAsAConnection(t *testing.T) {
 	}
 }
 
+/*
+A READER WHO NAVIGATES AWAY STOPS BEING COUNTED, which is the commonest exit
+
+	of all and had no test.
+	MEASURED: deleting the leave() on the hung-up path failed ZERO tests. Every
+	page navigation aborts an in-flight poll, so a leak there is not an edge case
+	— it is the normal way a poll ends, and holding would climb monotonically
+	until the number meant nothing. The count is right today; nothing was
+	protecting it.
+*/
+func TestAReaderWhoHangsUpStopsBeingCounted(t *testing.T) {
+	srv, s, _ := newServer(t)
+	ctx := context.Background()
+	if _, err := post(t, s, "orem", "ip-a", "something to poll past"); err != nil {
+		t.Fatal(err)
+	}
+	msgs, err := s.Recent(ctx, "dev", "orem", 0, 50)
+	if err != nil || len(msgs) == 0 {
+		t.Fatal(err)
+	}
+	top := msgs[len(msgs)-1].ID
+
+	ts := httptest.NewServer(srv.Routes())
+	defer ts.Close()
+
+	// A wait long enough that the poll cannot end on its own inside this test:
+	// if the count falls, it is the disconnect that did it.
+	rctx, cancel := context.WithCancel(context.Background())
+	req, err := http.NewRequestWithContext(rctx, http.MethodGet,
+		fmt.Sprintf("%s/api/chat/dev/orem?wait=8&seen=%d", ts.URL, top), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ended := make(chan struct{})
+	go func() {
+		defer close(ended)
+		if r, err := http.DefaultClient.Do(req); err == nil {
+			io.Copy(io.Discard, r.Body)
+			r.Body.Close()
+		}
+	}()
+	time.Sleep(400 * time.Millisecond)
+	if d := diagOf(t, srv)["holding"]; d != float64(1) {
+		t.Fatalf("the reader should be holding a connection: %v", d)
+	}
+
+	cancel() // navigate away
+	<-ended
+	// The handler notices through r.Context(); give it a moment to unwind.
+	var got any
+	for i := 0; i < 40; i++ {
+		got = diagOf(t, srv)["holding"]
+		if got == float64(0) {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if got != float64(0) {
+		t.Errorf("a reader who hung up is still counted: holding=%v — this leaks "+
+			"on every navigation, so the number climbs and stops meaning anything", got)
+	}
+	// ...and the peak still remembers they were there.
+	if p := diagOf(t, srv)["holding_peak"]; p != float64(1) {
+		t.Errorf("the peak should have seen them: %v", p)
+	}
+}
+
+/*
+A REQUEST THAT DOES NOT WAIT IS NOT A HELD CONNECTION, which is the claim the
+
+	gauge's own comment makes: the number means "readers holding a connection",
+	not "requests being served". Asserted through the PEAK, because an instant
+	request cannot be caught in the act — if the gauge were taken for every
+	request the peak would have climbed, and it is monotonic so it cannot hide it.
+*/
+func TestARequestThatDoesNotWaitIsNotCounted(t *testing.T) {
+	srv, s, _ := newServer(t)
+	if _, err := post(t, s, "orem", "ip-a", "a message to read"); err != nil {
+		t.Fatal(err)
+	}
+	ts := httptest.NewServer(srv.Routes())
+	defer ts.Close()
+
+	// Twenty ordinary reads, none of them asking to wait — the shape of an older
+	// client, and of the first poll of any busy court.
+	for i := 0; i < 20; i++ {
+		r, err := http.Get(ts.URL + "/api/chat/dev/orem")
+		if err != nil {
+			t.Fatal(err)
+		}
+		io.Copy(io.Discard, r.Body)
+		r.Body.Close()
+	}
+	d := diagOf(t, srv)
+	if d["holding"] != float64(0) {
+		t.Errorf("nothing is being held: %v", d["holding"])
+	}
+	if d["holding_peak"] != float64(0) {
+		t.Errorf("twenty non-waiting reads must never have been counted, "+
+			"peak=%v — the gauge is being taken for requests rather than waits",
+			d["holding_peak"])
+	}
+}
+
 func TestHoldGaugeRemembersItsPeak(t *testing.T) {
 	var g holdGauge
 	g.enter()
