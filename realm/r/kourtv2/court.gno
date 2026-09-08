@@ -88,10 +88,17 @@ const (
 	// resolving. Zero here would have two thresholds on one quantity
 	// contradicting each other, and would leave an answerer who posted a bond
 	// drawing nothing on a claim the court let them answer.
-	// The voted bands, still written by the quality lane and still read by its
-	// display. They no longer reach the money: every economic site reads
-	// tierBpsFor (tier.gno). They go when the lane does.
-	tierLowX, tierMidX, tierHighX = int64(0), int64(1), int64(2)
+	// THE VOTED BANDS ARE GONE — tierLowX, tierMidX and tierHighX, 0/1/2. They
+	// were the quality lane's three buckets, doubling as draw multipliers, and
+	// the note here said "they go when the lane does". The lane went; they
+	// stayed, because nothing forced the question.
+	// Nothing in the realm read them at the end: every economic site reads
+	// tierBpsFor against tierParBps (tier.gno), which is the bps form and the
+	// only one the money has ever used. Their six remaining references were all
+	// in tests — three rows asserting the literals 0/1/2, and three helpers
+	// multiplying a conviction figure by tierMidX, which is 1. Multiplying by
+	// one is not a use; those call sites now say what they meant without a
+	// production constant kept alive to spell it.
 
 	// tierRefFloorBps FLOORS the reference — it is not the reference. The
 	// reference is the court's own running average claim size (tier.gno); this

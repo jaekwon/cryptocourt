@@ -333,7 +333,8 @@ func TestS3ProvCloseDrawsLikeTheTwoFailedRoundFinalize(cur realm, t *testing.T) 
 	// NON-CLAMPING AS A PRECONDITION. Both draws must fit the reservoir or the
 	// comparison is between two clamped figures, which would agree for the wrong
 	// reason — the comp drought can pay a restored draw zero.
-	want := mustMul(tierMidX, convToCC(mustClaim(c, pcID).yesConvHi, mustClaim(c, pcID).yesConvLo))
+	// tierMidX was 1, so this was conviction times one — see rentedweight_test.
+	want := convToCC(mustClaim(c, pcID).yesConvHi, mustClaim(c, pcID).yesConvLo)
 	uassert.True(t, want > 0)
 	drainUntilUnclamped(cur, "s3a", mustMul(want, 3))
 
@@ -380,7 +381,7 @@ func TestS3ProvCloseWinnersCanCollect(cur realm, t *testing.T) {
 	uassert.True(t, ProvClose("s3b", id))
 
 	cs := mustClaim(c, id)
-	want := mustMul(tierMidX, convToCC(cs.yesConvHi, cs.yesConvLo))
+	want := convToCC(cs.yesConvHi, cs.yesConvLo)
 	drainUntilUnclamped(cur, "s3b", mustMul(want, 2))
 	testing.SetRealm(testing.NewUserRealm(alice))
 	OpenRewards(cross(cur), "s3b", id)

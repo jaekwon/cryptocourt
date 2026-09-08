@@ -289,7 +289,10 @@ func TestTheCarrotSurvivesRollReclamation(cur realm, t *testing.T) {
 // drainForCarrot advances until the reservoir covers the claim's draw, so the
 // carrot is not zero for want of emission rather than for want of a record.
 func drainForCarrot(cur realm, slug string, cs *claimState) {
-	want := mustMul(tierMidX, convToCC(cs.yesConvHi, cs.yesConvLo)) * 3
+	// The unit draw is the conviction itself: this multiplied by tierMidX,
+	// which was 1, so the multiplication was a no-op standing in for the
+	// words "the unit draw". The bands are gone; the meaning is in this note.
+	want := convToCC(cs.yesConvHi, cs.yesConvLo) * 3
 	for i := 0; i < 400; i++ {
 		if Reservoir(slug) >= want {
 			return
