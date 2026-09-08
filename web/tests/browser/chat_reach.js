@@ -422,6 +422,24 @@ const HEIGHTS = [1000, 900, 800, 760, 700, 620];
     ok(`dragging the seam up grows the log (${a0.log}px -> ${a1.log}px)`,
        a1.log >= a0.log + 120, `panel ${a0.panel} -> ${a1.panel}`);
     ok("...and the panel is now a set size rather than a leftover", a1.sized === true);
+    /* AND THE HANDLE IS STILL THERE TO GRAB A SECOND TIME. Setting a size makes
+       the nav scrollable so it can yield height, and the handle is nav's LAST
+       child — so without pinning, the first thing to scroll out of sight is the
+       control that resizes and resets. Measured before the fix: the heading's
+       rect still read y=417 while the panel painted at 383, because the heading
+       had been clipped out of the scrolled nav, leaving a size the reader could
+       not change and no visible way back.
+       HIT-TESTED, NOT MEASURED. The rect survives the clipping; only asking what
+       is actually at that point catches it. */
+    const grabbable = await page.evaluate(() => {
+      const g = document.getElementById('railchathead');
+      const r = g.getBoundingClientRect();
+      const el = document.elementFromPoint(Math.round(r.x + r.width / 2),
+                                           Math.round(r.y + r.height / 2));
+      return !!(el && el.closest('#railchathead'));
+    });
+    ok("...and the handle can still be grabbed after resizing once", grabbable,
+       "the seam scrolled out of the nav and something else took the point");
 
     /* IT SURVIVES THE DOCUMENT. A size that resets on the next page is not a
        setting, and the panel is rebuilt on every court a reader opens. */
@@ -459,8 +477,38 @@ const HEIGHTS = [1000, 900, 800, 760, 700, 620];
     ok(`dragging it all the way down keeps the composer usable (${a4.panel}px panel)`,
        /\bchatsend\b/.test(a4.send), `send reached ${a4.send}`);
 
-    /* DOUBLE-CLICK GIVES IT BACK TO THE LAYOUT, so a reader who has dragged
-       themselves somewhere strange has a way out that is not guesswork. */
+    /* THE WAY BACK IS VISIBLE, AND ONLY WHEN THERE IS ONE.
+       Double-click resets too and shipped as the only undo, which was reported
+       straight back as "it's hard to undo, not intuitive" — correctly: an
+       affordance nobody can see is not an affordance. A labelled control sits in
+       the row the reader is already looking at, beside the button they used to
+       get here, and is absent until a size has been set so it is not one more
+       thing to ignore on a rail this narrow. */
+    {
+      const seen = () => page.evaluate(() => {
+        const a = document.getElementById('chatauto');
+        const r = a ? a.getBoundingClientRect() : null;
+        return {on: !!(r && r.width > 2 && r.height > 2),
+                box: r ? Math.round(r.width) + "x" + Math.round(r.height) : "none",
+                label: a ? (a.textContent || "").trim() : null};
+      });
+      // Put a size back on: the arms above ended by dragging down to the floor,
+      // which is still a set size, so this is already true — asserted rather
+      // than assumed, because it is the precondition for the next two.
+      const now = await seen();
+      ok(`with a size set, a way back is offered (${now.label}, ${now.box})`,
+         now.on === true, JSON.stringify(now));
+      await page.click('#chatauto');
+      await new Promise(r => setTimeout(r, 250));
+      const off = await size();
+      ok("...one click gives the height back to the layout", off.sized === false);
+      ok("...and the control goes away with the thing it undoes",
+         (await seen()).on === false, JSON.stringify(await seen()));
+    }
+
+    /* DOUBLE-CLICK STILL WORKS, for a reader who found it. Kept because it costs
+       nothing, not because it counts as the undo. */
+    await drag(120);
     const at = await grabAt();
     await page.mouse.click(at.x, at.y, {clickCount: 2});
     await new Promise(r => setTimeout(r, 250));
