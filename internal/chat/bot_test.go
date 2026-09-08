@@ -624,9 +624,20 @@ func TestBotSpeaksOncePerGapAcrossEveryRoom(t *testing.T) {
 		t.Fatalf("the bot spoke twice inside its gap: %d messages in the second room", len(got))
 	}
 
-	// PAST THE GAP IT MAY SPEAK AGAIN — but the question it would have answered
-	// has been consumed by the watermark, which is deliberate: a question that
-	// waited out the throttle is stale, and MaxAge says so. A new one is answered.
+	/* PAST THE GAP IT MAY SPEAK AGAIN, and it answers the NEWEST thing waiting.
+	   This used to say the throttled question "has been consumed by the
+	   watermark, which is deliberate: a question that waited out the throttle is
+	   stale, and MaxAge says so" — and that cost a real reader their first
+	   message on the live site. MinGap there is ten seconds and MaxAge is ten
+	   minutes, so the drop was calling a message stale that the code itself
+	   considered fresh for another nine and a half. A throttled pass now returns
+	   without consuming; see Bot.once.
+	   THE COUNT IS THE SAME EITHER WAY — two questions and one answer — because
+	   this pass answers the newest of the two rather than nothing, so the arm
+	   below is not what distinguished the behaviours. The prompt is: it names the
+	   message being answered, and the next assertion pins that it is the newer
+	   one. TestAMessageArrivingInsideTheGapIsAnsweredAfterIt covers the case that
+	   was silently dropped. */
 	*clock = clock.Add(2 * time.Minute)
 	if _, err := post(t, s, "ledger", "ip-b", "what does settled NO mean?"); err != nil {
 		t.Fatal(err)
@@ -636,6 +647,71 @@ func TestBotSpeaksOncePerGapAcrossEveryRoom(t *testing.T) {
 	}
 	if got, _ := s.Recent(ctx, "dev", "ledger", 0, 50); len(got) != 3 {
 		t.Fatalf("expected two questions and one answer, got %d", len(got))
+	}
+	if !strings.Contains(m.prompt, "what does settled NO mean?") {
+		t.Errorf("it should answer the NEWEST question waiting, not the older one")
+	}
+}
+
+/*
+A MESSAGE THAT ARRIVES INSIDE THE GAP IS ANSWERED AFTER IT, not dropped.
+
+	THE REPORT: a visitor said "hello?" in the covid room four seconds after the
+	helper had answered somewhere else, and the log has no line for it at all —
+	the scan considered it, could not speak, advanced the watermark past it, and
+	nothing ever looked at it again. Reproduced live in two fresh rooms: a
+	greeting 2.5s after a reply was still unanswered 75 seconds later.
+	THE SHAPE IS THE REPORTED ONE: a reply somewhere else spends the allowance,
+	the newcomer's greeting lands inside the gap, and the pass that follows the
+	gap must pick it up. A greeting rather than a question, because a greeting is
+	what a new reader actually sends and it is the one message whose whole value
+	is that somebody answers it.
+*/
+func TestAMessageArrivingInsideTheGapIsAnsweredAfterIt(t *testing.T) {
+	s, clock := newStore(t)
+	ctx := context.Background()
+	m := &fakeModel{reply: "Hey! Ask away.", in: 60, out: 8}
+	b := newBot(t, s, m)
+	b.MinGap = time.Minute
+
+	// Somewhere else spends the allowance.
+	if _, err := post(t, s, "orem", "ip-a", "how do i stake?"); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.once(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if m.calls != 1 {
+		t.Fatalf("the first question should have been answered (%d calls)", m.calls)
+	}
+
+	// The newcomer arrives five seconds later, in a room of their own.
+	*clock = clock.Add(5 * time.Second)
+	if _, err := post(t, s, "ledger", "ip-new", "hello?"); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.once(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if m.calls != 1 {
+		t.Fatalf("the gap should have held this pass back (%d calls)", m.calls)
+	}
+
+	// AND THE PASS AFTER THE GAP MUST FIND IT. Nothing new is posted here: the
+	// only thing left to answer is the greeting that was already looked at once.
+	*clock = clock.Add(2 * time.Minute)
+	if err := b.once(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if m.calls != 2 {
+		t.Fatalf("the newcomer's greeting was dropped for good (%d calls)", m.calls)
+	}
+	got, err := s.Recent(ctx, "dev", "ledger", 0, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 || got[1].Moniker != "anon" {
+		t.Fatalf("the greeting should have been answered in its own room: %+v", got)
 	}
 }
 

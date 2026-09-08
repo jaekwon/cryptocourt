@@ -379,24 +379,46 @@ func (b *Bot) once(ctx context.Context) error {
 		return nil
 	}
 	now := b.now()
-	rooms, err := b.Store.ActiveRooms(ctx, now.Add(-b.age()).Unix())
-	if err != nil {
-		return err
-	}
 
-	// THE THROTTLE IS CHECKED BEFORE THE MODEL AND AFTER THE SCAN, deliberately.
-	// Before the model, so a throttled pass costs nothing at all.
-	// The scan is what advances the watermarks, and it must run every pass: if it
-	// were skipped while throttled, the questions that arrived during the wait
-	// would still be waiting when the gap expired and the bot would answer the
-	// oldest of them, which is the behaviour MaxAge exists to prevent.
+	/* THE THROTTLE IS CHECKED FIRST, AND IT RETURNS. It used to be checked after
+	   the scan so that a throttled pass still advanced the watermarks, on the
+	   reasoning that "the questions that arrived during the wait would still be
+	   waiting when the gap expired and the bot would answer the oldest of them,
+	   which is the behaviour MaxAge exists to prevent".
+	   THAT COST A REAL READER THEIR FIRST MESSAGE. Measured on the live site: a
+	   visitor said "hello?" in the covid room four seconds after the helper had
+	   answered somewhere else, and the log has no line for it at all — the scan
+	   considered it, could not speak, advanced the watermark past it, and it was
+	   never looked at again. Reproduced deliberately in two fresh rooms: a
+	   greeting 2.5s after a reply was still unanswered 75 seconds later, which is
+	   seven ticks and long past the gap.
+	   THE OLD REASONING DEFINED "STALE" TWICE AND THE TWO DISAGREE. MaxAge says
+	   stale is ten MINUTES; the drop treated anything older than MinGap as spent,
+	   and MinGap on the live site is ten SECONDS. A message the code itself calls
+	   fresh for another 9m50s was being discarded as too old to answer.
+	   IT ALSO ANSWERS THE NEWEST, NOT THE OLDEST. The loop below keeps the newest
+	   candidate across every room and scan keeps the newest within one, so the
+	   harm the old comment named cannot happen: after the gap this answers the
+	   most recent thing anybody asked, and MaxAge still discards a genuine
+	   backlog.
+	   THE BILL DOES NOT MOVE. The gap still governs how often it may speak, so
+	   this changes WHICH message gets answered — one instead of none — and not
+	   how many. A throttled pass now costs a single indexed row lookup and
+	   returns.
+	   A CALL, NOT A REPLY. See Store.BotLastCallAt: a refused call left no trace
+	   the throttle could see, so a broken key called once per incoming message. */
 	last, err := b.Store.BotLastCallAt(ctx)
 	if err != nil {
 		return err
 	}
-	// A CALL, NOT A REPLY. See Store.BotLastCallAt: a refused call left no trace
-	// the throttle could see, so a broken key called once per incoming message.
-	maySpeak := last.IsZero() || now.Sub(last) >= b.gap()
+	if !last.IsZero() && now.Sub(last) < b.gap() {
+		return nil
+	}
+
+	rooms, err := b.Store.ActiveRooms(ctx, now.Add(-b.age()).Unix())
+	if err != nil {
+		return err
+	}
 
 	var pick *botCandidate
 	for _, room := range rooms {
@@ -416,7 +438,7 @@ func (b *Bot) once(ctx context.Context) error {
 			pick = c
 		}
 	}
-	if pick == nil || !maySpeak {
+	if pick == nil {
 		return nil
 	}
 	return b.answer(ctx, *pick)
