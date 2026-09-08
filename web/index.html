@@ -19355,6 +19355,34 @@ function initControls(){
 }
 applyTheme(CFG.theme);
 initControls();
+/* A CLEAN PATH BECOMES ITS HASH ROUTE, ONCE, BEFORE THE FIRST RENDER.
+   THE FAILURE THIS FIXES did not look like a routing bug at all. nginx serves
+   index.html for any path it has no file for, so https://kourt.xyz/covid
+   answered 200 with the whole application in it — and render() reads
+   location.hash, which was empty, so it matched "/" and drew the DIRECTORY. The
+   page looked fine. It simply was not the court, and the court page is what
+   carries the chat panel, so the report was "typing in the chat at
+   kourt.xyz/covid doesn't work" — measured: panel:false, input:false. There was
+   no box. Everything about the chat was working, on a URL that never had one.
+   MATCHED AGAINST THE ROUTE TABLE, not against a list written here. `/diag`
+   and `/c/covid/map` are routes already and are taken as written; a single bare
+   segment is a court, which is the URL somebody types by hand. Anything else —
+   a deep path with no route, which is what a missing media blob looks like when
+   it falls through to this file — is left alone to draw the directory, exactly
+   as it does today.
+   replaceState, not a redirect: no second request, and no entry in the reader's
+   history for the URL they typed. */
+function pathRoute(pathname){
+  const p = String(pathname == null ? "" : pathname).replace(/^\/+|\/+$/g, "");
+  if(!p) return null;
+  const asIs = "/" + p;
+  if(routes.some(([re]) => re.test(asIs))) return asIs;
+  return /^[a-z0-9-]+$/.test(p) ? "/c/" + p : null;
+}
+if(!location.hash){
+  const to = pathRoute(location.pathname);
+  if(to) history.replaceState(null, "", "/#" + to + location.search);
+}
 render().then(()=>{ const t=atTarget(); atReveal(t); if(t){ t.focus({preventScroll:true}); t.scrollIntoView(); } });
 </script>
 </body>

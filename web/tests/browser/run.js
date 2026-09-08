@@ -105,6 +105,7 @@ const ALL = ["embed_layout.js", "tagrow_layout.js", "route_crawl.js",
              // the two marks, and the pupil that must not move between them
              "map_reveal.js",
              "map_glide.js",
+             "clean_path.js",
              // a set's own page: the mark beside its name, and the way in
              "set_page.js",
              // the meta franchise, as it actually reaches a reader
