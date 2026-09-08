@@ -17208,7 +17208,22 @@ async function meHoldings(addr,courts){
       <div class="stat"><div class="k">you can pull now</div><div class="v tnum">${pullsNow.length}</div><div class="sub">principal and earned pools — open each claim</div></div>
       <div class="stat"><div class="k">maybe — the court decides</div><div class="v tnum">${maybeCourts.length}</div><div class="sub">voter carrots — a pull costs only gas</div></div>
       <div class="stat"><div class="k">senior tickets</div><div class="v tnum">${seniorCount}</div><div class="sub">owed payouts — paid as budget accrues${isLive()? " · newest 25 per court checked":""}</div></div>
-     </div></section>`;
+     </div>`
+    /* AND A WAY TO TAKE IT, HERE, where the figure is. The claim control lived
+       only on a court page, so this page said "554.4 GNOT waiting" and offered
+       nothing to do about it — a reader would have to know that the way to act
+       on a number shown here is to go and find some other court's page.
+       ONLY FOR THE READER'S OWN ADDRESS. This page reads any address you paste,
+       and offering to claim somebody else's entitlement is offering a
+       transaction that mints to THEM and is signed by you: it would not fail, it
+       would just be a gift the page implied was yours to take. */
+    + (pendingFr > 0 && CFG.addr && addr === CFG.addr
+        ? `<div class="actions" style="margin-top:10px">`
+          + btn("Claim your meta coin", "ClaimMetaFranchise", {}, "",
+                "mints what you have accrued across every court; nothing else is touched")
+          + `</div>`
+        : "")
+    + `</section>`;
   const depth0 = isLive()? (parseInt(QP.scan||"",10)||SCAN_DEPTH) : 0;
   const mescanNote = mescan.length? `<div class="pager"><span class="mono small">live scan: ${mescan.map(([sl,k,n])=>`${fmtN(k)} of ${fmtN(n)} of your positions in ${esc(sl)}`).join(" · ")} — your positions come from the court's address index, so none is out of reach; older PULLS still are</span><span class="chips"><a class="pill void" href="#/me?scan=${depth0+100}">scan older ›</a></span></div>` : "";
   const mewarn = mefail? `<p class="small" style="color:var(--no)">${mefail} chain read${mefail>1?"s":""} failed — this view may be incomplete; a pull is never guessed, so rows may be missing. Reload before trusting it.</p>` : "";

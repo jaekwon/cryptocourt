@@ -91,6 +91,21 @@ const {PAGE, demoPage} = require('./harness');
   ok("...beside what is already held, which is the other half",
      !!(heldTile && heldTile.v && !/none/.test(heldTile.v)), JSON.stringify(heldTile));
 
+  /* AND NO CLAIM CONTROL FOR AN ADDRESS THAT IS NOT YOURS. The sample reader has
+     an entitlement waiting and no wallet is connected, which is the exact state
+     where offering the transaction would be wrong: it would mint to that address
+     and be signed by whoever pressed it. The figure is public; the control is
+     not. */
+  /* FOUND BY ITS LABEL, NOT BY data-func. In demo mode btn() renders the INERT
+     form — no data-func at all, because an action wired to sample arguments is a
+     trap — so an assertion keyed on that attribute cannot tell a control that is
+     present from one that is absent. Measured: it passed with the guard removed,
+     which is an arm testing nothing. The label is on both forms. */
+  const claim = await page.evaluate(() =>
+    [...document.querySelectorAll('button')]
+      .some(b => /Claim your meta coin/.test(b.textContent || "")));
+  ok("...and no claim control, because no wallet is connected", !claim);
+
   ok("the page threw nothing while doing all that", errs.length === 0, errs.join(" | "));
   await browser.close();
   console.log(fail ? "\n" + fail + " FAILURES" : "\nALL PASS");

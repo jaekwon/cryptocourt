@@ -232,6 +232,20 @@ ok("...and shows it as its own tile", /waiting in the meta court/.test(src));
    leaves every assertion above green and the page unchanged — measured: deleting
    `${frStat}` from the strip survived this file until this arm existed. The same
    shape as a tile that exists in a variable nobody renders. */
+/* AND A WAY TO TAKE IT, WHERE THE FIGURE IS. The claim control lived only on a
+   court page, so this page said "554.4 GNOT waiting" and offered nothing to do
+   about it — a reader would have to know that the way to act on a number shown
+   here is to go and find some other court's page. */
+ok("the positions page offers the claim beside the figure",
+   /btn\("Claim your meta coin", "ClaimMetaFranchise", \{\}, "",\s*\n\s*"mints what you have accrued across every court/.test(src));
+/* ONLY FOR THE READER'S OWN ADDRESS, and this is the arm that matters. The page
+   reads any address you paste. Offering to claim somebody else's entitlement is
+   offering a transaction that mints to THEM and is signed by you — it would not
+   fail, it would just be a gift the page implied was yours to take. */
+ok("...only when it is the reader's own address, and they are connected",
+   /pendingFr > 0 && CFG\.addr && addr === CFG\.addr/.test(src));
+ok("...and nothing at all when it is not", /: ""\)\s*\n\s*\+ `<\/section>`;/.test(src));
+
 ok("...and the positions strip renders it, not just builds it",
    /\$\{heldStat\}\s*\n\s*\$\{frStat\}/.test(src));
 ok("...saying none rather than a bare zero when there is none",
