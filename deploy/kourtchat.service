@@ -40,6 +40,28 @@ Group=kourt
 # The archive asks a node whether the chain really references a blob before
 # keeping it, so it needs a node to ask. This is the same chain the overlay is
 # stamped with at deploy time.
+# THE HELPER IN THE CHAT is the --bot at the end of this list.
+#
+# IT NEEDS BOTH THE FLAG AND A KEY before it runs — see chat.BotRunnable — so
+# this flag alone starts nothing, and a key alone starts nothing either. The key
+# is set once through /api/chat/botkey and read at startup; one set afterwards
+# takes effect at the next restart, which the diagnostics page says out loud.
+#
+# IN THE UNIT RATHER THAN ONLY ON THE BOX, because deploy.sh installs this file:
+# a --bot added by hand on the server is a --bot the next deploy silently
+# removes, and the symptom is a helper that stops answering with nothing in the
+# log to explain it.
+#
+# THE COMMENTARY IS UP HERE AND NOT BESIDE THE FLAG because systemd does not
+# reliably take comments inside a backslash-continued value — older versions
+# fold them into the argument list. A unit that fails to parse does not fail the
+# helper, it fails chat.
+#
+# THE PRICES ARE DEFAULTS AND ARE CONFIGURATION, NOT FACTS: $1 and $5 per
+# million tokens for claude-haiku-4-5. Wrong numbers make the "Spent" column on
+# the diagnostics page wrong and nothing else — the token counts beside it come
+# from the API's own response. Pass --bot-price-in / --bot-price-out to correct
+# them against the current price list.
 ExecStart=/opt/kourt/kourtchat \
     --addr 127.0.0.1:8788 \
     --db /var/lib/kourt/chat.db \
@@ -47,7 +69,8 @@ ExecStart=/opt/kourt/kourtchat \
     --chain dev,kourt-1 \
     --archive-rpc https://rpc.kourt.xyz \
     --behind-proxy \
-    --trusted-proxy 127.0.0.1/32,::1/128
+    --trusted-proxy 127.0.0.1/32,::1/128 \
+    --bot
 
 Restart=on-failure
 RestartSec=2
