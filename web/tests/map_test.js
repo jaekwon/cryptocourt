@@ -1539,6 +1539,27 @@ ok("controls present", ["mt-titles","mt-ids","mz-in","mz-out","mz-fit","mz-slide
        [...commentClusterSvg(n).matchAll(/ r="([\d.]+)"/g)]
          .every(m => +m[1] >= 1.5)));
 
+  /* THE CLUSTER SURVIVES THE ZOOM-OUT, which is the view it is most needed in.
+     MEASURED on kourt.xyz at 1440x900: there was no zoom at which a cluster
+     could be seen. On arrival the two commented claims sat at y=1311 and 1350,
+     under a 900px viewport that does not scroll; one click of FIT brought them
+     into view and set .far, which carried `.mapsvg.far .mcmt{display:none}` and
+     blanked them. Deployed, working, and invisible in both states.
+     Asked of the stylesheet because that is where it went wrong. The dots must
+     not be hidden at far zoom, and they must be brighter there to survive
+     shrinking — brighter and not bigger, because the reach bound above holds in
+     user units and growing the fan would break it. */
+  /* ANCHORED AT LINE START, because the first version of this assertion matched
+     the COMMENT above the rule — which quotes the old `.mapsvg.far .mcmt
+     {display:none}` verbatim to say why it went — and so failed against a
+     stylesheet that was already correct. A rule in this file begins at column
+     zero; prose about a rule is indented. */
+  ok("a cluster is not hidden when the map zooms out",
+     !/^\.mapsvg\.far[^{]*\.mcmt\b[^{]*\{[^}]*display:none/m.test(src));
+  ok("...and is drawn brighter there, since the dots shrink with the zoom",
+     /\.mapsvg\.far \.mcmt-d\{opacity:\.(\d+)\}/.test(src)
+     && +RegExp.$1 > 42);   // the base .mcmt-d opacity, in the same hundredths
+
   /* NO CROSSING EDGES. A chain through spiral points crossed itself constantly
      and read as a scribble. Checked as geometry rather than trusted to the
      construction: every pair of segments is tested for a proper intersection. */

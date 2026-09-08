@@ -504,6 +504,51 @@ const {PAGE, demoPage} = require('./harness');
   ok("...and empty in demo, where there is no chain to count comments",
      cmt.emptyInDemo === true, JSON.stringify(cmt));
 
+  /* AND THE CLUSTER SURVIVES THE ZOOM-OUT, asked of the CASCADE rather than of
+     the stylesheet — a source test can read the rule, but only a browser can say
+     what a dot computes to once .far is on, which is where a specificity mistake
+     would hide.
+     THE BUG THIS STANDS OVER. `.mapsvg.far .mcmt{display:none}` followed .mtitle
+     and .mthumb on the grounds that a cluster beside every node is noise. But
+     only claims that HAVE comments get one, and the zoomed-out view is the one
+     where "where is the talking" is the whole question. MEASURED on kourt.xyz at
+     1440x900: no zoom showed a cluster at all — on arrival the two commented
+     claims sat below a 900px viewport that does not scroll, and one click of FIT
+     brought them into view and set .far, which blanked them.
+     Demo has no comments, so a cluster is put into a real cell by hand; the CSS
+     under test is the page's own. */
+  /* MEASURED ON AN UNSELECTED NODE, and the first version of this was not: by
+     this point the harness has clicked a claim, and `.mnode-a.selected .mcmt-d`
+     is .75 in BOTH states, so near and far read identically and the check said
+     nothing. That precedence is deliberate — a picked or hovered node should out-
+     rank the zoom, which is why the far rules sit ABOVE the hover rules in the
+     stylesheet — so the selection is cleared here rather than worked around. */
+  await page.mouse.move(2, 2);
+  const far = await page.evaluate(() => {
+    document.querySelectorAll("a.mnode-a.selected").forEach(a => a.classList.remove("selected"));
+    const cell = [...document.querySelectorAll("g.mcmt")]
+      .find(g => !g.closest("a.mnode-a").matches(".selected,:hover"));
+    if(!cell) return {err: "no unselected g.mcmt cell to test"};
+    cell.innerHTML = '<path class="mcmt-e" d="M4 4L8 8"/><circle class="mcmt-d" cx="6" cy="6" r="1.75"/>';
+    const dot = cell.querySelector("circle.mcmt-d"), edge = cell.querySelector("path.mcmt-e");
+    const svg = document.querySelector("svg.mapsvg");
+    const read = () => ({cell: getComputedStyle(cell).display,
+                         dot: getComputedStyle(dot).display,
+                         dotOp: +getComputedStyle(dot).opacity,
+                         edgeOp: +getComputedStyle(edge).opacity,
+                         w: +cell.getBoundingClientRect().width.toFixed(1)});
+    svg.classList.remove("far"); const near = read();
+    svg.classList.add("far");    const out  = read();
+    svg.classList.remove("far"); cell.innerHTML = "";
+    return {near, far: out};
+  });
+  ok("a cluster is still drawn when the map zooms out",
+     !far.err && far.far.dot !== "none" && far.far.cell !== "none" && far.far.w > 0,
+     JSON.stringify(far));
+  ok("...and brighter out there than up close, since it shrinks with the zoom",
+     !far.err && far.far.dotOp > far.near.dotOp && far.far.edgeOp > far.near.edgeOp,
+     JSON.stringify(far));
+
   ok("no page errors on the map route", errs.length === 0, errs.slice(0, 2).join(" | "));
 
   await browser.close();
