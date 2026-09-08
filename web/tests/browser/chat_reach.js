@@ -208,6 +208,97 @@ const HEIGHTS = [1000, 900, 800, 760, 700, 620];
        /\bchatsend\b/.test(n.send), `reached ${n.send} instead`);
   }
 
+  /* ── ONE CLICK GIVES THE CHAT THE RAIL ──────────────────────────────────────
+     Asked for: "make the left sidebar chat expandable in case your browser
+     height is short on desktop. one click... and squishes or overrides lines
+     above chat like REFERENCE".
+     THE SHORT WINDOW IS THE POINT, so 700 is measured and not just 1000. At
+     1280x700 the log is 0px before the click — the default trade this file's
+     first half exists to defend, where the composer keeps its floor and the log
+     is what yields. Expanding is the reader taking that trade back for as long
+     as they are talking.
+     FOUR CLAIMS PER SIZE, and each is a different way for this to be broken: the
+     log grows, the links above it actually fold (a log that grew while the nav
+     stayed would mean the rail simply scrolls, which is not what was asked),
+     the composer still takes its own clicks, and COLLAPSE PUTS EVERYTHING BACK
+     — a one-way expand is a layout the reader cannot undo. Restoration is
+     asserted as equality with the pre-click measurement rather than as "smaller
+     than expanded", which a half-restore would also satisfy. */
+  for (const h of [700, 1000]) {
+    await page.setViewport({width: 1280, height: h});
+    await page.goto(PAGE + '#/c/orem', {waitUntil: 'domcontentloaded'});
+    await new Promise(r => setTimeout(r, 900));
+    const read = () => page.evaluate(() => {
+      const log = document.querySelector('#railchat .chatlog');
+      const link = [...document.querySelectorAll('.nav a')]
+        .find(a => /How it works/.test(a.textContent));
+      const send = document.querySelector('.chatsend');
+      const hgt = e => e ? Math.round(e.getBoundingClientRect().height) : null;
+      let at = "none";
+      if (send) { const r = send.getBoundingClientRect();
+        const t = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        at = t && typeof t.className === "string" ? t.className : (t ? t.tagName : "none"); }
+      const btn = document.getElementById('chatbig');
+      return {log: hgt(log), nav: hgt(link), send: at,
+              label: btn ? btn.textContent.trim() : null,
+              expanded: btn ? btn.getAttribute('aria-expanded') : null};
+    });
+    const click = async () => { await page.evaluate(() => document.getElementById('chatbig').click());
+                                await new Promise(r => setTimeout(r, 350)); };
+    const before = await read();
+    await click();
+    const open = await read();
+    await click();
+    const shut = await read();
+
+    ok(`at ${h}px the toggle says what it will do (${before.label}/${open.label})`,
+       before.label === "expand" && open.label === "collapse" &&
+       before.expanded === "false" && open.expanded === "true",
+       JSON.stringify([before.label, open.label, before.expanded, open.expanded]));
+    ok(`at ${h}px expanding grows the log (${before.log}px -> ${open.log}px)`,
+       open.log >= before.log + 100, `only ${open.log - before.log}px more`);
+    ok(`...by folding away the links above it (nav row ${before.nav}px -> ${open.nav}px)`,
+       before.nav > 0 && open.nav === 0,
+       "a log that grew while the nav stayed means the rail just scrolls");
+    ok(`...and send still takes the pointer while expanded`,
+       /\bchatsend\b/.test(open.send), `reached ${open.send} instead`);
+    ok(`...and collapsing puts both back exactly (${shut.log}px log, ${shut.nav}px nav)`,
+       shut.log === before.log && shut.nav === before.nav,
+       `expected ${before.log}/${before.nav}`);
+    /* THE 15rem CAP COMES OFF, and only a tall window can say so: at 700 the
+       freed height is under the cap, so the arm above passes either way. At
+       1000 there is 453px of room and chat.js's max-height would stop the log
+       at 240 — which is how much of this button's effect the cap would eat. */
+    if (h === 1000) {
+      ok(`at ${h}px the log passes chat.js's 15rem cap (${open.log}px)`,
+         open.log > 260, "the panel's page cap is still limiting the rail");
+    }
+  }
+  /* AND THE TOGGLE IS NOT OFFERED WHERE IT WOULD TRAP A READER. Below the
+     layout's breakpoint the rail is height:auto — nothing to expand into — so
+     the button is hidden, and the remembered flag must be INERT rather than
+     folding a phone's nav away with no visible control to bring it back. */
+  {
+    await page.setViewport({width: 390, height: 844});
+    await page.goto(PAGE + '#/c/orem', {waitUntil: 'domcontentloaded'});
+    await new Promise(r => setTimeout(r, 900));
+    const m = await page.evaluate(() => {
+      const btn = document.getElementById('chatbig');
+      const link = [...document.querySelectorAll('.nav a')]
+        .find(a => /How it works/.test(a.textContent));
+      const log = document.querySelector('#railchat .chatlog');
+      const hgt = e => e ? Math.round(e.getBoundingClientRect().height) : null;
+      const shown = btn ? getComputedStyle(btn).display : "absent";
+      const was = {log: hgt(log), nav: hgt(link)};
+      if (btn) btn.click();
+      return {shown, was, now: {log: hgt(log), nav: hgt(link)}};
+    });
+    ok("on a phone the expand toggle is not offered", m.shown === "none", m.shown);
+    ok("...and setting it anyway changes nothing there",
+       m.now.log === m.was.log && m.now.nav === m.was.nav,
+       JSON.stringify(m));
+  }
+
   ok("no page errors", errs.length === 0, errs.slice(0, 2).join(" | "));
 
   await browser.close();
