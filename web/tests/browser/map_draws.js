@@ -656,10 +656,43 @@ const {PAGE, demoPage} = require('./harness');
       const bottom = Math.max(...painted.map(R => R.bottom));
       const left = Math.min(...painted.map(R => R.left));
       const right = Math.max(...painted.map(R => R.right));
-      const C = g.getBoundingClientRect();
+      /* WHAT THE CLUSTER DRAWS, not what it can be hovered over. The group now
+         carries a transparent rect as a hit area — the <title> is on the group
+         and a browser needs a pointer target bigger than a 4.6-unit circle for
+         it to be reachable — and that rect deliberately overlaps the node by a
+         few units. Measuring the GROUP's box therefore asks "does the hit area
+         hang below the node", which is not a question anybody has: reported at
+         -28.5, i.e. minus the feather.
+         So the box is taken from the drawn children only. `fill="transparent"`
+         is what makes the rect a target rather than a decoration, and it is also
+         exactly what marks it as not-ink. */
+      const inkBoxes = [...g.querySelectorAll("circle,path,text")]
+        .map(e => e.getBoundingClientRect()).filter(R => R.width > 0 && R.height > 0);
+      const C = inkBoxes.length
+        ? {top: Math.min(...inkBoxes.map(R => R.top)),
+           bottom: Math.max(...inkBoxes.map(R => R.bottom)),
+           left: Math.min(...inkBoxes.map(R => R.left)),
+           right: Math.max(...inkBoxes.map(R => R.right)),
+           get width(){ return this.right - this.left; },
+           get height(){ return this.bottom - this.top; }}
+        : g.getBoundingClientRect();
       const others = [...document.querySelectorAll("a.mnode-a")].filter(x => x !== a)
         .map(x => x.getBoundingClientRect());
+      // The claim's own frame — the rect the node draws, not the badge below it.
+      const frame = a.querySelector("rect");
+      const frameR = frame ? frame.getBoundingClientRect() : null;
+      const circles = [...g.querySelectorAll("circle")]
+        .map(e => e.getBoundingClientRect()).filter(R => R.width > 0);
       return {id,
+        /* THE ORIGIN TOUCHES THE FRAME, and the CIRCLES clear the badge. Those
+           are two different clearances and the old single one could not say
+           either: it compared the cluster's box against the node's lowest ink,
+           so an origin resting on the frame read as an overlap of exactly the
+           badge's overhang. Asked for as "the tip of the edges just barely
+           touches the claim node". */
+        touchesFrame: frameR ? +(C.top - frameR.bottom).toFixed(1) : null,
+        circlesClear: circles.length
+          ? +(Math.min(...circles.map(R => R.top)) - bottom).toFixed(1) : null,
         clears: +(C.top - bottom).toFixed(1),
         offCentre: +Math.abs((C.left + C.width / 2) - ((left + right) / 2)).toFixed(1),
         w: +C.width.toFixed(1), h: +C.height.toFixed(1),
@@ -675,9 +708,19 @@ const {PAGE, demoPage} = require('./harness');
     ok("every cluster is matched to the claim node it belongs to", bad.length === 0,
        JSON.stringify(bad).slice(0, 160));
     const good = fan.filter(f => !f.noOwner);
-    ok("every cluster hangs BELOW everything its node paints",
-       good.every(f => f.clears >= 0),
-       JSON.stringify(good.map(f => [f.id, f.clears])));
+    /* THE TIP JUST TOUCHES. Not a gap and not buried: the stems all start at the
+       group's origin, and the origin is the frame's own bottom edge. A pixel of
+       tolerance for the map's own scaling. */
+    ok("every cluster's edges start on the claim's frame, touching it",
+       good.every(f => Math.abs(f.touchesFrame) <= 1.5),
+       JSON.stringify(good.map(f => [f.id, f.touchesFrame])));
+    /* AND THE CIRCLES STILL CLEAR THE BADGE. That is what the old single
+       clearance was really protecting — a verdict oval hangs MAPK.vov below the
+       frame, and a circle drawn through it is unreadable — but it is the DROP's
+       job now that the origin has to touch. */
+    ok("...while the circles hang below everything the node paints",
+       good.every(f => f.circlesClear === null || f.circlesClear >= 0),
+       JSON.stringify(good.map(f => [f.id, f.circlesClear])));
     ok("...centred under it, not off a corner",
        good.every(f => f.offCentre <= 1),
        JSON.stringify(good.map(f => [f.id, f.offCentre])));

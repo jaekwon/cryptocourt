@@ -44,7 +44,12 @@ const {PAGE, demoPage} = require('./harness');
   ok("a court page fills the franchise panel", !!onCourt, "(never filled)");
   ok("...saying the burn here also earns coin in the meta court",
      /also earns you the meta court's coin/.test(onCourt), onCourt.slice(0, 110));
-  ok("...one for one with what is burned", /one for one with what you burn/.test(onCourt));
+  /* THE SAME BURN, COUNTED AGAIN — the claim, not the sentence. This pinned "one
+     for one with what you burn" and went red when the copy was reworded to "the
+     same GNOT credited again there", which says the same thing. What has to hold
+     is that the panel says the burn HERE is what earns the coin THERE. */
+  ok("...saying the same burn is what earns it",
+     /(one for one|the same GNOT|same burn)/i.test(onCourt), onCourt.slice(0, 160));
   /* THE SENTENCE THAT ANSWERS THE REPORT. Without it, meta's zero supply reads as
      the feature being broken rather than as coin that is owed and unminted. */
   ok("...and that nothing is minted until it is claimed",

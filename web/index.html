@@ -8367,7 +8367,11 @@ function commentClusterSvg(count, threadCount){
   const r = shown > 3 ? 4.6 : 5.2;
   const GAP = 2.6;                             // ink between neighbours
   const step = 2 * r + GAP;
-  const drop = 15;                             // how far below the node they sit
+  /* FAR ENOUGH DOWN TO CLEAR A VERDICT BADGE. The origin now sits on the frame,
+     so the oval's MAPK.vov = 9 units of overhang is inside this figure's own
+     coordinates: a circle whose top is above 9 would be drawn through the badge.
+     16 puts the smallest circle's top at 10.8 and the largest at 11.4. */
+  const drop = 16;                             // how far below the node they sit
   const slots = shown + (more ? 1 : 0);
   /* CENTRED ON WHAT IT DRAWS, not on its slots. The ellipsis's box overhangs a
      circle's by half the difference between them, and only on the right, because
@@ -8402,7 +8406,30 @@ function commentClusterSvg(count, threadCount){
         + `text-anchor="middle" dominant-baseline="central">\u2026</text>`;
     }
   }
-  return `<path class="mcmt-e" d="${d}"/>` + dots + ell;
+  /* AN INVISIBLE FEATHER OVER THE WHOLE FIGURE, so the hover text is reachable.
+     The <title> lives on this group and a browser shows it when the pointer is
+     over any of its children — which were a 4.6-unit circle and a 0.7-wide line,
+     so reading "9 comments in 3 threads" meant landing on a dot exactly.
+     Reported as: "right now i need to exactly put my mouse cursor on the comment
+     node/circle which is small".
+     A RECT, NOT A FATTER STROKE. A transparent stroke on each circle would widen
+     each one's hit area and its bounding box unevenly; one rect over the drawn
+     extent covers the gaps BETWEEN the circles too, which is most of where a
+     pointer actually lands.
+     fill="transparent", NOT fill="none". `none` takes no pointer events at all,
+     which is the whole difference between a hit area and a decoration.
+     HUGGING THE DRAWING, not centred on the origin: the extent is asymmetric
+     when an ellipsis is present, and a symmetric rect would define the group's
+     bounding box and quietly mask the off-centre check in map_draws. */
+  const FEATHER = 3;
+  const halfEll = more ? (CMT_ELL_BOX / CMT_ELL_INK) * r : 0;
+  const lastX = x0 + (slots - 1) * step;
+  const hx = x0 - r - FEATHER;
+  const hw = (lastX + (more ? halfEll : r) + FEATHER) - hx;
+  const hit = `<rect class="mcmt-h" x="${hx.toFixed(2)}" y="${(-FEATHER).toFixed(2)}" `
+    + `width="${hw.toFixed(2)}" height="${(drop + r + 2 * FEATHER).toFixed(2)}" `
+    + `fill="transparent"/>`;
+  return hit + `<path class="mcmt-e" d="${d}"/>` + dots + ell;
 }
 
 /* THE COUNTS, ONE CLAIM AT A TIME BUT AFTER THE PAINT.
@@ -12399,8 +12426,18 @@ function mapSvg(L, data, slug){
       // self-referential and returns minus the cluster height whatever the
       // truth is. Measured against everything the node PAINTS, the fan now
       // clears it by 5.9px and sits at 0 offset from centre.)
+      /* ON THE FRAME, NOT BELOW THE BADGE. This anchored at n.y+max(fh,h), which
+         on a badged claim is fh plus the verdict oval's MAPK.vov overhang — so
+         the origin every stem starts from sat 9 units under the node, in empty
+         space, and the figure read as floating. Measured: the cluster's top
+         cleared the frame by 11.5px and the lowest ink by 0.6.
+         Asked for as "the tip of the edges just barely touches the claim node",
+         which is n.y+fh: the frame's own bottom edge.
+         THE OVERHANG IS HANDLED BY THE DROP INSTEAD. That is what the earlier
+         anchor was really for — keeping the circles out of the badge — and it is
+         the drop's job, not the origin's, because only the origin has to touch. */
       + `transform="translate(${(n.x + n.w / 2).toFixed(1)} `
-      + `${(n.y + Math.max(fh, n.h)).toFixed(1)})" `
+      + `${(n.y + fh).toFixed(1)})" `
       /* NOT aria-hidden ANY MORE. It was, while it held nothing but dots; it
          now carries a <title> saying how many comments and how many threads,
          which is information a reader gets and so is one a screen reader
@@ -13939,10 +13976,31 @@ function mountMap(slug, data, focusId, focusPath){
      Clicking the same node again halves what is left, so a reader who does want
      to land on it gets there by repeating the gesture rather than by learning a
      second one — and never has to undo an arrival they did not ask for.
-     THE ZOOM IS NOT BLENDED. It is a floor, not a target: it only ever raises z
-     far enough for the titles to clear the LOD line, and half of "far enough to
-     read" is not far enough to read. */
+     THE ZOOM IS STAGED THE SAME WAY, on the owner's ask: "instead of zooming
+     all the way to the node at once ... rather zoom half as much so that i need
+     to click it again to get the full zoom effect." It used to land the picked
+     title at reading size in one jump — a lot of camera for one gesture, and
+     inconsistent with the pan beside it, which had already been cut to half for
+     exactly the reason above: everything you were reading FROM left the frame in
+     a single step.
+     HALF OF A ZOOM IS HALF THE RATIO, not half the number. The wheel multiplies
+     z, the slider is log2 of it, and glideTo interpolates it geometrically — so
+     the midpoint between where the camera is and where it is going is their
+     GEOMETRIC mean. A plain average would be a bigger step at low z and a
+     smaller one at high z, which is not what "half as much" means to a hand on
+     a wheel.
+     THE SECOND STEP IS NOT ANOTHER HALVING. Halving what is left never arrives.
+     The pan can live with that — arbitrarily close to centred IS centred — but a
+     zoom with a readability threshold cannot, so a node that has spent its half
+     step is remembered and its next pick goes the whole way. Remembered PER
+     NODE, so picking a neighbour is a fresh arrival and not a continuation of
+     somebody else's.
+     THE TARGET IS STILL A FLOOR. It only ever raises z far enough for the titles
+     to clear the LOD line; a reader who has already gone further in with the
+     wheel keeps what they had, and both stages collapse to no movement rather
+     than pulling the camera back out. */
   const CENTRE_BLEND = 0.5;
+  const zoomSpent = new Set();     // node keys whose half step has been taken
   function centreOn(next){
     if(!next) return;
     const b = next.kind==="court" ? L.court
@@ -13952,7 +14010,13 @@ function mountMap(slug, data, focusId, focusPath){
     // centring on a claim shows a box with its sentence hidden.
     const el = svgEl(), px = el && el.clientWidth;
     let tz = z;
-    if(px) tz = Math.min(MAPK.zMax, Math.max(z, MAPK.readSelPx*fit.w/(MAPK.fs.title*px)));
+    if(px){
+      const full = Math.min(MAPK.zMax,
+        Math.max(z, MAPK.readSelPx*fit.w/(MAPK.fs.title*px)));
+      const k = selKey(next);
+      tz = zoomSpent.has(k) ? full : Math.sqrt(z * full);
+      zoomSpent.add(k);
+    }
     glideTo(cx + (b.cx - cx) * CENTRE_BLEND,
             cy + (b.cy - cy) * CENTRE_BLEND, tz);
   }
@@ -14188,7 +14252,13 @@ function mountMap(slug, data, focusId, focusPath){
          middle of the screen. A claim page's "map →" link is that parameter, so
          the promise the link makes was kept everywhere except the panel a
          reader looks at to find out what they arrived at.
-         After the zoom, because select() re-centres and this must not fight it. */
+         After the zoom, because select() re-centres and this must not fight it.
+         AND IT ARRIVES ALL THE WAY IN. A click is a step TOWARD a node and so
+         takes half the zoom; ?focus=<id> is a claim page saying "this one", and
+         the reader made that choice before the map existed. Spending the half
+         step here keeps the landing exactly what it was before staging — the
+         "map →" link still delivers a readable claim in one move. */
+      zoomSpent.add(selKey({kind:"claim", id:focusId}));
       select({kind:"claim", id:focusId});
     } }
   else { frameCore(); apply(); }

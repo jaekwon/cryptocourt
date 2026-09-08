@@ -1651,6 +1651,38 @@ ok("controls present", ["mt-titles","mt-ids","mz-in","mz-out","mz-fit","mz-slide
      directly with both numbers, so none of it can see a caller that passes only
      one — and the caller HAD both in hand and passed only rows, which is how the
      figure came to mean comments in the first place. */
+  /* AN INVISIBLE FEATHER, so the hover text is reachable. The <title> is on the
+     group and a browser shows it for a pointer over any child — which were a
+     4.6-unit circle and a 0.7-wide line, so reading the count meant landing on a
+     dot exactly. Reported as "i need to exactly put my mouse cursor on the
+     comment node/circle which is small".
+     fill="transparent", NOT fill="none": `none` takes no pointer events at all,
+     which is the whole difference between a hit area and a decoration. Verified
+     in a browser as well as here — elementFromPoint two pixels beside a dot, and
+     in the gap between two dots, both land on this rect. */
+  ok("the figure carries an invisible hit area", (() => {
+    const svg = commentClusterSvg(4, 3);
+    return /class="mcmt-h"[^>]*fill="transparent"/.test(svg);
+  })(), commentClusterSvg(4, 3).slice(0, 130));
+  ok("...that is much larger than the circles it covers", (() => {
+    const svg = commentClusterSvg(1, 1);
+    const w = +(svg.match(/class="mcmt-h"[^>]*width="([\d.]+)"/) || [])[1];
+    return w >= 2 * rOf(svg) + 6 - 0.01;         // a circle plus 3 either side
+  })());
+  ok("...and reaches above the origin, so the stems' own tip is hoverable",
+     +(commentClusterSvg(1, 1).match(/class="mcmt-h"[^>]*y="(-?[\d.]+)"/) || [])[1] < 0);
+  /* AND IT COVERS EVERY CIRCLE, including the last one when an ellipsis has
+     pushed the row off the origin. Written first as "it must NOT be centred on
+     the origin", which was wrong: the row IS centred once the ellipsis
+     compensation is applied, so that arm failed on correct geometry. What the
+     hit area actually has to do is contain what it is a target for. */
+  ok("...covering every circle it is a target for", (() => {
+    const svg = commentClusterSvg(40, 9);
+    const x = +(svg.match(/class="mcmt-h"[^>]*x="(-?[\d.]+)"/) || [])[1];
+    const w = +(svg.match(/class="mcmt-h"[^>]*width="([\d.]+)"/) || [])[1];
+    const rr = rOf(svg);
+    return cx(svg).every(c => c - rr >= x && c + rr <= x + w);
+  })());
   ok("the cluster fill passes the thread count, not only the row count",
      /commentClusterSvg\(rows, threads\)/.test(src));
   ok("...and is not encircled", (() => {

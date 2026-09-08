@@ -131,8 +131,13 @@ const PAGE = 'file://' + path.join(__dirname, '..', '..', 'index.html');
        Read live at a position of 2,007,984,062: the curve gives 2,015,999,997
        µGNOT against 2,016.0 GNOT of entitlement actually consumed, the same
        number to a rounding remainder of one micro-unit. */
+    /* NAMES WHERE THE BURNING HAPPENED — the claim, not a preposition. This
+       required "on other courts" and went red when the line was reworded to
+       "burned in other courts", which says exactly the same thing. An assertion
+       that pins the wording of prose somebody else is still writing fails on
+       their edits rather than on defects. */
     ok("...while the meta court names where the burning happened",
-       /on other courts/.test(metaRow.small), JSON.stringify(metaRow));
+       /other courts/.test(metaRow.small), JSON.stringify(metaRow));
     ok("...and gives the figure rather than its structural zero",
        /GNOT/.test(metaRow.small) && !/^0(\.0+)? GNOT/.test(metaRow.small),
        JSON.stringify(metaRow));
