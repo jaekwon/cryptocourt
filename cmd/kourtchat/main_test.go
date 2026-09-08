@@ -248,31 +248,38 @@ func TestTheCountryHeaderWarningFiresOnlyWhereTheHeaderIsIgnored(t *testing.T) {
 }
 
 /*
-THE HELPER'S HOOKS ARE ACTUALLY WIRED, asked of main.go's SOURCE because that
+THE COMMAND DOES NOT HAND-BUILD THE HELPER, which is a far narrower thing to
 
-	is the one thing the package's own tests cannot reach: main() opens a
-	database, binds a port and never returns, so there is no seam to call it
-	through.
-	WHY IT IS WORTH A CHECK AT ALL. Bot.Wake and Bot.Subscribe are optional
-	fields — deliberately, so a test can run the helper with no server — and an
-	optional field that nothing sets fails silently and slowly. Wake is the
-	example: without it the bot posted in 3ms and a reader holding a long poll saw
-	nothing for the full twenty seconds of MaxWait. The bot's own tests pass
-	either way, because they set the field themselves.
-	ITS LIMITS, ADMITTED: this shows the lines are written, not that they run.
+	check than what used to be here.
+	WHAT WAS HERE, AND WHY IT WENT. A check that read main.go for "Wake: srv.Wake"
+	and "Subscribe: srv.Subscribe": those are optional fields, so the one real
+	caller forgetting either was a fault nothing failed on, and main() has no seam
+	a test can call. It could only ever show the lines were WRITTEN, not that the
+	hooks worked — and it did not: the Subscribe line was present and correct the
+	whole time while the channel it handed back was one that ordinary posts never
+	closed, so the helper never woke on a message at all. A guard that reads text
+	cannot see that.
+	WHAT REPLACES IT. chat.NewBot owns the wiring and is tested behaviourally in
+	its own package, by driving the hooks rather than reading them. All that is
+	left for this file to say is that the command goes THROUGH it — a struct
+	literal would bypass the constructor and the guarantee with it.
 */
-func TestTheHelpersHooksAreWiredInMain(t *testing.T) {
+func TestTheCommandBuildsTheHelperThroughTheConstructor(t *testing.T) {
 	src, err := os.ReadFile("main.go")
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{
-		"Subscribe: srv.Subscribe", // so it reacts in about a second, not on a tick
-		"Wake:      srv.Wake",      // so the readers are told at once
-	} {
-		if !strings.Contains(string(src), want) {
-			t.Errorf("main.go does not wire %q — an unset optional hook fails "+
-				"silently, and this one costs a reader up to MaxWait", want)
-		}
+	text := string(src)
+	if !strings.Contains(text, "chat.NewBot(") {
+		t.Error("main.go must build the helper with chat.NewBot, which is what attaches its hooks")
+	}
+	if strings.Contains(text, "&chat.Bot{") {
+		t.Error("main.go hand-builds a chat.Bot, which bypasses NewBot and its wiring")
+	}
+	// ...and the server's own flag comes from that same result, so "is there a
+	// helper" is answered once. Two answers to it once published enabled=true for
+	// a helper that could not run, and put a phantom participant in every room.
+	if !strings.Contains(text, "srv.BotEnabled = helper != nil") {
+		t.Error("main.go must set BotEnabled from the constructor's result")
 	}
 }

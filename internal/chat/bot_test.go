@@ -168,6 +168,134 @@ func TestAGreetingArrivesInAboutASecondAndAnAnswerTakesItsTime(t *testing.T) {
 	}
 }
 
+/*
+THE CONSTRUCTOR CONNECTS THE HELPER, and this drives the hooks rather than
+
+	reading them.
+	WHAT THIS REPLACES. Wake and Subscribe are optional fields, so the one real
+	caller forgetting either is a fault nothing fails on — and Wake WAS missing
+	for a while, at a cost of replies the bot wrote in 3ms that readers did not
+	see for up to twenty seconds. The bot's own tests passed throughout, because
+	they set the fields themselves. The command has no seam a test can call, so
+	the guard was a check that read main.go's TEXT, which could only show the line
+	was written. Here the wiring is in a function, and these arms USE it.
+*/
+func TestNewBotIsConnectedToTheServerItSpeaksThrough(t *testing.T) {
+	srv, s, _ := newServer(t)
+	opts := BotOptions{Enabled: true, Model: "m", MinGap: time.Minute,
+		Chains: map[string]bool{"dev": true}}
+
+	if b := NewBot(s, srv, "", opts); b != nil {
+		t.Error("no key means no helper")
+	}
+	off := opts
+	off.Enabled = false
+	if b := NewBot(s, srv, "sk-ant-key-000000", off); b != nil {
+		t.Error("a key lying in the database is not a request to spend it")
+	}
+
+	b := NewBot(s, srv, "sk-ant-key-000000", opts)
+	if b == nil {
+		t.Fatal("a flag and a key should give a helper")
+	}
+	if b.Wake == nil || b.Subscribe == nil {
+		t.Fatal("the constructor exists to attach these")
+	}
+
+	/* THE WAKE ACTUALLY WAKES A WAITER ON THAT SERVER. Non-nil is not the
+	   property that matters — a function that points at the wrong pulse, or at a
+	   different server, is non-nil too. So a real poll is held and the hook the
+	   bot was handed is the thing that releases it. */
+	if _, err := post(t, s, "orem", "ip-a", "something to poll past"); err != nil {
+		t.Fatal(err)
+	}
+	msgs, _ := s.Recent(context.Background(), "dev", "orem", 0, 50)
+	top := msgs[len(msgs)-1].ID
+
+	ts := httptest.NewServer(srv.Routes())
+	defer ts.Close()
+	const wait = 4 * time.Second
+	held := make(chan time.Duration, 1)
+	go func() {
+		t0 := time.Now()
+		r, err := http.Get(fmt.Sprintf("%s/api/chat/dev/orem?wait=%d&seen=%d",
+			ts.URL, int(wait.Seconds()), top))
+		if err == nil {
+			io.Copy(io.Discard, r.Body)
+			r.Body.Close()
+		}
+		held <- time.Since(t0)
+	}()
+	time.Sleep(250 * time.Millisecond) // let it settle into the wait
+
+	b.Wake("dev", "orem")
+	if took := <-held; took > wait/2 {
+		t.Errorf("the wake the constructor attached did not release a waiter: "+
+			"%s against a %s poll", took.Round(time.Millisecond), wait)
+	}
+
+	/* AND THE SUBSCRIBE FIRES WHEN SOMETHING IS SAID. Same argument: a channel
+	   from the wrong pulse would satisfy a nil check and never close. */
+	ch := b.Subscribe()
+	srv.Wake("dev", "ledger") // any room: the signal it hands back is the global one
+	select {
+	case <-ch:
+	case <-time.After(2 * time.Second):
+		t.Error("the subscription the constructor attached never fired")
+	}
+}
+
+/*
+A POST WAKES THE RUNNING HELPER, which is what makes "about a second" true of
+
+	anything a reader experiences.
+	THE TICK IS SET TO AN HOUR ON PURPOSE. That is the whole design of this test:
+	if a reply arrives, the WAKE delivered it, because nothing else could have.
+	Before the observer channel existed this timed out — an ordinary post fired
+	the court's own channel and left the global one alone, the subscription never
+	fired, and the helper waited for its tick. MEASURED: 1.22s after the post.
+*/
+func TestAPostWakesTheRunningHelper(t *testing.T) {
+	srv, s, _ := newServer(t)
+	m := &fakeModel{reply: "hey — what would you like to know?", in: 50, out: 10}
+	b := NewBot(s, srv, "sk-ant-key-000000", BotOptions{
+		Enabled: true, Model: "m", MinGap: time.Minute,
+		Chains: map[string]bool{"dev": true},
+	})
+	if b == nil {
+		t.Fatal("expected a helper")
+	}
+	b.Endpoint = m.server(t).URL
+	b.GreetAfter = 30 * time.Minute
+	b.Tick = time.Hour
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go b.Run(ctx)
+	time.Sleep(200 * time.Millisecond) // let Run take its first subscription
+
+	t0 := time.Now()
+	if _, err := post(t, s, "orem", "ip-reader", "hi"); err != nil {
+		t.Fatal(err)
+	}
+	srv.Wake("dev", "orem") // exactly what the HTTP handler does after a post
+
+	for i := 0; i < 60; i++ {
+		msgs, _ := s.Recent(ctx, "dev", "orem", 0, 50)
+		if len(msgs) > 1 {
+			if msgs[len(msgs)-1].Moniker != "anon" {
+				t.Fatalf("the reply is not the helper's: %+v", msgs)
+			}
+			if took := time.Since(t0); took > 4*time.Second {
+				t.Errorf("woken, but slowly: %s", took.Round(time.Millisecond))
+			}
+			return
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
+	t.Fatal("no reply in six seconds, with a one-hour tick: the post did not wake it")
+}
+
 // ---- the key: write-once, and never readable -------------------------------
 
 func TestBotKeyIsWriteOnceAndNeverReadBack(t *testing.T) {

@@ -146,14 +146,17 @@ func (s *Server) here() int64 {
 // Subscribe hands back the channel that closes when anything changes anywhere.
 //
 // FOR THE IN-PROCESS HELPER, so it can react to a message in about a second
-// instead of on its next tick. It is the same global signal the long poll
-// already selects on — a close wakes every holder at once and cannot block a
-// writer, so a subscriber costs a post nothing. A caller must re-subscribe after
-// each wake, exactly as the poll does, because the channel is replaced.
-func (s *Server) Subscribe() <-chan struct{} {
-	_, anywhere := s.pulse().watch("")
-	return anywhere
-}
+// instead of on its next tick.
+//
+// NOT THE GLOBAL SIGNAL, and handing back that one was a bug: an ordinary post
+// fires the court's own channel and leaves global alone, so the subscription
+// never fired and the helper fell back to its tick. MEASURED. pulse.any is
+// closed by every change of either kind — see the field's own comment for why
+// the per-court channel cannot serve an observer that does not know the rooms.
+//
+// A caller must re-subscribe after each wake, exactly as the poll does, because
+// the channel is replaced.
+func (s *Server) Subscribe() <-chan struct{} { return s.pulse().watchAny() }
 
 func (s *Server) Wake(chain, court string) { s.pulse().fire(pulseKey(chain, court)) }
 

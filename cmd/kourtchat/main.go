@@ -256,15 +256,14 @@ func main() {
 	if botKeyErr != nil {
 		lg.Printf("chat bot: cannot read the key: %v", botKeyErr)
 	}
-	runBot := chat.BotRunnable(*bot, botKeySet)
 
 	srv := &chat.Server{
 		Store: store, Hasher: hasher, Policy: policy,
 		HealthDetail: *healthDetail,
 		AppealTo:     *appealTo,
 		Chains:       names, CountryHeader: *countryHdr, Log: lg,
-		BotEnabled:      runBot,
 		BotKeyBootstrap: *botKeyForm,
+		// BotEnabled is set below, from the one thing that decides it.
 	}
 	// Flags are decoration, so a missing or broken geo database must never stop the
 	// server: it logs and carries on with no flags at all.
@@ -282,30 +281,28 @@ func main() {
 	if err == nil && h.ScannerSeen == 0 {
 		lg.Printf("no scanner has ever run: chat is UNMODERATED and says so in /api/chat/health")
 	}
-	// THE HELPER, on the one answer computed above.
-	//
-	// THE KEY IS READ ONCE, before the server is built. A key set through the
-	// form after this point takes effect at the next restart, which the page says
-	// rather than papering over: re-reading it every tick would mean a process
-	// that starts spending because somebody filled in a form, with nothing in the
-	// log to say when that began.
+	/* THE HELPER, built by the one function that knows how to connect it.
+	   chat.NewBot returns nil when it must not run and wires Wake and Subscribe
+	   when it must — see its doc for why that is not a struct literal here. The
+	   server's own flag comes from the SAME result, so "is there a helper" is
+	   answered once rather than twice.
+	   THE KEY IS READ ONCE, above. A key set through the form afterwards takes
+	   effect at the next restart, which the page says rather than papering over:
+	   re-reading it every tick would mean a process that starts spending because
+	   somebody filled in a form, with nothing in the log to say when. */
+	helper := chat.NewBot(store, srv, botKey, chat.BotOptions{
+		Enabled: *bot, Model: *botModel,
+		Site: *botSite, Repo: *botRepo, ChainDocs: *botDocs,
+		MinGap: *botGap, InPerMTok: *botIn, OutPerMTok: *botOut,
+		Chains: names, Log: lg.Printf,
+	})
+	srv.BotEnabled = helper != nil
 	switch {
-	case !*bot:
-		// Nothing to say: the operator did not ask for one.
-	case !botKeySet:
-		lg.Printf("chat bot: enabled but no key is set yet — set one at /api/chat/botkey, then restart")
-	default:
-		b := &chat.Bot{
-			Store: store, Key: botKey, Model: *botModel,
-			Chains: names, MinGap: *botGap,
-			Site: *botSite, Repo: *botRepo, ChainDocs: *botDocs,
-			InPerMTok: *botIn, OutPerMTok: *botOut,
-			Subscribe: srv.Subscribe,
-			Wake:      srv.Wake,
-			Log:       lg.Printf,
-		}
-		go b.Run(context.Background())
+	case helper != nil:
+		go helper.Run(context.Background())
 		lg.Printf("chat bot: on, model %s, one reply per %s", *botModel, *botGap)
+	case *bot && !botKeySet:
+		lg.Printf("chat bot: enabled but no key is set yet — set one at /api/chat/botkey, then restart")
 	}
 
 	lg.Printf("listening on %s, chains %v, proxy=%v", *addr, keys(names), *behindProxy)

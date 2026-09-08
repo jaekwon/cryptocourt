@@ -201,6 +201,51 @@ const botIPHash = "bot:site-helper"
 // so that there is one place to be right and a truth table can be pinned to it.
 func BotRunnable(flagOn, keySet bool) bool { return flagOn && keySet }
 
+// BotOptions is everything a deployment chooses about the helper. Nothing in it
+// is a hook: the hooks are the point of NewBot.
+type BotOptions struct {
+	Enabled                      bool
+	Model, Site, Repo, ChainDocs string
+	MinGap                       time.Duration
+	InPerMTok, OutPerMTok        int64
+	Chains                       map[string]bool
+	Log                          func(string, ...any)
+}
+
+// NewBot builds the helper AND CONNECTS IT to the server it will speak through,
+// returning nil when it must not run.
+//
+// WHY A CONSTRUCTOR RATHER THAN A STRUCT LITERAL AT THE CALL SITE. Wake and
+// Subscribe are optional fields — deliberately, so a test can drive the bot with
+// no server attached — and an optional field that the one real caller forgets is
+// a fault that nothing fails on. That is not hypothetical: Wake was missing for
+// a while, and the cost was a reply the bot wrote in 3ms that readers did not see
+// for up to twenty seconds. The bot's own tests passed throughout, because they
+// set the field themselves.
+//
+// The command has no seam a test can call, so that omission was guarded by a
+// check that read main.go's TEXT — which could only ever show the line was
+// written, not that the hook worked. Here the wiring is inside a function a test
+// can call, and the test drives the hooks rather than reading them.
+//
+// nil MEANS DO NOT RUN, and it is the same answer Server.BotEnabled should
+// report, so a caller sets that from this result instead of deciding twice.
+func NewBot(store *Store, srv *Server, key string, o BotOptions) *Bot {
+	if !BotRunnable(o.Enabled, key != "") {
+		return nil
+	}
+	return &Bot{
+		Store: store, Key: key, Model: o.Model,
+		Chains: o.Chains, MinGap: o.MinGap,
+		Site: o.Site, Repo: o.Repo, ChainDocs: o.ChainDocs,
+		InPerMTok: o.InPerMTok, OutPerMTok: o.OutPerMTok,
+		Log: o.Log,
+		// THE TWO HOOKS, and the whole reason this function exists.
+		Subscribe: srv.Subscribe,
+		Wake:      srv.Wake,
+	}
+}
+
 func (b *Bot) logf(f string, a ...any) {
 	if b.Log != nil {
 		b.Log(f, a...)

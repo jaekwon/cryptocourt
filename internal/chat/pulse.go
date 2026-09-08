@@ -37,10 +37,46 @@ type pulse struct {
 	mu     sync.Mutex
 	per    map[string]chan struct{}
 	global chan struct{}
+
+	// AND ONE FOR AN OBSERVER OF EVERYTHING, which the two above cannot serve.
+	//
+	// A reader watches ONE court, so `fire` closes that court's channel and
+	// leaves the rest alone — deliberately, because posts are frequent and exact.
+	// `global` is the other extreme: it is closed only by fireAll, for the
+	// changes that name no court.
+	//
+	// An IN-PROCESS observer wants neither. The site's own answerer has to hear
+	// about a message in ANY room, and it cannot subscribe per-court because it
+	// does not know which rooms exist until it looks. Handing it `global` was the
+	// bug: MEASURED, an ordinary post fired the per-court channel and left global
+	// untouched, so the answerer's subscription never fired at all and it fell
+	// back to its fifteen-second tick — while the code around it claimed it
+	// reacted in about a second.
+	//
+	// Closed by BOTH fire and fireAll, so it means "something changed" and
+	// nothing narrower. It costs a post one extra close and costs readers
+	// nothing: no reader selects on it.
+	any chan struct{}
 }
 
 func newPulse() *pulse {
-	return &pulse{per: map[string]chan struct{}{}, global: make(chan struct{})}
+	return &pulse{per: map[string]chan struct{}{},
+		global: make(chan struct{}), any: make(chan struct{})}
+}
+
+// watchAny is the observer's subscription. Like watch, it must be taken BEFORE
+// the caller looks at the store, or a change landing in between closes a channel
+// nobody was holding and the observer sleeps through it.
+func (p *pulse) watchAny() <-chan struct{} {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.any
+}
+
+// bumpAny closes and replaces the observer channel. Callers hold the lock.
+func (p *pulse) bumpAny() {
+	close(p.any)
+	p.any = make(chan struct{})
 }
 
 // watch hands back the two channels a waiter selects on. TAKEN BEFORE THE
@@ -67,6 +103,11 @@ func (p *pulse) fire(key string) {
 		close(c)
 		p.per[key] = make(chan struct{})
 	}
+	// ...and an observer of everything hears about it even when no reader was
+	// watching this court. The `ok` above is why that has to be separate: with no
+	// waiter registered for a court there is no channel to close, and an observer
+	// that relied on it would hear nothing.
+	p.bumpAny()
 }
 
 // fireAll wakes every waiter, for the changes that do not name a court.
@@ -75,6 +116,7 @@ func (p *pulse) fireAll() {
 	defer p.mu.Unlock()
 	close(p.global)
 	p.global = make(chan struct{})
+	p.bumpAny()
 	// The per-court channels are left alone: a global wake reaches their waiters
 	// through the second channel they are already selecting on, and closing both
 	// would wake each waiter twice for one change.
