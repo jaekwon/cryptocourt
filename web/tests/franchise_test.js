@@ -38,7 +38,7 @@ global.btn = (label, func, args, cls, sub) =>
 const html = eval(fn("franchiseHtml") + "; franchiseHtml");
 
 /* ---- the rule is stated whether or not anyone is connected ---------------- */
-const anon = html("covid", null, 5105763090, true, null);
+const anon = html("covid", null, 5105763090, true, null, "");
 ok("the rule is stated with no wallet connected", /one for one/.test(anon), anon.slice(0, 90));
 ok("...and names the meta court as where it lands", /#\/c\/meta/.test(anon));
 ok("...and says the burn is what earns it", /one for one with what you burn/.test(anon));
@@ -58,7 +58,7 @@ ok("...naming the court whose supply that is, not the one being read",
    /the meta court's supply counts/.test(anon), anon);
 
 /* ---- the meta court's own page says it differently ------------------------ */
-const onMeta = html("meta", null, 0, true, null);
+const onMeta = html("meta", null, 0, true, null, "");
 ok("on meta's own page the coin is earned, not received for GNOT",
    /not received for GNOT/.test(onMeta) && /<b>earned<\/b>/.test(onMeta));
 ok("...and it does not link the reader to the page they are on",
@@ -66,7 +66,7 @@ ok("...and it does not link the reader to the page they are on",
 ok("every court page carries the heading", /The meta franchise/.test(anon) && /The meta franchise/.test(onMeta));
 
 /* ---- the reader's own entitlement ----------------------------------------- */
-const mine = html("covid", 554400000, 5105763090, true, null);
+const mine = html("covid", 554400000, 5105763090, true, null, "");
 ok("a pending entitlement is shown as the GNOT it came from",
    /554\.4 GNOT/.test(mine), mine.slice(mine.indexOf("fr-mine"), mine.indexOf("fr-mine") + 140));
 ok("...and says it is claimable", /claimable as meta coin/.test(mine));
@@ -83,7 +83,7 @@ ok("the confirmation names the claim", /ClaimMetaFranchise: "your meta claim"/.t
 /* ZERO IS NOT THE SAME AS NOT CONNECTED. A connected wallet with nothing waiting
    gets told how to start; an unconnected one is told nothing about itself,
    because the page does not know anything about it. */
-const zero = html("covid", 0, 5105763090, true, null);
+const zero = html("covid", 0, 5105763090, true, null, "");
 ok("a connected wallet with nothing waiting is told how to start",
    /nothing waiting here yet/.test(zero) && /burn for any court's coin/.test(zero));
 /* NOT OFFERED WHEN THERE IS NOTHING TO CLAIM. A control that signs a no-op is a
@@ -111,15 +111,15 @@ for (const [what, t] of [["a court page", anon], ["meta's own page", onMeta],
    "How much meta do people have" has an exact answer — the balance — and it was
    missing entirely: the panel showed only what was WAITING. A reader who had
    already claimed saw nothing about the coin they were holding. */
-const holds = html("covid", 0, 5105763090, true, 120000);
+const holds = html("covid", 0, 5105763090, true, 120000, "");
 ok("a holder is told what they hold", /you hold/.test(holds) && /120000 CC:META/.test(holds), holds);
 ok("...in meta's coin, not the court whose page this is", !/CC:COVID/.test(holds));
 ok("a zero balance is not printed as a holding",
-   !/you hold/.test(html("covid", 0, 5105763090, true, 0)));
+   !/you hold/.test(html("covid", 0, 5105763090, true, 0, "")));
 ok("...nor is an unread one", !/you hold/.test(zero));
 /* HOLDING AND WAITING ARE DIFFERENT THINGS and both can be true at once: coin
    already claimed, plus burn accrued since. */
-const both = html("covid", 554400000, 5105763090, true, 120000);
+const both = html("covid", 554400000, 5105763090, true, 120000, "");
 ok("holding and waiting are shown together when both are true",
    /you hold/.test(both) && /yours, waiting/.test(both));
 ok("...and the claim control is still offered", /ClaimMetaFranchise/.test(both));
@@ -169,7 +169,7 @@ ok("...and says where it all is instead", /still waiting as an entitlement/.test
    every court page in demo mode. The SENTENCE is true either way and is said
    either way — only the anchor is conditional, which is the same rule the page
    applies to a claim reference. */
-const noMeta = html("covid", null, null, false, null);
+const noMeta = html("covid", null, null, false, null, "");
 ok("with no meta court to open, the name is not a link", !/<a /.test(noMeta), noMeta);
 ok("...but the rule is still stated", /one for one/.test(noMeta) && /meta court/.test(noMeta));
 ok("...and with one, it is", /<a href="#\/c\/meta">meta court<\/a>/.test(anon));
@@ -334,6 +334,27 @@ ok("...and both buy panels render it, not just build it",
    (src.match(/\n        \$\{ack2\}\n/g) || []).length === 2,
    String((src.match(/\n        \$\{ack2\}\n/g) || []).length));
 
+/* ---- the chain says it on meta's own page, and the site does not -----------
+   The rule is meta's court DESCRIPTION now, written to the realm with
+   SetCourtDesc, and the court page already renders a description in its lead.
+   Printing it again here is the site restating a chain fact three inches below
+   the chain's own words. Asked for directly: "i thought this was supposed to be
+   description of the court on chain, not custom site language". */
+const metaOnChain = html("meta", 0, 2007984062, true, null, "the chain's own sentence");
+ok("meta's panel does not restate a description the chain carries",
+   !/not received for GNOT/.test(metaOnChain), metaOnChain);
+ok("...but still shows what only a read can say", /nothing waiting here yet/.test(metaOnChain));
+/* THE FALLBACK STAYS. A deployment whose moderators never wrote one would
+   otherwise say nothing at all about how this coin is got. */
+ok("...and says it itself when the chain has none",
+   /not received for GNOT/.test(html("meta", 0, 2007984062, true, null, "")));
+ok("...treating whitespace as none", /not received for GNOT/.test(html("meta", 0, 1, true, null, "   ")));
+/* AND ANY OTHER COURT KEEPS ITS SENTENCE, which is not a duplicate there: it is
+   about what burning HERE earns you SOMEWHERE ELSE — not that court's
+   description, and on its page in no other form. */
+ok("another court keeps the sentence even when it has a description of its own",
+   /also earns you the/.test(html("covid", 0, 5105763090, true, null, "covid's own description")));
+
 /* ---- the wiring ------------------------------------------------------------ */
 ok("the read is by ADDRESS, not by court — it is earned everywhere",
    /async function franchiseOf\(addr\)\{/.test(src)
@@ -345,7 +366,13 @@ ok("every court page carries the slot", /\+ franchiseSlotHtml\(slug\)/.test(src)
    sample too, and the sample is the default mode — which is where the silence
    would have been loudest, since most readers never leave it. */
 ok("...and it is filled in demo mode as well as live",
-   /\n  fillFranchise\(slug\);/.test(src));
+   /\n  fillFranchise\(slug, chainDesc\);/.test(src));
+/* AND IT IS HANDED THE COURT'S OWN DESCRIPTION, which the route has already read
+   — so the panel can tell whether the chain has said this itself without a
+   second read for a string the page is holding. */
+ok("...and handed the description the route already read",
+   /async function fillFranchise\(slug, desc\)\{/.test(src)
+   && /franchiseHtml\(slug, pending, supply, hasMeta, held, desc\)/.test(src));
 ok("the fill decides on the link from whether the court answered",
    /const hasMeta = isLive\(\)\? Number\.isFinite\(supply\) : !!demoCourt\(META_SLUG\);/.test(src));
 ok("the fill asks for all three at once — pending, supply, and what is held",

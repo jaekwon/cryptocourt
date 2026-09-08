@@ -3403,6 +3403,108 @@ const boardPartyRows   = out => boardRows(out, 6, ["id","author","role","mark","
 
    Each ordering gets its OWN reader bound to its own arity, so there is no
    shared entry point through which a caller can pass the wrong field count. */
+/* HOW MANY, AND IN HOW MANY CONVERSATIONS — for many claims in ONE query.
+   Same shape and same reason as docketSeriesPreload: the map draws a cluster of
+   dots beside every claim and asked BoardSize once per node, twenty-one queries
+   for twenty-one nodes, each one reloading the realm. gno runs a JSON-RPC array
+   serially, so batching at the RPC does not help; the realm has to be asked
+   once. BoardCounts does that and adds the thread count, which no read exposed.
+   IT COSTS NO GAS. A read is a query, not a transaction. The alternative was a
+   counter maintained at every post and purge — gas on every write to speed up
+   something nobody pays for, and a new thing to drift.
+   A CHAIN WITHOUT THE ENTRYPOINT answers "name BoardCounts not declared", and
+   then each claim falls back to BoardSize on its own and the label says only
+   what it knows. This page is served from a static host and cannot know which
+   build of the realm it is pointed at — the same reason DocketSeries keeps its
+   four single-claim readers. */
+/* KEYED ON THE PLAIN SLUG, which is what every reader of this cache already
+   holds — the map's card and the cluster fill both have the route's slug, and
+   only the query needs the quoted gno form. Keying on the quoted one made the
+   card call gstr() to look up a number, which is a dependency on the wire
+   grammar for no reason. */
+const BCOUNTS = new Map();   // "slug\u0000id" -> {rows, threads}
+function bcountsKey(slug, id){ return slug + "\u0000" + id; }
+async function boardCountsPreload(s2, slug, ids){
+  BCOUNTS.clear();
+  if(!ids.length) return;
+  /* THE SAMPLE ANSWERS FROM ITS OWN FIXTURE, so the map's hover text and its
+     card are exercised offline and by the browser harness. `size` counts every
+     row because BoardSize does, and `newest` is the TOP-LEVEL list — so the
+     number of lines in it is the thread count. boardchip_test pins that
+     relation (size === top-level rows + replies) so this derivation cannot
+     quietly stop being true. */
+  if(!isLive()){
+    for(const id of ids){
+      const b = demoBoard(slug, id);
+      if(!b) continue;
+      const top = String(b.newest||"").split("\n").filter(x=>x.trim()).length;
+      BCOUNTS.set(bcountsKey(slug, id), {rows: b.size||0, threads: top});
+    }
+    return;
+  }
+  let packed;
+  try{ packed = await one(`BoardCounts(${s2},${gstr(ids.join(","))})`); }
+  catch(_){ return; }         // older realm: each claim falls back on its own
+  for(const r of bcountsParse(packed)) BCOUNTS.set(bcountsKey(slug, r.id), r);
+}
+/* THE PARSE, PURE, so the field order can be tested without a chain or a DOM.
+   It was inline and a mutant that read rows out of the threads column survived
+   every harness — there was nothing that could see the difference. The realm's
+   grammar is `<id>:<rows>:<threads>;…`; a record of any other arity is dropped
+   rather than half-read, and a non-numeric count is dropped rather than
+   becoming NaN in a sentence. */
+function bcountsParse(packed){
+  const out = [];
+  for(const rec of String(packed||"").split(";")){
+    const f = rec.split(":");
+    if(f.length !== 3) continue;
+    const rows = Number(f[1]), threads = Number(f[2]);
+    if(!Number.isFinite(rows) || !Number.isFinite(threads)) continue;
+    out.push({id: f[0], rows, threads});
+  }
+  return out;
+}
+/* THE CACHE IS THE MAP'S AND NOTHING ELSE READS IT. BCOUNTS is cleared by each
+   preload, so it holds one render's answers — exactly like DSERIES. The map's
+   card may read it synchronously, because the card is drawn inside the render
+   that filled it. A CLAIM PAGE MUST NOT: it is a different route, and a hit
+   left over from a map looked at earlier would be served as this claim's
+   current count with nothing to say it was stale. */
+function bcountsGet(slug, id){ return BCOUNTS.get(bcountsKey(slug, id)) || null; }
+/* One claim, asked directly. Still ONE query where the realm has BoardCounts,
+   and two on a realm that does not — the fallback pays a second read rather
+   than showing a number it cannot stand behind.
+   threads is NULL and not zero when the chain could not say: zero would be a
+   claim of fact ("nothing was replied to") about something never asked, and
+   commentCountLabel prints a different sentence for the two. */
+async function boardCountsOf(s2, id){
+  try{
+    const f = String(await one(`BoardCounts(${s2},${gstr(String(id))})`) || "").split(":");
+    if(f.length === 3 && Number(f[0]) === Number(id)){
+      const rows = Number(f[1]), threads = Number(f[2]);
+      if(Number.isFinite(rows) && Number.isFinite(threads)) return {rows, threads};
+    }
+  }catch(_){}               // older realm, or a court that does not have this id
+  try{ return {rows: Number(await one(`BoardSize(${s2},${id})`)), threads: null}; }
+  catch(_){ return null; }
+}
+/* WHAT THE READER IS TOLD, in one place because four surfaces say it: the
+   cluster's hover text, the map's card, the claim page's chip and the docket.
+   ROWS AND NOT THREADS IS THE HEADLINE, which is the call board.gno already
+   made and had to fix once — writeBoardLink counted cs.boardTop, so a board
+   with three threads and two replies advertised "3 comments" and then showed
+   five things to read. The number in front of a discussion is a promise about
+   how much there is to read, and a reply is a comment.
+   THE THREAD CLAUSE IS DROPPED when it says nothing: a single comment is
+   trivially a single thread, and a flat board where every comment is its own
+   thread is better described as having no replies than as N threads. */
+function commentCountLabel(rows, threads){
+  if(!(rows > 0)) return "";
+  const c = rows + (rows === 1 ? " comment" : " comments");
+  if(rows === 1 || threads == null || !(threads > 0)) return c;
+  if(threads >= rows) return c + ", none replied to";
+  return c + " in " + threads + (threads === 1 ? " thread" : " threads");
+}
 const boardWire = async expr => boardUnwrap(await qeval(expr));
 const readBoardNewest  = (slug, id, off, n) =>
   boardWire(`BoardNewest(${gstr(slug)},${id},${off},${n})`).then(boardNewestRows);
@@ -3472,12 +3574,12 @@ async function boardParties(slug, id){
    while somebody can still accept it.
 
    Pure so it can be tested without a DOM — the caller does the reads. */
-function boardChipLabel(n, open, parties){
+function boardChipLabel(n, open, parties, threads){
   if(!(n > 0)) return open ? "discuss this claim" : "";
-  return n + (n === 1 ? " comment" : " comments");
+  return commentCountLabel(n, threads === undefined ? null : threads);
 }
-function boardChip(slug, id, n, open, parties){
-  const label = boardChipLabel(n, open, parties);
+function boardChip(slug, id, n, open, parties, threads){
+  const label = boardChipLabel(n, open, parties, threads);
   if(!label) return "";
   return `<a class="tlink" href="#/c/${esc(slug)}/${id}/board">${esc(label)}`
        + `<span aria-hidden="true">→</span></a>`;
@@ -3492,12 +3594,18 @@ async function fillBoardChip(slug, id){
   const slot = document.getElementById("boardchip");
   if(!slot) return;
   try{
-    const n = await boardSize(slug, id);
+    /* ONE READ, TWO NUMBERS where the realm can. boardCountsOf asks BoardCounts
+       for this single id and falls back to BoardSize alone, so this is the same
+       one query it always was and threads arrive free where they exist. */
+    const bc = await boardCountsOf(gstr(slug), id);
+    const n = bc ? bc.rows : 0;
     if(!(n > 0)){ slot.innerHTML = boardChip(slug, id, 0, await boardOpenOf(slug, id), []); return; }
+    const threads = bc.threads;
     // Filtered like every other party read: the chip says a party "has replied",
     // and a party whose only comment is hidden has not, on any surface here.
     slot.innerHTML = boardChip(slug, id, n, true,
-                               boardVisible(await boardParties(slug, id).catch(()=>[])));
+                               boardVisible(await boardParties(slug, id).catch(()=>[])),
+                               threads);
   }catch(_){ /* an unreadable board leaves the tagrow as it was, never a broken chip */ }
 }
 
@@ -7882,6 +7990,15 @@ on(/^\/$/, async ()=>{
   if(QP.q){ const qi=document.getElementById("q"); if(qi){ qi.value=QP.q; applyQ(QP.q); } }
   // stats fill for the visible rows only, chunked so a big directory cannot
   // burst hundreds of concurrent queries
+  /* THE TWO HALVES OF META'S LINE, filled by whichever row answers first. A
+     court's burn is entitlement meta earned; meta's curve position is the part
+     of it that has been claimed. Neither is knowable from one row alone. */
+  let BURN_ELSEWHERE = 0, META_CLAIMED = null;
+  const metaRowLine = claimed =>
+    claimed == null ? "earned by burning on other courts"
+    : BURN_ELSEWHERE > claimed
+      ? `${gnotAmt(claimed)} claimed of ${gnotAmt(BURN_ELSEWHERE)} earned`
+      : `${gnotAmt(claimed)} claimed`;
   const visible = (page===1? featured:[]).concat(listed);
   // ONE read for every face on the page, not one per court: CourtImages skips
   // the courts with no picture, so this costs a query whether the directory has
@@ -7904,6 +8021,15 @@ on(/^\/$/, async ()=>{
          gnotAmt, NOT ugnot, because this shares a narrow column with a name and
          a pill: "13053599975 µGNOT" does not fit and reads worse than the same
          figure in GNOT anyway. It falls back to µGNOT on dust by itself. */
+      /* AND THE FIGURE IS ONLY WHAT HAS BEEN CLAIMED, which the first label hid.
+         Reported as: covid shows 13,054 GNOT burned and meta shows 2,016 — should
+         it not be greater or equal? It should, and it is: 2,016 is claimed,
+         11,038 is still owed, and the two add to 13,053.6 against covid's
+         13,053.6, to a difference of zero. What was wrong was the sentence, which
+         said "burned on other courts" as though that were all of it.
+         SO THE ROW SAYS BOTH, and the directory is the one page that can: it
+         already reads every listed court's stats to fill these cells, so the
+         total burn across them is a sum of numbers it has, not a new read. */
       /* THE META COURT'S BURN IS ALWAYS ZERO, AND SAYING SO IS A LIE BY OMISSION.
          Its supply does not arrive through Buy — it arrives through
          ClaimMetaFranchise, which records no burn because the GNOT was already
@@ -7916,9 +8042,20 @@ on(/^\/$/, async ()=>{
          is what was spent to build it; meta's is where its coin comes from. */
       if(el&&s) el.innerHTML = `<b>${cc(s.supply, c.slug)}</b>`
         + `<small>${c.slug === META_SLUG
-            ? ((b => b == null ? "earned by burning on other courts"
-                               : gnotAmt(b) + " burned on other courts")(metaBurnFromCurve(s.minted)))
+            ? metaRowLine(metaBurnFromCurve(s.minted))
             : (Number.isFinite(s.burned)? gnotAmt(s.burned)+" burned" : "burn unread")}</small>`;
+      /* EVERY OTHER COURT'S BURN IS THE ENTITLEMENT META EVER CREATED, so each
+         one that lands adds to the total and repaints meta's cell — whichever
+         order the replies come back in. */
+      if(c.slug !== META_SLUG && Number.isFinite(s.burned)){
+        BURN_ELSEWHERE += s.burned;
+        const m = document.getElementById("cp-" + META_SLUG);
+        if(m && META_CLAIMED != null){
+          const sm = m.querySelector("small");
+          if(sm) sm.innerHTML = metaRowLine(META_CLAIMED);
+        }
+      }
+      if(c.slug === META_SLUG) META_CLAIMED = metaBurnFromCurve(s.minted);
       if(s && c.claims==null){
         // a featured court occupying a deep-window slot: the render skips it
         // in the listed section without backfilling — hide the row likewise
@@ -8055,7 +8192,7 @@ on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
   if(isLive()) fillCourtFaces([slug]);
   /* NOT GATED ON isLive(), unlike its neighbours: the rule this states is true of
      the sample too, and the sample is what most readers see. */
-  fillFranchise(slug);
+  fillFranchise(slug, chainDesc);
   if(isLive() && s.claims!=null) fillCourtRecord(slug, s.claims, s.minted);
   if(isLive()) fillJoinHeld(slug);
   if(isLive() && claims.length){
@@ -8189,17 +8326,40 @@ async function fillCommentClusters(s2, slug, seq0){
     .map(g=>Number(String(g.dataset.cmt).slice(slug.length + 1)))
     .filter(id=>Number.isFinite(id) && id > 0);
   if(!ids.length) return;
-  await inChunks(ids, 6, async id=>{
+
+  /* ONE QUERY FOR THE WHOLE MAP. This asked BoardSize once per node — twenty-one
+     queries for twenty-one nodes, each reloading the realm — and BoardCounts
+     answers all of them together and carries the thread count besides. The
+     per-node reads remain as the fallback for a realm that predates it. */
+  await boardCountsPreload(s2, slug, ids);
+  if(renderSeq!==seq0) return;
+
+  /* THE DOTS AND THE SENTENCE COME FROM ONE PLACE. A cluster a reader cannot
+     read is a decoration; the <title> is what turns seven dots into "7 comments
+     in 3 threads" on hover, and it is the FIRST child because that is the one a
+     browser shows. */
+  const paint = (id, rows, threads) => {
+    if(!(rows > 0)) return;
+    const words = commentCountLabel(rows, threads);
+    document.querySelectorAll(`[data-cmt="${slug}-${id}"]`).forEach(g=>{
+      g.innerHTML = `<title>${esc(words)}</title>` + commentClusterSvg(rows);
+    });
+  };
+
+  const missed = [];
+  for(const id of ids){
+    const b = bcountsGet(slug, id);
+    if(b) paint(id, b.rows, b.threads); else missed.push(id);
+  }
+  if(!missed.length || !isLive()) return;
+  // A realm without BoardCounts, or ids past its page cap: those claims read
+  // the old way, one query each, and their hover text says only the count.
+  await inChunks(missed, 6, async id=>{
     try{
       if(renderSeq!==seq0) return;
       const n = Number(await one(`BoardSize(${s2},${id})`));
-      if(!Number.isFinite(n) || n < 1) return;
       if(renderSeq!==seq0) return;
-      // Every surface this claim is drawn on, from one read — the map's own node
-      // and any other cell that asked for the same claim.
-      document.querySelectorAll(`[data-cmt="${slug}-${id}"]`).forEach(g=>{
-        g.innerHTML = commentClusterSvg(n);
-      });
+      paint(id, n, null);
     }catch(_){}
   });
 }
@@ -11271,6 +11431,7 @@ function mapSelCard(id, data, slug, L){
        for good in demo mode, where the sample carries no bodies. */
     + claimBody(c, slug)
     + claimExhibits(c)
+    + mapSelComments(slug, id)
     + (o? `<p class="small muted">asserts: ${esc(o)}</p>` : "")
     + (i? `<p class="small muted">asserted about it: ${esc(i)}</p>` : "")
     + (!o && !i? `<p class="small muted">no relations drawn on this map</p>` : "")
@@ -11284,6 +11445,18 @@ function mapSelCard(id, data, slug, L){
        nothing. Capped like the folder's, because a card is not a docket. */
     + relRows
     + `<div class="mapsel-a"><a class="btn" href="#/c/${esc(slug)}/${id}">Open claim page →</a></div>`;
+}
+/* WHAT THE DISCUSSION LOOKS LIKE, on the card, from the map's own preload.
+   READ FROM THE CACHE AND NOT ASKED FOR. The card is drawn inside the render
+   that filled BCOUNTS, so this costs no query at all — and a card that fired
+   its own read would spend one on every click, on a number the map already
+   knows. A claim the preload did not cover says nothing rather than guessing. */
+function mapSelComments(slug, id){
+  const b = bcountsGet(slug, id);
+  const words = b ? commentCountLabel(b.rows, b.threads) : "";
+  if(!words) return "";
+  return `<p class="small muted"><a class="tlink" href="#/c/${esc(slug)}/${id}/board">`
+       + `${esc(words)}<span aria-hidden="true">→</span></a></p>`;
 }
 /* The same courtesy for a folder: say what is in it, then offer the page.
    A folder card lists the claims filed DIRECTLY in it, each one selectable, so
@@ -12094,7 +12267,11 @@ function mapSvg(L, data, slug){
        selection rules rather than needing a second set. */
     out.push(`<g class="mcmt" data-cmt="${esc(slug)}-${n.id}" `
       + `transform="translate(${(n.x + n.w).toFixed(1)} ${(n.y + fh).toFixed(1)})" `
-      + `aria-hidden="true"></g>`);
+      /* NOT aria-hidden ANY MORE. It was, while it held nothing but dots; it
+         now carries a <title> saying how many comments and how many threads,
+         which is information a reader gets and so is one a screen reader
+         should. */
+      + `></g>`);
     out.push(`<title>#${n.id} · ${esc(pc.short)}${pc.side? " "+esc(pc.side):""} — ${esc(stripSetMark(cl.title))}</title></a>`);
   }
   out.push(`</svg>`);
@@ -12412,7 +12589,7 @@ function statTile(k, v, sub, spark){
 function franchiseSlotHtml(slug){
   return `<section id="franchise" class="franchise" data-slug="${esc(slug)}"></section>`;
 }
-function franchiseHtml(slug, pending, supply, hasMeta, held){
+function franchiseHtml(slug, pending, supply, hasMeta, held, onChainDesc){
   const meta = slug === META_SLUG;
   /* THE NAME IS A LINK ONLY WHERE THERE IS SOMETHING TO OPEN — the same rule the
      page applies to a claim reference, and for the same reason. The offline
@@ -12427,9 +12604,22 @@ function franchiseHtml(slug, pending, supply, hasMeta, held){
      and a way out at that price, and there is none of the three. This copy said
      "buying", "purchase" and "buy into" in its first draft and the check caught
      all three on the rendered page. */
+  /* ON META'S OWN PAGE THE CHAIN SAYS THIS, NOT THE SITE. The rule is meta's
+     court DESCRIPTION now — written to the realm with SetCourtDesc — and the
+     court page already renders a description in its lead. Printing it again here
+     is the site restating a chain fact three inches below the chain's own words,
+     which is exactly what it was asked not to do.
+     THE FALLBACK IS NOT REMOVED, because a deployment whose moderators never
+     wrote one would otherwise say nothing at all about how this coin is got. So
+     the sentence is skipped only when the chain HAS one.
+     ON ANY OTHER COURT THE SENTENCE STAYS, and it is not a duplicate there: it
+     is about what burning HERE earns you SOMEWHERE ELSE, which is not that
+     court's description and is not on its page in any other form. */
+  const chainSays = meta && typeof onChainDesc === "string" && onChainDesc.trim() !== "";
   const rule = meta
-    ? `This court's coin is not received for GNOT — it is <b>earned</b>. Every burn `
-      + `for any other court's coin accrues here to whoever made it, one for one.`
+    ? (chainSays ? ""
+       : `This court's coin is not received for GNOT — it is <b>earned</b>. Every burn `
+         + `for any other court's coin accrues here to whoever made it, one for one.`)
     : `Burning GNOT for this court's coin also earns you the ${metaName}'s coin — `
       + `one for one with what you burn, on top of the coin you receive here.`;
   /* NOTHING IS MINTED UNTIL IT IS ASKED FOR, and that is the whole reason meta
@@ -12480,15 +12670,17 @@ function franchiseHtml(slug, pending, supply, hasMeta, held){
        court" named the wrong one — read live on kourt.xyz and fixed there. On
        meta's own page both readings coincide, which is exactly why the mistake
        survived being written. */
-    + `<p class="small">${rule} Nothing is minted at the moment of the burn: it `
-    + `waits as an entitlement until the holder claims it, so the ${esc(META_SLUG)} `
-    + `court's supply counts the people who came to use it rather than everyone `
-    + `who passed through.</p>`
+    + (rule
+        ? `<p class="small">${rule} Nothing is minted at the moment of the burn: it `
+          + `waits as an entitlement until the holder claims it, so the ${esc(META_SLUG)} `
+          + `court's supply counts the people who came to use it rather than everyone `
+          + `who passed through.</p>`
+        : "")
     + (heldLine? `<p class="small muted">${heldLine}</p>` : "")
     + have
     + mine;
 }
-async function fillFranchise(slug){
+async function fillFranchise(slug, desc){
   const slot = document.getElementById("franchise");
   if(!slot) return;
   try{
@@ -12503,7 +12695,7 @@ async function fillFranchise(slug){
        answering at all is the proof. Demo: the sample either carries the court
        or it does not. */
     const hasMeta = isLive()? Number.isFinite(supply) : !!demoCourt(META_SLUG);
-    slot.innerHTML = franchiseHtml(slug, pending, supply, hasMeta, held);
+    slot.innerHTML = franchiseHtml(slug, pending, supply, hasMeta, held, desc);
   }catch(_){ /* an unread franchise leaves the rest of the court page intact */ }
 }
 function courtStatsHtml(slug, s){
@@ -13228,12 +13420,16 @@ on(/^\/c\/([a-z0-9-]+)\/map$/, async (slug)=>{
      It cannot run before mountMap — the groups it writes into do not exist yet —
      and it must not be awaited, because a decoration may not hold up a drawing
      that is already complete. Same shape as the court page's stake sweep.
-     LIVE ONLY: BoardSize is a chain read and the demo has no chain to ask, so a
-     demo map draws none — the branch every other live-only fact takes here.
-     `renderSeq` GUARDS IT, because these are chunked round trips: a reader who
-     clicks to another court before they land would otherwise get one court's
-     clusters written onto another's nodes, which share id numbers. */
-  if(isLive()){
+     THE SAMPLE DRAWS THEM TOO, and it used to be live-only on the grounds that
+     "the demo has no chain to ask". That was true of BoardSize and is not true
+     of the fixture: DEMO.claims carries each board's size and its top-level
+     wire, so the sample can answer both numbers without a chain — and a screen
+     the sample cannot draw is a screen no browser check can measure, which is
+     how the cluster came to ship invisible in the first place.
+     `renderSeq` GUARDS IT, because the live path is chunked round trips: a
+     reader who clicks to another court before they land would otherwise get one
+     court's clusters written onto another's nodes, which share id numbers. */
+  {
     const seq0 = renderSeq;
     fillCommentClusters(gstr(slug), slug, seq0).catch(()=>{});
   }
