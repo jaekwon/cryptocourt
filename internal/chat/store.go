@@ -818,7 +818,36 @@ func (s *Store) HasSince(ctx context.Context, chain, court string, since int64) 
 	if err != nil {
 		return false, err
 	}
-	return n == 1, nil
+	if n == 1 {
+		return true, nil
+	}
+	/* A ROW THE READER HAS ALREADY PAINTED CAN VANISH, and no "is there anything
+	   NEWER" question can see that. The paragraph above says hides reach a screen
+	   as a wake-up rather than as a row, and that is true only for a reader who
+	   is holding when it happens: a pulse fired into the gap between two polls is
+	   spent, and the next poll then asked this question, got false, and held for
+	   the whole wait even though the room had already changed under it.
+	   MEASURED ON THE LIVE SITE, with /delete: a bystander whose poll was already
+	   held dropped the row in 1.2s, and one that was between polls kept it on
+	   screen for 11 SECONDS — one interval plus one full hold. Same room, same
+	   withdrawal, and the only difference was whether the pulse found anybody in.
+	   SO THE WATERMARK IS ALSO A CLAIM ABOUT WHAT IS STILL THERE. `since` is the
+	   newest id the reader has painted, so a visible top BELOW it means something
+	   they are showing is gone — answer now and let them repaint. /delete always
+	   trips this, because the row it withdraws is by its own rule the newest one.
+	   COALESCE, so an empty court reads 0 rather than NULL, and `since <= 0` is
+	   skipped entirely: a reader with no watermark has nothing to have lost. */
+	if since <= 0 {
+		return false, nil
+	}
+	var top int64
+	err = s.r.QueryRowContext(ctx,
+		`SELECT COALESCE(MAX(id), 0) FROM messages
+		   WHERE chain=? AND court=? AND hidden=0`, chain, court).Scan(&top)
+	if err != nil {
+		return false, err
+	}
+	return top < since, nil
 }
 
 func (s *Store) Recent(ctx context.Context, chain, court string, since int64, limit int) ([]Message, error) {

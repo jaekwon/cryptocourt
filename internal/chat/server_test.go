@@ -343,6 +343,64 @@ func TestLongPollHoldsUntilSomethingHappens(t *testing.T) {
 	}
 }
 
+// A WITHDRAWAL MUST NOT WAIT OUT THE HOLD. The test above covers the two cases
+// a watermark can see — nothing newer, and something newer — and a /delete is
+// neither: it makes no new row, so "is there anything newer" is false and the
+// poll used to hold for the full wait before answering with the row gone.
+//
+// THAT IS ONLY A PROBLEM FOR A READER WHO IS NOT HOLDING WHEN IT HAPPENS. The
+// pulse releases anybody already in the room — measured on the live site at
+// 1.2s — but a pulse fired into the gap between two polls is spent, and the
+// next poll then paid the whole hold on top of the gap. Measured, same room and
+// same withdrawal: 11 SECONDS before a bystander's screen dropped the row.
+//
+// SO THE REQUEST IS TIMED, NOT JUST ANSWERED. The transcript assertion below
+// passes either way — the row is gone from the payload whenever the answer
+// finally comes — so a build that still held for a second would satisfy
+// everything except the clock. wait=2 against a 400ms bound leaves a wide
+// margin in the right direction: a hold is 2s, an immediate answer is a
+// millisecond of SQLite.
+func TestAPollAnswersAtOnceWhenARowTheReaderHasSeenIsGone(t *testing.T) {
+	srv, _, clock := newServer(t)
+	if rec := do(t, srv, postReq(t, "/api/chat/dev/orem", "alice", "take this back")); rec.Code != 200 {
+		t.Fatalf("seed: %d %s", rec.Code, rec.Body)
+	}
+	*clock = clock.Add(MinInterval)
+
+	var seen getReply
+	rec := do(t, srv, httptest.NewRequest(http.MethodGet, "/api/chat/dev/orem", nil))
+	if err := json.Unmarshal(rec.Body.Bytes(), &seen); err != nil {
+		t.Fatal(err)
+	}
+	if len(seen.Messages) != 1 {
+		t.Fatalf("the reader should be holding one row, got %d", len(seen.Messages))
+	}
+
+	// The same address as the poster, so the withdrawal is allowed. The pulse this
+	// fires is spent immediately: nobody is holding, which is the whole point.
+	if rec := do(t, srv, postReq(t, "/api/chat/dev/orem", "alice", WithdrawCommand)); rec.Code != 200 {
+		t.Fatalf("withdraw: %d %s", rec.Code, rec.Body)
+	}
+
+	start := time.Now()
+	rec = do(t, srv, httptest.NewRequest(http.MethodGet,
+		fmt.Sprintf("/api/chat/dev/orem?seen=%d&wait=2", seen.Next), nil))
+	took := time.Since(start)
+	if rec.Code != 200 {
+		t.Fatalf("expected 200, got %d %s", rec.Code, rec.Body)
+	}
+	if took > 400*time.Millisecond {
+		t.Fatalf("the poll held for %v after a row the reader had was withdrawn", took)
+	}
+	var after getReply
+	if err := json.Unmarshal(rec.Body.Bytes(), &after); err != nil {
+		t.Fatal(err)
+	}
+	if len(after.Messages) != 0 {
+		t.Fatalf("the withdrawn row is still being served: %+v", after.Messages)
+	}
+}
+
 /*
 THE CAP IS THE SERVER'S, NOT THE CALLER'S. A client asking for an hour would
 
