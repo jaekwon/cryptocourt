@@ -2169,3 +2169,67 @@ func TestTheModLogSaysWhatItCovers(cur realm, t *testing.T) {
 		t.Fatal("the log must link the court page, where the tree renders")
 	}
 }
+
+// BOARDCOUNTS IS THE PACKED READ THE MAP NEEDS, and the arms below are the four
+// ways a count like this goes wrong: it counts the wrong tree, it drops the
+// quiet claims, it answers in the wrong order, or it invents a claim.
+func TestBoardCountsSaysRowsAndThreadsForManyClaimsAtOnce(cur realm, t *testing.T) {
+	alice := testutils.TestAddress("bc1-alice")
+	_, id := boardFixture(cur, "bc1", alice)
+
+	// A SECOND CLAIM ON THE SAME COURT, left with no board at all — the quiet
+	// case, which a caller drawing one cluster per node still has to hear about.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	quiet := OpenClaim(cross(cur), "bc1", "a claim nobody has discussed")
+
+	// Two threads and one reply under the first: rows 3, threads 2. This is the
+	// distinction the whole read exists for, and the one writeBoardLink already
+	// got wrong once by counting cs.boardTop and calling it comments.
+	testing.SetRealm(testing.NewUserRealm(alice))
+	first := PostComment(cross(cur), "bc1", id, 0, "the first thread")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostComment(cross(cur), "bc1", id, 0, "a second thread")
+	testing.SetRealm(testing.NewUserRealm(alice))
+	PostComment(cross(cur), "bc1", id, first, "a reply inside the first")
+
+	uassert.Equal(t, int(3), BoardSize("bc1", id)) // the read it must agree with
+
+	ids := strconv.FormatUint(id, 10) + "," + strconv.FormatUint(quiet, 10)
+	got := BoardCounts("bc1", ids)
+	want := strconv.FormatUint(id, 10) + ":3:2;" +
+		strconv.FormatUint(quiet, 10) + ":0:0"
+	uassert.Equal(t, want, got)
+
+	// THE ORDER IS THE CALLER'S, not the tree's — asked the other way round.
+	rev := strconv.FormatUint(quiet, 10) + "," + strconv.FormatUint(id, 10)
+	uassert.Equal(t,
+		strconv.FormatUint(quiet, 10)+":0:0;"+strconv.FormatUint(id, 10)+":3:2",
+		BoardCounts("bc1", rev))
+
+	// A CLAIM THIS COURT DOES NOT HAVE IS SKIPPED, never guessed at and never
+	// answered as a zero — which is why a caller matches on the id field rather
+	// than on position. 999999 is not this court's, so only two pairs come back.
+	three := BoardCounts("bc1", strconv.FormatUint(id, 10)+",999999,"+strconv.FormatUint(quiet, 10))
+	uassert.Equal(t, 2, len(strings.Split(three, ";")))
+	if strings.Contains(three, "999999") {
+		t.Fatalf("BoardCounts invented a claim: %q", three)
+	}
+
+	// Junk and empties are dropped rather than shifting the reply.
+	uassert.Equal(t, strconv.FormatUint(id, 10)+":3:2",
+		BoardCounts("bc1", " ,,not-a-number,"+strconv.FormatUint(id, 10)+", "))
+	uassert.Equal(t, "", BoardCounts("bc1", ""))
+
+	// AND THREADS NEVER EXCEEDS ROWS. The two trees are maintained separately —
+	// a top-level row is in both, a reply in cs.board alone — so nothing but
+	// this says they cannot disagree.
+	for _, pair := range strings.Split(BoardCounts("bc1", ids), ";") {
+		f := strings.Split(pair, ":")
+		uassert.Equal(t, 3, len(f))
+		rows, _ := strconv.Atoi(f[1])
+		threads, _ := strconv.Atoi(f[2])
+		if threads > rows {
+			t.Fatalf("threads %d exceeds rows %d in %q", threads, rows, pair)
+		}
+	}
+}

@@ -156,6 +156,10 @@ eval(fn('verdictSentence'));
 // not the other is testing half a card.
 global.fmtN = n => String(n);
 
+/* THE REAL CACHE READER. mapSelCard says how much talking a claim has had, and
+   a stub that always answered nothing would let the card assertions pass
+   against a card that never shows it. */
+eval(slice('const BCOUNTS = new Map()', '\nconst boardWire').replace(/^const /gm, 'var '));
 eval(slice('const MAPK', '/* The join panel').replace('const MAPK','var MAPK'));
 eval(slice('function mountMap(', '/* Folder page'));
 

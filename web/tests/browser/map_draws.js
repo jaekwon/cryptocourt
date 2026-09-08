@@ -501,8 +501,39 @@ const {PAGE, demoPage} = require('./harness');
      JSON.stringify(cmt));
   ok("...inside the node's own anchor, at its bottom-right corner",
      cmt.inNodeAnchor === true && cmt.atCorner === true, JSON.stringify(cmt));
-  ok("...and empty in demo, where there is no chain to count comments",
-     cmt.emptyInDemo === true, JSON.stringify(cmt));
+  /* THE SAMPLE DRAWS THEM NOW, and this assertion used to say the opposite:
+     "empty in demo, where there is no chain to count comments". That was true
+     of BoardSize and never true of the fixture — DEMO.claims carries each
+     board's size and its top-level wire — and while it held, no browser check
+     could see a cluster at all. Which is how the thing shipped invisible.
+     A CLUSTER SAYS WHAT IT IS. Dots a reader cannot read are decoration; the
+     <title> is what makes seven dots "4 comments in 3 threads" on hover, and
+     it must be the FIRST child because that is the one a browser shows. */
+  /* OREM'S MAP FOR THESE, because annex carries no board fixtures. Only orem/1
+     and orem/2 have comments in the sample, so on annex there is nothing to
+     draw — and asserting a cluster there would be asserting the shape of the
+     sample rather than the behaviour of the code. */
+  await page.goto(PAGE + '#/c/orem/map', {waitUntil: 'networkidle0'});
+  await new Promise(z => setTimeout(z, 1400));
+  const cmtSaid = await page.evaluate(() => {
+    const filled = [...document.querySelectorAll("g.mcmt")].filter(g => g.children.length);
+    return filled.map(g => {
+      const t = g.querySelector("title");
+      return {id: g.dataset.cmt, dots: g.querySelectorAll("circle.mcmt-d").length,
+              titleFirst: !!t && g.firstElementChild === t,
+              words: t ? t.textContent : null,
+              hidden: g.getAttribute("aria-hidden")};
+    });
+  });
+  // Every sentence commentCountLabel can produce, and nothing else.
+  const SAYS = /^\d+ comments?( in \d+ threads?|, none replied to)?$/;
+  ok("the sample map draws a cluster for the claims that have comments",
+     cmtSaid.length > 0, JSON.stringify(cmtSaid));
+  ok("...each one carrying its count in words, as its first child",
+     cmtSaid.every(c => c.titleFirst && SAYS.test(String(c.words || "").trim())),
+     JSON.stringify(cmtSaid));
+  ok("...and the cell no longer calls itself decoration, now that it says something",
+     cmtSaid.every(c => c.hidden === null), JSON.stringify(cmtSaid));
 
   /* AND THE CLUSTER SURVIVES THE ZOOM-OUT, asked of the CASCADE rather than of
      the stylesheet — a source test can read the rule, but only a browser can say

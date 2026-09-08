@@ -309,6 +309,10 @@ global.SHUT_MARK = "\u{1307C}";   // 𓁼 — the second mark, opens concealed
   eval(fn('verdictMark'));
   eval(fn('sideOval'));   // verdictSentence delegates the oval to it
   eval(fn('verdictSentence'));
+  /* THE REAL CACHE READER, not a stub: mapSelCard now says how much talking a
+     claim has had, and a stub that always answered nothing would let the card
+     assertions pass against a card that never shows it. */
+  eval(slice('const BCOUNTS = new Map()', '\nconst boardWire').replace(/^const /gm, 'var '));
   eval(slice('function mapSelCard(', 'function mapDotClass'));
   /* THE CARD DESCRIBES THE DRAWING, so the fixture has to be one. This was a
      bare claims dict holding only #7, with relations pointing at 5, 6, 8 and 9 —
@@ -1600,10 +1604,18 @@ ok("controls present", ["mt-titles","mt-ids","mz-in","mz-out","mz-fit","mz-slide
   {
     const fn = slice('async function fillCommentClusters(', '\n}\n');
     ok("the cluster fill reads one count per cell, not per loaded claim",
-       // The chunk width is deliberately NOT pinned: six is a tuning choice, and
-       // an assertion on it would fail a future tuning without a defect.
-       /querySelectorAll\(`\[data-cmt\^="\$\{slug\}-"\]`\)/.test(fn)
-       && /inChunks\(ids,/.test(fn));
+       /querySelectorAll\(`\[data-cmt\^="\$\{slug\}-"\]`\)/.test(fn));
+    /* ONE QUERY FOR THE WHOLE MAP, and per-node reads only for what it missed.
+       This asked BoardSize once per node — twenty-one queries measured on
+       kourt.xyz — and BoardCounts answers them together. The fallback must
+       cover the MISSES and not the whole list, or a realm that has the
+       entrypoint pays for both. The chunk width is deliberately not pinned:
+       six is a tuning choice, and an assertion on it would fail a future
+       tuning without a defect. */
+    ok("...and asks for all of them in one query before falling back",
+       /boardCountsPreload\(s2, slug, ids\)/.test(fn)
+       && /inChunks\(missed,/.test(fn)
+       && !/inChunks\(ids,/.test(fn));
     ok("...and it takes no claim list, so the two cannot disagree",
        /async function fillCommentClusters\(s2, slug, seq0\)/.test(fn));
     // A fill that outlives its paint must not write into the next one.

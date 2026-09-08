@@ -331,6 +331,82 @@ func BoardSize(courtSlug string, claimID uint64) int {
 	return cs.board.Size()
 }
 
+// BoardCounts answers, for MANY claims in ONE query, the two numbers a reader
+// needs about a discussion without opening it:
+//
+//	"<id>:<rows>:<threads>;…"
+//
+// rows is every row, top-level and replies together — the same number BoardSize
+// returns and the same one the claim page's own link advertises. threads is the
+// count of rows with no parent, so "7 rows in 3 threads" says both how much
+// there is to read and how many separate conversations it is.
+//
+// BOTH ARE O(1). cs.board and cs.boardTop are each a bptree, and Size() on a
+// bptree is a stored count rather than a walk — so this is two field reads per
+// claim and the cost of the reply is the string, not the counting. It adds NO
+// state: there is nothing to maintain at a write site and therefore nothing that
+// can drift, which is the trade BoardHiddenCount explains one level down.
+//
+// WHY IT IS PACKED, and it is the same reason DocketSeries is. The overlay's map
+// drew a cluster of dots beside each claim to show where the talking is, and
+// asked BoardSize once per node: twenty-one queries for twenty-one nodes, each
+// one reloading this realm. Batching at the RPC does not help, because gno
+// executes a JSON-RPC array serially, so the batching has to happen HERE where
+// the realm is loaded once for the whole page. Twenty-one queries become one.
+//
+// IT COSTS NO GAS. This is a read, so it is a query and not a transaction. The
+// alternative — a maintained counter — would have added gas to every post and
+// every purge in order to speed up something nobody pays for.
+//
+// ids is comma-separated, in any order; the reply keeps that order and SKIPS an
+// id this court does not have, so a caller matches on the id field rather than
+// on position. At most seriesPageMax ids are answered and the rest are dropped:
+// read the length of what came back.
+//
+// THREADS CAN EXCEED NOTHING AND NEVER EXCEEDS ROWS, which is worth saying
+// because the two trees are maintained separately: every top-level row is in
+// both, a reply is in cs.board alone. A claim with no board at all answers 0:0
+// rather than being skipped — it is a claim this court HAS, and a caller
+// drawing one cluster per node needs to hear about the quiet ones too.
+func BoardCounts(courtSlug string, ids string) string {
+	c := mustCourt(courtSlug)
+	out := strings.Builder{}
+	sent := 0
+	for _, part := range strings.Split(ids, ",") {
+		if sent >= seriesPageMax {
+			break
+		}
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		id, err := strconv.ParseUint(part, 10, 64)
+		if err != nil {
+			continue
+		}
+		v := c.claims.Get(beClaimKey(id))
+		if v == nil {
+			continue // a claim this court does not have is skipped, never guessed
+		}
+		cs := v.(*claimState)
+		rows, threads := 0, 0
+		if cs.board != nil {
+			rows = cs.board.Size()
+		}
+		if cs.boardTop != nil {
+			threads = cs.boardTop.Size()
+		}
+		if sent > 0 {
+			out.WriteString(";")
+		}
+		out.WriteString(strconv.FormatUint(id, 10))
+		out.WriteString(":" + strconv.Itoa(rows))
+		out.WriteString(":" + strconv.Itoa(threads))
+		sent++
+	}
+	return out.String()
+}
+
 // BoardHiddenCount is how many TOP-LEVEL rows this claim's list is not
 // showing — hidden, legally withheld or purged.
 //
