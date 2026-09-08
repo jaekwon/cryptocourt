@@ -39,9 +39,27 @@ const html = eval(fn("franchiseHtml") + "; franchiseHtml");
 
 /* ---- the rule is stated whether or not anyone is connected ---------------- */
 const anon = html("covid", null, 5105763090, true, null, "");
-ok("the rule is stated with no wallet connected", /one for one/.test(anon), anon.slice(0, 90));
+/* RE-POINTED OFF "one for one", which this arm used as its proxy for "the rule
+   is stated". The phrase went because it misled: a reader asked whether being
+   first into a new court — where their GNOT buys the most of that court's coin —
+   also earns more META. It does not. The entitlement banks the GNOT SPENT, so
+   equal GNOT earns equal entitlement in any court at any time; what varies is
+   what it BUYS, since claiming runs it through meta's own curve. "One for one"
+   reads as token-for-token and says none of that.
+   The property is unchanged — the rule must be stated to a reader with no
+   wallet — and it is now proxied on the two clauses that carry the substance,
+   the crediting and the price-dependence, rather than on a phrase whose whole
+   problem was that it carried neither. */
+ok("the rule is stated with no wallet connected",
+   /credited again there/.test(anon) && /price on the day/.test(anon),
+   anon.slice(0, 120));
 ok("...and names the meta court as where it lands", /#\/c\/meta/.test(anon));
-ok("...and says the burn is what earns it", /one for one with what you burn/.test(anon));
+// Re-pointed off "one for one with what you burn": the phrase went because it
+// reads as token-for-token when the credit is measured in GNOT. What this arm
+// is for — that the BURN is named as the thing that earns — is now proxied on
+// the clause that says so.
+ok("...and says the burn is what earns it",
+   /same GNOT credited again there/.test(anon), anon.slice(0, 120));
 /* THE SENTENCE THAT RESOLVES THE CONTRADICTION. A reader looking at meta's zero
    supply needs to be told that minting is deferred, or the zero reads as "this
    does not work". */
@@ -171,7 +189,8 @@ ok("...and says where it all is instead", /still waiting as an entitlement/.test
    applies to a claim reference. */
 const noMeta = html("covid", null, null, false, null, "");
 ok("with no meta court to open, the name is not a link", !/<a /.test(noMeta), noMeta);
-ok("...but the rule is still stated", /one for one/.test(noMeta) && /meta court/.test(noMeta));
+ok("...but the rule is still stated",
+   /credited again there/.test(noMeta) && /meta court/.test(noMeta), noMeta.slice(0, 120));
 ok("...and with one, it is", /<a href="#\/c\/meta">meta court<\/a>/.test(anon));
 
 /* ---- and How it works explains it, once, in prose --------------------------
@@ -188,7 +207,13 @@ const about = src.slice(src.indexOf("<h2>The meta court</h2>"),
 ok("How it works has a section for the meta court", about.length > 200, String(about.length));
 ok("...saying every burn in every court earns it",
    /Every burn, in every court, also earns you coin/.test(about));
-ok("...one for one with the GNOT burned", /One for one with the GNOT you burn/.test(about));
+// The about page carries the fullest version, so it is held to the whole
+// mechanism rather than to a phrase: the credit is in GNOT, and what it becomes
+// is settled at claim time. That pair is exactly what "one for one" failed to
+// convey and what a reader had to ask about.
+ok("...the credit is measured in GNOT, and the coin is settled at claim time",
+   /measured in GNOT, not in coin/.test(about) &&
+   /settled when\s+you claim it/.test(about.replace(/\s+/g, " ")), about.slice(0, 160));
 ok("...and that nothing else earns it",
    /cannot be received for GNOT directly/.test(about));
 /* THE SENTENCE THE WHOLE REPORT TURNED ON. A reader who has seen meta at zero
@@ -310,8 +335,12 @@ ok("...and an unread position gives no figure rather than a wrong one",
    be undone. */
 ok("meta's buy panel carries a second acknowledgement",
    /I understand that receiving \$\{sym\} here is not necessary/.test(src));
+// Re-pointed off the old phrasing, which spanned a line break in the source and
+// carried "one for one". The property is that the checkbox says WHERE the coin
+// comes from instead of merely warning — so it is proxied on the crediting
+// clause, which is what now carries that.
 ok("...saying where the coin comes from instead",
-   /every burn on `\s*\n\s*\+ `any other court earns \$\{sym\}, one for one/.test(src));
+   /every GNOT `\s*\n\s*\+ `burned on any other court is credited to me again here/.test(src));
 /* ONLY THERE. Every other court's coin has to be burned for, so this warning
    would be false on any of them — and a checkbox that is false is worse than no
    checkbox, because it trains the reader to tick without reading. */

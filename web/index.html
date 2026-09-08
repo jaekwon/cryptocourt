@@ -12463,8 +12463,9 @@ function joinPanel(slug, s){
   const ack2Attr = form.ack2? " checked" : "";
   const ack2 = slug === META_SLUG
     ? `<label class="ack small"><input type="checkbox" id="buyack2"${ack2Attr}> `
-      + `I understand that receiving ${sym} here is not necessary — every burn on `
-      + `any other court earns ${sym}, one for one, and it waits until you claim it.</label>`
+      + `I understand that receiving ${sym} here is not necessary — every GNOT `
+      + `burned on any other court is credited to me again here, and waits until `
+      + `I claim it.</label>`
     : "";
   let body;
   if(minted==null){
@@ -12782,10 +12783,14 @@ function franchiseHtml(slug, pending, supply, hasMeta, held, onChainDesc){
   const chainSays = meta && typeof onChainDesc === "string" && onChainDesc.trim() !== "";
   const rule = meta
     ? (chainSays ? ""
-       : `This court's coin is not received for GNOT — it is <b>earned</b>. Every burn `
-         + `for any other court's coin accrues here to whoever made it, one for one.`)
-    : `Burning GNOT for this court's coin also earns you the ${metaName}'s coin — `
-      + `one for one with what you burn, on top of the coin you receive here.`;
+       : `This court's coin is not received for GNOT — it is <b>earned</b>. Every GNOT `
+         + `burned for any other court's coin is credited here to whoever burned it; how `
+         + `much of this coin that credit becomes depends on this court's price on the `
+         + `day they claim it.`)
+    : `Burning GNOT for this court's coin also earns you the ${metaName}'s coin: the `
+      + `same GNOT credited again there, on top of the coin you receive here. How much `
+      + `of that coin the credit becomes depends on the ${metaName}'s price on the day `
+      + `you claim it.`;
   /* NOTHING IS MINTED UNTIL IT IS ASKED FOR, and that is the whole reason meta
      can read as empty. Said plainly, because "supply 0" next to a live
      entitlement is the exact thing that misleads. */
@@ -17643,7 +17648,7 @@ async function meHoldings(addr,courts){
       + `<div class="v tnum">${pendingFr > 0 ? gnotAmt(pendingFr) : "none"}</div>`
       + `<div class="sub">${pendingFr > 0
           ? `burn accrued across every court — claimable as ${esc(META_SLUG)} coin`
-          : "every burn accrues here, one for one, and waits until it is claimed"}`
+          : "every GNOT burned anywhere is credited here, and waits to be claimed"}`
       + `</div></div>`;
   const strip = `<section><div class="grid stats">
       ${heldStat}
@@ -18894,10 +18899,26 @@ on(/^\/about$/, async ()=>{
            is a fact about what a burn EARNS you and belongs beside the burn. -->
       <h2>The meta court</h2>
       <p>Every burn, in every court, also earns you coin in one further court:
-      <b>meta</b>. One for one with the GNOT you burn — the same burn, counted
+      <b>meta</b>. What it earns is measured in GNOT, not in coin: burn a GNOT
+      anywhere and that same GNOT is credited again here — the same burn counted
       twice, once for the court you were reading and once for the court that
-      governs them all. Nothing else earns it: meta's coin cannot be received for
-      GNOT directly.</p>
+      governs them all. How much meta coin that credit becomes is settled when
+      you claim it, at meta's price then — so equal GNOT earns equal credit
+      whichever court you burned it in, early or late, and only the day you
+      claim decides the coin. Nothing else earns it: meta's coin cannot be
+      received for GNOT directly.</p>
+      <!-- "ONE FOR ONE" WAS THE OLD PHRASE AND IT MISLED. A reader asked
+           whether being first into a brand-new court — where their GNOT buys the
+           most of that court's coin — would also earn them more META, or less
+           than somebody buying late into an established one. Neither: the
+           entitlement banks the GNOT SPENT — accrueFranchise takes the spent
+           amount, not the coin minted — so
+           equal GNOT earns equal entitlement whichever court it was burned in
+           and however early. What differs is what the entitlement BUYS, because
+           claiming runs it through meta's own curve — so the answer to "how much
+           META" is a question about meta's price on the day you claim, and about
+           nothing else. "One for one" says none of that and invites exactly the
+           token-for-token reading it got. -->
       <p><b>It is not minted when you burn.</b> It waits as an entitlement until
       you claim it, which is why meta can show a supply of zero while every court
       on the chain has been burning — the coin is owed, not absent. Claiming is a
