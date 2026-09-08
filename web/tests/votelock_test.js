@@ -152,14 +152,27 @@ ok("the filler reads DisposableOf", src.includes('DisposableOf(${gstr(slug)},${g
 ok("nothing in the client CALLS SpendableOf", !/SpendableOf\(/.test(src));
 ok("the filler reads the committed total", src.includes('VoteLockedOf(${gstr(slug)},${gstr(CFG.addr)})'));
 
-// THE INDEX IS THE ASSERTION. ClaimVoteWeightOf returns (verdict, quality) and
-// the two weigh at different epochs. With only one row left, w[0] would render a
-// verdict-epoch figure under a quality question and NOTHING on the page would
-// look wrong — the tuple is the only thing that can catch it.
-ok("the quality span is fed the quality weight, index 1",
-  src.includes('qv.textContent = voteLockFigures(slug, w? w[1]: null'));
-ok("...and the verdict weight is not read into it",
-  !/textContent = voteLockFigures\(slug, w\? w\[0\]/.test(src));
+/* THE INDEX IS STILL THE ASSERTION, AND IT NOW POINTS THE OTHER WAY. This
+   required index 1 — the QUALITY weight — and its reasoning was sound at the
+   time: ClaimVoteWeightOf returns (verdict, quality), the two weigh at
+   different epochs, and reading w[0] "would render a verdict-epoch figure
+   under a quality question" with nothing on the page looking wrong.
+   ITS PREMISE WAS A QUALITY QUESTION ON THAT PAGE, and there is not one. The
+   quality lane went; nothing assigns the second return, so it is always 0. The
+   span it fills sits in the dispute explainer under "What casting costs you",
+   whose prose is entirely about overturning an answer — a VERDICT vote. And
+   voteLockFigures omits the sentence when the figure is not above zero, so
+   what this arm was protecting was a panel that never printed "this vote would
+   commit N" for anybody, on any claim.
+   The consequence is worth stating plainly, because the old comment said the
+   opposite: nothing looked wrong, and the one number a voter wants before
+   voting was missing. Re-pointed to index 0 — the verdict weight, under a
+   verdict question — with the same tuple-position discipline. The rendered
+   behaviour is covered separately, and in a browser, by vote_commit.js. */
+ok("the commitment span is fed the verdict weight, index 0",
+  src.includes('qv.textContent = voteLockFigures(slug, w? w[0]: null'));
+ok("...and the always-zero quality weight is not read into it",
+  !/textContent = voteLockFigures\(slug, w\? w\[1\]/.test(src));
 
 // A failed read must not break the panel, and demo mode must not query a chain.
 ok("the filler is gated on live mode and an address", src.includes('if(!qv || !CFG.addr || !isLive()) return;'));

@@ -9450,12 +9450,19 @@ async function fillVoteCommitment(slug, id){
       tup(`ClaimVoteWeightOf(${gstr(slug)},${gstr(CFG.addr)},${id})`).catch(()=>null),
       one(`VoteLockedOf(${gstr(slug)},${gstr(CFG.addr)})`).catch(()=>null),
       one(`DisposableOf(${gstr(slug)},${gstr(CFG.addr)})`).catch(()=>null)]);
-    // INDEX 1, and the index is the whole assertion. ClaimVoteWeightOf returns
-    // (verdict, quality) and the two weigh at DIFFERENT epochs; w[0] here would
-    // print a verdict-epoch figure under a quality question, which is the exact
-    // defect VoteWeightWhy was split in two to fix. Only one lane renders a row
-    // now, so nothing on the page would look wrong if this read the other one.
-    qv.textContent = voteLockFigures(slug, w? w[1]: null, locked, free);
+    /* INDEX 0, AND THE INDEX WAS THE WHOLE BUG. This read w[1] — the QUALITY
+       weight — and the note here said the two weigh at different epochs, so
+       w[0] "would print a verdict-epoch figure under a quality question", and
+       that "nothing on the page would look wrong if this read the other one".
+       The first half was true when a quality lane existed. It does not: nothing
+       assigns quality any more, so ClaimVoteWeightOf's second return is always
+       0 — and voteLockFigures only emits "this vote would commit N" when the
+       figure is ABOVE zero. So the sentence never rendered, for anybody, on any
+       claim. Not "nothing would look wrong": the one number a voter wants
+       before voting was silently absent.
+       w[0] here is the verdict weight, which is what a verdict vote actually
+       commits, and this panel sits under a verdict question. */
+    qv.textContent = voteLockFigures(slug, w? w[0]: null, locked, free);
   }catch(_){}
 }
 /* ---------------- everything one holder is committed to ----------------
