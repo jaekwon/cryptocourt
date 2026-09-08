@@ -1969,7 +1969,7 @@ tr.youare .mono{font-weight:600}
    IT BRIGHTENS WITH ITS OWN NODE on hover and selection, which is what makes it
    readable exactly when a reader is asking about that claim, and invisible the
    rest of the time. */
-.mcmt-d{fill:var(--muted); opacity:.42}
+.mcmt-d{fill:var(--muted); opacity:.62}
 .mcmt-e{stroke:var(--muted); stroke-width:.7; fill:none; opacity:.30;
   vector-effect:non-scaling-stroke}
 /* BRIGHTER WHEN SMALLER, RATHER THAN GONE. This used to be
@@ -1989,7 +1989,7 @@ tr.youare .mono{font-weight:600}
    made brighter instead of bigger. Growing them would break the one bound that
    keeps a fan off its neighbour — reach under MAPK.sep — which holds in user
    units and would stop holding the moment the geometry moved. */
-.mapsvg.far .mcmt-d{opacity:.62}
+.mapsvg.far .mcmt-d{opacity:.8}
 .mapsvg.far .mcmt-e{opacity:.45}
 .mnode-a:hover .mcmt-d,.mnode-a:focus .mcmt-d,.mnode-a.selected .mcmt-d{opacity:.75}
 .mnode-a:hover .mcmt-e,.mnode-a:focus .mcmt-e,.mnode-a.selected .mcmt-e{opacity:.55}
@@ -8291,8 +8291,21 @@ function commentClusterSvg(count){
      AND MOST OF THE LEGIBILITY IS THE DOT, NOT THE REACH: a 2px speck is
      unreadable because of what it is, not where it is, which is why the radius
      below roughly doubled while the reach grew by only half. */
-  const PER = 3, R0 = 5.6 * spread, RSTEP = 4.2 * spread;
-  const A0 = 0.30, A1 = 1.27;                 // radians: ~17 to ~73 degrees
+  /* STRAIGHT DOWN, CENTRED, AND BIGGER — reported as "i can barely see it", and
+     that it belongs "center bottom dangling out the claim node, because there's
+     the most space there". Measured before moving it, because the note this
+     replaces warned that a longer reach can cross into a neighbour: nodes are
+     230x61 units and the clearance BELOW one is 58 at the tightest, 178 median.
+     So the space really is underneath, and a fan reaching ~28 at its widest
+     spread has ~30 units of slack even in the worst case on this map.
+     The sweep is symmetric about pi/2 rather than the old 17..73 degrees, which
+     hung the whole cluster off the bottom-RIGHT corner. Half-sweep 0.60rad puts
+     the horizontal spread at about +/-11 units at full reach — comfortably
+     inside a 230-wide node, so the fan stays under its own claim and cannot
+     read as belonging to the one beside it. */
+  const PER = 3, R0 = 9.0 * spread, RSTEP = 5.5 * spread;
+  const CMT_HALF_SWEEP = 0.60;                // radians either side of straight down
+  const A0 = Math.PI / 2 - CMT_HALF_SWEEP, A1 = Math.PI / 2 + CMT_HALF_SWEEP;
   const pts = [], first = [];
   for(let i = 0; i < dots; i++){
     const ring = Math.floor(i / PER), k = i % PER;
@@ -8314,7 +8327,7 @@ function commentClusterSvg(count){
   }
   /* A dot is a FILL, so unlike the edges it has no vector-effect:non-scaling-
      stroke to fall back on — at the fit scale its radius IS its visibility. */
-  const r = n > 12 ? 2.6 : n > 4 ? 2.2 : 2.1;
+  const r = n > 12 ? 4.2 : n > 4 ? 3.6 : 3.4;
   return (d? `<path class="mcmt-e" d="${d}"/>` : "")
     + pts.map(([x, y]) => `<circle class="mcmt-d" cx="${x}" cy="${y}" r="${r}"/>`).join("");
 }
@@ -12290,7 +12303,24 @@ function mapSvg(L, data, slug){
        INSIDE THE ANCHOR, so it dims with the node under the map's own hover and
        selection rules rather than needing a second set. */
     out.push(`<g class="mcmt" data-cmt="${esc(slug)}-${n.id}" `
-      + `transform="translate(${(n.x + n.w).toFixed(1)} ${(n.y + fh).toFixed(1)})" `
+      // BOTTOM-CENTRE, not the bottom-right corner. The corner is what made the
+      // old fan sweep into the gap beside the node; centred, it hangs under the
+      // claim it belongs to. commentClusterSvg's own comment carries the
+      // measurements that say there is room.
+      // ...AND BELOW THE BADGE, not just below the frame. mapNodeSize returns
+      // `h = fh + (badged? MAPK.vov : 0)`, so h is the frame plus a verdict
+      // badge's overhang and is never smaller than fh — anchoring at n.y+fh
+      // starts the fan inside that overhang on every claim wearing a side.
+      // Math.max rather than n.h alone is belt-and-braces: it states the
+      // relation this depends on instead of assuming it holds forever.
+      // (An earlier version of this comment claimed a measured 18px overlap at
+      // n.y+fh. That was my own bad metric — the cluster lives INSIDE the node
+      // anchor, so comparing its top against the anchor's bottom is
+      // self-referential and returns minus the cluster height whatever the
+      // truth is. Measured against everything the node PAINTS, the fan now
+      // clears it by 5.9px and sits at 0 offset from centre.)
+      + `transform="translate(${(n.x + n.w / 2).toFixed(1)} `
+      + `${(n.y + Math.max(fh, n.h)).toFixed(1)})" `
       /* NOT aria-hidden ANY MORE. It was, while it held nothing but dots; it
          now carries a <title> saying how many comments and how many threads,
          which is information a reader gets and so is one a screen reader

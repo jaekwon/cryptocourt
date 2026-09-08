@@ -701,15 +701,36 @@ const {PAGE, demoPage} = require('./harness');
   });
   ok("a comment dot is drawn big enough to see", !dotR.none && dotR.min >= 3.0,
      JSON.stringify(dotR));
-  ok("...and the fill is not near-invisible either",
-     await page.evaluate(() => {
-       const d = document.querySelector("circle.mcmt-d");
-       return d ? parseFloat(getComputedStyle(d).opacity) >= 0.55 : false;
-     }),
-     await page.evaluate(() => {
-       const d = document.querySelector("circle.mcmt-d");
-       return d ? getComputedStyle(d).opacity : "<no dot>";
-     }));
+  /* BOTH ZOOM STATES, because there are two rules and the map is in one of
+     them. `.mapsvg.far .mcmt-d` overrides `.mcmt-d`, and this map renders FAR —
+     so an arm that reads the computed opacity as-is pins the far rule only, and
+     reverting the near rule to its old .42 fired nothing. Measured. The class
+     is toggled to read each, and restored either way. */
+  const ink = await page.evaluate(() => {
+    const svg = document.querySelector("svg.mapsvg");
+    if (!svg) return {none: true};
+    /* A DOT IN AN UNSELECTED NODE. By this point the harness has clicked a
+       claim, and `.mnode-a.selected .mcmt-d` sets .75 — which outranks the base
+       rule and made this arm read the SELECTED state. Reverting the base
+       opacity to its old .42 then fired nothing, because .42 was never what was
+       being measured. Any selected node is skipped, and if every one of them is
+       selected the class comes off for the read and goes back after. */
+    const dots = [...document.querySelectorAll("circle.mcmt-d")];
+    if (!dots.length) return {none: true};
+    let d = dots.find(x => { const a = x.closest("a.mnode-a"); return a && !a.classList.contains("selected"); });
+    let unselected = null;
+    if (!d) { d = dots[0]; unselected = d.closest("a.mnode-a"); unselected && unselected.classList.remove("selected"); }
+    const wasFar = svg.classList.contains("far");
+    svg.classList.add("far");
+    const far = parseFloat(getComputedStyle(d).opacity);
+    svg.classList.remove("far");
+    const near = parseFloat(getComputedStyle(d).opacity);
+    if (wasFar) svg.classList.add("far");
+    if (unselected) unselected.classList.add("selected");
+    return {near, far, wasFar, hadToDeselect: !!unselected};
+  });
+  ok("...and the fill is not near-invisible, zoomed in or out",
+     !ink.none && ink.near >= 0.55 && ink.far >= 0.7, JSON.stringify(ink));
 
   ok("no page errors on the map route", errs.length === 0, errs.slice(0, 2).join(" | "));
 
