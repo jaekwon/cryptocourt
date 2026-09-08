@@ -445,6 +445,18 @@ func fold(r rune) rune {
 // are talking to one.
 const ClerkName = "clerk"
 
+// ClerkCountry is the country code the clerk's own rows carry, and it is not a
+// country: gno.land is a jurisdiction rather than a place, so the clerk flies a
+// plain black flag — the only one that says "not from any of these" without
+// claiming a nation. web/chat.js maps this code to 🏴.
+//
+// THREE LETTERS ON PURPOSE. Every real code here is two, and chatFlag refuses
+// anything that is not exactly two A-Z letters — so a browser running an older
+// chat.js shows the clerk no flag at all rather than a box of letters, and a
+// new chat.js against an older server sees an empty country and does the same.
+// Both directions degrade to silence, which is what a cosmetic field should do.
+const ClerkCountry = "GNO"
+
 // IsReservedName is whether a display name is the clerk's, however it is spelt.
 //
 // SKELETON, NOT EQUALITY, because equality defends nothing: "Clerk", "CLERK",

@@ -1014,6 +1014,37 @@ function mkDoc() {
   }
 
 
+  /* ---- the clerk's flag ----------------------------------------------------
+     gno.land is a jurisdiction rather than a place, so the clerk flies a plain
+     black flag instead of a country's. The code is three letters on purpose:
+     every real one is two, and the branch below it refuses anything that is not
+     exactly two A-Z letters, so an older chat.js shows the clerk NO flag rather
+     than a box of letters. Both arms are here — the black flag, and that real
+     codes still render — because a special case in front of a regex is exactly
+     the shape that quietly eats the general path. */
+  {
+    ok("the clerk flies a black flag", chatFlag("GNO") === "\u{1F3F4}",
+       JSON.stringify(chatFlag("GNO")));
+    ok("...and it is case-insensitive like every other code",
+       chatFlag("gno") === "\u{1F3F4}", JSON.stringify(chatFlag("gno")));
+    /* GB IS IN HERE FOR A REASON, and ablation is what put it there: a special
+       case written as `s.startsWith("G")` instead of an equality would swallow
+       every G country, and with only US and JP asserted nothing in this file
+       would have noticed. The clerk's code shares a first letter with real
+       places, so a real place beginning with G is the arm that pins equality. */
+    ok("a real country still gets its own flag",
+       chatFlag("US") === "\u{1F1FA}\u{1F1F8}" && chatFlag("jp") === "\u{1F1EF}\u{1F1F5}" &&
+       chatFlag("GB") === "\u{1F1EC}\u{1F1E7}" && chatFlag("GR") === "\u{1F1EC}\u{1F1F7}",
+       [chatFlag("US"), chatFlag("jp"), chatFlag("GB"), chatFlag("GR")].join(" "));
+    ok("no country means no flag, as before",
+       chatFlag("") === "" && chatFlag(null) === "" && chatFlag(undefined) === "");
+    // A THREE-LETTER CODE THAT IS NOT THE CLERK'S IS STILL NOTHING, which is
+    // what keeps the special case from becoming "any odd length draws a flag".
+    ok("...and any other odd code is refused",
+       chatFlag("XYZ") === "" && chatFlag("USA") === "",
+       JSON.stringify([chatFlag("XYZ"), chatFlag("USA")]));
+  }
+
   /* ---- how the page decides there is a chat service at all -----------------
      This file evaluates chat.js whole and does not otherwise read index.html;
      it reads it here because the decision that the panel exists is made there.

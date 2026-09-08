@@ -112,8 +112,18 @@ function chatEsc(s) {
 // returns "" — an unknown country renders as no flag rather than as a guess, and the
 // strict test is also what stops an arbitrary code point being assembled out of a
 // field that arrived over the network.
+// The clerk's own code, from internal/chat.ClerkCountry. Three letters, so the
+// two-letter test below refuses it and an older chat.js shows no flag rather
+// than a box of letters — see that constant for both directions of that.
+const CHATCLERKCC = "GNO";
+
 function chatFlag(cc) {
   const s = String(cc == null ? "" : cc).toUpperCase();
+  /* THE CLERK IS NOT FROM ANYWHERE. gno.land is a jurisdiction rather than a
+     place, so it flies a plain black flag: the one flag that says "not from any
+     of these" without claiming a nation. Checked BEFORE the two-letter test,
+     which would otherwise refuse it. */
+  if (s === CHATCLERKCC) return "\u{1F3F4}";
   if (!/^[A-Z]{2}$/.test(s)) return "";
   return String.fromCodePoint(0x1f1e6 + s.charCodeAt(0) - 65,
                               0x1f1e6 + s.charCodeAt(1) - 65);
