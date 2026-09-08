@@ -91,15 +91,15 @@ type claimState struct {
 	verdictAtTime  int64
 	escrowUntilAt  int64 // absolute: the reopen window's close, in unix seconds
 	closed         bool  // dead-claim close (unanswered past the timeout)
-	// dustBurns IS DEAD STATE. It recorded what deposit+fee actually burned at a
-	// conclusive low, so settleSlash could size a bounty top-up against real
-	// burns rather than params — a seeded claim burns nothing, and the params
-	// base would have under-paid the flagger. settleSlash and the conclusive-low
-	// path both went with the quality lane, and this field now has exactly one
-	// non-comment line in the realm: the declaration below. Removing it changes
-	// claimState's stored shape, so it is filed with flagger and flagVoteEnd
-	// rather than dropped here.
-	dustBurns int64
+	// dustBurns IS GONE, and this is what it was for. It recorded what deposit+fee
+	// actually burned at a conclusive low, so settleSlash could size a bounty
+	// top-up against real burns rather than params — a seeded claim burns
+	// nothing, and the params base would have under-paid the flagger. settleSlash
+	// and the conclusive-low path both went with the quality lane, leaving the
+	// declaration as its only non-comment line in the realm.
+	// Removed together with flagger and flagVoteEnd: all three changed
+	// claimState's STORED shape, which is why they waited for a reseed rather
+	// than going out with the code that read them.
 	// The board (board.gno). Four indexes, nil until the first comment: every
 	// read tests for nil rather than calling ensure*, because a query carries no
 	// storage deposit and a lazily-initialising read is unpaid state growth.
@@ -228,10 +228,16 @@ type claimState struct {
 	// (audit M2-1: a weightless self-contest must not mint the credential).
 	credEligible bool
 
-	// The quality lane (quality.gno, §10.2 Q2-Q5). One flag slot per claim;
-	// a court-local sealed 3-bucket tally rides flags AND dispute rounds.
-	flagger     address
-	flagVoteEnd int64
+	// The quality lane (quality.gno, §10.2 Q2-Q5) HELD TWO FIELDS HERE: flagger,
+	// the one flag slot per claim, and flagVoteEnd, the close of its court-local
+	// sealed 3-bucket tally, which rode flags AND dispute rounds. Both are gone
+	// with the lane. They outlived it only because dropping a persisted field
+	// changes claimState's stored shape and so needs a fresh chain.
+	// NOTHING READ EITHER ONE at the point they were removed — verified as
+	// selectors, not by name: `cs.flagger` and `cs.flagVoteEnd` appeared nowhere
+	// in the realm or its tests. The name `flagger` does still appear in three
+	// test files, every time as a LOCAL variable for an address, which is why a
+	// bare grep made this look six-times referenced when it was zero.
 	// slotConsumed IS GONE, and so is every reader that made it interesting. The
 	// field is not declared in this struct any more; what stood here was a
 	// twenty-two-line enumeration of SEVEN behavioural readers, written because
