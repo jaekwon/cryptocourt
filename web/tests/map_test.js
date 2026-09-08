@@ -1518,9 +1518,20 @@ ok("controls present", ["mt-titles","mt-ids","mz-in","mz-out","mz-fit","mz-slide
      neighbouring box. Tied to the constant rather than to the 17 that used to
      be written here, which was a number with no reason and would not have
      noticed sep changing underneath it. */
+  /* MEASURED ON THE INK, not on the centres. `reach < sep` compared centre
+     distance and so ignored the dot's own radius — at the busiest count that
+     understated the fan by 2.6 units, and the honest figure (22.2) was already
+     PAST sep while the assertion still passed. And centre distance is the wrong
+     axis anyway: a neighbour box sits right of or below this one, so what can
+     collide is the x and y extent, not the diagonal. */
+  const extent = svg => { const X = cx(svg), Y = cy(svg);
+    const rr = [...svg.matchAll(/ r="([\d.]+)"/g)].map(m => +m[1]);
+    const pad = Math.max(...rr);
+    return {x: Math.max(...X) + pad, y: Math.max(...Y) + pad}; };
   ok("...but the fan still grows past the cap, and stays inside the node's gap",
      reach(commentClusterSvg(25)) > reach(commentClusterSvg(12)) + 1
-     && reach(commentClusterSvg(4000)) < MAPK.sep);
+     && extent(commentClusterSvg(4000)).x < MAPK.sep
+     && extent(commentClusterSvg(4000)).y < MAPK.sep);
 
   /* AND THE FLOOR, WHICH IS THE BUG THAT SHIPPED. Seven comments drew a cluster
      9.3 units wide beside a 230-unit node — 4.0% — and at the map's measured

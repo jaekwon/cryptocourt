@@ -8159,7 +8159,7 @@ function commentClusterSvg(count){
   }
   /* A dot is a FILL, so unlike the edges it has no vector-effect:non-scaling-
      stroke to fall back on — at the fit scale its radius IS its visibility. */
-  const r = n > 12 ? 2.1 : n > 4 ? 1.75 : 1.7;
+  const r = n > 12 ? 2.6 : n > 4 ? 2.2 : 2.1;
   return (d? `<path class="mcmt-e" d="${d}"/>` : "")
     + pts.map(([x, y]) => `<circle class="mcmt-d" cx="${x}" cy="${y}" r="${r}"/>`).join("");
 }
@@ -8804,7 +8804,12 @@ function buyActionsHtml(slug, q){
   const send = ok? q.x.toString()+"ugnot" : null;
   // no quote ⇒ buying stays possible (the chain computes the true amount),
   // but the acknowledgement still gates the one-click paths
-  const gate = isLive()? (noquote? !acked : (!ok || !acked)) : false;
+  /* AND META'S SECOND TICK GATES TOO. It is required rather than advisory
+     because the mistake it prevents is irreversible and costs real GNOT: the
+     curve is one way, so somebody who burns for coin they were already owed
+     cannot undo it. */
+  const acked2 = slug !== META_SLUG || !!buyFormFor(slug).ack2;
+  const gate = isLive()? (noquote? !acked || !acked2 : (!ok || !acked || !acked2)) : false;
   /* NO "GNOT in, one-way" UNDER THE VERB. The acknowledgement directly above it
      already says the coin cannot be sold back, in the reader's own words and
      with a tick beside it; five more words of shorthand under the button says
@@ -12105,6 +12110,21 @@ function joinPanel(slug, s){
   BUYQ = null; BUYCTX = null;
   const form = buyFormFor(slug);
   const ackAttr = form.ack? " checked" : "";
+  /* A SECOND ACKNOWLEDGEMENT, ON META ONLY, AND IT IS ABOUT SPENDING.
+     Meta's coin is the one coin on this site nobody needs to burn for: every
+     burn on every OTHER court earns it, one for one, and waits to be claimed.
+     So a reader who arrives at meta's buy panel and burns GNOT for it has spent
+     real GNOT on something they were already owed for nothing, and nothing on the
+     panel said so, because the panel is the same panel every court gets.
+     DEFAULT OFF AND REQUIRED, unlike the sold-back tick which is a property of
+     every court's curve. This one is a warning that only makes sense here, so it
+     is only drawn here and it gates the button on its own. */
+  const ack2Attr = form.ack2? " checked" : "";
+  const ack2 = slug === META_SLUG
+    ? `<label class="ack small"><input type="checkbox" id="buyack2"${ack2Attr}> `
+      + `I understand that receiving ${sym} here is not necessary — every burn on `
+      + `any other court earns ${sym}, one for one, and it waits until you claim it.</label>`
+    : "";
   let body;
   if(minted==null){
     BUYCTX = {slug, noquote:true};
@@ -12112,6 +12132,7 @@ function joinPanel(slug, s){
         <div class="kv"><div class="k">supply</div><div class="v tnum">${cc(s.supply,slug)}</div></div>
         <p class="small muted" style="margin:8px 0 0">No quote — the node did not answer the curve read; the chain computes the true amount when the offering lands.</p>
         <label class="ack small"><input type="checkbox" id="buyack"${ackAttr}> I understand ${sym} cannot be sold back to the court.</label>
+        ${ack2}
         <div class="actions" style="margin-top:10px" id="buyactions">${buyActionsHtml(slug,null)}</div>`;
   }else{
     BUYCTX = {slug, minted, supply:s.supply, price:s.price};
@@ -12132,6 +12153,7 @@ function joinPanel(slug, s){
           <div id="buyrows" aria-live="polite">${buyRowsHtml(q, s.price, slug)}</div>
         </div>
         <label class="ack small"><input type="checkbox" id="buyack"${ackAttr}> I understand ${sym} cannot be sold back to the court.</label>
+        ${ack2}
         <div class="actions" style="margin-top:10px" id="buyactions">${buyActionsHtml(slug,q)}</div>
         <!-- The dialog's home, and nothing else now the "You pay" line is gone: no
              ticket frame (an empty bordered box with registration marks reads as a box
@@ -12233,10 +12255,18 @@ function rememberBuyAmt(el){
 }
 document.addEventListener("input", ev=>{ if(ev.target && ev.target.id==="buyamt") rememberBuyAmt(ev.target); });
 function rememberBuyAck(el){
-  if(BUYCTX) BUYFORM = {slug:BUYCTX.slug, amt:BUYFORM.amt, ack:!!el.checked};
+  if(BUYCTX) BUYFORM = {slug:BUYCTX.slug, amt:BUYFORM.amt, ack:!!el.checked, ack2:BUYFORM.ack2};
+  refreshBuyActions();
+}
+function rememberBuyAck2(el){
+  if(BUYCTX) BUYFORM = {slug:BUYCTX.slug, amt:BUYFORM.amt, ack:BUYFORM.ack, ack2:!!el.checked};
   refreshBuyActions();
 }
 document.addEventListener("change", ev=>{ if(ev.target && ev.target.id==="buyack") rememberBuyAck(ev.target); });
+// The meta-only second tick, remembered the same way and for the same reason the
+// first one is: a re-render between the click and the paint must not silently
+// untick something the reader can see is ticked.
+document.addEventListener("change", ev=>{ if(ev.target && ev.target.id==="buyack2") rememberBuyAck2(ev.target); });
 /* THE FIGURES SIT IN THE LEFT COLUMN, not above both. Full width they pushed the
    whole two-column body — and the Join panel heading the right column — 200px
    down the page, so a reader who came to buy met four reference numbers first
@@ -12405,16 +12435,18 @@ function franchiseHtml(slug, pending, supply, hasMeta, held){
   /* NOTHING IS MINTED UNTIL IT IS ASKED FOR, and that is the whole reason meta
      can read as empty. Said plainly, because "supply 0" next to a live
      entitlement is the exact thing that misleads. */
-  /* A ZERO HERE IS THE WHOLE CONFUSION, so zero does not get printed as a
-     quantity. "minted so far 0.00" beside a court that has burned thirteen
-     thousand GNOT is the sentence a reader disbelieves — it looks like a
-     measurement of a broken thing. Nothing has been CLAIMED is a different
-     statement and the true one, so it is the one made. */
-  const heldLine = !Number.isFinite(supply) ? ""
-    : supply > 0
-      ? `<span class="fr-k">claimed so far</span> <span class="tnum">${cc(supply, META_SLUG)}</span>`
-      : `<span class="fr-k">Nobody has claimed any yet</span> — every burn so far `
-        + `is still waiting as an entitlement.`;
+  /* THE FIGURE IS NOT REPEATED HERE. "claimed so far 2,008 KOURT:META" is the
+     coin supply, and the stat strip three inches above this panel already
+     carries it — a panel that restates the number beside it is asking the reader
+     to check whether the two agree.
+     WHAT IS KEPT IS THE ZERO CASE, because that one is not a figure, it is the
+     answer to a question the supply cannot answer on its own: a court showing
+     nothing minted, next to courts that have burned thousands, reads as broken
+     rather than as unclaimed. */
+  const heldLine = supply === 0
+    ? `<span class="fr-k">Nobody has claimed any yet</span> — every burn so far `
+      + `is still waiting as an entitlement.`
+    : "";
   /* WHAT YOU ALREADY HOLD, which is the half of the question that was missing
      entirely. "How much meta do people have" has an exact answer — the balance —
      and "how much can they claim" has an exact answer in the units the
