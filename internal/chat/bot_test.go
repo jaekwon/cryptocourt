@@ -730,6 +730,60 @@ func TestBotThrottleSurvivesARestart(t *testing.T) {
 	}
 }
 
+// THE DEFAULT WINDOW, AGAINST THE TIMELINE THAT WAS REPORTED. The test below
+// this one sets GreetAfter by hand, which is right for checking the MECHANISM
+// and blind to the number the site actually runs: BotGreetAfter was 30 minutes,
+// so somebody alone in a room typing "testing" and then "is anybody here?" ten
+// seconds later got silence, and nothing in this package would have failed if it
+// had been thirty hours.
+//
+// SO THIS ONE LEAVES GreetAfter UNSET and drives the real default. The interval
+// is 10s because that is what was measured on the live room — 10:16:23 then
+// 10:16:33 — and created_at is whole seconds, so it lands exactly on the
+// boundary the window comparison decides. That is the case a `>=` window
+// refuses and a `>` window answers, which is the difference between fixing the
+// report and only appearing to.
+func TestTheDefaultGreetWindowAnswersSomebodyTalkingToThemselves(t *testing.T) {
+	s, clock := newStore(t)
+	ctx := context.Background()
+	m := &fakeModel{reply: "Hey — ask away if you have a question about the site.", in: 60, out: 12}
+	b := newBot(t, s, m) // GreetAfter deliberately not set: exercise the default
+
+	if _, err := post(t, s, "orem", "ip-a", "testing"); err != nil {
+		t.Fatal(err)
+	}
+	*clock = clock.Add(10 * time.Second)
+	if _, err := post(t, s, "orem", "ip-a", "is anybody here?"); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.once(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if m.calls != 1 {
+		t.Fatalf("the reported timeline still goes unanswered (%d calls)", m.calls)
+	}
+
+	// AND IT IS STILL A WINDOW, not an unconditional answer. Five seconds after
+	// somebody else spoke is a live exchange, and a greeting into one is aimed at
+	// the person, not at the site. Asserted in a SECOND room, so the throttle is
+	// not what produces the silence: a fresh room with its own watermark, at a
+	// clock far enough on that MinGap has expired.
+	*clock = clock.Add(time.Hour)
+	if _, err := post(t, s, "ledger", "ip-b", "the canvass PDF says twelve thousand"); err != nil {
+		t.Fatal(err)
+	}
+	*clock = clock.Add(5 * time.Second)
+	if _, err := post(t, s, "ledger", "ip-c", "hey"); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.once(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if m.calls != 1 {
+		t.Fatalf("a greeting interjected into a live exchange (%d calls)", m.calls)
+	}
+}
+
 func TestBotAnswersAGreetingOnlyWhenTheRoomWasQuiet(t *testing.T) {
 	s, clock := newStore(t)
 	ctx := context.Background()

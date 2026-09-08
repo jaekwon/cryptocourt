@@ -128,6 +128,18 @@ type Bot struct {
 	// site; the same word into a room where nothing has happened for an hour is
 	// somebody checking whether anyone is there, and leaving it unanswered is the
 	// worst version of this feature.
+	//
+	// NOW TEN SECONDS RATHER THAN THIRTY MINUTES, on the owner's call, and the
+	// reasoning above is what changed rather than being abandoned: "an empty
+	// room" turned out to be the wrong test for the case that actually matters.
+	// The report was somebody typing "is anybody here?" ten seconds after their
+	// own previous line — a person alone in a room, talking to themselves,
+	// getting silence — and a half-hour window calls that a live conversation.
+	// A greeting still cannot interject into one, because ten seconds is about
+	// how long a reply that is aimed at somebody takes to arrive.
+	// THE BILL IS BOUNDED ELSEWHERE, which is what makes this safe: MinGap still
+	// holds the helper to one reply per gap across every room, so a shorter
+	// window changes WHICH message gets answered, not how many.
 	GreetAfter time.Duration
 
 	// Endpoint is overridable so tests can point at a local server. Empty means
@@ -151,7 +163,7 @@ const (
 	// BotTypeCPS, BotTypeMax and BotGreetAfter are the defaults. See the fields.
 	BotTypeCPS    = 18.0
 	BotTypeMax    = 20 * time.Second
-	BotGreetAfter = 30 * time.Minute
+	BotGreetAfter = 10 * time.Second
 
 	// botReadPause is the beat before the typing starts — the time a person
 	// spends reading the message before answering it. Asked for as "immediately
@@ -593,11 +605,21 @@ func botGreeting(body string) bool {
 // quiet room from a reader's point of view — otherwise one greeting answered
 // would make the next hour of greetings ineligible, which is the opposite of
 // what an empty room needs.
+//
+// THE WINDOW IS HALF-OPEN, `> since` rather than `>= since`, and with
+// BotGreetAfter down to ten seconds that stopped being a hair-split. A message
+// AT the boundary is where the silence starts, not activity inside it: if
+// somebody speaks at t and greets at t+10, the room has been silent for ten
+// seconds by any reading a person would give the sentence. created_at is stored
+// in whole SECONDS, so with a ten-second window "exactly at the edge" is a
+// common case rather than a measure-zero one — the reported timeline was
+// precisely 10s apart, and under `>=` the change of window would not have
+// covered the very report that prompted it.
 func (s *Store) roomQuietBefore(ctx context.Context, chain, court string, id, since int64) (bool, error) {
 	var n int
 	err := s.r.QueryRowContext(ctx,
 		`SELECT count(*) FROM messages
-		  WHERE chain=? AND court=? AND id<>? AND created_at>=? AND hidden=0
+		  WHERE chain=? AND court=? AND id<>? AND created_at>? AND hidden=0
 		    AND ip_hash<>?`,
 		chain, court, id, since, botIPHash).Scan(&n)
 	return n == 0, err
