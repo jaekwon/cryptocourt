@@ -19033,12 +19033,15 @@ on(/^\/diag$/, async ()=>{
          that shows what it says. Rendered only when a file is actually loaded:
          crediting a source on a deployment that has none would be a claim about
          where the numbers came from. */
-      + (d.geo_known ? `<p class="small muted">Country data by <a
-           href="https://db-ip.com" rel="noopener">DB-IP</a>
-           (<a href="https://creativecommons.org/licenses/by/4.0/"
-           rel="noopener">CC-BY 4.0</a>). It is a guess from an address block: any
-           VPN defeats it and mobile carriers route through the wrong country
-           routinely.</p>` : "")
+      /* href AND rel ON ONE LINE, which is not a formatting preference: the
+         deploy's self-contained check greps for an external href and excludes
+         the line only when rel="noopener" is on it. Wrapped across two lines,
+         the exemption does not apply and the deploy refuses the page — measured,
+         on the CC link below while the DB-IP one beside it passed. */
+      + (d.geo_known ? `<p class="small muted">Country data by <a href="https://db-ip.com" rel="noopener">DB-IP</a>
+           (<a href="https://creativecommons.org/licenses/by/4.0/" rel="noopener">CC-BY 4.0</a>).
+           It is a guess from an address block: any VPN defeats it and mobile
+           carriers route through the wrong country routinely.</p>` : "")
       + `<h2 class="sec">The site's answerer</h2>`
       + `<div class="prose"><p>${d.bot.enabled
           ? `Running. It answers questions about how the site works.`
