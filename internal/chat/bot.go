@@ -1315,10 +1315,20 @@ func botTrimTo(s string, limit int) string {
 	if len(s) <= limit {
 		return s
 	}
-	// Cut at the last sentence end inside the limit, so a truncated reply reads
-	// as finished rather than as having been interrupted.
+	/* Cut at the last sentence end inside the limit, so a truncated reply reads
+	   as finished rather than as having been interrupted.
+	   A THIRD OF THE LIMIT, AND IT USED TO BE A HALF. Measured in a live room: an
+	   answer about staking ran to 366 characters against the 360 cap, its only
+	   sentence end sat at 155, the half rule wanted 180, and the reply the reader
+	   got ended "...based on their conviction (stake x time held) and". A reply
+	   that stops on "and" reads as a broken service, and the sentence before it
+	   was right there.
+	   THE GUARD IS STILL DOING ITS JOB. It exists so a long answer opening with
+	   "Hi." is not cut to three characters, and at a third of 360 that opening is
+	   still refused — 2 is not past 120. What changed is the band between a third
+	   and a half, which is where a first sentence of ordinary length falls. */
 	cut := s[:limit]
-	if i := strings.LastIndexAny(cut, ".!?"); i > limit/2 {
+	if i := strings.LastIndexAny(cut, ".!?"); i > limit/3 {
 		return cut[:i+1]
 	}
 	if i := strings.LastIndex(cut, " "); i > 0 {

@@ -1770,3 +1770,48 @@ func TestAQuestionTheFactAnswersIsNotAPass(t *testing.T) {
 		t.Errorf("...and the plain instruction must remain: %q", m2.prompt)
 	}
 }
+
+/*
+AN ANSWER MUST NOT END ON "and".
+
+	MEASURED IN A LIVE ROOM, and this is the exact reply a reader got: 366
+	characters against the 360 cap, whose only sentence end sat at 155. The old
+	rule wanted one past half the limit — 180 — so it fell through to the word
+	boundary and published "...based on their conviction (stake x time held)
+	and". The sentence before it was complete and right there.
+	THE FIXTURE IS THE MEASURED TEXT, because what makes it chop is WHERE the
+	punctuation falls: any other 366-character string would pass on a build that
+	still chopped this one.
+*/
+func TestALongAnswerIsCutAtASentenceNotMidClause(t *testing.T) {
+	const measured = "To stake on a claim, find the claim page, choose the YES or NO side you " +
+		"wish to support, enter your stake amount in court coin, and confirm the transaction. " +
+		"Your stake is locked until the claim is settled; then you withdraw it in full " +
+		"regardless of outcome, and winners receive newly minted court coin based on their " +
+		"conviction (stake x time held) and something more"
+	if len(measured) <= botMaxBody {
+		t.Fatalf("the fixture must exceed the cap to be trimmed at all: %d", len(measured))
+	}
+	got := botTrim(measured)
+	if strings.HasSuffix(got, "and") {
+		t.Errorf("the reply still ends mid-clause: ...%q", got[len(got)-40:])
+	}
+	if !strings.HasSuffix(got, "transaction.") {
+		t.Errorf("it should end at the sentence that was already complete: ...%q",
+			got[max(0, len(got)-40):])
+	}
+	/* AND THE GUARD THE THRESHOLD EXISTS FOR STILL HOLDS: a long answer that
+	   opens with a two-character sentence must not be cut to two characters.
+	   This is the case that made the bound a fraction rather than "the last
+	   sentence end anywhere". */
+	/* NO OTHER PUNCTUATION IN THE FIXTURE, and ablation is why. The first version
+	   repeated a sentence that ENDED in a full stop, so the cut always contained
+	   a late sentence end and the degenerate case never arose — the arm passed at
+	   every threshold, including zero, which makes it no arm at all. With one
+	   early "." and nothing after it, a threshold of zero really does return
+	   three characters. */
+	short := "Hi. " + strings.Repeat("this part is the actual answer and runs on ", 12)
+	if g := botTrim(short); len(g) < botMaxBody/3 {
+		t.Errorf("a tiny opening sentence must not swallow the answer: %d chars %q", len(g), g)
+	}
+}
