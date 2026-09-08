@@ -573,6 +573,20 @@ const CHATCSS = `
    must not grow without bound. Inside it, the rail's own flexing wins. */
 .chatlog{list-style:none;margin:0;padding:0;max-height:15rem;overflow-y:auto;
   flex:1 1 auto;min-height:0}
+/* height:0 IS WHAT MAKES THE RAIL'S FLOOR MEAN THE CONTROLS — and it is scoped
+   to the rail, which the first cut was not.
+   The rail floors this panel at min-content so the composer can never be
+   clipped. With the log sized by its messages that min-content includes a
+   screenful of them, the floor came out at 469px, and the composer was pushed
+   off the bottom at every height instead. Zero height with flex-grow gives the
+   log every spare pixel and nothing more, so the floor is the controls alone.
+   UNSCOPED IT BROKE THE STANDALONE CHAT PAGE, which is how the scope was
+   found: there the panel is not inside a flex column, so there is no spare
+   space to grow into, the log stayed at literally zero, and chat_page.js sat
+   waiting twenty seconds for a message that could never appear. In the rail the
+   log yields — 127px at 1000, 27px at 900, 0 by 800 — and everywhere else it
+   is sized by its messages exactly as before. */
+.railchat.chatpanel .chatlog{height:0}
 .chatmsg{display:flex;gap:.5rem;align-items:baseline;padding:.15rem 0;
   border-bottom:1px solid rgba(128,128,128,.12)}
 /* WHO SAID IT AND WHAT THEY SAID ARE ONE RUN OF PROSE, NOT TWO COLUMNS.

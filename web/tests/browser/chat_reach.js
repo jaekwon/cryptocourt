@@ -24,6 +24,13 @@
 //   - IT ONLY EXISTS IN A SHORT WINDOW. The existing chat checks run at one
 //     tall viewport, so the form never got squeezed. Heights are swept here,
 //     and 800 is the shortest one in the list for the reason recorded below.
+// EVERY HEIGHT IS SWEPT, AND THE ASSERTION IS "NOT COVERED" rather than "on
+// screen without scrolling". At 620px the composer sits below the rail's fold
+// and the rail scrolls to it, which is a normal thing a sidebar does; the bug
+// was a control that was VISIBLE and took no click. So each control is scrolled
+// into view if it is outside the viewport and then hit-tested, and the failure
+// is landing on some other element.
+//
 //   - IT IS A HIT TEST, NOT A COUNT. The button was present, enabled, correctly
 //     classed, cursor:pointer in its own style, and 35px tall the whole time —
 //     every countable property was right. What was wrong is which element the
@@ -51,27 +58,30 @@
 // session edits these files, and an in-place mutation has already been written
 // back once from that session's stale buffer.
 //
-// NOT SWEPT BELOW 800, AND THAT BOUND IS A SECOND OPEN BUG, not a tuning
-// choice — recorded here because a height list with no stated reason is how a
-// check quietly stops covering the thing it was written for.
-// `.railchat` IS this panel (the rail's chat slot wears both classes) and it
-// carries flex:1 1 auto with min-height:0 and overflow:hidden, so it can end up
-// SHORTER than its own rows and clip them. Pinning the rows stopped them
-// collapsing, which is the reported bug; it does not stop the container
-// clipping them. Below the bound the composer is clipped and the rail's own
-// foot — the node selector at 700, the theme button at 620 — is what the
-// pointer reaches, and by 560 the row is outside the viewport entirely.
-// A min-height:min-content floor on the panel was tried and MEASURED WORSE: it
-// inflates the panel to full content height and pushes the foot to y=896 with
-// the composer off-screen at every height tested. The real fix is in the rail's
-// layout in index.html, which is not this file's to change and is currently
-// open in another session; it is filed as its own task.
-// The bound differs between the demo page and the deployed one — 800 here, 700
-// live — because demo mode carries an extra node-selector block in the rail.
-// The lower of the two is what this file sweeps.
+// SWEPT DOWN TO 620 NOW, and the bound used to be 800 because of a second bug
+// that is fixed. `.railchat` IS this panel, and it carried flex:1 1 auto with
+// min-height:0 and overflow:hidden, so the rail handed it LESS height than its
+// own controls occupy and clipped them — 159px of panel around a 232px composer
+// at 800px, with send's centre landing on a stray <b> from the block painted
+// underneath. Pinning the rows stopped them collapsing; it did not stop the
+// container clipping them.
+//
+// It surfaced here because a nav link was added for the parameters page: the
+// rail's nav went from five entries to six, the threshold moved up from ~700 to
+// 800, and this file went red 3/3 — which is how a 28px addition to a sidebar
+// turned into a dead button. Worth keeping in mind about this layout.
+//
+// Fixed by flooring the panel at min-content and giving .chatlog height:0, so
+// min-content resolves to the CONTROLS rather than the controls plus a
+// screenful of messages. The log yields instead: 127px at 1000, 27px at 900, 0
+// by 800. Two alternatives were measured and rejected — a bare min-content
+// floor with the log sized by its messages put the composer off-screen at every
+// height (floor 469px), and a min-height on the log made the rail scroll even
+// at 1000px while never shrinking.
+//
 const {PAGE, demoPage} = require('./harness');
 
-const HEIGHTS = [1000, 900, 800];
+const HEIGHTS = [1000, 900, 800, 760, 700, 620];
 
 (async () => {
   const {browser, page, errs} = await demoPage({width: 1280, height: 1000});
@@ -93,10 +103,23 @@ const HEIGHTS = [1000, 900, 800];
         return t ? t.tagName.toLowerCase()
           + (typeof t.className === "string" && t.className.trim()
              ? "." + t.className.trim().split(/\s+/).join(".") : "") : "none"; };
-      const centre = el => { const b = el.getBoundingClientRect();
+      /* SCROLL IF IT IS OFF THE VIEWPORT, then hit-test — because "off the
+         bottom" and "covered by something else" are different facts and only
+         the second is the bug. elementFromPoint returns null for a point
+         outside the viewport, so without this a control the reader can simply
+         scroll to reads identically to one that is dead under another element.
+         At 620px the composer IS below the fold, and that is acceptable: the
+         rail scrolls. Being visible and unclickable is not. */
+      const centre = el => { const b0 = el.getBoundingClientRect();
+        const inView = b0.top >= 0 && b0.bottom <= innerHeight;
+        if (!inView) el.scrollIntoView({block: "center"});
+        const b = el.getBoundingClientRect();
         return at(b.left + b.width / 2, b.top + b.height / 2); };
       const N = nm.getBoundingClientRect(), F = form.getBoundingClientRect();
-      return {name: centre(nm), send: centre(sd),
+      // Was the composer already on screen BEFORE anything was scrolled? This
+      // is what the log yielding buys, and centre() would hide it.
+      const inViewUnscrolled = F.top >= 0 && F.bottom <= innerHeight;
+      return {name: centre(nm), send: centre(sd), inViewUnscrolled,
               formH: Math.round(F.height), btnH: Math.round(N.height),
               // positive means the button hangs out below its own form
               overflow: Math.round(N.bottom - F.bottom)};
@@ -114,6 +137,18 @@ const HEIGHTS = [1000, 900, 800];
        m.overflow <= 0, `button hangs ${m.overflow}px below the form`);
     ok(`at ${h}px the row is at least as tall as the button in it`,
        m.formH >= m.btnH, `form ${m.formH}px vs button ${m.btnH}px`);
+    /* AND AT A COMFORTABLE HEIGHT IT NEEDS NO SCROLLING AT ALL. This is the arm
+       that pins the log yielding: with the log sized by its messages instead of
+       height:0, the panel's floor becomes the whole panel (469px measured) and
+       the composer is pushed below the fold even in a tall window. Tolerating a
+       scroll is right at 620px and wrong at 900 — a sidebar chat you must
+       scroll to type in, in a full-height window, is the log winning an
+       argument it should lose. Only the roomy heights, since below them the
+       scroll is the intended behaviour. */
+    if (h >= 900) {
+      ok(`at ${h}px the composer needs no scrolling`, m.inViewUnscrolled,
+         `form box was outside the viewport at ${h}px`);
+    }
   }
 
   ok("no page errors", errs.length === 0, errs.slice(0, 2).join(" | "));

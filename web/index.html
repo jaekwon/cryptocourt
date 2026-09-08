@@ -1018,6 +1018,21 @@ a.card:hover{border-color:var(--line-2)}
 .railchat.chatpanel{margin-top:0}
 .railchat[hidden]{display:none}
 .railchat > *{min-height:0}
+/* AND THE PANEL ITSELF HAS A FLOOR, which is the other half of that rule.
+   min-height:0 on the children lets them shrink below their content, which is
+   what the log needs and what the COMPOSER must never do. Without a floor here
+   the rail simply gave the panel less height than its own controls occupy and
+   clipped them: measured at 800px, 159px of panel holding a 232px composer,
+   with the send button's centre landing on a stray <b> from the block painted
+   underneath. A reader saw the control, pressed it, and nothing happened.
+   min-content, and it means what it says only because chat.js pins every row
+   except the log to flex:0 0 auto and gives the log height:0 — so the panel's
+   min-content is its CONTROLS, not its controls plus a screenful of messages.
+   The log is what yields: 127px at 1000, 27px at 900, 0 by 800. That is
+   deliberate. Between a chat you can read but not use and one you can use but
+   must scroll to read, the controls win — they are what somebody came to press,
+   and the messages are one route away on the court's own page. */
+.railchat.chatpanel{min-height:min-content}
 /* The court coin's name, everywhere it is written. One hardcoded purple rather
    than a theme token: the token IS the colour, and it must read the same in
    light and dark. */
