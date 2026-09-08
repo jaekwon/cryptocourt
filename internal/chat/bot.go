@@ -551,10 +551,32 @@ func botGreeting(body string) bool {
 	if s == "" || len(s) > 24 {
 		return false
 	}
+	/* A PRESENCE CHECK IS ONE PHRASE WITH EIGHT SPELLINGS, and this list held
+	   three of them. Reported by the owner: "i asked 'is anybody here' but no
+	   bot responded." The message was `is anybody here?`, and the helper never
+	   even considered it \u2014 botWorthAsking refuses it correctly, since a presence
+	   check names nothing about this site and must not buy an API call, which
+	   left this function as the only path. It matched on equality against a
+	   hand-written list carrying "anybody here", "anyone here" and "is anyone
+	   here": every combination of {is, ""} x {anyone, anybody} except the one
+	   somebody typed. A message both filters refuse is dropped SILENTLY \u2014 the
+	   watermark advances and nothing is logged \u2014 so the room simply looked dead.
+	   NORMALISED RATHER THAN ENUMERATED. Four more literals would close these
+	   four spellings and leave "is there anybody here" open, and the report after
+	   that would be another word order. Dropping a leading "is"/"is there" and
+	   folding the anybody/anyone synonym collapses the whole family onto the two
+	   entries that were already here, which is why "is anyone here" is no longer
+	   in the list: it is now the same string as "anyone here".
+	   SAFE ONLY BECAUSE A GREETING IS SHORT. "is the docket down" opens
+	   identically and is a question, not a greeting \u2014 the 24-character bound
+	   above is what separates them, and it is checked before any of this. */
+	s = strings.TrimPrefix(s, "is there ")
+	s = strings.TrimPrefix(s, "is ")
+	s = strings.ReplaceAll(s, "anybody", "anyone")
 	for _, g := range []string{
 		"hi", "hii", "hey", "heya", "hello", "hallo", "yo", "sup", "gm",
 		"good morning", "good evening", "good afternoon", "greetings",
-		"anyone here", "anybody here", "anyone around", "is anyone here",
+		"anyone here", "anyone around",
 		"anyone", "hello there", "hey there", "hi there", "howdy",
 	} {
 		if s == g {

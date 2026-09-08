@@ -71,6 +71,46 @@ func TestBotDoesNotFindItsOwnAnswersWorthAnswering(t *testing.T) {
 	}
 }
 
+// A PRESENCE CHECK IS ONE PHRASE WITH EIGHT SPELLINGS, and the list had three.
+// Reported by the owner: "i asked 'is anybody here' but no bot responded." The
+// message was `is anybody here?` and the helper never even considered it — no
+// log line, because a message the local filters both refuse is dropped
+// silently. botWorthAsking refuses it correctly (a presence check names nothing
+// about the site, so it must not buy an API call), which leaves botGreeting as
+// the only path, and botGreeting matched on `s == g` against a hand-written
+// list holding "anybody here", "anyone here" and "is anyone here" — every
+// combination of {is, ""} x {anyone, anybody} EXCEPT the one that was typed.
+//
+// A LIST OF LITERALS CANNOT BE THE FIX. Four more entries would close these
+// four spellings and leave "is there anybody here" open, and the next report
+// would be another word order. The eight collapse to two by normalising the
+// leading "is"/"is there" and the anybody/anyone synonym, so this table is the
+// FAMILY rather than a sample of it — and each row below is a spelling a person
+// actually types.
+func TestBotGreetingCoversEveryPresenceSpelling(t *testing.T) {
+	for _, s := range []string{
+		"is anybody here?", "is anybody here", "is anyone here?", "anybody here?",
+		"anyone here?", "is there anybody here?", "is there anyone here?",
+		"anybody around?", "is anyone around?", "IS ANYBODY HERE?", " is anybody here ",
+		"is anybody", "is anyone",
+	} {
+		if !botGreeting(s) {
+			t.Errorf("a presence check must read as a greeting: %q", s)
+		}
+	}
+	// AND THE NORMALISING MUST NOT SWALLOW A REAL SENTENCE. Stripping a leading
+	// "is" is only safe because a greeting is short; these open the same way and
+	// are not greetings, so they check the bound is still doing its job.
+	for _, s := range []string{
+		"is the docket down?", "is staking live yet?", "is this thing broken",
+		"is there a way to unstake",
+	} {
+		if botGreeting(s) {
+			t.Errorf("not a greeting, it asks something: %q", s)
+		}
+	}
+}
+
 func TestBotGreetingIsABareHelloAndNotAnOpening(t *testing.T) {
 	for _, s := range []string{"hi", "Hello", "hey!", "HELLO?", "gm", "yo",
 		"good morning", "anyone here?", "howdy", " hi "} {
