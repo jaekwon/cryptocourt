@@ -8294,7 +8294,17 @@ function commentClusterSvg(count){
      and bounded at 1.4x so a busy claim's cluster cannot walk into its
      neighbour — the layout's own minimum gap between nodes is about 17 units and
      the widest fan here reaches under 16. */
-  const spread = Math.min(1.4, Math.sqrt(n / dots));
+  /* THE SPREAD CAP CAME DOWN WITH THE DOTS. It exists to open the fan when there
+     are more comments than dots drawn, and it multiplies the whole reach — which
+     was affordable while a dot was 3.4 units and is not now. At 1.15 the deepest
+     dot sits 49.4 units below the node against a measured clearance of 58; at
+     the old 1.4 it would have been 54.6, and three units of slack is not a
+     margin, it is a coincidence waiting to be reported.
+     NOT LOWER THAN 1.25, EITHER. sqrt(12/9) is already 1.155, so a cap of 1.15
+     binds at twelve comments and the fan stops growing exactly where the map
+     starts needing it to — which is what "the fan still grows past the cap"
+     exists to catch, and did. */
+  const spread = Math.min(1.25, Math.sqrt(n / dots));
   /* SIZED AGAINST THE NODE IT SITS BESIDE, because the first numbers here were
      picked in isolation and MEASURED far too small. On kourt.xyz claim #22's
      seven comments drew a cluster 9.3 units wide beside a 230-unit node — 4.0%
@@ -8323,8 +8333,37 @@ function commentClusterSvg(count){
      the horizontal spread at about +/-11 units at full reach — comfortably
      inside a 230-wide node, so the fan stays under its own claim and cannot
      read as belonging to the one beside it. */
-  const PER = 3, R0 = 9.0 * spread, RSTEP = 5.5 * spread;
-  const CMT_HALF_SWEEP = 0.60;                // radians either side of straight down
+  /* BIGGER DOTS AND MORE ROOM BETWEEN THE RINGS, reported as "make the comments
+     figure under claim nodes in the map bigger circles than they are now".
+     THE STEP HAD TO GROW WITH THE RADIUS, AND BY MORE THAN IT LOOKS. At r=3.4
+     against a 5.5 step the rings already touched; enlarging the dot alone would
+     have merged the fan into a blob, which is a smaller figure to read rather
+     than a bigger one. The binding case is NOT the biggest fan: `spread` scales
+     the step but not the dot, so the tightest packing is a mid-sized count at
+     spread 1 — nine comments, r=4.9, needing 9.8 between rings. 10.5 clears
+     that, and 14.7 at the 1.4 spread cap against a 5.6 radius.
+     (Measured, not reasoned: 7.5 was tried first and the ring-gap assertion in
+     map_test failed on exactly that case.)
+     AND THE REACH STILL FITS. CMT_MAX_DOTS is 9 and PER is 3, so there are three
+     rings: the outermost sits at R0 + 2*RSTEP = 31, times the 1.4 spread cap is
+     43.4, plus a 5.6 radius is 49 units below the node. The clearance measured
+     underneath a node on this map is 58 at the tightest and 178 median. */
+  const PER = 3, R0 = 16.0 * spread, RSTEP = 10.0 * spread;
+  /* THE SWEEP HAD TO WIDEN WITH THE DOT, and this is the one that was missed.
+     Neighbours in a RING are separated by an arc, not by the ring step: at R0=10
+     and a half-sweep of 0.60 the gap between two of three dots is 10*0.60 = 6
+     units against a 9.8 diameter, so the ring drew as one lump. The between-ring
+     assertion passed the whole time — it measured the wrong pair.
+     BUT IT CANNOT WIDEN FREELY, and 0.95 was too far. A ring holding only TWO
+     dots joins them with a straight chord across the whole sweep, and that chord
+     cuts INWARD: it sits at R*cos(sweep), so a wide enough sweep drops it behind
+     the ring above and the two edges cross. Ring counts of two happen at five
+     comments and at eight. The binding case is the outer ring at eight —
+     36*cos(h) must clear 26 — which caps the half-sweep at about 0.775.
+     0.70 keeps 1.5 units of clearance there and still gives 11.2 of arc between
+     neighbours in the first ring, against a 9.8 diameter. Found by the
+     no-crossing assertion, which had been green through every earlier tuning. */
+  const CMT_HALF_SWEEP = 0.70;                // radians either side of straight down
   const A0 = Math.PI / 2 - CMT_HALF_SWEEP, A1 = Math.PI / 2 + CMT_HALF_SWEEP;
   const pts = [], first = [];
   for(let i = 0; i < dots; i++){
@@ -8337,7 +8376,19 @@ function commentClusterSvg(count){
     pts.push(pt);
     if(k === 0) first.push(pt);
   }
+  /* A STEM FROM THE NODE TO THE FIRST RING, which is the whole of "i don't see
+     any edges from the claim nodes to the comments". The fan drew edges between
+     its own dots and nothing joining it to the claim, so it read as a separate
+     little constellation that happened to sit nearby rather than as something
+     hanging off the node.
+     ONE STEM PER DOT IN THE FIRST RING, not a single line to the middle. A ring
+     of two has no dot on the vertical, so one central stem would end in empty
+     space; drawn to each, the fan reads as stalks and is right for one, two or
+     three. The origin is the node's bottom-centre, so (0,0) is on its edge. */
   let d = "";
+  for(let i = 0; i < Math.min(PER, pts.length); i++){
+    d += `M0 0L${pts[i][0]} ${pts[i][1]}`;
+  }
   for(let i = 1; i < pts.length; i++){
     if(i % PER === 0) continue;               // ring boundary: joined below instead
     d += `M${pts[i-1][0]} ${pts[i-1][1]}L${pts[i][0]} ${pts[i][1]}`;
@@ -8347,7 +8398,7 @@ function commentClusterSvg(count){
   }
   /* A dot is a FILL, so unlike the edges it has no vector-effect:non-scaling-
      stroke to fall back on — at the fit scale its radius IS its visibility. */
-  const r = n > 12 ? 4.2 : n > 4 ? 3.6 : 3.4;
+  const r = n > 12 ? 5.6 : n > 4 ? 4.9 : 4.6;
   return (d? `<path class="mcmt-e" d="${d}"/>` : "")
     + pts.map(([x, y]) => `<circle class="mcmt-d" cx="${x}" cy="${y}" r="${r}"/>`).join("");
 }

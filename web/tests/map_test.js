@@ -1499,8 +1499,79 @@ ok("controls present", ["mt-titles","mt-ids","mz-in","mz-out","mz-fit","mz-slide
 
   ok("no comments draws nothing at all",
      commentClusterSvg(0) === "" && commentClusterSvg(-3) === "");
-  ok("one comment is one dot and no edge",
-     dots(commentClusterSvg(1)) === 1 && !/<path/.test(commentClusterSvg(1)));
+  /* ONE COMMENT IS ONE DOT ON A STEM. It used to be one dot and no path at all,
+     and that is what "i don't see any edges from the claim nodes to the
+     comments" was about: the fan drew edges between its own dots and nothing
+     joining it to the claim, so at one comment it was a speck floating under a
+     node and at three it was a small constellation beside one.
+     THE STEM IS NOT AN INTER-DOT EDGE. Both live in the same path, so the test
+     is where it starts: a stem begins at the origin, which is the node's own
+     bottom edge, and no edge between dots ever does. */
+  ok("one comment is one dot", dots(commentClusterSvg(1)) === 1);
+  ok("...hanging on a stem from the node itself",
+     (commentClusterSvg(1).match(/M0 0L/g) || []).length === 1);
+  ok("...and no edge between dots, because there is only one",
+     (commentClusterSvg(1).match(/M(?!0 0L)/g) || []).length === 0,
+     commentClusterSvg(1).slice(0, 90));
+  /* ONE STEM PER DOT IN THE FIRST RING, not one line to the middle: a ring of
+     two has no dot on the vertical, so a single central stem would end in empty
+     space. Capped at the ring, so a big fan does not sprout a stem per dot. */
+  ok("two comments hang on two stems",
+     (commentClusterSvg(2).match(/M0 0L/g) || []).length === 2);
+  ok("...and a large fan still hangs on exactly the first ring",
+     (commentClusterSvg(20).match(/M0 0L/g) || []).length === 3);
+
+  /* THE DOT IS BIG ENOUGH TO BE A CIRCLE. Reported twice — "i can barely see
+     it", then "make the comments figure under claim nodes in the map bigger
+     circles than they are now". A dot is a FILL, so unlike an edge it has no
+     non-scaling-stroke to fall back on: at the fit scale its radius IS its
+     visibility. Held as a floor rather than an exact value, so tuning upward is
+     free and tuning back down is not. */
+  const rOf = svg => +(svg.match(/ r="([\d.]+)"/) || [])[1];
+  ok("a comment dot is at least 4.5 units across the radius",
+     rOf(commentClusterSvg(1)) >= 4.5, String(rOf(commentClusterSvg(1))));
+  ok("...and grows with the count", rOf(commentClusterSvg(20)) > rOf(commentClusterSvg(1)));
+  /* AND THE RINGS STAY APART. At the old 5.5 step a 3.4 radius already touched
+     the next ring; enlarging the dot without the step would merge the fan into
+     a blob, which is a smaller figure to read rather than a bigger one. */
+  /* AND NEIGHBOURS WITHIN A RING STAY APART, which the ring test does NOT cover
+     and which is how the fan shipped as a lump: two dots in the same ring are
+     separated by an ARC, and at R0=10 with a 0.60 half-sweep that arc was 6
+     units against a 9.8 diameter. The between-ring assertion passed the whole
+     time — it was measuring the wrong pair. Found by rendering the figure and
+     looking at it. */
+  ok("...and neighbours in a ring do not overlap either", (() => {
+    const svg = commentClusterSvg(9), X = cx(svg), Y = cy(svg), rr = rOf(svg);
+    const by = new Map();
+    X.forEach((x, i) => {
+      const k = Math.round(Math.hypot(x, Y[i]));   // one ring, to the unit
+      (by.get(k) || by.set(k, []).get(k)).push([x, Y[i]]);
+    });
+    for (const ring of by.values()) {
+      ring.sort((a, b) => a[0] - b[0]);
+      for (let i = 1; i < ring.length; i++)
+        if (Math.hypot(ring[i][0] - ring[i-1][0], ring[i][1] - ring[i-1][1]) < 2 * rr) return false;
+    }
+    return true;
+  })());
+  ok("...without the rings merging into one blob", (() => {
+    const svg = commentClusterSvg(20), Y = cy(svg), X = cx(svg);
+    /* GROUPED WITH A TOLERANCE, not by a rounded string. Dots in one ring differ
+       in radius by hundredths — the coordinates are rounded to two places before
+       the radius is taken — so `toFixed(1)` split a single ring into two "rings"
+       0.1 apart and this arm failed on geometry that was correct. */
+    const rad = X.map((x, i) => Math.hypot(x, Y[i])).sort((a, b) => a - b);
+    const rings = rad.filter((v, i) => i === 0 || v - rad[i - 1] > 1);
+    for (let i = 1; i < rings.length; i++)
+      if (rings[i] - rings[i - 1] < 2 * rOf(svg)) return false;
+    return true;
+  })());
+  /* AND THE WHOLE FAN STILL FITS UNDER THE NODE. The clearance measured beneath
+     a node on this map is 58 units at the tightest; the spread multiplier caps
+     at 1.4 and is already inside these coordinates at the largest count. */
+  ok("...and the deepest dot stays inside the clearance under a node",
+     reach(commentClusterSvg(20)) + rOf(commentClusterSvg(20)) < 58,
+     String(reach(commentClusterSvg(20)) + rOf(commentClusterSvg(20))));
 
   /* BELOW THE NODE, AT EVERY COUNT — a half-plane now and not a quadrant. The
      fan hangs from bottom-CENTRE, so x is symmetric about zero and a negative x
