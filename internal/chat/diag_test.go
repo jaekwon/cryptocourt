@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"strings"
 	"sync"
 	"testing"
@@ -46,6 +47,14 @@ func TestDiagPublishesCountsAndNothingElse(t *testing.T) {
 		"ok": true, "holding": true, "holding_peak": true,
 		"courts_active": true, "messages_last_hour": true,
 		"bot_key_set": true, "bot": true,
+		// THE PRESENCE TALLIES, ARGUED FOR IN diag.go's HEADER RATHER THAN HERE.
+		// here_by_country is a location and the rule above it said locations were
+		// not allowed, so the rule now states the carve-out: a count per country,
+		// detached from every name, hash, room and message, and only for
+		// countries at or above hereFloor. The rest of these are counts of keys
+		// whose keys are not published — how many networks, how many rooms.
+		"here_networks": true, "here_rooms": true,
+		"here_by_country": true, "here_elsewhere": true, "geo_known": true,
 	}
 	var out map[string]any
 	if err := json.Unmarshal([]byte(body), &out); err != nil {
@@ -224,12 +233,14 @@ func TestHereCountsTheAskerAndTheHelper(t *testing.T) {
 	if got := srv.here(); got != 2 {
 		t.Fatalf("the helper is one more participant, got %d", got)
 	}
-	srv.hold.enter()
-	srv.hold.enter()
+	a := holder{cc: "DE", net: "net-a", room: "dev\x00orem"}
+	b := holder{cc: "US", net: "net-b", room: "dev\x00orem"}
+	srv.hold.enter(a)
+	srv.hold.enter(b)
 	if got := srv.here(); got != 4 {
 		t.Fatalf("two waiters plus the asker plus the helper is 4, got %d", got)
 	}
-	srv.hold.leave()
+	srv.hold.leave(b)
 	if got := srv.here(); got != 3 {
 		t.Fatalf("a waiter that left must stop counting, got %d", got)
 	}
@@ -769,16 +780,222 @@ func TestTheGaugeSurvivesManyWaitersAtOnce(t *testing.T) {
 
 func TestHoldGaugeRemembersItsPeak(t *testing.T) {
 	var g holdGauge
-	g.enter()
-	g.enter()
-	g.enter()
-	g.leave()
-	g.leave()
-	g.leave()
+	h := []holder{
+		{cc: "DE", net: "n1", room: "r1"},
+		{cc: "DE", net: "n2", room: "r1"},
+		{cc: "US", net: "n3", room: "r2"},
+	}
+	for _, x := range h {
+		g.enter(x)
+	}
+	// AT THE PEAK, the tallies say what the room is made of. Asserted here rather
+	// than in its own test because this is the only moment all three are held.
+	if byCC, nets, rooms := g.snapshot(); byCC["DE"] != 2 || byCC["US"] != 1 || nets != 3 || rooms != 2 {
+		t.Fatalf("tallies at the peak: %v, %d nets, %d rooms", byCC, nets, rooms)
+	}
+	for _, x := range h {
+		g.leave(x)
+	}
 	if n := g.now.Load(); n != 0 {
 		t.Fatalf("every waiter left, so now should be 0, got %d", n)
 	}
 	if p := g.peak.Load(); p != 3 {
 		t.Fatalf("the peak should survive them leaving, got %d", p)
+	}
+	/* AND THE TALLIES DO NOT. They are what is HELD, not what was ever held, and
+	   the maps must be empty rather than full of zeroes — a key kept at zero
+	   would make HereNetworks count everyone who has ever polled, which climbs
+	   for the life of the process and means nothing within an hour. */
+	byCC, nets, rooms := g.snapshot()
+	if len(byCC) != 0 || nets != 0 || rooms != 0 {
+		t.Fatalf("the tallies must empty as connections leave: %v, %d nets, %d rooms",
+			byCC, nets, rooms)
+	}
+}
+
+// ---- where the room is ------------------------------------------------------
+
+// geoStub is a country file with three rows in it.
+type geoStub map[string]string
+
+func (g geoStub) Country(a netip.Addr) string { return g[a.Unmap().String()] }
+
+// THE TALLIES COME FROM THE CONNECTIONS BEING HELD, which is the whole feature
+// and the part no unit test on hereRows can reach: the poll path has to resolve
+// a country at all. It did not — the machinery for country lookup existed, was
+// tested, and was wired only into the POST path, so a room full of readers
+// produced no location information of any kind.
+//
+// HELD ON PURPOSE, and the seed message is what makes them wait: without a
+// baseline HasSince is true, the wait block is skipped, nothing is held, and
+// this would measure an empty gauge and pass.
+func TestHereTalliesComeFromTheHeldConnections(t *testing.T) {
+	srv, s, _ := newServer(t)
+	srv.Geo = geoStub{
+		"203.0.113.1":  "DE",
+		"203.0.113.2":  "DE",
+		"198.51.100.9": "US",
+	}
+	if _, err := post(t, s, "orem", "ip-seed", "a seed message"); err != nil {
+		t.Fatal(err)
+	}
+	msgs, err := s.Recent(context.Background(), "dev", "orem", 0, 50)
+	if err != nil || len(msgs) == 0 {
+		t.Fatal(err)
+	}
+	top := msgs[len(msgs)-1].ID
+
+	ctx, release := context.WithCancel(context.Background())
+	var wg sync.WaitGroup
+	/* RELEASED BEFORE IT IS WAITED ON. defer is last-in-first-out, so a
+	   `defer release()` written above `defer wg.Wait()` runs AFTER it — the
+	   waiters were still holding, and this test sat out the full twenty-second
+	   wait to prove something it had already proved. One defer, in order. */
+	defer func() { release(); wg.Wait() }()
+	for _, remote := range []string{"203.0.113.1:1111", "203.0.113.2:2222", "198.51.100.9:3333"} {
+		wg.Add(1)
+		go func(remote string) {
+			defer wg.Done()
+			req := httptest.NewRequest(http.MethodGet,
+				fmt.Sprintf("/api/chat/dev/orem?wait=20&seen=%d", top), nil).WithContext(ctx)
+			req.RemoteAddr = remote
+			srv.Routes().ServeHTTP(httptest.NewRecorder(), req)
+		}(remote)
+	}
+
+	// Wait for all three to be inside the hold. Polled rather than slept: the
+	// gauge is the only thing that knows, and a fixed sleep is either flaky or
+	// slow.
+	var d map[string]any
+	for i := 0; i < 100; i++ {
+		d = diagOf(t, srv)
+		if d["holding"] == float64(3) {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if d["holding"] != float64(3) {
+		t.Fatalf("three readers should be holding, got %v — nothing was measured", d["holding"])
+	}
+
+	if d["geo_known"] != true {
+		t.Errorf("a loaded country file should say so: %v", d["geo_known"])
+	}
+	// Two in Germany clears the floor and is named; the one in the United States
+	// does not and is folded into elsewhere with no location on it.
+	rows, _ := d["here_by_country"].([]any)
+	if len(rows) != 1 {
+		t.Fatalf("want exactly the one country at or above the floor, got %v", d["here_by_country"])
+	}
+	row, _ := rows[0].(map[string]any)
+	if row["cc"] != "DE" || row["n"] != float64(2) {
+		t.Errorf("want DE with 2, got %v", row)
+	}
+	if d["here_elsewhere"] != float64(1) {
+		t.Errorf("the lone holder belongs in elsewhere, got %v", d["here_elsewhere"])
+	}
+	/* THREE ADDRESSES, TWO NETWORKS — and getting this wrong is what the
+	   assertion is for. A network here is the /24, the same unit a range
+	   consequence applies to (NetPrefix), so 203.0.113.1 and 203.0.113.2 are ONE
+	   network and 198.51.100.9 is the second. Measured: this test first expected
+	   three, on the assumption that the net hash covered a single address the way
+	   the ip hash does. The number is a floor under "how many people", never a
+	   count of them, and it is coarser than it looks. */
+	if d["here_networks"] != float64(2) {
+		t.Errorf("two /24s hold these three readers, got %v", d["here_networks"])
+	}
+	if d["here_rooms"] != float64(1) {
+		t.Errorf("all three are in one room, got %v", d["here_rooms"])
+	}
+}
+
+// AND THE KEYS BEHIND THOSE COUNTS ARE NOT PUBLISHED. here_networks is the SIZE
+// of a map whose keys are the same hashed network identifiers a consequence is
+// recorded against, and here_rooms the size of one keyed by room. A count is
+// allowed; the keys are not, and "we only send the length" is a property of the
+// code that has to be checked rather than trusted.
+func TestHereCountsKeysWithoutPublishingThem(t *testing.T) {
+	srv, s, _ := newServer(t)
+	srv.Geo = geoStub{"203.0.113.1": "DE"}
+	if _, err := post(t, s, "orem", "ip-seed", "a seed message"); err != nil {
+		t.Fatal(err)
+	}
+	msgs, _ := s.Recent(context.Background(), "dev", "orem", 0, 50)
+	top := msgs[len(msgs)-1].ID
+
+	ctx, release := context.WithCancel(context.Background())
+	var wg sync.WaitGroup
+	defer func() { release(); wg.Wait() }() // see the sibling test: order matters
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		req := httptest.NewRequest(http.MethodGet,
+			fmt.Sprintf("/api/chat/dev/orem?wait=20&seen=%d", top), nil).WithContext(ctx)
+		req.RemoteAddr = "203.0.113.1:1111"
+		srv.Routes().ServeHTTP(httptest.NewRecorder(), req)
+	}()
+
+	var body string
+	for i := 0; i < 100; i++ {
+		rec := do(t, srv, httptest.NewRequest(http.MethodGet, "/api/chat/diag", nil))
+		body = rec.Body.String()
+		if strings.Contains(body, `"holding":1`) {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	if !strings.Contains(body, `"holding":1`) {
+		t.Fatalf("nobody was holding, so this measured nothing: %s", body)
+	}
+
+	// The hashes this connection is counted under, computed the same way the
+	// server computes them, and looked for in the raw payload.
+	_, netHash := HashPair(srv.Hasher, netip.MustParseAddr("203.0.113.1"))
+	for _, secret := range []string{netHash, "orem", "203.0.113.1"} {
+		if strings.Contains(body, secret) {
+			t.Errorf("the payload published %q, which is a key and not a count: %s", secret, body)
+		}
+	}
+}
+
+// THE FLOOR, on its own, because it is the privacy argument and it should be
+// readable without holding any connections open.
+func TestHereFloorNamesNoLoneHolder(t *testing.T) {
+	rows, elsewhere := hereRows(map[string]int{"DE": 3, "FR": 2, "NO": 1, "": 4})
+	if len(rows) != 2 {
+		t.Fatalf("only the countries at or above the floor are named, got %v", rows)
+	}
+	// Largest first, so the page does not reshuffle between two polls that saw
+	// the same room.
+	if rows[0].CC != "DE" || rows[0].N != 3 || rows[1].CC != "FR" || rows[1].N != 2 {
+		t.Errorf("want DE=3 then FR=2, got %v", rows)
+	}
+	// The lone Norwegian and the four unknowns are one number with no location
+	// on it. Split apart, "one connection from a country we will not name" is
+	// most of the way back to naming it.
+	if elsewhere != 5 {
+		t.Errorf("want 1 below the floor plus 4 unknown, got %d", elsewhere)
+	}
+	// And a country at exactly the floor IS named — the boundary, stated.
+	if rows, _ := hereRows(map[string]int{"JP": hereFloor}); len(rows) != 1 {
+		t.Errorf("a country at exactly the floor should be named, got %v", rows)
+	}
+	if rows, _ := hereRows(map[string]int{"JP": hereFloor - 1}); len(rows) != 0 {
+		t.Errorf("one below the floor must not be named, got %v", rows)
+	}
+}
+
+// WITH NO COUNTRY FILE, EVERY CONNECTION IS "ELSEWHERE" — which is exactly what
+// a room full of readers in small countries also looks like. geo_known is what
+// tells an operator which of the two they are looking at, the same way the bot's
+// Failures field distinguishes a broken helper from an idle one.
+func TestGeoKnownSaysWhetherThereIsAFileAtAll(t *testing.T) {
+	srv, _, _ := newServer(t)
+	if d := diagOf(t, srv); d["geo_known"] != false {
+		t.Errorf("no file loaded, so geo_known must be false: %v", d["geo_known"])
+	}
+	srv.Geo = geoStub{}
+	if d := diagOf(t, srv); d["geo_known"] != true {
+		t.Errorf("a file is loaded, so geo_known must be true: %v", d["geo_known"])
 	}
 }

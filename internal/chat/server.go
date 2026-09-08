@@ -442,6 +442,47 @@ func (s *Server) client(r *http.Request) (netip.Addr, error) {
 	return s.Policy.ClientIP(r.RemoteAddr, r.Header.Get("X-Forwarded-For"))
 }
 
+// countryOf resolves the two-letter code for a request, or "" for no idea.
+//
+// THE HEADER IS ONLY BELIEVED FROM A TRUSTED PROXY, and it used not to be checked at all.
+//
+// CountryHeader's own description calls it "a trusted proxy header", and nothing established
+// that it came from one: r.Header.Get was read on every request. In proxy mode that was
+// harmless by accident — an untrusted peer is already refused at s.client — but with
+// --country-header set and --behind-proxy off, every client chose the flag shown beside their
+// own name.
+//
+// The flag is decoration and §8 says nothing may be built on it, so this is not a hole in a
+// boundary. It is still worth closing: a flag is a credibility affordance to a human reader,
+// and §6 measured what one of those is worth to a scammer — gemma3:4b rates the same lure
+// from "kourt-moderator" as legitimate and from "dave" as a scam. A flag an impersonator
+// picks is that same discount, aimed at people rather than at the model. A wrong decoration
+// somebody chose is worse than no decoration.
+//
+// Ignored rather than refused at startup, unlike the IP policy's own unsafe combination:
+// flags going quiet is a smaller change to impose on a running deployment than not starting,
+// and cmd/kourtchat warns about the configuration where it now has no effect.
+//
+// ONE FUNCTION FOR BOTH PATHS. A posted message stores its country and a held
+// connection counts toward its country's tally on the diagnostics page, and the
+// two must agree about what the country IS — a second copy of the trust check is
+// how the header ends up believed on one path and not the other.
+func (s *Server) countryOf(r *http.Request, addr netip.Addr) string {
+	if s.CountryHeader != "" && s.Policy.TrustsPeer(r.RemoteAddr) {
+		if cc := strings.ToUpper(strings.TrimSpace(r.Header.Get(s.CountryHeader))); ccRe.MatchString(cc) {
+			return cc
+		}
+	}
+	if s.Geo != nil {
+		// Validated on the way in as well, not only on the way out: a lookup table
+		// is a file somebody edited, and two letters is the whole contract.
+		if cc := strings.ToUpper(s.Geo.Country(addr)); ccRe.MatchString(cc) {
+			return cc
+		}
+	}
+	return ""
+}
+
 func (s *Server) messages(w http.ResponseWriter, r *http.Request) {
 	if s.cors(w, r) {
 		return
@@ -463,7 +504,7 @@ func (s *Server) messages(w http.ResponseWriter, r *http.Request) {
 
 	switch r.Method {
 	case http.MethodGet:
-		s.get(w, r, chain, court, ipHash, netHash)
+		s.get(w, r, chain, court, ipHash, netHash, addr)
 	case http.MethodPost:
 		s.post(w, r, chain, court, addr, ipHash, netHash)
 	default:
@@ -525,7 +566,7 @@ func waitFor(q string) time.Duration {
 	return d
 }
 
-func (s *Server) get(w http.ResponseWriter, r *http.Request, chain, court, ipHash, netHash string) {
+func (s *Server) get(w http.ResponseWriter, r *http.Request, chain, court, ipHash, netHash string, addr netip.Addr) {
 	// Clamped, because unclamped they are a whole-table dump per request.
 	since, _ := strconv.ParseInt(r.URL.Query().Get("since"), 10, 64)
 	if since < 0 {
@@ -577,9 +618,14 @@ func (s *Server) get(w http.ResponseWriter, r *http.Request, chain, court, ipHas
 			   the first failed no test at all. That path is not exotic: every
 			   navigation aborts an in-flight poll, so a leak there would make
 			   this number climb monotonically and mean nothing within an hour. */
+			/* RESOLVED HERE, INSIDE THE `wait > 0` BRANCH, so a request that is
+			   not going to hold does not pay for a lookup nobody reads. The
+			   country is a bisection of a 717,000-row table — cheap, but a poll
+			   that answers immediately has no business doing it. */
+			who := holder{cc: s.countryOf(r, addr), net: netHash, room: pulseKey(chain, court)}
 			hungUp := func() bool {
-				s.hold.enter()
-				defer s.hold.leave()
+				s.hold.enter(who)
+				defer s.hold.leave(who)
 				timer := time.NewTimer(wait)
 				defer timer.Stop()
 				select {
@@ -810,19 +856,7 @@ func (s *Server) post(w http.ResponseWriter, r *http.Request, chain, court strin
 	// Ignored rather than refused at startup, unlike the IP policy's own unsafe combination:
 	// flags going quiet is a smaller change to impose on a running deployment than not starting,
 	// and cmd/kourtchat warns about the configuration where it now has no effect.
-	country := ""
-	if s.CountryHeader != "" && s.Policy.TrustsPeer(r.RemoteAddr) {
-		if cc := strings.ToUpper(strings.TrimSpace(r.Header.Get(s.CountryHeader))); ccRe.MatchString(cc) {
-			country = cc
-		}
-	}
-	if country == "" && s.Geo != nil {
-		// Validated on the way in as well, not only on the way out: a lookup table
-		// is a file somebody edited, and two letters is the whole contract.
-		if cc := strings.ToUpper(s.Geo.Country(addr)); ccRe.MatchString(cc) {
-			country = cc
-		}
-	}
+	country := s.countryOf(r, addr)
 
 	id, err := s.Store.Post(r.Context(), PostInput{
 		Chain: chain, Court: court, Moniker: moniker, Body: body,

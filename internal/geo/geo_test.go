@@ -232,3 +232,151 @@ func itoa(n int) string {
 	}
 	return string(d)
 }
+
+// ------------------------------------------------------------ range files ----
+
+// DB-IP's shape: three columns, no header, first and last address rather than a
+// prefix, and ZZ for "no idea". Reproduced rather than committed, same as above.
+const rangesCSV = `1.0.0.0,1.0.0.255,AU
+1.0.1.0,1.0.3.255,CN
+8.8.8.0,8.8.8.255,US
+` + "192.0.2.0,192.0.2.99,DE\n" + // a range that is NOT a whole prefix
+	"192.0.2.100,192.0.2.199,GB\n" + // and the span that abuts it
+	"198.51.100.0,198.51.100.255,ZZ\n" + // unknown: must not become a flag
+	"2001:db8::,2001:db8:ffff:ffff:ffff:ffff:ffff:ffff,DE\n" +
+	"2001:dbb::,2001:dbb::ffff,JP\n"
+
+func loadRanges(t *testing.T, body string) *Table {
+	t.Helper()
+	tab, err := LoadRanges(write(t, t.TempDir(), "r.csv", body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return tab
+}
+
+func TestRangeFileLookup(t *testing.T) {
+	tab := loadRanges(t, rangesCSV)
+	cases := []struct{ addr, want string }{
+		{"1.0.0.0", "AU"}, {"1.0.0.255", "AU"}, // both ends inclusive
+		{"1.0.1.5", "CN"},
+		{"8.8.8.8", "US"},
+
+		// THE WHOLE REASON THIS LOADER STORES SPANS. 192.0.2.0-99 is not a CIDR
+		// block, and 100-199 begins mid-prefix. A prefix table cannot hold either
+		// without splitting them, and a table that rounded them to /24 would give
+		// both addresses the same country.
+		{"192.0.2.0", "DE"}, {"192.0.2.99", "DE"},
+		{"192.0.2.100", "GB"}, {"192.0.2.199", "GB"},
+		{"192.0.2.200", ""}, // past the last span in that /24: known-unknown
+
+		{"2001:db8::1", "DE"},
+		{"2001:dbb::5", "JP"},
+
+		// ZZ is not a country, so an address inside a ZZ row is unknown and must
+		// not inherit the row above it.
+		{"198.51.100.7", ""},
+
+		{"9.9.9.9", ""},         // in no span
+		{"0.0.0.1", ""},         // below every span
+		{"255.255.255.255", ""}, // above every span
+		{"2001:dbf::1", ""},     // v6, in no span
+	}
+	for _, c := range cases {
+		t.Run(c.addr, func(t *testing.T) {
+			if got := tab.Country(netip.MustParseAddr(c.addr)); got != c.want {
+				t.Fatalf("%s: want %q, got %q", c.addr, c.want, got)
+			}
+		})
+	}
+}
+
+// The ZZ rows are a THIRD of the real file. Storing them would cost 200,000
+// spans to hold "no idea" — which the bisection already answers by finding
+// nothing.
+func TestRangeFileDropsUnknownRows(t *testing.T) {
+	tab := loadRanges(t, rangesCSV)
+	if got, want := tab.Len(), 7; got != want {
+		t.Fatalf("want %d spans with the ZZ row dropped, got %d", want, got)
+	}
+	if got, want := tab.Countries(), 6; got != want {
+		t.Fatalf("want %d distinct countries, got %d", want, got)
+	}
+}
+
+// A range file has no header, and one that has acquired a header on its way
+// through a spreadsheet must load anyway — the header row simply does not parse
+// as two addresses. A BOM in front of it must not change that.
+func TestRangeFileToleratesAHeaderAndBOM(t *testing.T) {
+	tab := loadRanges(t, "\ufeffstart,end,country\n1.0.0.0,1.0.0.255,AU\n")
+	if got := tab.Country(netip.MustParseAddr("1.0.0.7")); got != "AU" {
+		t.Fatalf("want AU, got %q", got)
+	}
+	if tab.Len() != 1 {
+		t.Fatalf("the header must not become a span: %d", tab.Len())
+	}
+}
+
+func TestRangeFileFailuresAreLoud(t *testing.T) {
+	if _, err := LoadRanges(filepath.Join(t.TempDir(), "nope.csv")); err == nil {
+		t.Fatal("a missing file must be an error")
+	}
+	// Every row unusable. A table that loaded nothing looks exactly like a world
+	// with no countries in it, so it must not be a silent success.
+	dir := t.TempDir()
+	for _, body := range []string{
+		"",
+		"1.0.0.0,1.0.0.255,ZZ\n",        // only unknowns
+		"1.0.0.255,1.0.0.0,AU\n",        // reversed: last before first
+		"1.0.0.0,2001:db8::,AU\n",       // families disagree
+		"1.0.0.0,1.0.0.255,AUS\n",       // not an ISO alpha-2
+		"not-an-address,1.0.0.255,AU\n", // unparseable
+	} {
+		if _, err := LoadRanges(write(t, dir, "r.csv", body)); err == nil {
+			t.Fatalf("a file of nothing but unusable rows must be an error: %q", body)
+		}
+	}
+}
+
+// A malformed row among good ones is skipped, not fatal: the real file is
+// 717,000 rows and a single bad line upstream must not take the feature out.
+func TestRangeFileSkipsBadRowsAmongGood(t *testing.T) {
+	tab := loadRanges(t, "junk\n1.0.0.0,1.0.0.255,AU\n1.0.1.0,oops,CN\n8.8.8.0,8.8.8.255,US\n")
+	if tab.Len() != 2 {
+		t.Fatalf("want the two good rows, got %d", tab.Len())
+	}
+	if got := tab.Country(netip.MustParseAddr("8.8.8.8")); got != "US" {
+		t.Fatalf("a good row after a bad one must still work, got %q", got)
+	}
+}
+
+// A PREFIX IS A SPAN, and the conversion has to be exact at both ends or the
+// MaxMind path silently loses the last address of every block. /32 and /0 are
+// the two that a shift-based mask gets wrong if it guards the wrong way.
+func TestPrefixToSpanCoversBothEnds(t *testing.T) {
+	for _, c := range []struct{ pre, first, last string }{
+		{"203.0.113.0/24", "203.0.113.0", "203.0.113.255"},
+		{"203.0.113.7/32", "203.0.113.7", "203.0.113.7"},
+		{"0.0.0.0/0", "0.0.0.0", "255.255.255.255"},
+		{"10.0.0.0/7", "10.0.0.0", "11.255.255.255"},
+		{"2001:db8::/32", "2001:db8::", "2001:db8:ffff:ffff:ffff:ffff:ffff:ffff"},
+		{"2001:db8::/128", "2001:db8::", "2001:db8::"},
+		{"::/0", "::", "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff"},
+	} {
+		t.Run(c.pre, func(t *testing.T) {
+			p := netip.MustParsePrefix(c.pre)
+			if got := lastOf(p).String(); got != c.last {
+				t.Fatalf("%s: last is %s, want %s", c.pre, got, c.last)
+			}
+			// And the span really does answer for both ends.
+			tab := &Table{}
+			tab.add(p.Masked().Addr(), lastOf(p), "DE")
+			tab.sortSpans()
+			for _, a := range []string{c.first, c.last} {
+				if got := tab.Country(netip.MustParseAddr(a)); got != "DE" {
+					t.Fatalf("%s: %s resolved to %q", c.pre, a, got)
+				}
+			}
+		})
+	}
+}

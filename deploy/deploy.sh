@@ -345,6 +345,57 @@ MEDIA_SHA=$(shasum -a 256 web/media.js | cut -d' ' -f1)
 echo "    index.html  sha ${LOCAL_SHA:0:16}…  $(wc -c < "$STAMPED" | tr -d ' ') bytes"
 echo "    chat.js     sha ${CHAT_SHA:0:16}…  $(wc -c < web/chat.js | tr -d ' ') bytes"
 
+# ------------------------------------------------------------- the country file
+# Fetched ON THE BOX rather than shipped from here: it is 4.5MB, it is refreshed
+# monthly upstream, and it has nothing to do with the code being deployed. Kept
+# in $STATEDIR/geo because it is data, not a binary.
+#
+# NOTHING HERE MAY FAIL THE DEPLOY. Flags are decoration and kourtchat already
+# logs and carries on with no file at all, so every step below is best-effort:
+# db-ip.com being down must not stop a code deploy.
+#
+# AND A BAD DOWNLOAD MUST NOT REPLACE A GOOD FILE. The failure mode is not a
+# missing file, it is an HTML error page or a truncated transfer landing at the
+# path kourtchat reads — which would parse to a handful of spans and quietly give
+# the whole internet no country. So the candidate is checked before the rename:
+# it must have at least 100,000 rows and its first row must start with a digit.
+# The real file has 717,000.
+say "country file"
+"${SSH[@]}" "$HOST" "
+  set -u
+  GEO=$STATEDIR/geo/dbip-country.csv
+  # Refreshed when older than 25 days, so a monthly file is never more than a
+  # few weeks stale and a daily deploy does not re-download it.
+  if [ -s \"\$GEO\" ] && [ -z \"\$(find \"\$GEO\" -mtime +25 2>/dev/null)\" ]; then
+    echo \"    have \$(wc -l < \"\$GEO\" | tr -d ' ') rows, fetched \$(date -r \"\$GEO\" +%Y-%m-%d)\"
+    exit 0
+  fi
+  # THIS MONTH, THEN LAST. A new month's file is not published on the first, and
+  # asking only for the current one would leave a box with no file for days.
+  for m in \$(date +%Y-%m) \$(date -d '15 days ago' +%Y-%m 2>/dev/null || date -v-15d +%Y-%m); do
+    url=\"https://download.db-ip.com/free/dbip-country-lite-\$m.csv.gz\"
+    if curl -fsS --max-time 180 -o /tmp/dbip.csv.gz \"\$url\" 2>/dev/null &&
+       gzip -dc /tmp/dbip.csv.gz > /tmp/dbip.csv 2>/dev/null; then
+      rows=\$(wc -l < /tmp/dbip.csv | tr -d ' ')
+      first=\$(head -1 /tmp/dbip.csv)
+      case \"\$first\" in
+        [0-9]*) ;;
+        *) echo \"    refused \$m: first row is not an address (\$first)\"; continue ;;
+      esac
+      if [ \"\$rows\" -lt 100000 ]; then
+        echo \"    refused \$m: only \$rows rows\"; continue
+      fi
+      mv /tmp/dbip.csv \"\$GEO\"
+      chown kourt:kourt \"\$GEO\"
+      echo \"    fetched \$m, \$rows rows\"
+      rm -f /tmp/dbip.csv.gz
+      exit 0
+    fi
+  done
+  rm -f /tmp/dbip.csv.gz /tmp/dbip.csv
+  echo \"    could not fetch one; the site runs without flags\"
+" || echo "    (skipped)"
+
 say "building kourtchat for linux/amd64"
 # Fully static: the SQLite driver is modernc.org/sqlite, pure Go, so CGO stays
 # off and the binary runs on any distro regardless of libc.
@@ -359,7 +410,7 @@ say "preparing $HOST"
 "${SSH[@]}" "$HOST" "
   set -e
   id kourt >/dev/null 2>&1 || adduser --system --group --home $APPDIR kourt
-  mkdir -p $APPDIR $WEBROOT $STATEDIR/secret
+  mkdir -p $APPDIR $WEBROOT $STATEDIR/secret $STATEDIR/geo
   chown -R kourt:kourt $APPDIR $STATEDIR
   # The key that reverses the address hashes must not be readable by anyone
   # else on the box, and must not share a directory with the database it

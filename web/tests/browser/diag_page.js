@@ -19,6 +19,16 @@ const PAYLOAD = {
   ok: true,
   holding: 4,
   holding_peak: 11,
+  /* THE PRESENCE TALLIES. Four connections: two in Germany, one in the United
+     States, one from an address the country file does not cover. The service has
+     already applied its floor, so DE is a row and the other two arrived summed
+     into here_elsewhere — the page cannot take that apart and this payload is
+     the proof it is never asked to. */
+  here_networks: 3,
+  here_rooms: 2,
+  here_by_country: [{cc: "DE", n: 2}],
+  here_elsewhere: 2,
+  geo_known: true,
   courts_active: 2,
   messages_last_hour: 37,
   bot_key_set: false,
@@ -98,6 +108,7 @@ const SECRET = "sk-ant-must-never-be-rendered-0001";
   });
   const wants = {
     "Holding now": "4", "Most at once": "11", "Rooms active": "2",
+    "Networks": "3", "Rooms being read": "2",
     "Messages, last hour": "37", "Answered": "9", "Passed on": "4",
     "Calls failed": "6 · refused", "Not delivered": "2",
   };
@@ -136,6 +147,36 @@ const SECRET = "sk-ant-must-never-be-rendered-0001";
      JSON.stringify(cells["Calls failed"]));
   ok("...and the row explains where to look",
      /key/i.test(Object.keys(cells).length ? seen.text : ""), "");
+
+  /* ---- where the room is -------------------------------------------------
+     THE COUNTRY IT WAS GIVEN, WITH ITS FLAG. The flag is chat.js's chatFlag
+     rather than a second renderer here, so this also checks that the page can
+     still reach it — the /diag route is not a chat route and nothing else on it
+     calls into that file. */
+  ok(`"Where" names the country it was given (${cells["Where"]})`,
+     /DE\s*2/.test(cells["Where"] || ""), JSON.stringify(cells["Where"]));
+  ok("...with the flag for it", /\u{1F1E9}\u{1F1EA}/u.test(cells["Where"] || ""),
+     JSON.stringify(cells["Where"]));
+  /* AND SAYS SO WHEN IT CANNOT SAY MORE. Two of the four connections are not in
+     that row: one in a country under the service's floor and one from an address
+     the file does not cover. They arrive already added together. */
+  ok("...and the rest are one number called elsewhere",
+     /elsewhere\s*2/.test(cells["Where"] || ""), JSON.stringify(cells["Where"]));
+  /* THE GUARANTEE, FROM THE PAGE'S SIDE. The server in this scenario has one
+     reader in the United States and the payload does not mention it, because a
+     country with a single connection in it is a public statement about one
+     person. The page cannot name what it was not told, and this is the assertion
+     that would fail if the payload ever started telling it. */
+  ok("...and names no country that was not in the payload",
+     !/\bUS\b|\u{1F1FA}\u{1F1F8}/u.test(cells["Where"] || ""),
+     JSON.stringify(cells["Where"]));
+  /* THE ATTRIBUTION IS A LICENCE CONDITION of the country file, so it is checked
+     like one rather than left to whoever edits the page next. */
+  ok("the country data is credited to its source",
+     /DB-IP/.test(seen.text) && /CC-BY/i.test(seen.text),
+     seen.text.slice(-240));
+  ok("...and the page says what the guess is worth",
+     /VPN/i.test(seen.text), "");
 
   /* THE PAGE MUST NOT SHOW WHAT IT CANNOT KNOW, asked of the TABLE and not of
      the whole page. The prose above it promises that nothing here names a person
@@ -197,6 +238,31 @@ const SECRET = "sk-ant-must-never-be-rendered-0001";
   ok("no form once a key is set", after.hasForm === false);
   ok("...and the page says it cannot be read back or replaced",
      /cannot be read back/i.test(after.text));
+
+  /* WITH NO COUNTRY FILE, THE PAGE SAYS THAT rather than showing an empty row.
+     Every connection lands in elsewhere on a deployment with no file, which is
+     indistinguishable from a room full of readers in small countries — the same
+     "healthy and idle looks like broken" trap the failure rows exist for. And the
+     credit must go with the data: crediting a source on a deployment that has
+     none would be a claim about where the numbers came from. */
+  await page.evaluate((p) => { window.__payload = p; },
+    Object.assign({}, PAYLOAD, {geo_known: false, here_by_country: [], here_elsewhere: 4}));
+  await page.goto(PAGE + '#/', {waitUntil: 'networkidle0'});
+  await page.evaluate(() => { CFG.chat = "http://chat.invalid"; });
+  await page.goto(PAGE + '#/diag', {waitUntil: 'networkidle0'});
+  await new Promise(z => setTimeout(z, 900));
+  const noGeo = await page.evaluate(() => {
+    const out = {text: document.querySelector("main").innerText};
+    for (const tr of document.querySelectorAll("main table.tbl tr")) {
+      const td = tr.querySelectorAll("td");
+      if (td.length >= 2 && td[0].textContent.trim() === "Where") out.where = td[1].textContent.trim();
+    }
+    return out;
+  });
+  ok("with no country file the page says so",
+     /no country file/i.test(noGeo.where || ""), JSON.stringify(noGeo.where));
+  ok("...and credits nobody for data it does not have",
+     !/DB-IP/.test(noGeo.text), "the credit outlived the data");
 
   ok("no page errors", errs.length === 0, errs.slice(0, 2).join(" | "));
 
