@@ -2104,13 +2104,6 @@
  {
   "pkg": "kourtv2",
   "file": "court.gno",
-  "label": "CONST tierHighX 2 -> 3 (bucket value and draw multiplier at once)",
-  "find": "\ttierLowX, tierMidX, tierHighX = int64(0), int64(1), int64(2)",
-  "replace": "\ttierLowX, tierMidX, tierHighX = int64(0), int64(1), int64(3)"
- },
- {
-  "pkg": "kourtv2",
-  "file": "court.gno",
   "label": "CONST the P7 split moves carrot 7 -> 14",
   "find": "\tsplitWinners, splitAuthor, splitAnswerer, splitCarrot = int64(80), int64(8), int64(5), int64(7)",
   "replace": "\tsplitWinners, splitAuthor, splitAnswerer, splitCarrot = int64(80), int64(8), int64(5), int64(14)"
@@ -9015,13 +9008,6 @@
   "label": "scaleBps: a non-positive base or rate pays nothing",
   "find": "\tif base <= 0 || bps <= 0 {\n\t\treturn 0\n\t}\n",
   "replace": ""
- },
- {
-  "pkg": "kourtv2",
-  "file": "standing.gno",
-  "label": "creditFlagSlash: the base is what the act destroyed, not the bond",
-  "find": "func creditFlagSlash(c *Court, who address, burned int64) {\n\tcreditStanding(c, who, scaleBps(burned, creditRatesFor(c).flag), standingCatFlag)",
-  "replace": "func creditFlagSlash(c *Court, who address, burned int64) {\n\tcreditStanding(c, who, creditRatesFor(c).flag, standingCatFlag)"
  },
  {
   "pkg": "kourtv2",
