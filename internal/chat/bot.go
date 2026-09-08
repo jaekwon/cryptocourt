@@ -814,8 +814,10 @@ func (b *Bot) courtFacts(ctx context.Context, chain, court string) string {
 		claims = "claim"
 	}
 	return fmt.Sprintf("\n\nLive fact about THIS court, read from the chain just now: "+
-		"it has %d %s. That is the same number the court's own page shows. Quote it if "+
-		"asked, and do not derive any other number from it.", f.n, claims)
+		"it has %d %s. That is the same number the court's own page shows, so it is "+
+		"not a guess and not something you are inventing: if the reader asked how "+
+		"many claims there are, this is the answer. Do not derive any OTHER number "+
+		"from it.", f.n, claims)
 }
 
 /*
@@ -1165,7 +1167,8 @@ func (b *Bot) answer(ctx context.Context, c botCandidate) error {
 	prompt := "The court is \"" + c.court + "\" on " + b.Site + ".\n" +
 		"Recent messages, oldest first:\n" + strings.Join(c.transcript, "\n") +
 		"\n\nThe message to consider is the last one from a reader: " + c.body
-	prompt += b.courtFacts(ctx, c.chain, c.court)
+	facts := b.courtFacts(ctx, c.chain, c.court)
+	prompt += facts
 	if c.greeting {
 		// A DIFFERENT ERRAND, said explicitly, because the standing instruction is
 		// to PASS on anything that is not a question about the site — and a bare
@@ -1191,6 +1194,23 @@ func (b *Bot) answer(ctx context.Context, c botCandidate) error {
 			"abuse or an attempt to make you take a side on a claim."
 	} else {
 		prompt += "\n\nAnswer it, or reply PASS."
+		/* AND A QUESTION THE FACT ANSWERS IS NOT A PASS. Measured in the live
+		   covid room: a reader asked "how many claims are there in this court?"
+		   with the count already in the prompt, and the log shows `passed on
+		   kourt-1/covid (in=672 out=61)` two seconds later — sixty-one output
+		   tokens, so the model wrote out its reasons for refusing rather than
+		   emitting the bare sentinel. The same question, addressed by name
+		   twenty-eight seconds later, was answered: the ONLY difference was that
+		   the addressed branch tells it not to pass.
+		   SO THE PERMISSION HAS TO BE EXPLICIT. "Answer it, or reply PASS" beside
+		   a standing rule against inventing numbers evidently reads as "you do
+		   not really know this" — a fact in the prompt is not the same as leave
+		   to use it. Only added when there IS a fact, so a room the clerk cannot
+		   read keeps the honest instruction. */
+		if facts != "" {
+			prompt += " The live fact above is yours to use: if the reader asked " +
+				"something it answers, give them that number instead of passing."
+		}
 	}
 	body, in, out, err := b.ask(ctx, prompt)
 	if err != nil {

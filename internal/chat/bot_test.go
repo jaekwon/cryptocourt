@@ -1715,3 +1715,58 @@ func TestWithoutFactsTheClerkStillAnswers(t *testing.T) {
 		t.Errorf("no facts means no fact line and still an answer: calls=%d", m.calls)
 	}
 }
+
+/*
+A FACT IN THE PROMPT IS NOT LEAVE TO USE IT, and the live room proved the
+
+	difference. A reader asked "how many claims are there in this court?" with
+	the count already injected, and the log recorded `passed on kourt-1/covid
+	(in=672 out=61)` two seconds later — sixty-one output tokens, so the model
+	wrote out its reasons for refusing rather than emitting the bare sentinel.
+	Twenty-eight seconds later the SAME question, addressed by name, was
+	answered: the only difference between the two prompts was the addressed
+	branch's instruction not to pass.
+	SO THE ARM IS ON THE PERMISSION, and on its absence. A prompt that carries a
+	number and also says "answer it, or reply PASS" beside a standing rule
+	against inventing numbers is a prompt that invites exactly what happened.
+*/
+func TestAQuestionTheFactAnswersIsNotAPass(t *testing.T) {
+	s, clock := newStore(t)
+	ctx := context.Background()
+	m := &fakeModel{reply: "This court has 26 claims.", in: 90, out: 9}
+	b := newBot(t, s, m)
+	b.Facts = &fakeFacts{n: 26}
+	*clock = clock.Add(time.Hour)
+	if _, err := post(t, s, "orem", "ip-fact", "how many claims are there in this court?"); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.once(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(m.prompt, "26 claims") {
+		t.Fatalf("the number should be in the prompt: %q", m.prompt)
+	}
+	if !strings.Contains(m.prompt, "instead of passing") {
+		t.Errorf("the prompt must give leave to use the fact: %q", m.prompt)
+	}
+
+	/* AND WITHOUT A FACT THE HONEST INSTRUCTION SURVIVES. A room the clerk
+	   cannot read must not be told there is a number it may quote — that is how
+	   an invented one gets published. */
+	s2, clock2 := newStore(t)
+	m2 := &fakeModel{reply: "Anyone can file a claim.", in: 80, out: 8}
+	b2 := newBot(t, s2, m2) // no Facts
+	*clock2 = clock2.Add(time.Hour)
+	if _, err := post(t, s2, "orem", "ip-nofact", "how many claims are there?"); err != nil {
+		t.Fatal(err)
+	}
+	if err := b2.once(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(m2.prompt, "instead of passing") {
+		t.Errorf("with no fact there is nothing to give leave for: %q", m2.prompt)
+	}
+	if !strings.Contains(m2.prompt, "Answer it, or reply PASS") {
+		t.Errorf("...and the plain instruction must remain: %q", m2.prompt)
+	}
+}
