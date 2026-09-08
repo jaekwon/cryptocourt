@@ -24,7 +24,7 @@ const PAYLOAD = {
   bot_key_set: false,
   bot: {
     enabled: true, model: "claude-haiku-4-5-20251001",
-    replies: 9, last_at: 1757000000,
+    replies: 9, passes: 4, last_at: 1757000000,
     in_tokens: 12345, out_tokens: 678, cost_micros: 15735,
   },
 };
@@ -96,7 +96,7 @@ const SECRET = "sk-ant-must-never-be-rendered-0001";
   });
   const wants = {
     "Holding now": "4", "Most at once": "11", "Rooms active": "2",
-    "Messages, last hour": "37", "Replies": "9",
+    "Messages, last hour": "37", "Answered": "9", "Passed on": "4",
   };
   for (const [label, want] of Object.entries(wants)) {
     ok(`"${label}" reads ${want}`, cells[label] === want,
@@ -107,6 +107,13 @@ const SECRET = "sk-ant-must-never-be-rendered-0001";
   // fractions of a cent at a time. MEASURED: this is what the page did first.
   ok("a fraction of a cent keeps enough decimals to be a spend",
      cells["Spent"] === "$0.0157", JSON.stringify(cells["Spent"]));
+  /* ANSWERED AND PASSED ON ARE DIFFERENT ROWS, which is the defect this pair
+     exists for: they were one number, and the page reported "3 replies" for an
+     answerer that had never posted. A page that showed only one of them, or the
+     same value in both, would be back where it started. */
+  ok("answering and passing are reported separately",
+     cells["Answered"] === "9" && cells["Passed on"] === "4"
+     && cells["Answered"] !== cells["Passed on"], JSON.stringify(cells));
   ok("...and the tokens are reported as counted, both directions",
      /12,345 in/.test(cells["Tokens"] || "") && /678 out/.test(cells["Tokens"] || ""),
      JSON.stringify(cells["Tokens"]));

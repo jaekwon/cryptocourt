@@ -58,13 +58,31 @@ type diagPayload struct {
 // what that cost. Money is reported in micro-dollars as an integer, because a
 // float that has been added to a thousand times is a number nobody can check.
 type botStats struct {
-	Enabled    bool   `json:"enabled"`
-	Model      string `json:"model,omitempty"`
-	Replies    int64  `json:"replies"`
-	LastAt     int64  `json:"last_at,omitempty"`
-	InTokens   int64  `json:"in_tokens"`
-	OutTokens  int64  `json:"out_tokens"`
-	CostMicros int64  `json:"cost_micros"`
+	Enabled bool   `json:"enabled"`
+	Model   string `json:"model,omitempty"`
+
+	// Replies is how many times it SPOKE. Passes is how many times it looked at
+	// something, paid for the looking, and had nothing to add.
+	//
+	// SPLIT BECAUSE THE FIRST VERSION COUNTED THEM TOGETHER, and the page said
+	// "3 replies" for a bot that had never once posted — MEASURED: three human
+	// messages in the room, three PASSes, three replies reported. bot_replies
+	// holds a row per API CALL, because a call that said nothing was still
+	// charged and still has to appear in the cost; so "how often has it
+	// answered" has to ask for the rows that are attached to a message, which is
+	// the rows with a positive msg_id.
+	//
+	// AND PASSES ARE WORTH SHOWING rather than hiding: together with Replies they
+	// say where the spend went, and a bot that is passing on everything is a bot
+	// whose filter or prompt is wrong. A count of calls names nobody.
+	Replies int64 `json:"replies"`
+	Passes  int64 `json:"passes"`
+
+	// LastAt is when it last SPOKE, for the same reason.
+	LastAt     int64 `json:"last_at,omitempty"`
+	InTokens   int64 `json:"in_tokens"`
+	OutTokens  int64 `json:"out_tokens"`
+	CostMicros int64 `json:"cost_micros"`
 }
 
 // ------------------------------------------------------------------ storage --
@@ -184,23 +202,33 @@ func (s *Store) BotStats(ctx context.Context) (botStats, error) {
 	var (
 		st                  botStats
 		last, in, out, cost sql.NullInt64
-		n                   sql.NullInt64
+		spoke, passed       sql.NullInt64
 		model               sql.NullString
 	)
+	/* THE TOKENS ARE EVERY ROW AND THE REPLIES ARE NOT, which is the whole point
+	   of these three sums being asked for together. A call that answered PASS
+	   spent input tokens and posted nothing, so it belongs in the cost and not in
+	   the count of answers. msg_id is the discriminator: a real reply carries the
+	   id of the message it wrote, and a call that wrote nothing carries a
+	   negative placeholder — see recordBotSpend for why negative. */
 	err := s.r.QueryRowContext(ctx,
-		`SELECT count(*), max(created_at), sum(in_tokens), sum(out_tokens), sum(cost_micros)
-		   FROM bot_replies`).Scan(&n, &last, &in, &out, &cost)
+		`SELECT sum(CASE WHEN msg_id > 0 THEN 1 ELSE 0 END),
+		        sum(CASE WHEN msg_id < 0 THEN 1 ELSE 0 END),
+		        max(CASE WHEN msg_id > 0 THEN created_at END),
+		        sum(in_tokens), sum(out_tokens), sum(cost_micros)
+		   FROM bot_replies`).Scan(&spoke, &passed, &last, &in, &out, &cost)
 	if err != nil {
 		return st, err
 	}
 	// The model most recently used, so the page reports what is actually running
 	// rather than what a flag said at some point.
 	if err := s.r.QueryRowContext(ctx,
-		`SELECT model FROM bot_replies ORDER BY created_at DESC, msg_id DESC LIMIT 1`).
+		`SELECT model FROM bot_replies WHERE msg_id > 0
+		   ORDER BY created_at DESC, msg_id DESC LIMIT 1`).
 		Scan(&model); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return st, err
 	}
-	st.Replies, st.LastAt = n.Int64, last.Int64
+	st.Replies, st.Passes, st.LastAt = spoke.Int64, passed.Int64, last.Int64
 	st.InTokens, st.OutTokens, st.CostMicros = in.Int64, out.Int64, cost.Int64
 	st.Model = model.String
 	return st, nil

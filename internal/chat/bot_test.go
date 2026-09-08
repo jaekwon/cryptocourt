@@ -251,6 +251,12 @@ func TestBotAnswersASiteQuestionAsAnonAndRecordsWhatItSpent(t *testing.T) {
 	if st.Replies != 1 || st.InTokens != 900 || st.OutTokens != 30 {
 		t.Errorf("accounting is wrong: %+v", st)
 	}
+	if st.Passes != 0 {
+		t.Errorf("it answered, so nothing was passed on: %+v", st)
+	}
+	if st.LastAt == 0 {
+		t.Errorf("it spoke, so there is a last-spoke time: %+v", st)
+	}
 	// 900 in at $1/Mtok and 30 out at $5/Mtok = 900 + 150 = 1050 micro-dollars.
 	if st.CostMicros != 1050 {
 		t.Errorf("cost should be 1050 micro-dollars, got %d", st.CostMicros)
@@ -292,6 +298,21 @@ func TestBotPassesWithoutSpeakingAndTheSpendIsStillCounted(t *testing.T) {
 	}
 	if st.CostMicros != 715 {
 		t.Errorf("cost should be 700 + 15 = 715, got %d", st.CostMicros)
+	}
+	/* ...AND IT IS NOT AN ANSWER. This is the arm that was missing, and its
+	   absence shipped a page reporting "3 replies" for a bot that had never
+	   posted — MEASURED: three human messages, three PASSes, three replies
+	   reported. bot_replies holds a row per CALL because a call that said
+	   nothing was still charged, so the count of answers has to ask for the
+	   rows attached to a message. */
+	if st.Replies != 0 {
+		t.Errorf("a PASS is not a reply, got Replies=%d", st.Replies)
+	}
+	if st.Passes != 1 {
+		t.Errorf("a PASS should be counted as one, got Passes=%d", st.Passes)
+	}
+	if st.LastAt != 0 {
+		t.Errorf("the bot never spoke, so there is no last-spoke time: %d", st.LastAt)
 	}
 }
 

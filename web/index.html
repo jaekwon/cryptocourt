@@ -18783,7 +18783,14 @@ function diagRows(d){
     ["Messages, last hour", d.messages_last_hour, "Across every room."],
   ];
   if(b.enabled){
-    rows.push(["Replies", b.replies, "How many times the site's own answerer has spoken."]);
+    rows.push(["Answered", b.replies, "How many times the site's own answerer has spoken."]);
+    /* SHOWN BESIDE THE ANSWERS, not folded into them. These were one number
+       once, and the page then reported "3 replies" for an answerer that had
+       never posted — a call that had nothing to add was still a call, and still
+       charged. Separating them is also what makes the cost legible: mostly
+       passes with a large bill means the filter or the prompt is wrong. */
+    rows.push(["Passed on", b.passes,
+      "Times it read something, was charged for reading it, and had nothing to add."]);
     rows.push(["Tokens", `${Number(b.in_tokens||0).toLocaleString()} in · `
       + `${Number(b.out_tokens||0).toLocaleString()} out`,
       "Counted from the API's own response, not estimated."]);

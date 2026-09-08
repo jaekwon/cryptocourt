@@ -53,8 +53,8 @@ func TestDiagPublishesCountsAndNothingElse(t *testing.T) {
 		}
 	}
 	botAllowed := map[string]bool{
-		"enabled": true, "model": true, "replies": true, "last_at": true,
-		"in_tokens": true, "out_tokens": true, "cost_micros": true,
+		"enabled": true, "model": true, "replies": true, "passes": true,
+		"last_at": true, "in_tokens": true, "out_tokens": true, "cost_micros": true,
 	}
 	if bot, ok := out["bot"].(map[string]any); ok {
 		for k := range bot {
