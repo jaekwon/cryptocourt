@@ -3479,11 +3479,12 @@ function bcountsGet(slug, id){ return BCOUNTS.get(bcountsKey(slug, id)) || null;
    commentCountLabel prints a different sentence for the two. */
 async function boardCountsOf(s2, id){
   try{
-    const f = String(await one(`BoardCounts(${s2},${gstr(String(id))})`) || "").split(":");
-    if(f.length === 3 && Number(f[0]) === Number(id)){
-      const rows = Number(f[1]), threads = Number(f[2]);
-      if(Number.isFinite(rows) && Number.isFinite(threads)) return {rows, threads};
-    }
+    /* THE SAME PARSER THE PACKED PATH USES. This knew the grammar itself, so
+       `<id>:<rows>:<threads>` was written down twice and a mutant that swapped
+       the two columns had two homes to hide in. One grammar, one place. */
+    const rec = bcountsParse(await one(`BoardCounts(${s2},${gstr(String(id))})`))
+      .find(r => Number(r.id) === Number(id));
+    if(rec) return {rows: rec.rows, threads: rec.threads};
   }catch(_){}               // older realm, or a court that does not have this id
   try{ return {rows: Number(await one(`BoardSize(${s2},${id})`)), threads: null}; }
   catch(_){ return null; }
@@ -12664,6 +12665,12 @@ function franchiseHtml(slug, pending, supply, hasMeta, held, onChainDesc){
               "mints what you have accrued; the rest of your holdings are untouched")
       : `<p class="fr-mine muted">You have nothing waiting here yet — burn for any `
         + `court's coin and it starts accruing.</p>`;
+  /* NOTHING AT ALL WHEN THERE IS NOTHING TO SAY. On meta's own page with the
+     chain carrying the description and no wallet connected, every part of this
+     panel is empty — and what shipped was a bordered box with a heading and no
+     body, which reads as a section that failed to load rather than one with
+     nothing to report. A heading is not content. */
+  if(!rule && !heldLine && !have && !mine) return "";
   return `<h2 class="sec-h">The meta franchise</h2>`
     /* "THIS COURT'S SUPPLY" WAS WRONG ON EVERY PAGE BUT ONE. The panel sits on
        covid's page and the supply it is talking about is META's, so "this

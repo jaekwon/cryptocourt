@@ -344,6 +344,15 @@ const metaOnChain = html("meta", 0, 2007984062, true, null, "the chain's own sen
 ok("meta's panel does not restate a description the chain carries",
    !/not received for GNOT/.test(metaOnChain), metaOnChain);
 ok("...but still shows what only a read can say", /nothing waiting here yet/.test(metaOnChain));
+/* AND NOTHING AT ALL WHEN THERE IS NOTHING TO SAY. On meta's own page, with the
+   chain carrying the description and no wallet connected, every part of this
+   panel is empty — and what shipped was a bordered box with a heading and no
+   body, which reads as a section that failed to load. A heading is not content. */
+ok("an empty panel is not drawn as an empty box",
+   html("meta", null, 2007984062, true, null, "the chain's own sentence") === "",
+   JSON.stringify(html("meta", null, 2007984062, true, null, "the chain's own sentence")));
+ok("...but it appears the moment there is something to report",
+   /yours, waiting/.test(html("meta", 554400000, 2007984062, true, null, "chain")));
 /* THE FALLBACK STAYS. A deployment whose moderators never wrote one would
    otherwise say nothing at all about how this coin is got. */
 ok("...and says it itself when the chain has none",
