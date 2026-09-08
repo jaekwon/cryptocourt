@@ -151,6 +151,63 @@ const HEIGHTS = [1000, 900, 800, 760, 700, 620];
     }
   }
 
+  /* ── AND NARROW, WHERE THE RAIL IS NOT A SIDEBAR ────────────────────────────
+     THE SWEEP ABOVE IS ALL AT WIDTH 1280, which is why it could not see this.
+     Reported from a phone: "i can't see *any* chat there besides the input
+     field." Measured at 390, 430 and 768 — the log's box was 0px tall with FOUR
+     messages inside it and a scrollHeight of 194.
+     BECAUSE THE FIX ABOVE ASSUMES A CONTAINER WITH HEIGHT TO GIVE AWAY. Below
+     the layout's 820px breakpoint the rail is `position:static; height:auto`,
+     so it sizes to its content and distributes no free space; the log's
+     height:0 basis is then all it ever gets, and every message renders inside a
+     zero-height box. The composer stayed visible, so the panel looked present
+     and simply had nothing in it — the failure mode that gets reported as "chat
+     doesn't work" rather than "chat is clipped".
+     THE ARM IS THE ROW INSIDE THE LOG'S BOX, not the log's own height. A log
+     with height and its messages scrolled out of sight is the same experience,
+     and a height alone would pass on it. Rows are counted first: on a fixture
+     with an empty room every one of these would certify nothing. */
+  for (const w of [390, 430, 768]) {
+    await page.setViewport({width: w, height: 844});
+    await page.goto(PAGE + '#/c/orem', {waitUntil: 'domcontentloaded'});
+    await new Promise(r => setTimeout(r, 900));
+    const n = await page.evaluate(() => {
+      const log = document.querySelector('.chatlog');
+      const form = document.querySelector('.chatform');
+      if (!log || !form) return {missing: true};
+      const rows = [...log.querySelectorAll('.chatmsg')];
+      const L = log.getBoundingClientRect();
+      const last = rows.length ? rows[rows.length - 1].getBoundingClientRect() : null;
+      const at = (x, y) => { const t = document.elementFromPoint(x, y);
+        return t ? t.tagName.toLowerCase()
+          + (typeof t.className === "string" && t.className.trim()
+             ? "." + t.className.trim().split(/\s+/).join(".") : "") : "none"; };
+      const centre = el => { const b0 = el.getBoundingClientRect();
+        if (!(b0.top >= 0 && b0.bottom <= innerHeight)) el.scrollIntoView({block: "center"});
+        const b = el.getBoundingClientRect();
+        return at(b.left + b.width / 2, b.top + b.height / 2); };
+      return {rows: rows.length, logH: Math.round(L.height),
+              scrollH: log.scrollHeight,
+              // how far the newest row falls outside the log's visible box
+              spillTop: last ? Math.round(L.top - last.top) : null,
+              spillBottom: last ? Math.round(last.bottom - L.bottom) : null,
+              send: centre(document.querySelector('.chatsend'))};
+    });
+    if (n.missing) { ok(`the chat panel mounts at ${w}px wide`, false); continue; }
+    ok(`the ${w}px fixture has messages to show`, n.rows > 0,
+       "an empty room would make the arms below vacuous");
+    ok(`at ${w}px wide the log has height (${n.logH}px for ${n.rows} rows)`,
+       n.logH > 20, `log box was ${n.logH}px tall around ${n.scrollH}px of messages`);
+    ok(`...and the newest message is inside the log's box, not clipped out of it`,
+       n.rows > 0 && n.spillTop <= 1 && n.spillBottom <= 1,
+       `row spills ${n.spillTop}px above / ${n.spillBottom}px below the log`);
+    // The composer must still take its own clicks here: this is the layout the
+    // height:0 rule was protecting, and the narrow case must not buy the log
+    // back by re-clipping the controls.
+    ok(`...and send still takes the pointer at ${w}px wide`,
+       /\bchatsend\b/.test(n.send), `reached ${n.send} instead`);
+  }
+
   ok("no page errors", errs.length === 0, errs.slice(0, 2).join(" | "));
 
   await browser.close();

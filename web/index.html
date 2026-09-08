@@ -2624,6 +2624,25 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
   .docket .courtrow .px{grid-row:3; grid-column:2/4; justify-self:start;
     flex-direction:row; flex-wrap:wrap; align-items:baseline; gap:4px 8px; min-width:0}
   .rail{position:static; height:auto; flex-direction:column}
+  /* AND THE CHAT LOG IS SIZED BY ITS MESSAGES AGAIN, because the line above is
+     what makes the rail's height indefinite. Reported from a phone: "i can't
+     see *any* chat there besides the input field."
+     THE LOG WAS 0px WITH FOUR MESSAGES IN IT. chat.js gives it height:0 and
+     flex:1 1 auto so the rail's floor can be the CONTROLS alone — a flex-basis
+     of auto resolves to that 0, and in the sidebar the log then grows into the
+     rail's spare height. Here there is no spare height to grow into: the rail
+     is `height:auto`, so it sizes to its content and distributes nothing. The
+     log kept its basis and rendered every message inside a zero-height box.
+     Measured at 390, 430 and 768 — log h=0, rows=4, scrollHeight 194.
+     This is the same failure that scoping height:0 to the rail fixed on the
+     standalone chat page, arriving by the other door: not "which element", but
+     "does its container have a height to give away". The stacked rail does not,
+     so the log goes back to being sized by its messages and capped by chat.js's
+     own max-height, exactly as the panel behaves on a page. FOUR CLASSES, not
+     three: chat.js's stylesheet is injected after this one, so an equally
+     specific rule would lose on document order — the same reason .railchat's
+     rules above are written with two classes. */
+  .rail .railchat.chatpanel .chatlog{height:auto}
   .nav{flex-direction:row; flex-wrap:wrap; gap:4px} .nav .sec{width:100%}
   /* The trail's indent is meaningless once the nav is a wrapping ROW: there is
      no parent above a child to line up under. It stays as two ordinary chips. */
