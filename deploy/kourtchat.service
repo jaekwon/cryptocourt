@@ -57,6 +57,20 @@ Group=kourt
 # fold them into the argument list. A unit that fails to parse does not fail the
 # helper, it fails chat.
 #
+# --bot-gap IS THE FLOOR BETWEEN TWO REPLIES, across every room together, and it
+# is ten seconds here against a code default of a minute. Asked for, and the
+# reason is what a minute did to a conversation: a reader asked "how do i stake
+# on a claim?", got an answer, asked "what wallet?" twenty-four seconds later,
+# and was never answered at all — the throttle held the reply and the helper's
+# watermark then moved past the question. Follow-ups are the normal shape of a
+# conversation, and a minute is longer than one.
+#
+# WHAT IT COSTS, from this deployment's own numbers: a reply measured 408 input
+# and 16 output tokens, about 490 micro-dollars. Six a minute is the new ceiling,
+# so a room talking flat out for an hour is roughly $0.18 — and the local filter
+# means most messages never reach the model at all. The ceiling is what changed;
+# the ordinary bill will not move much.
+#
 # THE PRICES ARE DEFAULTS AND ARE CONFIGURATION, NOT FACTS: $1 and $5 per
 # million tokens for claude-haiku-4-5. Wrong numbers make the "Spent" column on
 # the diagnostics page wrong and nothing else — the token counts beside it come
@@ -70,7 +84,8 @@ ExecStart=/opt/kourt/kourtchat \
     --archive-rpc https://rpc.kourt.xyz \
     --behind-proxy \
     --trusted-proxy 127.0.0.1/32,::1/128 \
-    --bot
+    --bot \
+    --bot-gap 10s
 
 Restart=on-failure
 RestartSec=2
