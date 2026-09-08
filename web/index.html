@@ -7970,11 +7970,28 @@ on(/^\/$/, async ()=>{
     + `</section>`
     + `<div id="qempty" class="empty qhide"><div class="g">◌</div><p>No loaded name matches.</p><p class="small muted">clear to browse, or go to a claim by id — orem/7</p></div>`
     + `</div>`
+    /* THE EXPLANATIONS SIT OUTSIDE THE BUTTONS, not inside them. Both creation
+       buttons carried their text through btn()'s `sub` argument, which renders
+       within the control — reported as unreadable, and fairly: small type on a
+       tinted background, inside a target whose job is to be pressed rather than
+       read. A price especially cannot live there.
+       The price is stated ONCE for the pair, since both burn the same amount,
+       and the polish window keeps its own sentence because that is the only
+       thing distinguishing the second button from the first.
+       This comment sits HERE and not in the markup below, because a comment
+       inside a template literal is not a comment: it renders as text, and a
+       backtick within it ends the literal. That is exactly what broke the page
+       on the first attempt — the whole inline script failed to parse and every
+       route died with "CFG is not defined". */
     + `<div class="lead-row" style="margin-top:26px"><div><h1 class="page-h">Courts of record</h1>
        <p class="page-sub">Each court runs its own coin and its own docket of claims of fact. Stake on YES or NO; your staked coin always returns 1×, and conviction — stake × time held — earns the reward when the verdict goes your way. Pick the court whose judgment you trust.
        <button type="button" class="helplink" data-help="help-newcourt">what starting one involves →</button></p></div>
-       ${btn("Create a new court","StartCourt",{slug:"my-court",name:"My Court"},"primary",burnNote,burnSend,false,true)}
-       ${btn("Create one with a polish window","StartCourtP",{slug:"my-court",name:"My Court",stakeOpenDelay:720},"","one hour before staking opens, so an author can fix the wording"+(burnNote?" — "+burnNote:""),burnSend,false,true)}</div>
+       ${btn("Create a new court","StartCourt",{slug:"my-court",name:"My Court"},"primary",null,burnSend,false,true)}
+       ${btn("Create one with a polish window","StartCourtP",{slug:"my-court",name:"My Court",stakeOpenDelay:720},"",null,burnSend,false,true)}
+       <p class="small muted newcourtnote">${burnNote ? `Either one burns <b>`
+          + gnotAmt(creationBurnNow) + `</b>, and it is not refundable. ` : ""
+          }The polish window holds staking for one hour after a claim opens, so
+          an author can fix the wording before anyone bets.</p></div>
       <dialog class="helper" id="help-newcourt" aria-labelledby="help-newcourt-h">
         <div class="hd"><h3 id="help-newcourt-h">What starting a court involves</h3><button type="button" class="pill void" data-close>Close</button></div>
         <div class="bd">
