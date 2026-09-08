@@ -8029,13 +8029,26 @@ on(/^\/$/, async ()=>{
      what the burn represents — "5,110 META tokens" — and that figure already
      opens this same cell in bold, so naming it again would be the duplication
      one clause over. What this line adds is WHERE the coin came from, which a
-     supply figure cannot say. */
+     supply figure cannot say.
+     THE TOTAL COMES FIRST AND THE CLAIMED PART SECOND, which is the shape the
+     second report asked for: "13,XXX gnot burned, 13,054 in all other courts".
+     The two figures it imagines are the realm-wide sink and the per-court sum,
+     and they are THE SAME NUMBER today — measured on the live chain,
+     BurnedGNOT() and CourtBurnedGNOT summed over every court are both
+     13,053.599976, difference exactly zero, because meta's own burn is
+     structurally nil and no court has yet been opened under the creation fee.
+     Printing both would have restored the doubling the first report was about.
+     They diverge the moment somebody creates a court: the creation burn reaches
+     the sink and is deliberately not counted toward any court's burnedGNOT. If
+     that distinction ever wants showing it belongs on the parameters page,
+     whose footnote already says "across every court and every creation", not in
+     a directory row about where meta's coin came from. */
   const metaRowLine = claimed => {
     if(claimed == null) return "earned by burning on other courts";
     const got = gnotAmt(claimed), all = gnotAmt(BURN_ELSEWHERE);
     return got === all
-      ? `${all} burned on other courts, all of it claimed`
-      : `${got} claimed of ${all} burned on other courts`;
+      ? `${all} burned in other courts`
+      : `${all} burned in other courts, ${got} claimed`;
   };
   const visible = (page===1? featured:[]).concat(listed);
   // ONE read for every face on the page, not one per court: CourtImages skips
@@ -8078,7 +8091,26 @@ on(/^\/$/, async ()=>{
          were tokens burned for covid?"
          THE ROW SAYS WHAT IS TRUE OF IT INSTEAD. Every other court's second line
          is what was spent to build it; meta's is where its coin comes from. */
-      if(el&&s) el.innerHTML = `<b>${cc(s.supply, c.slug)}</b>`
+      /* THE SUPPLY IS WHAT IS LEFT, AND THE ROW NOW SAYS SO. Reported: covid
+         listed 5,103 coin and meta 5,110, off the same 13,054 GNOT — "then how
+         come the number of court tokens for covid and meta are different?"
+         Because both curves sit at the SAME position, 5,109.52; covid has since
+         had coin burned out of it as claim deposits and fees, and meta has had
+         none. So the smaller figure is not a smaller mint, it is a remainder,
+         and printing it bare invited exactly that question.
+         DERIVED, NOT READ: minted (the curve position) plus emission, less the
+         live supply, is what has been destroyed — every figure already fetched
+         for this row, so the clause costs no query. Checked against the live
+         chain: covid 5,109.52 + 0.13 − 5,102.83 = 6.82, meta 0 exactly, which
+         is why the clause appears on one row and not the other.
+         SHOWN ONLY WHEN IT RENDERS NON-ZERO, so a court that has burned dust
+         does not carry "and 0.00 burned" — a clause whose only content is that
+         there is nothing to report. */
+      const coinGone = s && [s.minted, s.emitted, s.supply].every(Number.isFinite)
+        ? Math.max(0, s.minted + s.emitted - s.supply) : 0;
+      const goneClause = parseFloat(ccFig(coinGone)) > 0
+        ? `<span class="dim"> and ${ccFig(coinGone)} burned</span>` : "";
+      if(el&&s) el.innerHTML = `<b>${cc(s.supply, c.slug)}</b>${goneClause}`
         + `<small>${c.slug === META_SLUG
             ? metaRowLine(metaBurnFromCurve(s.minted))
             : (Number.isFinite(s.burned)? gnotAmt(s.burned)+" burned" : "burn unread")}</small>`;
