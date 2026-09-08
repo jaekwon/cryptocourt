@@ -835,6 +835,20 @@ func botAskingWhoTheClerkIs(body string) bool {
 		"are you a real person", "are you real", "are you alive",
 		"is this a bot", "is this a person", "is this a real person",
 		"am i talking to a bot", "am i talking to a person", "bot or human",
+		/* "WHAT IS YOUR ROLE" IS THE SAME QUESTION IN POLITE FORM, and the live
+		   room is what added these: a reader asked "what is your role in this?"
+		   and got nothing, because the shapes above all ask WHAT the clerk is and
+		   none of them asks what it is FOR. Measured at the same time: "what do
+		   you do here?" and "what is your job?" were refused by every path, while
+		   "what are you for?" already matched — the list had one member of the
+		   family and not the family.
+		   THE APOSTROPHE FORMS ARE SPELLED OUT because normalising does not strip
+		   one: "what's your role" and "whats your role" are what people type, and
+		   a Contains test sees exactly what it is given. */
+		"what is your role", "what's your role", "whats your role",
+		"what is your job", "what's your job", "whats your job",
+		"what do you do", "what are you here for", "what is your purpose",
+		"what's your purpose", "whats your purpose",
 	} {
 		if strings.Contains(s, shape) {
 			return true

@@ -1325,6 +1325,14 @@ func TestTheClerkSaysWhoItIsWithoutAskingAModel(t *testing.T) {
 	for _, q := range []string{
 		"who are you", "who are you?", "are you a bot?", "are you a real person?",
 		"are you human", "who is this", "am i talking to a bot?", "what are you?",
+		/* THE ROLE FAMILY, added from the live room: a reader asked "what is your
+		   role in this?" and got nothing, because every shape above asks WHAT the
+		   clerk is and none asks what it is FOR. Measured then: these three were
+		   refused by botWorthAsking, botAddressed and this predicate alike, while
+		   "what are you for?" already matched — one member of a family is not the
+		   family. */
+		"what is your role in this?", "what do you do here?", "what is your job?",
+		"what's your role?", "whats your purpose",
 	} {
 		if !botAskingWhoTheClerkIs(q) {
 			t.Errorf("should be an identity question: %q", q)
