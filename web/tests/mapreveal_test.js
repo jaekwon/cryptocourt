@@ -166,7 +166,19 @@ ok("select() pushes the pick alone, leaving the subtree to be derived",
 ok("a pick moves the camera part of the way, not all of it",
    /const CENTRE_BLEND = 0\.5;/.test(src));
 ok("...blended from where the camera already was",
-   /glideTo\(cx \+ \(b\.cx - cx\) \* CENTRE_BLEND,\s*\n\s*cy \+ \(b\.cy - cy\) \* CENTRE_BLEND, tz\)/.test(src));
+   /glideTo\(cx \+ \(b\.cx - cx\) \* f, cy \+ \(b\.cy - cy\) \* f, tz\)/.test(src));
+/* AND THE BLEND IS A FLOOR, NOT A RULE. Reported as: zoom out until the graph
+   sits in one corner, click a node at the far side, and the map "zooms into
+   space and doesn't end up focusing at all on what i clicked on". A click from
+   far out raises the zoom a long way, and moving half the distance left the node
+   outside a viewport that had just become much smaller — the blend was measured
+   against the old viewport and applied to the new one. It now moves at least far
+   enough to bring the node's own box inside the frame at the TARGET zoom. */
+ok("...and never so little that the clicked node lands off screen",
+   /const halfW = fit\.w \/ tz \/ 2, halfH = fit\.h \/ tz \/ 2;/.test(src)
+   && /const f = Math\.min\(1, Math\.max\(CENTRE_BLEND, need\)\);/.test(src));
+ok("...measured against the node's own box and the map's own clearance",
+   /roomX = Math\.max\(0, halfW - \(b\.w \/ 2\) - MAPK\.sep\)/.test(src));
 /* THE ZOOM IS NOT BLENDED, and that is not an oversight: tz is a FLOOR that
    raises z far enough for titles to clear the LOD line, and half of "far enough
    to read" is not far enough to read. */

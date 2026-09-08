@@ -14027,8 +14027,29 @@ function mountMap(slug, data, focusId, focusPath){
       tz = zoomSpent.has(k) ? full : Math.sqrt(z * full);
       zoomSpent.add(k);
     }
-    glideTo(cx + (b.cx - cx) * CENTRE_BLEND,
-            cy + (b.cy - cy) * CENTRE_BLEND, tz);
+    /* HALFWAY, BUT NEVER SO LITTLE THAT THE NODE IS OFF SCREEN.
+       Reported as: zoom out until the whole graph sits in one corner, click a
+       node at the far side of it, and the map "zooms into space and doesn't end
+       up focusing at all on what i clicked on". Exactly what it did. A click
+       from far out raises the zoom a long way — tz is a geometric step toward
+       `full` — and the camera moved only half the distance, so at the NEW zoom,
+       where the viewport covers fit/tz instead of fit/z, half the distance left
+       the node well outside the frame. The blend was measured against the old
+       viewport and applied to the new one.
+       SO THE BLEND IS A FLOOR, NOT A RULE. Move at least far enough that the
+       node's own box lands inside the frame at tz, with a margin, and no less
+       than halfway. When the node is already close, `need` is below the blend
+       and nothing changes — which is the case the blend was added for. When it
+       is far, this goes to 1 and the click centres, which is what a reader
+       asking for a node across the map plainly means. */
+    const halfW = fit.w / tz / 2, halfH = fit.h / tz / 2;
+    const roomX = Math.max(0, halfW - (b.w / 2) - MAPK.sep);
+    const roomY = Math.max(0, halfH - (b.h / 2) - MAPK.sep);
+    const dx = Math.abs(b.cx - cx), dy = Math.abs(b.cy - cy);
+    const need = Math.max(dx > 0.001 ? 1 - roomX / dx : 0,
+                          dy > 0.001 ? 1 - roomY / dy : 0);
+    const f = Math.min(1, Math.max(CENTRE_BLEND, need));
+    glideTo(cx + (b.cx - cx) * f, cy + (b.cy - cy) * f, tz);
   }
   /* THE CARD'S TEXT IS READ WHEN THE CARD IS OPENED, not for the whole docket
      when the map loads. A body is paragraphs and a docket can be fifty claims, so

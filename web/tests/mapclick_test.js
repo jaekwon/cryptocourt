@@ -276,10 +276,26 @@ ok("...and drops EVERY selection, not just the newest",
      comparison at least as often as it is a destination. The camera now goes
      half the distance from wherever it was — so the assertion needs the starting
      point too, which is the part a "lands on it" test never had to know. */
-  ok("and stops halfway between where the view was and that node", (()=>{
+  /* HALFWAY IS THE FLOOR, AND THE NODE BEING ON SCREEN IS THE RULE. This required
+     EXACTLY halfway, which was the whole behaviour until a reader zoomed out far
+     enough to put the graph in one corner, clicked a node at its far side, and
+     the map "zoomed into space": a click from far out raises the zoom a long way,
+     and half the distance left the node outside a viewport that had just become
+     much smaller. So the assertion is now the two things that actually matter —
+     it moves at least halfway, and it moves far enough. */
+  ok("and moves at least halfway toward that node", (()=>{
     const L2 = mapLayout(data, "titles"), n = L2.nodes.find(x=>x.id===3);
     const [bx,by] = mid(before), [mx,my] = mid(after);
-    return Math.abs(mx - (bx + (n.cx-bx)/2)) < 1 && Math.abs(my - (by + (n.cy-by)/2)) < 1;
+    const went = Math.hypot(mx-bx, my-by), all = Math.hypot(n.cx-bx, n.cy-by);
+    return all < 1 || (went >= all/2 - 1 && went <= all + 1);
+  })());
+  /* AND THE NODE IS INSIDE THE FRAME IT LANDS IN. Measured off the viewBox the
+     glide wrote, which is the only place the target zoom and the target centre
+     appear together. */
+  ok("...and lands with the node inside the view", (()=>{
+    const L2 = mapLayout(data, "titles"), n = L2.nodes.find(x=>x.id===3);
+    const v = (box.querySelector("svg").getAttribute("viewBox")||"").split(" ").map(Number);
+    return n.cx >= v[0] && n.cx <= v[0]+v[2] && n.cy >= v[1] && n.cy <= v[1]+v[3];
   })());
   /* AND IT REALLY IS PART OF THE WAY — a blend that returned the node's own
      coordinates would satisfy the midpoint test whenever the view happened to
@@ -315,14 +331,23 @@ ok("...and drops EVERY selection, not just the newest",
   const from = mid(svg.getAttribute("viewBox"));
   claimA(3).click();
   const L3 = mapLayout(data,"titles"), n3 = L3.nodes.find(x=>x.id===3);
-  const aim = [from[0] + (n3.cx-from[0])/2, from[1] + (n3.cy-from[1])/2];
+  /* THE FLIGHT'S DESTINATION IS NOT A FIXED FRACTION. The blend is a floor: the
+     camera goes at least halfway and at least far enough to bring the node
+     inside the frame at the target zoom, so the landing point depends on the
+     zoom the glide is heading for. Reading the last frame's own viewBox is what
+     makes this checkable without restating the arithmetic here. */
   ok("the view is stepped over many frames, not written once", seen.length > 3);
   ok("and the steps are distinct views", new Set(seen).size >= 3);
+  const last = mid(seen[seen.length-1]);
   ok("the first step has not arrived yet",
-     Math.abs(mid(seen[0])[0]-aim[0]) > 0.5 || Math.abs(mid(seen[0])[1]-aim[1]) > 0.5);
-  ok("the last step lands exactly on the halfway point", (()=>{
-     const [mx,my]=mid(seen[seen.length-1]);
-     return Math.abs(mx-aim[0])<0.001 && Math.abs(my-aim[1])<0.001; })());
+     Math.abs(mid(seen[0])[0]-last[0]) > 0.5 || Math.abs(mid(seen[0])[1]-last[1]) > 0.5);
+  ok("the last step goes at least halfway toward the node", (()=>{
+     const went = Math.hypot(last[0]-from[0], last[1]-from[1]);
+     const all  = Math.hypot(n3.cx-from[0], n3.cy-from[1]);
+     return all < 1 || (went >= all/2 - 0.01 && went <= all + 0.01); })());
+  ok("...and stops on the point the last frame actually names", (()=>{
+     const v = seen[seen.length-1].split(" ").map(Number);
+     return n3.cx >= v[0] && n3.cx <= v[0]+v[2] && n3.cy >= v[1] && n3.cy <= v[1]+v[3]; })());
   ok("a glide never outlives the reader taking over",
      /const schedule=\(\)=>\{ stopTween\(\);/.test(src));
   ok("reduced motion gets the jump instead",
