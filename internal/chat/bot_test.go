@@ -118,6 +118,54 @@ func TestBotDelayGrowsWithTheReplyAndIsCapped(t *testing.T) {
 	}
 }
 
+/*
+A GREETING ARRIVES IN ABOUT A SECOND, and a paragraph does not.
+
+	BOTH WERE ASKED FOR and the first version honoured only the second: the model
+	was told "one short line, under 100 characters", produced 60 to 64, and the
+	typing model therefore held it back 4.3 to 4.4 seconds — MEASURED — against
+	the ~1s that was asked for. A greeting that takes four and a half seconds has
+	missed the moment it was answering.
+	THE LENGTH IS WHAT RECONCILES THEM. Hold a greeting to what a greeting is and
+	a fixed beat becomes its plausible typing time rather than an exception.
+*/
+func TestAGreetingArrivesInAboutASecondAndAnAnswerTakesItsTime(t *testing.T) {
+	// The instruction the model is given, and the length it actually returns.
+	long := "Hi — ask away if you have a question about how the site works."
+	if got := botTrimTo(long, botGreetMaxChars); len(got) > botGreetMaxChars {
+		t.Errorf("a greeting reply must be held to %d chars, got %d: %q",
+			botGreetMaxChars, len(got), got)
+	}
+	// ...AND IT IS STILL A SENTENCE. A cap that cuts mid-word reads as a fault.
+	if got := botTrimTo(long, botGreetMaxChars); strings.HasSuffix(got, " ") || got == "" {
+		t.Errorf("the trimmed greeting is not presentable: %q", got)
+	}
+
+	greet := botWaitFor("hey, what would you like to know?", true, BotTypeCPS, BotTypeMax)
+	if greet > 2*time.Second {
+		t.Errorf("a greeting must arrive in about a second, got %s", greet)
+	}
+	if greet < 500*time.Millisecond {
+		t.Errorf("...but not in the same instant it was posted, got %s", greet)
+	}
+	// EVEN IF THE MODEL OVERRUNS. The beat is fixed, and the cap above is what
+	// keeps that from being implausibly fast for what is actually sent.
+	if over := botWaitFor(strings.Repeat("x", 400), true, BotTypeCPS, BotTypeMax); over != greet {
+		t.Errorf("the greeting beat must not depend on the model's length: %s vs %s", over, greet)
+	}
+
+	// AND THE OTHER HALF MUST NOT HAVE BEEN LOST. A paragraph still takes the
+	// seconds a paragraph takes, which is the thing that stops an answer reading
+	// as a machine.
+	answer := botWaitFor(strings.Repeat("x", 150), false, BotTypeCPS, BotTypeMax)
+	if answer < 5*time.Second {
+		t.Errorf("a 150-character answer should take real time, got %s", answer)
+	}
+	if answer <= greet {
+		t.Errorf("an answer must take longer than a greeting: %s vs %s", answer, greet)
+	}
+}
+
 // ---- the key: write-once, and never readable -------------------------------
 
 func TestBotKeyIsWriteOnceAndNeverReadBack(t *testing.T) {
@@ -429,6 +477,20 @@ func TestBotAnswersAGreetingOnlyWhenTheRoomWasQuiet(t *testing.T) {
 	msgs, _ := s.Recent(ctx, "dev", "ledger", 0, 50)
 	if len(msgs) != 2 || msgs[len(msgs)-1].Moniker != "anon" {
 		t.Fatalf("the greeting was not answered as anon: %+v", msgs)
+	}
+	/* AND WHAT WAS ACTUALLY POSTED IS HELD TO A GREETING'S LENGTH. Asserted on
+	   the message in the room rather than on the trimmer, because the trimmer
+	   being right does not mean this path calls it: MEASURED, by pointing the
+	   greeting branch at the room's full limit instead, which no other assertion
+	   here noticed. The model is given a 54-character line on purpose, longer
+	   than the cap, so the cap has something to do. */
+	said := msgs[len(msgs)-1].Body
+	if len(said) > botGreetMaxChars {
+		t.Errorf("a greeting reply must be held to %d chars, got %d: %q",
+			botGreetMaxChars, len(said), said)
+	}
+	if said == "" {
+		t.Error("...and it must still say something")
 	}
 	// THE MODEL HAS TO BE TOLD, or its standing instruction to PASS on anything
 	// that is not a site question makes it refuse the very thing it was woken for.

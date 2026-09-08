@@ -141,6 +141,23 @@ const (
 	// + 1s", and it is also what keeps a one-word greeting from being answered in
 	// the same instant it is posted.
 	botReadPause = time.Second
+
+	// A GREETING IS NOT COMPOSED, so it is not timed as though it were.
+	//
+	// MEASURED against the instruction the model was given — "one short line,
+	// under 100 characters" — a greeting reply came out 60 to 64 characters and
+	// so took 4.3 to 4.4 seconds to arrive under the typing model, against the
+	// ~1s that was asked for. The length was the whole problem: a bare "hey" took
+	// 1.17s already.
+	//
+	// So the reply is held to what a greeting actually is. Forty characters is
+	// "hey — what would you like to know?", which is muscle memory rather than
+	// composition, and at that length arriving inside a second and a bit is the
+	// plausible speed rather than an exception to the model. Substantive answers
+	// keep the full rate: that is the other half of what was asked for, and a
+	// paragraph appearing instantly is what gives a helper away.
+	botGreetWithin   = 1200 * time.Millisecond
+	botGreetMaxChars = 40
 )
 
 // botIPHash is the ip_hash the bot's own rows carry.
@@ -564,10 +581,14 @@ func (b *Bot) answer(ctx context.Context, c botCandidate) error {
 		// to PASS on anything that is not a question about the site — and a bare
 		// hello is not one. Without this line the model correctly refuses to
 		// answer the very thing it was woken for.
+		// UNDER FORTY, not under a hundred: at a hundred the reply took four and a
+		// half seconds to arrive and a greeting that takes that long has missed
+		// the moment it was answering. The cap is enforced after the fact too, so
+		// a model that overruns does not get answered implausibly fast.
 		prompt += "\n\nThis is a greeting into a room that has been silent for a " +
-			"while. Greet them back in ONE short line, under 100 characters, and " +
-			"offer to help if they have a question about the site. Do not explain " +
-			"anything yet and do not reply PASS."
+			"while. Greet them back in ONE very short line, UNDER 40 CHARACTERS, " +
+			"and invite a question about the site. Do not explain anything yet " +
+			"and do not reply PASS."
 	} else {
 		prompt += "\n\nAnswer it, or reply PASS."
 	}
@@ -583,7 +604,15 @@ func (b *Bot) answer(ctx context.Context, c botCandidate) error {
 		b.logf("chat bot: passed on %s/%s (in=%d out=%d)", c.chain, c.court, in, out)
 		return b.Store.recordBotSpend(ctx, b.Model, in, out, b.costMicros(in, out))
 	}
-	text = botTrim(text)
+	/* A GREETING IS CAPPED SHORT AND ANSWERED FAST; an answer gets the room's
+	   full limit and the full typing rate. Both halves were asked for, and it is
+	   the LENGTH that reconciles them: hold a greeting to what a greeting is and
+	   the ~1s follows from the same model that makes a paragraph take twenty. */
+	if c.greeting {
+		text = botTrimTo(text, botGreetMaxChars)
+	} else {
+		text = botTrim(text)
+	}
 	if text == "" {
 		return nil
 	}
@@ -591,7 +620,7 @@ func (b *Bot) answer(ctx context.Context, c botCandidate) error {
 	// the delay is the whole difference between a participant and a service. It
 	// happens HERE, after the model has answered and before the message lands, so
 	// the wait is real time on the wall and not a queue somewhere.
-	if !b.pause(ctx, botDelay(text, b.cps(), b.typeMax())) {
+	if !b.pause(ctx, botWaitFor(text, c.greeting, b.cps(), b.typeMax())) {
 		// The context ended mid-pause. The spend already happened and is recorded;
 		// the message is simply never said, which is better than saying it into a
 		// process that is shutting down.
@@ -614,23 +643,42 @@ func (b *Bot) answer(ctx context.Context, c botCandidate) error {
 		in, out, b.costMicros(in, out))
 }
 
-// botTrim caps the reply and takes any leading markdown off it.
-func botTrim(s string) string {
+// botTrim caps the reply at the room's limit and takes any leading markdown off.
+func botTrim(s string) string { return botTrimTo(s, botMaxBody) }
+
+// botTrimTo is the same with the cap named, because a greeting is held to a
+// shorter one than an answer — see botGreetMaxChars.
+func botTrimTo(s string, limit int) string {
 	s = strings.TrimSpace(strings.TrimLeft(s, "#>*- \t"))
 	s = strings.Join(strings.Fields(s), " ")
-	if len(s) <= botMaxBody {
+	if len(s) <= limit {
 		return s
 	}
-	// Cut at the last sentence end inside the cap, so a truncated answer reads as
-	// finished rather than as having been interrupted.
-	cut := s[:botMaxBody]
-	if i := strings.LastIndexAny(cut, ".!?"); i > botMaxBody/2 {
+	// Cut at the last sentence end inside the limit, so a truncated reply reads
+	// as finished rather than as having been interrupted.
+	cut := s[:limit]
+	if i := strings.LastIndexAny(cut, ".!?"); i > limit/2 {
 		return cut[:i+1]
 	}
 	if i := strings.LastIndex(cut, " "); i > 0 {
 		return cut[:i]
 	}
 	return cut
+}
+
+// botWaitFor is how long to hold a reply back before sending it, and it is a
+// pure function of the reply so that the two halves of what was asked for can be
+// checked against each other without a clock.
+//
+// A GREETING GOES AT A FIXED BEAT and an answer is timed by its length. That is
+// not two rules fighting: a greeting is capped to what a greeting is — see
+// botGreetMaxChars — so the fixed beat IS the plausible typing time for it,
+// while a paragraph still takes the seconds a paragraph takes.
+func botWaitFor(text string, greeting bool, cps float64, max time.Duration) time.Duration {
+	if greeting {
+		return botGreetWithin
+	}
+	return botDelay(text, cps, max)
 }
 
 // botDelay is the read-then-type wait for a reply of this length.
