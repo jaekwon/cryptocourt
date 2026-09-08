@@ -1117,6 +1117,31 @@ a.card:hover{border-color:var(--line-2)}
   .rail.chatsized .nav{min-height:0; overflow-y:auto}
   /* The grip: two rules, drawn on the heading itself so it reads as a seam
      rather than as an icon somebody has to find. Only while it can be used. */
+  /* THE WAY BACK IS VISIBLE, AND ONLY WHEN THERE IS ONE. Double-click resets
+     too, and a double-click nobody can see is not an undo — reported as "it's
+     hard to undo, not intuitive". This sits in the row the reader is already
+     looking at, beside the button they used to get here, and appears only once
+     a size has been set so it is not one more control to ignore. */
+  /* PINNED TO THE SEAM ONCE A SIZE IS SET, and this is not decoration.
+     .rail.chatsized makes the nav scrollable so it can yield height, and the
+     handle is nav's LAST child — so the first thing that scrolls out of sight
+     is the control that resizes and resets. Measured: after one drag the
+     heading's rect still read y=417 while the panel's own content painted at
+     383, because the heading was clipped out of the scrolled nav. The reader is
+     then left with a size they cannot change and no visible way back, which is
+     exactly what "hard to undo" describes.
+     Sticky rather than moved out of the nav: the nav is where it belongs
+     structurally, and .rail.chatbig's rule already selects it by name from
+     inside there. The background is the rail's own, or the links scroll
+     through it. */
+  .rail.chatsized #railchathead{position:sticky; bottom:0; z-index:2;
+    background-color:#0a0a14; padding-bottom:6px}
+  #railchathead .headctl{display:flex; gap:8px; align-items:baseline}
+  #chatauto{display:none}
+  .rail.chatsized #chatauto{display:inline; background:none; border:0; padding:0;
+    cursor:pointer; font:inherit; letter-spacing:inherit; text-transform:inherit;
+    color:var(--ink-2)}
+  .rail.chatsized #chatauto:hover{color:var(--accent)}
   #railchathead::before{content:""; position:absolute; left:12px; right:12px;
     top:-5px; height:0; border-top:2px dotted var(--line-2); opacity:0}
   #railchathead{position:relative}
@@ -2995,9 +3020,12 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
          REFERENCE". It lives in the heading because the heading is the one row
          that STAYS when everything above it folds away — a toggle inside the
          part that disappears could not bring it back. -->
-    <div class="sec" id="railchathead" hidden>Chat<button type="button" id="chatbig"
+    <div class="sec" id="railchathead" hidden
+         title="Drag this line to resize the chat">Chat<span class="headctl"><button
+        type="button" id="chatauto"
+        title="Give the height back to the layout">reset</button><button type="button" id="chatbig"
         aria-expanded="false"
-        title="Give the chat the rail's height — the links above it fold away">expand</button></div>
+        title="Give the chat the rail's height — the links above it fold away">expand</button></span></div>
   </nav>
   <div class="railchat" id="railchat" hidden></div>
   <div class="foot">
@@ -19568,7 +19596,7 @@ function initControls(){
     };
     grip.addEventListener("pointerdown", (ev)=>{
       // The expand button lives in this row and must keep taking its own clicks.
-      if(ev.target.closest("#chatbig")) return;
+      if(ev.target.closest("#chatbig,#chatauto")) return;
       const rc=railChat(); if(!rc) return;
       // MEASURED BEFORE THE MODE IS DROPPED, and the order is the whole point.
       // Leaving chatbig gives the nav its height back, so reading the panel
@@ -19597,7 +19625,7 @@ function initControls(){
     grip.setAttribute("aria-orientation","horizontal");
     grip.setAttribute("tabindex","0");
     grip.addEventListener("keydown", (ev)=>{
-      if(ev.target.closest("#chatbig")) return;
+      if(ev.target.closest("#chatbig,#chatauto")) return;
       const rc=railChat(); if(!rc) return;
       const step = ev.key==="ArrowUp"? 24 : ev.key==="ArrowDown"? -24 : 0;
       if(!step) return;
@@ -19605,9 +19633,11 @@ function initControls(){
       if(v) store.set("cc.chath", String(v));
       ev.preventDefault();
     });
+    const auto=document.getElementById("chatauto");
+    if(auto) auto.addEventListener("click", (ev)=>{ ev.stopPropagation(); clearSize(); });
     // ...and back to automatic, without hunting for the original height.
     grip.addEventListener("dblclick", (ev)=>{
-      if(ev.target.closest("#chatbig")) return;
+      if(ev.target.closest("#chatbig,#chatauto")) return;
       clearSize();
     });
   }
