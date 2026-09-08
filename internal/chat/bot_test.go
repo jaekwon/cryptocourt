@@ -1815,3 +1815,123 @@ func TestALongAnswerIsCutAtASentenceNotMidClause(t *testing.T) {
 		t.Errorf("a tiny opening sentence must not swallow the answer: %d chars %q", len(g), g)
 	}
 }
+
+/*
+THE CLERK CONTINUES A CONVERSATION IT IS ALREADY IN.
+
+	REPORTED BY THE ROOM: a reader was answered about staking and replied "in
+	short? one liner". Every filter refused it — it names nothing about the site,
+	nobody's name is in it, and it is not a greeting — so a person who was mid-
+	exchange with the clerk got silence, and by the time anybody looked it was
+	past MaxAge and unanswerable.
+	TWO HALVES, AND NEITHER IS ENOUGH ALONE. The shape says "this is a
+	continuation"; clerkSpokeLast says "of MINE". "why?" between two readers is
+	not the clerk's business, and that is the arm below.
+*/
+func TestTheClerkAnswersAShortFollowUpToItsOwnMessage(t *testing.T) {
+	for _, s := range []string{
+		"in short? one liner", "why?", "in short", "tldr", "shorter", "go on",
+		"an example?", "and?", "i don't get it", "explain more",
+	} {
+		if !botFollowUp(s) {
+			t.Errorf("should read as a follow-up: %q", s)
+		}
+	}
+	for _, s := range []string{
+		"", "the docket is long", "staking is a scam",
+		strings.Repeat("why? ", 20), // long enough to stand on its own merits
+	} {
+		if botFollowUp(s) {
+			t.Errorf("should NOT read as a follow-up: %q", s)
+		}
+	}
+
+	// THE CLERK SPOKE LAST, so the follow-up is answered.
+	s, clock := newStore(t)
+	ctx := context.Background()
+	m := &fakeModel{reply: "Stake on a side; you get your stake back either way.", in: 90, out: 9}
+	b := newBot(t, s, m)
+	b.MinGap = time.Second
+	*clock = clock.Add(time.Hour)
+	if _, err := post(t, s, "orem", "ip-asker", "how do i stake on a claim?"); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.once(ctx); err != nil { // the clerk answers, and is now the last speaker
+		t.Fatal(err)
+	}
+	if m.calls != 1 {
+		t.Fatalf("the first question should be answered (%d calls)", m.calls)
+	}
+	*clock = clock.Add(2 * time.Second)
+	if _, err := post(t, s, "orem", "ip-asker", "in short? one liner"); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.once(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if m.calls != 2 {
+		t.Fatalf("the follow-up was dropped (%d calls)", m.calls)
+	}
+	if !strings.Contains(m.prompt, "short reply to the message YOU sent") {
+		t.Errorf("the model must be told it is a continuation: %q", m.prompt)
+	}
+
+	/* AND WHEN A PERSON SPOKE LAST, THE SAME WORDS ARE NOT THE CLERK'S BUSINESS.
+	   Two readers talking to each other, one of whom says "why?", must not
+	   summon a third participant into their conversation. */
+	s2, clock2 := newStore(t)
+	m2 := &fakeModel{reply: "SHOULD NOT BE USED", in: 90, out: 9}
+	b2 := newBot(t, s2, m2)
+	b2.MinGap = time.Second
+	*clock2 = clock2.Add(time.Hour)
+	if _, err := post(t, s2, "orem", "ip-one", "the canvass PDF says twelve thousand"); err != nil {
+		t.Fatal(err)
+	}
+	*clock2 = clock2.Add(3 * time.Second)
+	if _, err := post(t, s2, "orem", "ip-two", "why?"); err != nil {
+		t.Fatal(err)
+	}
+	if err := b2.once(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if m2.calls != 0 {
+		t.Errorf("the clerk joined a conversation it was not in (%d calls)", m2.calls)
+	}
+}
+
+/*
+AND A GREETING WITH A QUESTION MARK IS STILL A GREETING. This is the bug the
+
+	first implementation shipped into the test suite: written as
+	`case botFollowUp(m.Body):` with the store asked INSIDE the branch, it
+	swallowed "hello?" and "is anybody here?" — the case matched on the shape
+	alone, the store said the clerk had not spoken last, the branch set nothing,
+	and botGreeting below was never reached. A case that matches on half a
+	condition eats every branch under it.
+	PINNED AS A GREETING BEING ANSWERED IN A QUIET ROOM WHERE NOBODY SPOKE
+	FIRST, which is precisely the state the follow-up test cannot be true in.
+*/
+func TestAGreetingWithAQuestionMarkIsNotSwallowedByTheFollowUpBranch(t *testing.T) {
+	for _, greeting := range []string{"hello?", "is anybody here?", "anyone here?"} {
+		if !botFollowUp(greeting) {
+			t.Fatalf("the fixture must match the follow-up SHAPE, or this proves nothing: %q", greeting)
+		}
+		s, clock := newStore(t)
+		ctx := context.Background()
+		m := &fakeModel{reply: "Hey! Ask away.", in: 60, out: 8}
+		b := newBot(t, s, m)
+		*clock = clock.Add(time.Hour)
+		if _, err := post(t, s, "orem", "ip-new", greeting); err != nil {
+			t.Fatal(err)
+		}
+		if err := b.once(ctx); err != nil {
+			t.Fatal(err)
+		}
+		if m.calls != 1 {
+			t.Errorf("%q should have been answered as a greeting (%d calls)", greeting, m.calls)
+		}
+		if !strings.Contains(m.prompt, "greeting") {
+			t.Errorf("%q was not framed as a greeting: %q", greeting, m.prompt)
+		}
+	}
+}

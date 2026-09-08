@@ -106,6 +106,8 @@ const ALL = ["embed_layout.js", "tagrow_layout.js", "route_crawl.js",
              "vote_commit.js",
              // the two marks, and the pupil that must not move between them
              "map_reveal.js",
+             // on a phone the map is the page, and it was a sliver
+             "map_mobile.js",
              "map_glide.js",
              "clean_path.js",
              "chat_warn.js",
