@@ -13874,6 +13874,16 @@ function mountMap(slug, data, focusId, focusPath){
     const out = [], seen = new Set();
     (function walk(b){
       (b.kidC||[]).forEach(id => out.push({kind:"claim", id}));
+      /* AND THE CLAIMS FILED HERE WHOSE NODE HANGS SOMEWHERE ELSE. A claim may
+         be filed in two sets; the map draws ONE node for it, under the first,
+         and records the other membership in the folder's `also` list — that is
+         what the cross-cut spoke is drawn from. kidC only holds the children the
+         layout actually parented here, so opening a set revealed everything in
+         it EXCEPT its cross-filed claims.
+         Reported as: clicking Gain-of-function funding does not light #10. Read
+         off the chain, covid's claim 10 is in folders 1 and 4 — its node hangs
+         under Origins, so Gain-of-function's kidC never contained it. */
+      (b.also||[]).forEach(id => out.push({kind:"claim", id}));
       (b.kidF||[]).forEach(key=>{
         if(seen.has(key)) return;
         seen.add(key);

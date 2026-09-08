@@ -83,6 +83,25 @@ ok("...and neither does one that is not there at all", subtreeOf(undefined).leng
 L = {court: {kidF: [], kidC: []}, folders: {0: mk(["f1"], [], true), 1: mk(["f0"], [], true)}};
 ok("a set filed inside itself terminates", keys(subtreeOf(L.folders[0]).map(selKey)) === "f0 f1");
 
+/* A CLAIM FILED IN TWO SETS IS REVEALED BY BOTH. The map draws ONE node per
+   claim — under the first set that holds it — and records the other membership
+   in that folder's `also` list, which is what the cross-cut spoke is drawn from.
+   kidC only holds the children the layout actually parented there, so opening a
+   set revealed everything in it EXCEPT its cross-filed claims.
+   REPORTED AS: clicking Gain-of-function funding does not light #10. Read off
+   the chain: covid's claim 10 is in folders 1 and 4, its node hangs under
+   Origins, and Gain-of-function's kidC never contained it. The fixture here had
+   no cross-cut at all, which is why every assertion stayed green. */
+const gof = mk([], [22, 24], true); gof.also = [10];
+const origins = mk([], [7, 8, 9, 10], true);
+ok("a set reveals a claim filed in it whose node hangs elsewhere",
+   keys(subtreeOf(gof).map(selKey)) === "c10 c22 c24",
+   keys(subtreeOf(gof).map(selKey)));
+ok("...and the set the node DOES hang under still reveals it too",
+   keys(subtreeOf(origins).map(selKey)).includes("c10"));
+ok("...and a set with no cross-cut is unchanged",
+   keys(subtreeOf(mk([], [1, 2], true)).map(selKey)) === "c1 c2");
+
 /* THE DEFAULT: the court's 𓂀 children, and only those. */
 L = withCourt(["f0", "f2", "f4"]);   // the cycle case above left L on its own fixture
 const def = defaultReveal();
