@@ -18709,6 +18709,136 @@ on(/^\/params$/, async ()=>{
        : "");
 });
 
+/* ---- diagnostics ---------------------------------------------------------
+   A PUBLIC PAGE THAT HOLDS NOTHING PRIVATE, and the service decides that rather
+   than this page: /api/chat/diag publishes counts, yes/no, tokens and what they
+   cost, and refuses to publish anything else, with the rule written down in
+   diag.go and a
+   test that checks the payload against an allowlist of keys. This route renders
+   what it is given and asks for nothing more.
+   WHY IT LIVES IN THE OVERLAY. It is a page on the site, and every other page on
+   the site is here — a second document would need its own head, its own styles
+   and its own copy of the theme, and would drift from all three. */
+const DIAG_MS = 5000;
+/* THE VENDOR'S BILL IN DOLLARS, which is a different thing from the court's own
+   token and is deliberately not named like one. §7.4 bars this file from
+   describing a court token in those terms at all, and dispute_test enforces it
+   over the whole file including its comments — which is how this very comment
+   failed on its first draft. An API invoice really is dollars, so the rule is
+   not aimed at this line; but a carve-out in a rule that absolute is how the
+   rule stops being absolute. So: cost, in dollars, said plainly. */
+function diagCost(micros){
+  const d = Number(micros || 0) / 1e6;
+  if(d === 0) return "$0.00";
+  /* FOUR DECIMALS UNTIL THERE IS A DOLLAR TO ROUND. Two is the habit and it is
+     wrong here: a token bill spends fractions of a cent at a time, and 1.57
+     cents shown as "$0.02" has thrown away most of what the number said. The
+     threshold is a dollar rather than a cent — MEASURED against the first real
+     figure this page produced, 15735 micro-dollars, which two decimals rendered
+     as $0.02 and a test caught. Past a dollar the extra digits stop being
+     information and start being noise. */
+  return "$" + (d < 1 ? d.toFixed(4) : d.toFixed(2));
+}
+function diagRows(d){
+  const b = d.bot || {};
+  const rows = [
+    ["Holding now", d.holding,
+     "Long-poll requests in flight. One reader with the chat open is one of these, "
+     + "so it counts CONNECTIONS rather than people — two tabs are two — and only "
+     + "this server's."],
+    ["Most at once", d.holding_peak, "The high-water mark since this process started."],
+    ["Rooms active", d.courts_active, "Courts with a message in the last hour."],
+    ["Messages, last hour", d.messages_last_hour, "Across every room."],
+  ];
+  if(b.enabled){
+    rows.push(["Replies", b.replies, "How many times the site's own answerer has spoken."]);
+    rows.push(["Tokens", `${Number(b.in_tokens||0).toLocaleString()} in · `
+      + `${Number(b.out_tokens||0).toLocaleString()} out`,
+      "Counted from the API's own response, not estimated."]);
+    rows.push(["Spent", diagCost(b.cost_micros),
+      "At the prices this deployment was configured with. Those are operator "
+      + "settings and not facts — the token counts above them are the reliable half."]);
+    if(b.model) rows.push(["Model", safeInline(b.model), "As most recently used."]);
+  }
+  return `<table class="tbl"><tbody>` + rows.map(([k,v,why])=>`<tr>
+      <td><b>${safeInline(String(k))}</b></td>
+      <td class="mono">${typeof v === "number" ? v.toLocaleString() : v}</td>
+      <td class="dim">${safeInline(String(why))}</td></tr>`).join("") + `</tbody></table>`;
+}
+on(/^\/diag$/, async ()=>{
+  const head = crumbs([{label:"Directory",href:"#/"},{label:"Diagnostics"}])
+    + `<h1 class="page-h">Diagnostics</h1>`;
+  const base = chatBase();
+  if(!base){
+    main.innerHTML = head + `<div class="prose" style="margin-top:16px"><p>These
+      numbers come from the chat service, and this page is not configured to reach
+      one.</p></div>`;
+    return;
+  }
+  main.innerHTML = head + `<div class="dim" style="margin-top:16px">Reading…</div>`;
+  const seq0 = renderSeq;
+  const draw = async ()=>{
+    if(renderSeq !== seq0) return false;
+    let d = null;
+    try{
+      const r = await fetch(base + "/api/chat/diag", {cache:"no-store"});
+      if(r.ok) d = await r.json();
+    }catch(_){}
+    if(renderSeq !== seq0) return false;
+    if(!d){
+      main.innerHTML = head + `<div class="notice refuse" style="margin-top:16px">
+        <span class="g">✕</span> The chat service did not answer.</div>`;
+      return true;
+    }
+    /* THE FORM APPEARS ONLY WHILE THERE IS NOWHERE FOR A KEY TO GO. Once one is
+       set the service refuses another and there is nothing here to offer — and
+       the page is told only THAT one is set, never anything about it. */
+    const form = d.bot_key_set ? `<p class="small muted">A key is set. It cannot be
+        read back or replaced from this page.</p>`
+      : `<form id="diag-key" style="margin-top:8px">
+           <p class="small muted">No key is set. The first one submitted is kept and
+           cannot be replaced here, so whoever fills this in first claims it — set
+           it now, or turn the form off with <code>--bot-key-form=false</code>.</p>
+           <input id="diag-key-v" type="password" autocomplete="off" spellcheck="false"
+             placeholder="API key" style="width:min(420px,100%)">
+           <button class="btn" type="submit">Set it</button>
+           <span id="diag-key-say" class="small muted"></span></form>`;
+    main.innerHTML = head
+      + `<div class="prose" style="margin-top:16px"><p>What this server is doing
+         right now. Nothing here names a person, an address or anything anybody
+         said — the service publishes counts and refuses the rest.</p></div>`
+      + diagRows(d)
+      + `<h2 class="sec">The site's answerer</h2>`
+      + `<div class="prose"><p>${d.bot.enabled
+          ? `Running. It answers questions about how the site works.`
+          : `Not running on this server.`}</p></div>`
+      + form;
+    const f = document.getElementById("diag-key");
+    if(f) f.addEventListener("submit", async ev=>{
+      ev.preventDefault();
+      const say = document.getElementById("diag-key-say");
+      const v = (document.getElementById("diag-key-v")||{}).value || "";
+      say.textContent = "sending…";
+      try{
+        const r = await fetch(base + "/api/chat/botkey", {
+          method:"POST", headers:{"Content-Type":"application/json"},
+          body: JSON.stringify({key: v})});
+        const j = await r.json().catch(()=>({}));
+        say.textContent = r.ok ? "set — restart the service to start it"
+          : (j.error || `refused (${r.status})`);
+      }catch(_){ say.textContent = "could not reach the service"; }
+    });
+    return true;
+  };
+  if(!await draw()) return;
+  /* IT KEEPS READING, because a diagnostics page whose numbers are from whenever
+     you opened it is a screenshot. Guarded by renderSeq so leaving the route
+     stops the timer rather than writing into somebody else's page. */
+  const tick = setInterval(async ()=>{
+    if(renderSeq !== seq0 || !(await draw())) clearInterval(tick);
+  }, DIAG_MS);
+});
+
 on(/^\/about$/, async ()=>{
   main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:"How it works"}])
     + `<h1 class="page-h">How a court works</h1>

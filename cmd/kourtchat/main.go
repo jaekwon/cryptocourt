@@ -153,6 +153,35 @@ func main() {
 			"vision model the archive asks about filed images")
 		appealTo = flag.String("appeal-to", "",
 			"where a punished person should complain; the panel stays silent about appeals if unset")
+		// THE HELPER IN THE ROOM. Off unless --bot is given: a process that would
+		// start spending money because a key happened to be in the database is not
+		// a process anybody should have to reason about.
+		bot      = flag.Bool("bot", false, "answer questions about the site in chat")
+		botModel = flag.String("bot-model", "claude-haiku-4-5-20251001",
+			"model the chat helper uses")
+		botSite = flag.String("bot-site", "kourt.xyz",
+			"the site the helper is helping with, for its prompt")
+		botRepo = flag.String("bot-repo", "github.com/jaekwon/cryptocourt",
+			"the project's source, for its prompt")
+		botDocs = flag.String("bot-chain-docs", "docs.gno.land",
+			"gno.land documentation, for its prompt")
+		botGap = flag.Duration("bot-gap", chat.BotMinGap,
+			"minimum time between two replies, across every room together")
+		// PRICES ARE CONFIGURATION AND NOT FACTS. They are whatever the vendor
+		// charges this account today and this process cannot ask. Wrong numbers
+		// make the money column on the diagnostics page wrong and nothing else —
+		// the token counts beside it come from the API's own response. CHECK THEM
+		// against the current price list rather than trusting these defaults.
+		botIn = flag.Int64("bot-price-in", 1_000_000,
+			"micro-dollars per million input tokens (verify against current pricing)")
+		botOut = flag.Int64("bot-price-out", 5_000_000,
+			"micro-dollars per million output tokens (verify against current pricing)")
+		// THE BOOTSTRAP WINDOW. On by default because the feature is a form on a
+		// page; an operator who has set the key already, or who would rather set it
+		// out of band, passes false and the endpoint accepts nothing at all.
+		botKeyForm = flag.Bool("bot-key-form", true,
+			"accept the helper's API key at /api/chat/botkey until one is set")
+
 		geoLoc    = flag.String("geo-locations", "", "MaxMind GeoLite2-Country-Locations-en.csv")
 		geoBlocks = flag.String("geo-blocks", "", "comma-separated GeoLite2-Country-Blocks-IPv{4,6}.csv")
 	)
@@ -223,6 +252,8 @@ func main() {
 		HealthDetail: *healthDetail,
 		AppealTo:     *appealTo,
 		Chains:       names, CountryHeader: *countryHdr, Log: lg,
+		BotEnabled:      *bot,
+		BotKeyBootstrap: *botKeyForm,
 	}
 	// Flags are decoration, so a missing or broken geo database must never stop the
 	// server: it logs and carries on with no flags at all.
@@ -240,6 +271,34 @@ func main() {
 	if err == nil && h.ScannerSeen == 0 {
 		lg.Printf("no scanner has ever run: chat is UNMODERATED and says so in /api/chat/health")
 	}
+	// THE HELPER, STARTED ONLY IF THERE IS BOTH A FLAG AND A KEY.
+	//
+	// THE KEY IS READ ONCE, HERE. A key set through the form after this point
+	// takes effect at the next restart, which is stated on the page rather than
+	// papered over: re-reading it every tick would mean a process that starts
+	// spending money because somebody filled in a form, with nothing in the log
+	// to say when that began.
+	if *bot {
+		key, ok, err := store.BotKey()
+		switch {
+		case err != nil:
+			lg.Printf("chat bot: cannot read the key: %v", err)
+		case !ok:
+			lg.Printf("chat bot: enabled but no key is set yet — set one at /api/chat/botkey, then restart")
+		default:
+			b := &chat.Bot{
+				Store: store, Key: key, Model: *botModel,
+				Chains: names, MinGap: *botGap,
+				Site: *botSite, Repo: *botRepo, ChainDocs: *botDocs,
+				InPerMTok: *botIn, OutPerMTok: *botOut,
+				Subscribe: srv.Subscribe,
+				Log:       lg.Printf,
+			}
+			go b.Run(context.Background())
+			lg.Printf("chat bot: on, model %s, one reply per %s", *botModel, *botGap)
+		}
+	}
+
 	lg.Printf("listening on %s, chains %v, proxy=%v", *addr, keys(names), *behindProxy)
 
 	// THE MEDIA ARCHIVE. kourt.xyz's own copy of the images filed with a claim,

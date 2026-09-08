@@ -91,6 +91,8 @@ try {
 const ALL = ["embed_layout.js", "tagrow_layout.js", "route_crawl.js",
              "rowscope_layout.js", "map_draws.js", "map_type.js", "map_boing.js", "chat_all.js",
              "params_page.js",
+             // the public diagnostics page, and chiefly what it must not show
+             "diag_page.js",
              "court_burn_pay.js",
              "vote_commit.js",
              // the two marks, and the pupil that must not move between them
