@@ -364,6 +364,14 @@ say "country file"
 "${SSH[@]}" "$HOST" "
   set -u
   GEO=$STATEDIR/geo/dbip-country.csv
+  # ITS OWN DIRECTORY, RATHER THAN THE ONE THE PREPARE STEP MAKES. This step runs
+  # BEFORE that one, so relying on it meant mv had nowhere to write: the download
+  # succeeded, all 717,170 rows were verified, and the move failed with 'no such
+  # file or directory' — after which kourtchat logged 'no flags' and carried on,
+  # exactly as designed, which is why nothing looked broken. Measured on the
+  # first real deploy. A step that depends on the order of another step is the
+  # defect; one line of mkdir removes the dependency rather than reordering.
+  mkdir -p \"\$(dirname \"\$GEO\")\"
   # Refreshed when older than 25 days, so a monthly file is never more than a
   # few weeks stale and a daily deploy does not re-download it.
   if [ -s \"\$GEO\" ] && [ -z \"\$(find \"\$GEO\" -mtime +25 2>/dev/null)\" ]; then
@@ -385,11 +393,17 @@ say "country file"
       if [ \"\$rows\" -lt 100000 ]; then
         echo \"    refused \$m: only \$rows rows\"; continue
       fi
-      mv /tmp/dbip.csv \"\$GEO\"
-      chown kourt:kourt \"\$GEO\"
-      echo \"    fetched \$m, \$rows rows\"
-      rm -f /tmp/dbip.csv.gz
-      exit 0
+      # REPORTED ONLY IF IT LANDED. This said 'fetched 2026-09, 717170 rows' on a
+      # deploy where the move had just failed and the file did not exist — every
+      # number in that line was true and the sentence was not. A step that
+      # announces a success it did not have is worse than one that fails loudly.
+      if mv /tmp/dbip.csv \"\$GEO\"; then
+        chown kourt:kourt \"\$GEO\"
+        echo \"    fetched \$m, \$rows rows\"
+        rm -f /tmp/dbip.csv.gz
+        exit 0
+      fi
+      echo \"    fetched \$m but could not place it at \$GEO\"
     fi
   done
   rm -f /tmp/dbip.csv.gz /tmp/dbip.csv
