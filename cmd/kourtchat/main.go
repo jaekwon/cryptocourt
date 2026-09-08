@@ -247,12 +247,23 @@ func main() {
 		lg.Fatal("--chain needs at least one name")
 	}
 
+	/* WHETHER THE HELPER WILL RUN IS DECIDED ONCE, HERE, and both the goroutine
+	   below and the flag the diagnostics page reports come from that one answer.
+	   They used to be decided separately — the field from --bot, the goroutine
+	   from --bot AND a key — so a deployment with the flag and no key reported
+	   enabled=true and added a phantom participant to every room's count. */
+	botKey, botKeySet, botKeyErr := store.BotKey()
+	if botKeyErr != nil {
+		lg.Printf("chat bot: cannot read the key: %v", botKeyErr)
+	}
+	runBot := chat.BotRunnable(*bot, botKeySet)
+
 	srv := &chat.Server{
 		Store: store, Hasher: hasher, Policy: policy,
 		HealthDetail: *healthDetail,
 		AppealTo:     *appealTo,
 		Chains:       names, CountryHeader: *countryHdr, Log: lg,
-		BotEnabled:      *bot,
+		BotEnabled:      runBot,
 		BotKeyBootstrap: *botKeyForm,
 	}
 	// Flags are decoration, so a missing or broken geo database must never stop the
@@ -271,32 +282,29 @@ func main() {
 	if err == nil && h.ScannerSeen == 0 {
 		lg.Printf("no scanner has ever run: chat is UNMODERATED and says so in /api/chat/health")
 	}
-	// THE HELPER, STARTED ONLY IF THERE IS BOTH A FLAG AND A KEY.
+	// THE HELPER, on the one answer computed above.
 	//
-	// THE KEY IS READ ONCE, HERE. A key set through the form after this point
-	// takes effect at the next restart, which is stated on the page rather than
-	// papered over: re-reading it every tick would mean a process that starts
-	// spending money because somebody filled in a form, with nothing in the log
-	// to say when that began.
-	if *bot {
-		key, ok, err := store.BotKey()
-		switch {
-		case err != nil:
-			lg.Printf("chat bot: cannot read the key: %v", err)
-		case !ok:
-			lg.Printf("chat bot: enabled but no key is set yet — set one at /api/chat/botkey, then restart")
-		default:
-			b := &chat.Bot{
-				Store: store, Key: key, Model: *botModel,
-				Chains: names, MinGap: *botGap,
-				Site: *botSite, Repo: *botRepo, ChainDocs: *botDocs,
-				InPerMTok: *botIn, OutPerMTok: *botOut,
-				Subscribe: srv.Subscribe,
-				Log:       lg.Printf,
-			}
-			go b.Run(context.Background())
-			lg.Printf("chat bot: on, model %s, one reply per %s", *botModel, *botGap)
+	// THE KEY IS READ ONCE, before the server is built. A key set through the
+	// form after this point takes effect at the next restart, which the page says
+	// rather than papering over: re-reading it every tick would mean a process
+	// that starts spending because somebody filled in a form, with nothing in the
+	// log to say when that began.
+	switch {
+	case !*bot:
+		// Nothing to say: the operator did not ask for one.
+	case !botKeySet:
+		lg.Printf("chat bot: enabled but no key is set yet — set one at /api/chat/botkey, then restart")
+	default:
+		b := &chat.Bot{
+			Store: store, Key: botKey, Model: *botModel,
+			Chains: names, MinGap: *botGap,
+			Site: *botSite, Repo: *botRepo, ChainDocs: *botDocs,
+			InPerMTok: *botIn, OutPerMTok: *botOut,
+			Subscribe: srv.Subscribe,
+			Log:       lg.Printf,
 		}
+		go b.Run(context.Background())
+		lg.Printf("chat bot: on, model %s, one reply per %s", *botModel, *botGap)
 	}
 
 	lg.Printf("listening on %s, chains %v, proxy=%v", *addr, keys(names), *behindProxy)

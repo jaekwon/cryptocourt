@@ -153,6 +153,21 @@ const (
 // inside the room's rules, not exempt from them.
 const botIPHash = "bot:site-helper"
 
+// BotRunnable is whether a helper will actually run, and it exists so that the
+// answer is given ONCE.
+//
+// The command had two answers to this and they disagreed: Server.BotEnabled came
+// straight from the --bot flag, while the goroutine started only inside the
+// branch where a key had also been found. So a deployment with --bot and no key
+// reported enabled=true on the diagnostics page and added one to the count of
+// people in every room — a participant that was never going to speak. Neither
+// line was wrong on its own; there were simply two of them.
+//
+// A FLAG IS AN INTENTION AND A KEY IS A CAPABILITY, and it takes both. Trivial
+// enough to inline, which is exactly why it was inlined twice; it is a function
+// so that there is one place to be right and a truth table can be pinned to it.
+func BotRunnable(flagOn, keySet bool) bool { return flagOn && keySet }
+
 func (b *Bot) logf(f string, a ...any) {
 	if b.Log != nil {
 		b.Log(f, a...)

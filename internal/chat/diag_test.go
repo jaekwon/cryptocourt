@@ -255,6 +255,47 @@ func TestPollReplyCarriesHereAndDoesNotDecomposeIt(t *testing.T) {
 	}
 }
 
+/*
+IT TAKES BOTH A FLAG AND A KEY, and the truth table is pinned because the two
+
+	answers this replaces disagreed: the reported flag came from --bot alone while
+	the goroutine needed a key too, so --bot with no key published enabled=true
+	and put a phantom participant in every room's count.
+*/
+func TestBotRunsOnlyWithBothAFlagAndAKey(t *testing.T) {
+	for _, c := range []struct {
+		flagOn, keySet, want bool
+		why                  string
+	}{
+		{true, true, true, "asked for, and able"},
+		{true, false, false, "asked for with nothing to authenticate with"},
+		{false, true, false, "a key lying in the database is not a request to spend it"},
+		{false, false, false, "neither"},
+	} {
+		if got := BotRunnable(c.flagOn, c.keySet); got != c.want {
+			t.Errorf("BotRunnable(%v,%v) = %v, want %v — %s",
+				c.flagOn, c.keySet, got, c.want, c.why)
+		}
+	}
+}
+
+// AND A HELPER THAT IS NOT RUNNING IS NOT IN THE ROOM. The count and the page's
+// flag are the same field, so this is the consequence of the table above.
+func TestANonRunningHelperIsNotCounted(t *testing.T) {
+	srv, _, _ := newServer(t)
+	srv.BotEnabled = BotRunnable(true, false)
+	if got := srv.here(); got != 1 {
+		t.Errorf("only the asker is here, got %d", got)
+	}
+	if d := diagOf(t, srv); d["bot"].(map[string]any)["enabled"] != false {
+		t.Errorf("the page should not claim a helper that cannot run: %v", d["bot"])
+	}
+	srv.BotEnabled = BotRunnable(true, true)
+	if got := srv.here(); got != 2 {
+		t.Errorf("a running helper is one more, got %d", got)
+	}
+}
+
 func TestHoldGaugeRemembersItsPeak(t *testing.T) {
 	var g holdGauge
 	g.enter()
