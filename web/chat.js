@@ -383,6 +383,11 @@ function chatPanelHtml(slug, moniker, note, heading) {
     + "</div>"
     + '<ol class="chatlog" aria-live="polite"></ol>'
     + '<div class="chatstate"></div>'
+    /* HOW MANY ARE IN THE ROOM, directly above the box you type into, because
+       that is the moment the answer matters: whether it is worth saying
+       anything. Hidden until the server has told us — a room that says "0 here"
+       while you are plainly in it is worse than a room that says nothing. */
+    + '<div class="chathere" hidden></div>'
     + '<form class="chatform" autocomplete="off">'
     +   '<button class="chatnamebtn" type="button" aria-label="your name — click to change">'
     +     '<span class="chatbtnface">' + chatEsc(moniker || CHATDEFAULTNAME)
@@ -503,6 +508,10 @@ async function chatFetch(base, chain, court, limit, wait, seen) {
     // what caught it — after a hand-simulation of the arithmetic had already "passed", because
     // the simulation never went through this function.
     now: Number(d.now || 0),
+    /* HOW MANY ARE HERE, counted by the server and passed through as one number.
+       It must survive this allowlist for the same reason `now` must: a field
+       dropped here does not fail, it just quietly never appears. */
+    here: Number(d.here || 0),
   };
 }
 
@@ -669,6 +678,12 @@ const CHATCSS = `
    single class it borrows. Rendered outside the overlay the mark falls back
    exactly as it does today, so nothing breaks that was working. */
 .chatmark{cursor:help;margin-right:.35em}
+/* THE ROOM'S COUNT. Quiet on purpose: it is a fact about the room, not a call to
+   act, so it sits at the weight of the note under the composer rather than
+   competing with the transcript above it. Right-aligned so it reads as a label
+   on the box it sits over. */
+.chathere{flex:0 0 auto; text-align:right; font-size:.82em; opacity:.55;
+  margin:0 .15rem .15rem}
 .chatage{flex:0 0 auto;opacity:.45;font-size:.85em}
 .chatempty{opacity:.55;padding:.3rem 0}
 .chatstate{margin:.4rem 0;padding:.35rem .5rem;border-radius:4px;
@@ -694,7 +709,7 @@ const CHATCSS = `
    max-height and scrollbar), and everything else is pinned. If the rail ever
    gets too short for the fixed rows it clips the NOTE, the least important
    thing in the panel, instead of swallowing the controls. */
-.chathead,.chatstate,.chatform,.chatnote{flex:0 0 auto}
+.chathead,.chatstate,.chathere,.chatform,.chatnote{flex:0 0 auto}
 .chatform{display:flex;gap:.4rem;margin-top:.5rem;flex-wrap:wrap}
 /* THE NAME IS A LABEL, NOT A MESSAGE. At 8rem it took a third of a 230px rail
    and left the message box too narrow to read what you were typing. It needs
@@ -850,7 +865,22 @@ function mountChat(el, opts) {
   const stateEl = el.querySelector(".chatstate");
   const noteEl = el.querySelector(".chatnote");
   const formEl = el.querySelector(".chatform");
+  const hereEl = el.querySelector(".chathere");
   const nameEl = el.querySelector(".chatmoniker");
+  /* THE COUNT, AS THE SERVER GAVE IT. No arithmetic here and nothing added: the
+     server sends one total and this prints it. Anything the page computed would
+     be a second opinion about how many people are in a room it cannot see.
+     "here" rather than "online" or "connected", because those claim more than a
+     count of held connections can support — and it is people, not sessions, that
+     a reader is asking about. Zero or missing hides the line rather than
+     printing a number we do not have. */
+  function showHere(n) {
+    if (!hereEl) return;
+    const k = Number(n || 0);
+    if (!(k > 0)) { hereEl.hidden = true; return; }
+    hereEl.hidden = false;
+    hereEl.textContent = k === 1 ? "1 here" : k + " here";
+  }
   /* THE NAME IS A BUTTON UNTIL YOU PRESS IT.
    *
    * It was an <input> dressed as a chip, and the costume was the whole problem:
@@ -960,6 +990,11 @@ function mountChat(el, opts) {
     // "9 months ago".
     const shift = nowSec() - demo.now;
     paint(demo.messages.map(m => ({...m, created_at: m.created_at + shift})), demo.you);
+    /* THE SAMPLE SHOWS THE COUNT TOO. Not a server fact — there is no server
+       here — but a screen the sample cannot draw is a screen no browser check
+       can measure, and this panel's own history says that is how a line ships
+       broken. A small honest number for a sample room. */
+    showHere(3);
 
     // SAY THAT THE THREAD IS INVENTED — not merely that chat is unconfigured.
     //
@@ -1050,6 +1085,7 @@ function mountChat(el, opts) {
       // Before painting, so the ages in this very repaint are already corrected.
       learnSkew(d);
       paint(d.messages, d.you);
+      showHere(d.here);
       note("");
     } catch (e) {
       if (!live()) return;

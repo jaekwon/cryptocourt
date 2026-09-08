@@ -215,7 +215,7 @@ CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS frozen (chain TEXT, court TEXT, at INTEGER NOT NULL,
   lifted_at INTEGER,
   PRIMARY KEY (chain, court));
-`
+` + botSchema
 
 // Open prepares the database. The pragmas are not optional: without busy_timeout
 // a concurrent writer gets SQLITE_BUSY instantly rather than waiting, which is the

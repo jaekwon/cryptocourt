@@ -43,6 +43,24 @@ type Server struct {
 		Country(netip.Addr) string
 	}
 
+	// BotEnabled is whether this process is running the answering bot. Reported by
+	// the diagnostics page so that "no replies yet" and "no bot here" are
+	// distinguishable, which they were not when the page showed only a count.
+	BotEnabled bool
+
+	// BotKeyBootstrap is whether /api/chat/botkey will accept a key at all.
+	//
+	// TRUE BY DEFAULT, because the feature as asked for is a form on a page. An
+	// operator who has already set the key, or who would rather set it out of
+	// band, turns this off and the endpoint refuses everything — which is the only
+	// way to close a trust-on-first-use window that is otherwise open until
+	// somebody uses it. See Store.SetBotKeyOnce for what write-once does and does
+	// not buy.
+	BotKeyBootstrap bool
+
+	// hold counts long-poll requests in flight. See holdGauge.
+	hold holdGauge
+
 	// AppealTo is where a punished person is told to complain, and it is empty by default.
 	//
 	// The panel told anyone it paused "You can appeal — quote reference 9" and there was no
@@ -111,6 +129,32 @@ func (s *Server) pulse() *pulse {
 // wakes here — a hidden message still leaves the panel on the next ordinary
 // poll, which is the behaviour that existed before the long poll and remains the
 // floor under it.
+// here is the number the poll reply carries. See getReply.Here.
+//
+// THE WAITER THAT IS ASKING IS ONE OF THEM. A GET that is answered immediately
+// is not holding a connection and so is not in the gauge, which would make a
+// lone reader see "0 here" on their own screen. Adding one for the asker is not
+// a fudge: they are in the room, they are just not asleep at this instant.
+func (s *Server) here() int64 {
+	n := s.hold.now.Load() + 1
+	if s.BotEnabled {
+		n++
+	}
+	return n
+}
+
+// Subscribe hands back the channel that closes when anything changes anywhere.
+//
+// FOR THE IN-PROCESS HELPER, so it can react to a message in about a second
+// instead of on its next tick. It is the same global signal the long poll
+// already selects on — a close wakes every holder at once and cannot block a
+// writer, so a subscriber costs a post nothing. A caller must re-subscribe after
+// each wake, exactly as the poll does, because the channel is replaced.
+func (s *Server) Subscribe() <-chan struct{} {
+	_, anywhere := s.pulse().watch("")
+	return anywhere
+}
+
 func (s *Server) Wake(chain, court string) { s.pulse().fire(pulseKey(chain, court)) }
 
 // WakeAll is the same for a change that names no single court.
@@ -125,6 +169,12 @@ var (
 func (s *Server) Routes() *http.ServeMux {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/chat/health", s.health)
+	// BEFORE the catch-all, which would otherwise swallow both: ServeMux prefers
+	// the longest pattern, but these are exact paths under the same prefix and
+	// registering them after reads as though order mattered. It does not; they are
+	// listed first because that is the order a reader needs them in.
+	mux.HandleFunc("/api/chat/diag", s.diag)
+	mux.HandleFunc("/api/chat/botkey", s.botkey)
 	mux.HandleFunc("/api/chat/", s.messages)
 	return mux
 }
@@ -419,6 +469,20 @@ type getReply struct {
 	// said. Status.Seconds fixed the same arithmetic for one status line; this fixes it for
 	// every row, and for anything added later that needs to know when the server thinks it is.
 	Now int64 `json:"now"`
+
+	// Here is how many people are in this room right now, and it rides along with
+	// the poll the panel already makes rather than costing a second request.
+	//
+	// COUNTED SERVER-SIDE, INCLUDING THE HELPER. The number is long-poll waiters
+	// plus one for the site's own answerer when it is running. The panel is given
+	// a total and no way to decompose it: there is no field saying which of them
+	// is which, because the client is not told that one of them is not a person.
+	// That is the deployment's choice and it is made HERE, once, rather than by
+	// arithmetic the page could get wrong or reveal.
+	//
+	// It is a count of CONNECTIONS, not of humans — two tabs are two — and it is
+	// per-server, so it means nothing behind more than one of these.
+	Here int64 `json:"here"`
 }
 
 /*
@@ -484,14 +548,22 @@ func (s *Server) get(w http.ResponseWriter, r *http.Request, chain, court, ipHas
 		fresh, err := s.Store.HasSince(r.Context(), chain, court, seen)
 		if err == nil && !fresh {
 			timer := time.NewTimer(wait)
+			// COUNTED ONLY AROUND THE WAIT, which is what makes the number mean
+			// "readers holding a connection" rather than "requests being served".
+			// A read that answers immediately — the first poll of a busy court,
+			// every request from a client that sends no wait — is not a held
+			// connection and must not inflate the gauge.
+			s.hold.enter()
 			select {
 			case <-here:
 			case <-anywhere:
 			case <-r.Context().Done():
 				timer.Stop()
+				s.hold.leave()
 				return // the client hung up; there is nobody to answer
 			case <-timer.C:
 			}
+			s.hold.leave()
 			timer.Stop()
 		}
 	}
@@ -527,7 +599,8 @@ func (s *Server) get(w http.ResponseWriter, r *http.Request, chain, court, ipHas
 	if n := len(msgs); n > 0 {
 		next = msgs[n-1].ID
 	}
-	writeJSON(w, http.StatusOK, getReply{Messages: msgs, Next: next, You: you, Now: s.Store.Now().Unix()})
+	writeJSON(w, http.StatusOK, getReply{Messages: msgs, Next: next, You: you,
+		Now: s.Store.Now().Unix(), Here: s.here()})
 }
 
 // Which field a refusal is about, so the sentence can name it correctly.

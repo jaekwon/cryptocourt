@@ -1,0 +1,507 @@
+package chat
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"strings"
+	"testing"
+	"time"
+)
+
+// ---- the local filter, which is what stands between this and a bill ---------
+
+func TestBotWorthAskingTakesSiteQuestionsAndNothingElse(t *testing.T) {
+	yes := []string{
+		"how do i stake on a claim?",
+		"What does settled YES mean?",
+		"how does voting work",
+		"where is the docket?",
+		"anyone know how to connect a wallet?",
+		"is there a way to unstake before it settles?",
+		"what is CC and how is it different from gnot?",
+	}
+	for _, s := range yes {
+		if !botWorthAsking(s) {
+			t.Errorf("should have been worth asking: %q", s)
+		}
+	}
+	// THE EXPENSIVE MISTAKE IS THE FALSE POSITIVE. Each of these is a question,
+	// or reads like one, and none of them is a question about this site — so a
+	// filter that fired on them would spend money to be off-topic in a room
+	// about virology.
+	no := []string{
+		"who really funded the lab?",             // subject matter, not the site
+		"why does nobody believe the 2021 data?", // argument
+		"what time is it in tokyo?",              // unrelated
+		"hello",                                  // greeting, handled elsewhere
+		"the map shows seven claims",             // site words, no question
+		"staking is a scam",                      // site words, no question
+		"",                                       // nothing
+		strings.Repeat("how do i stake? ", 60),   // a wall of text
+	}
+	for _, s := range no {
+		if botWorthAsking(s) {
+			t.Errorf("should NOT have been worth asking: %q", s)
+		}
+	}
+}
+
+// THE LOOP IS CLOSED BY SHAPE AS WELL AS BY ID, and this is the shape half: a
+// reply the bot writes must never satisfy the filter that would make it answer
+// again. Asserted on the kind of sentence it actually produces — declarative,
+// no question mark — because the id table is the belt and this is the brace.
+func TestBotDoesNotFindItsOwnAnswersWorthAnswering(t *testing.T) {
+	for _, s := range []string{
+		"Stake from the claim page: open a claim and use the YES or NO button.",
+		"A claim settles when the answer stands through the settling window.",
+		"The map is at the top of a court page; each box is a claim.",
+		"Sets are headings the court votes into existence.",
+	} {
+		if botWorthAsking(s) {
+			t.Errorf("the bot's own answer would trigger it: %q", s)
+		}
+		if botGreeting(s) {
+			t.Errorf("the bot's own answer read as a greeting: %q", s)
+		}
+	}
+}
+
+func TestBotGreetingIsABareHelloAndNotAnOpening(t *testing.T) {
+	for _, s := range []string{"hi", "Hello", "hey!", "HELLO?", "gm", "yo",
+		"good morning", "anyone here?", "howdy", " hi "} {
+		if !botGreeting(s) {
+			t.Errorf("should have been a greeting: %q", s)
+		}
+	}
+	// A MESSAGE THAT MERELY OPENS POLITELY IS NOT A GREETING. It has a question
+	// in it, and botWorthAsking is the path for that — treating it as a greeting
+	// would answer "hello there!" to somebody who asked how to stake.
+	for _, s := range []string{
+		"hello, how do i stake?",
+		"hi everyone, is the docket down?",
+		"hey does anyone know what CC is",
+		"",
+		"hello hello hello hello hello hello",
+	} {
+		if botGreeting(s) {
+			t.Errorf("should NOT have been a greeting: %q", s)
+		}
+	}
+}
+
+// ---- the wait, which is what makes it read as a participant -----------------
+
+func TestBotDelayGrowsWithTheReplyAndIsCapped(t *testing.T) {
+	short := botDelay("hi there", 18, BotTypeMax)
+	long := botDelay(strings.Repeat("a", 300), 18, BotTypeMax)
+	if short < botReadPause {
+		t.Fatalf("even a short reply waits to be read: %s", short)
+	}
+	if long <= short {
+		t.Fatalf("a long reply must take longer: short=%s long=%s", short, long)
+	}
+	// AS IF A FAST TYPER WROTE IT: 300 characters at 18 c/s is about 17 seconds,
+	// so the delay has to be in that neighbourhood and not a token gesture.
+	if long < 10*time.Second {
+		t.Fatalf("300 characters should take a typist real time, got %s", long)
+	}
+	if capped := botDelay(strings.Repeat("a", 100000), 18, BotTypeMax); capped != BotTypeMax {
+		t.Fatalf("the wait must be capped, got %s", capped)
+	}
+	// Measured in RUNES, not bytes: a reply in a script with multi-byte
+	// characters is not slower to type than the same number of Latin letters.
+	if botDelay(strings.Repeat("é", 50), 18, BotTypeMax) !=
+		botDelay(strings.Repeat("e", 50), 18, BotTypeMax) {
+		t.Fatal("the wait must count characters, not bytes")
+	}
+}
+
+// ---- the key: write-once, and never readable -------------------------------
+
+func TestBotKeyIsWriteOnceAndNeverReadBack(t *testing.T) {
+	s, _ := newStore(t)
+	if set, err := s.BotKeySet(); err != nil || set {
+		t.Fatalf("a fresh database has no key: set=%v err=%v", set, err)
+	}
+	first, err := s.SetBotKeyOnce("sk-ant-first-key-000000000000")
+	if err != nil || !first {
+		t.Fatalf("the first set must take: first=%v err=%v", first, err)
+	}
+	// THE SECOND CALLER LOSES AND THE KEY DOES NOT MOVE. This is the whole
+	// protection the design has: a form that could be re-submitted could
+	// redirect the spending onto somebody else's account after the fact.
+	second, err := s.SetBotKeyOnce("sk-ant-second-key-11111111111")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if second {
+		t.Fatal("a second set reported success")
+	}
+	got, ok, err := s.BotKey()
+	if err != nil || !ok {
+		t.Fatal(err)
+	}
+	if got != "sk-ant-first-key-000000000000" {
+		t.Fatalf("the key was replaced: %q", got)
+	}
+}
+
+// ---- the bot end to end, against a fake model ------------------------------
+
+// fakeModel stands in for the API. It records what it was asked and answers
+// with whatever the test set.
+type fakeModel struct {
+	reply  string
+	in     int64
+	out    int64
+	calls  int
+	prompt string
+	system string
+}
+
+func (f *fakeModel) server(t *testing.T) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var req botAPIReq
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Errorf("bad request to the model: %v", err)
+		}
+		f.calls++
+		f.system = req.System
+		if len(req.Messages) > 0 {
+			f.prompt = req.Messages[0].Content
+		}
+		// The key must reach the vendor and nowhere else; asserted here because
+		// this is the only place that sees the outbound request.
+		if r.Header.Get("x-api-key") == "" {
+			t.Error("the request carried no key")
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{
+			"content": []map[string]any{{"type": "text", "text": f.reply}},
+			"usage":   map[string]any{"input_tokens": f.in, "output_tokens": f.out},
+		})
+	}))
+}
+
+func newBot(t *testing.T, s *Store, m *fakeModel) *Bot {
+	t.Helper()
+	srv := m.server(t)
+	t.Cleanup(srv.Close)
+	return &Bot{
+		Store: s, Key: "sk-ant-test-key-0000000000", Model: "test-model",
+		Endpoint: srv.URL, Chains: map[string]bool{"dev": true},
+		Site: "kourt.xyz", Repo: "github.com/jaekwon/cryptocourt",
+		ChainDocs: "docs.gno.land",
+		InPerMTok: 1_000_000, OutPerMTok: 5_000_000,
+		// No wait in tests: the delay is covered by TestBotDelay... as arithmetic,
+		// and a test that actually slept would be a slow test asserting a clock.
+		TypeCPS: 1e9, TypeMax: time.Nanosecond,
+	}
+}
+
+func TestBotAnswersASiteQuestionAsAnonAndRecordsWhatItSpent(t *testing.T) {
+	s, _ := newStore(t)
+	ctx := context.Background()
+	m := &fakeModel{reply: "Open the claim page and use the YES or NO button to stake.", in: 900, out: 30}
+	b := newBot(t, s, m)
+
+	if _, err := post(t, s, "orem", "ip-reader", "how do i stake on a claim?"); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.once(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if m.calls != 1 {
+		t.Fatalf("expected one model call, got %d", m.calls)
+	}
+
+	msgs, err := s.Recent(ctx, "dev", "orem", 0, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(msgs) != 2 {
+		t.Fatalf("expected the question and one answer, got %d", len(msgs))
+	}
+	reply := msgs[len(msgs)-1]
+	// AS anon, LIKE EVERYBODY ELSE. Asked for, and the reason the bot cannot know
+	// itself by name.
+	if reply.Moniker != "anon" {
+		t.Errorf("the bot must post as anon, got %q", reply.Moniker)
+	}
+	if !strings.Contains(reply.Body, "YES or NO") {
+		t.Errorf("the answer did not reach the room: %q", reply.Body)
+	}
+
+	// ...AND IT KNOWS THAT ROW IS ITS OWN, by id.
+	mine, err := s.BotReplyIDs(ctx, "dev", "orem", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !mine[reply.ID] {
+		t.Errorf("the bot did not record its own message id %d", reply.ID)
+	}
+
+	st, err := s.BotStats(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Replies != 1 || st.InTokens != 900 || st.OutTokens != 30 {
+		t.Errorf("accounting is wrong: %+v", st)
+	}
+	// 900 in at $1/Mtok and 30 out at $5/Mtok = 900 + 150 = 1050 micro-dollars.
+	if st.CostMicros != 1050 {
+		t.Errorf("cost should be 1050 micro-dollars, got %d", st.CostMicros)
+	}
+	if st.Model != "test-model" {
+		t.Errorf("the model should be reported: %q", st.Model)
+	}
+
+	// THE CONTEXT IT WAS GIVEN. The whole point of the prompt is that it can
+	// point at real places instead of inventing them.
+	for _, want := range []string{"kourt.xyz", "cryptocourt", "gno.land"} {
+		if !strings.Contains(m.system, want) {
+			t.Errorf("the system prompt never mentioned %q", want)
+		}
+	}
+}
+
+func TestBotPassesWithoutSpeakingAndTheSpendIsStillCounted(t *testing.T) {
+	s, _ := newStore(t)
+	ctx := context.Background()
+	m := &fakeModel{reply: "PASS", in: 700, out: 3}
+	b := newBot(t, s, m)
+
+	if _, err := post(t, s, "orem", "ip-reader", "is staking a scam or how does it work?"); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.once(ctx); err != nil {
+		t.Fatal(err)
+	}
+	msgs, _ := s.Recent(ctx, "dev", "orem", 0, 50)
+	if len(msgs) != 1 {
+		t.Fatalf("a PASS must not post: %d messages", len(msgs))
+	}
+	// A PASS IS STILL CHARGED FOR THE INPUT, so a page that showed only
+	// successful replies would understate the bill. Counted, with no reply.
+	st, _ := s.BotStats(ctx)
+	if st.InTokens != 700 {
+		t.Errorf("the input spend was not recorded: %+v", st)
+	}
+	if st.CostMicros != 715 {
+		t.Errorf("cost should be 700 + 15 = 715, got %d", st.CostMicros)
+	}
+}
+
+func TestBotSpeaksOncePerGapAcrossEveryRoom(t *testing.T) {
+	s, clock := newStore(t)
+	ctx := context.Background()
+	m := &fakeModel{reply: "Open a claim from the docket to stake on it.", in: 100, out: 10}
+	b := newBot(t, s, m)
+	b.MinGap = time.Minute
+
+	if _, err := post(t, s, "orem", "ip-a", "how do i stake?"); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.once(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	// A SECOND QUESTION, IN A DIFFERENT ROOM, INSIDE THE GAP. The throttle is
+	// global on purpose: two rooms are not two allowances.
+	*clock = clock.Add(5 * time.Second)
+	if _, err := post(t, s, "ledger", "ip-b", "how does voting work?"); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.once(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := s.Recent(ctx, "dev", "ledger", 0, 50); len(got) != 1 {
+		t.Fatalf("the bot spoke twice inside its gap: %d messages in the second room", len(got))
+	}
+
+	// PAST THE GAP IT MAY SPEAK AGAIN — but the question it would have answered
+	// has been consumed by the watermark, which is deliberate: a question that
+	// waited out the throttle is stale, and MaxAge says so. A new one is answered.
+	*clock = clock.Add(2 * time.Minute)
+	if _, err := post(t, s, "ledger", "ip-b", "what does settled NO mean?"); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.once(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := s.Recent(ctx, "dev", "ledger", 0, 50); len(got) != 3 {
+		t.Fatalf("expected two questions and one answer, got %d", len(got))
+	}
+}
+
+// THE THROTTLE IS READ FROM THE DATABASE, so a restart cannot hand the bot a
+// fresh allowance. Asserted by building a second Bot — a new process, as far as
+// this state is concerned — and watching it stay quiet.
+func TestBotThrottleSurvivesARestart(t *testing.T) {
+	s, _ := newStore(t)
+	ctx := context.Background()
+	m := &fakeModel{reply: "The docket lists every claim in a court.", in: 50, out: 8}
+	b := newBot(t, s, m)
+	b.MinGap = time.Minute
+
+	if _, err := post(t, s, "orem", "ip-a", "where is the docket?"); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.once(ctx); err != nil {
+		t.Fatal(err)
+	}
+
+	fresh := newBot(t, s, m)
+	fresh.MinGap = time.Minute
+	if _, err := post(t, s, "orem", "ip-c", "and how do i stake there?"); err != nil {
+		t.Fatal(err)
+	}
+	if err := fresh.once(ctx); err != nil {
+		t.Fatal(err)
+	}
+	msgs, _ := s.Recent(ctx, "dev", "orem", 0, 50)
+	// two questions, one answer
+	if len(msgs) != 3 {
+		t.Fatalf("a restart reset the throttle: %d messages", len(msgs))
+	}
+}
+
+func TestBotAnswersAGreetingOnlyWhenTheRoomWasQuiet(t *testing.T) {
+	s, clock := newStore(t)
+	ctx := context.Background()
+	m := &fakeModel{reply: "Hello — ask away if you have a question about the site.", in: 60, out: 12}
+	b := newBot(t, s, m)
+	b.GreetAfter = 30 * time.Minute
+
+	// A GREETING INTO A LIVE CONVERSATION IS AIMED AT THE PEOPLE IN IT. Two
+	// people are already talking, so the hello needs nothing from the site.
+	if _, err := post(t, s, "orem", "ip-a", "the canvass PDF says twelve thousand"); err != nil {
+		t.Fatal(err)
+	}
+	*clock = clock.Add(10 * time.Second)
+	if _, err := post(t, s, "orem", "ip-b", "hello"); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.once(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if m.calls != 0 {
+		t.Fatalf("the bot answered a greeting in a busy room (%d calls)", m.calls)
+	}
+
+	// THE SAME WORD INTO A ROOM WHERE NOTHING HAS HAPPENED is somebody checking
+	// whether anyone is there, and leaving it unanswered is the worst version of
+	// this feature.
+	*clock = clock.Add(2 * time.Hour)
+	if _, err := post(t, s, "ledger", "ip-c", "hi"); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.once(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if m.calls != 1 {
+		t.Fatalf("the bot ignored a greeting in a quiet room (%d calls)", m.calls)
+	}
+	msgs, _ := s.Recent(ctx, "dev", "ledger", 0, 50)
+	if len(msgs) != 2 || msgs[len(msgs)-1].Moniker != "anon" {
+		t.Fatalf("the greeting was not answered as anon: %+v", msgs)
+	}
+	// THE MODEL HAS TO BE TOLD, or its standing instruction to PASS on anything
+	// that is not a site question makes it refuse the very thing it was woken for.
+	if !strings.Contains(m.prompt, "greeting") {
+		t.Errorf("the greeting was not framed as one: %q", m.prompt)
+	}
+}
+
+func TestBotConsidersAMessageOnce(t *testing.T) {
+	s, clock := newStore(t)
+	ctx := context.Background()
+	m := &fakeModel{reply: "PASS", in: 10, out: 1}
+	b := newBot(t, s, m)
+	b.MinGap = time.Minute
+
+	if _, err := post(t, s, "orem", "ip-a", "how do i stake?"); err != nil {
+		t.Fatal(err)
+	}
+	// THE CLOCK MOVES PAST THE GAP BETWEEN PASSES, and that is the whole point of
+	// this test rather than an incidental detail. Without it the throttle is what
+	// holds the call count at one and the watermark is never exercised at all:
+	// MEASURED, by breaking the watermark on purpose and watching this pass. A
+	// test that cannot fail for the reason it names is not a test.
+	for i := 0; i < 4; i++ {
+		if err := b.once(ctx); err != nil {
+			t.Fatal(err)
+		}
+		*clock = clock.Add(2 * time.Minute)
+	}
+	// THE WATERMARK MOVES WHETHER OR NOT WE SPEAK. Without that, every tick
+	// re-examines the same question forever and pays for it every time.
+	if m.calls != 1 {
+		t.Fatalf("the same message was considered %d times", m.calls)
+	}
+}
+
+// A FIRST RUN AGAINST A BUSY DATABASE MUST NOT ANSWER THE BACKLOG. The oldest
+// question in a room is the last thing worth answering, and answering it
+// announces that nobody was listening at the time.
+// A FRESH BOT MUST NOT ANSWER A BACKLOG, but it must answer what is happening
+// now. Both halves, because the first version of the rule bought the first at
+// the cost of the second: it started at max(id), so the newest message in a room
+// it had never seen — the one it was started for — was marked considered.
+func TestBotSkipsTheBacklogButNotThePresent(t *testing.T) {
+	s, clock := newStore(t)
+	ctx := context.Background()
+	// Three old questions, spaced past MinInterval so the store takes them.
+	for i := 0; i < 3; i++ {
+		if _, err := post(t, s, "orem", "ip-old", "how do i stake on a claim?"); err != nil {
+			t.Fatal(err)
+		}
+		*clock = clock.Add(3 * time.Second)
+	}
+	// ...and then an hour passes, which puts all three past MaxAge.
+	*clock = clock.Add(time.Hour)
+
+	m := &fakeModel{reply: "PASS", in: 10, out: 1}
+	b := newBot(t, s, m)
+	if err := b.once(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if m.calls != 0 {
+		t.Fatalf("a fresh bot answered the backlog (%d calls)", m.calls)
+	}
+
+	// THE VERY NEXT THING SAID IS ITS BUSINESS. This is the half the old rule
+	// broke, and on a live site it was every room's first question.
+	*clock = clock.Add(5 * time.Second)
+	if _, err := post(t, s, "orem", "ip-new", "where do i see the docket?"); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.once(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if m.calls != 1 {
+		t.Fatalf("a fresh bot ignored a live question (%d calls)", m.calls)
+	}
+}
+
+// AND THE FIRST MESSAGE EVER IN A ROOM IS ANSWERABLE, which is the same bug seen
+// from the other side: a room with no history at all had nothing to set a
+// watermark from, and max(id) made that watermark the message itself.
+func TestBotAnswersTheFirstThingEverSaidInARoom(t *testing.T) {
+	s, _ := newStore(t)
+	ctx := context.Background()
+	m := &fakeModel{reply: "The docket is the list on a court page.", in: 40, out: 9}
+	b := newBot(t, s, m)
+	if _, err := post(t, s, "ledger", "ip-first", "how does the docket work?"); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.once(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if m.calls != 1 {
+		t.Fatalf("the first question in a new room went unanswered (%d calls)", m.calls)
+	}
+}
