@@ -105,6 +105,31 @@ const {PAGE, demoPage} = require('./harness');
      URLs take. */
   ok("...and keeps the query string", /location\.search/.test(boot), boot.slice(-160));
 
+  /* ---- and the trailing slash, which is a different defect ----------------
+     /covid/ resolved to the right route and STILL had no chat panel. The two
+     script tags are relative, so the document's own URL decides what they point
+     at: at /covid/ the base is /covid/ and chat.js is fetched from
+     /covid/chat.js, which nginx answers with the fallback — the page loads
+     ITSELF as JavaScript, mountChat never exists, and the court has no chat.
+     Measured on the deployed site: panel:false, input:false.
+     STRIPPED ABOVE THE SCRIPT TAGS, because by the time the adopt block runs the
+     wrong script has already been fetched — so this is checked by POSITION, not
+     only by presence. */
+  const strip = src.indexOf('/\\/$/.test(location.pathname)');
+  const firstTag = src.indexOf('<script src="chat.js">');
+  ok("the trailing slash is stripped", strip > 0, "no trailing-slash guard at all");
+  ok("...before chat.js is asked for", strip > 0 && firstTag > strip,
+     `guard at ${strip}, script tag at ${firstTag}`);
+  /* A REAL NAVIGATION, because the base URL is fixed when the document is
+     fetched: replaceState would correct the address bar and leave every relative
+     src still pointing into /covid/. */
+  ok("...with a navigation, since replaceState cannot move the base",
+     /location\.replace\(location\.pathname\.replace/.test(src));
+  /* AND file:// IS EXEMPT. Every browser check here runs from a file:// path
+     ending in index.html; rewriting that would point the page at
+     file:///chat.js and take the whole suite out. */
+  ok("...and file:// is left alone", /location\.protocol !== "file:"/.test(src));
+
   ok("the page threw nothing while doing all that", errs.length === 0, errs.join(" | "));
   await browser.close();
   console.log(fail ? "\n" + fail + " FAILURES" : "\nALL PASS");
