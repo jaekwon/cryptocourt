@@ -320,7 +320,21 @@ func migrate(w *sql.DB) error {
 	}
 	// Nullable with no default, because NULL is the meaningful value: a freeze that has not
 	// been lifted. A NOT NULL DEFAULT 0 would have worked too and reads worse at every query.
-	return ensureColumn(w, "frozen", "lifted_at", "INTEGER")
+	if err := ensureColumn(w, "frozen", "lifted_at", "INTEGER"); err != nil {
+		return err
+	}
+	/* THE HELPER'S OUTCOMES BECAME THREE. `kind` replaces an inference from the
+	   sign of msg_id, which could tell "spoke" from "had nothing to add" and
+	   could not tell either from "written, billed, and refused by the room".
+	   THE BACKFILL IS CORRECT BECAUSE OF WHEN IT RUNS. On a database written by
+	   the older code a negative msg_id meant a pass and nothing else, so that is
+	   what those rows are. The default handles the positive ones. Idempotent: a
+	   second run finds the column already there and does nothing. */
+	if err := ensureColumn(w, "bot_replies", "kind", "TEXT NOT NULL DEFAULT 'spoke'"); err != nil {
+		return err
+	}
+	_, err := w.Exec(`UPDATE bot_replies SET kind='pass' WHERE msg_id < 0 AND kind='spoke'`)
+	return err
 }
 
 func ensureColumn(w *sql.DB, table, col, decl string) error {

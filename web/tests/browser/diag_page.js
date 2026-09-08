@@ -27,6 +27,7 @@ const PAYLOAD = {
     replies: 9, passes: 4, last_at: 1757000000,
     in_tokens: 12345, out_tokens: 678, cost_micros: 15735,
     failures: 6, last_fail_at: 1757000900, fail_kind: "refused",
+    undelivered: 2,
   },
 };
 
@@ -98,7 +99,7 @@ const SECRET = "sk-ant-must-never-be-rendered-0001";
   const wants = {
     "Holding now": "4", "Most at once": "11", "Rooms active": "2",
     "Messages, last hour": "37", "Answered": "9", "Passed on": "4",
-    "Calls failed": "6 · refused",
+    "Calls failed": "6 · refused", "Not delivered": "2",
   };
   for (const [label, want] of Object.entries(wants)) {
     ok(`"${label}" reads ${want}`, cells[label] === want,
@@ -119,6 +120,13 @@ const SECRET = "sk-ant-must-never-be-rendered-0001";
   ok("...and the tokens are reported as counted, both directions",
      /12,345 in/.test(cells["Tokens"] || "") && /678 out/.test(cells["Tokens"] || ""),
      JSON.stringify(cells["Tokens"]));
+
+  /* AND AN UNDELIVERED REPLY IS ITS OWN ROW, not folded into the passes. It was
+     reported as a pass once — the outcome that needs no attention — for a reply
+     that had been written, billed, and refused by the room. */
+  ok("a reply the room refused is reported apart from a pass",
+     cells["Not delivered"] === "2" && cells["Passed on"] === "4"
+     && cells["Not delivered"] !== cells["Passed on"], JSON.stringify(cells));
 
   /* A FAILING HELPER IS VISIBLE AS ONE. Without this row a refused key read
      exactly like an idle helper — every other number zero — on the page whose

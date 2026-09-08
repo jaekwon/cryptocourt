@@ -101,6 +101,13 @@ type botStats struct {
 	Failures   int64  `json:"failures"`
 	LastFailAt int64  `json:"last_fail_at,omitempty"`
 	FailKind   string `json:"fail_kind,omitempty"`
+
+	// Undelivered is replies that were written and BILLED and that the room then
+	// refused — a court frozen between the scan and the post, or the cross-court
+	// duplicate rule. Counted apart from Passes because the two could not be
+	// further apart in what they ask of an operator: one is the helper working
+	// as designed, the other is the helper paying for words nobody read.
+	Undelivered int64 `json:"undelivered"`
 }
 
 // The two words FailKind may take. A closed set, so nothing the vendor said can
@@ -130,10 +137,28 @@ CREATE TABLE IF NOT EXISTS bot_replies (
   out_tokens INTEGER NOT NULL DEFAULT 0,
   -- micro-dollars, integer. See botStats.
   cost_micros INTEGER NOT NULL DEFAULT 0,
+  -- WHAT BECAME OF THE CALL, and it is a column rather than a sign on msg_id
+  -- because there turned out to be three outcomes and not two. See botKind*.
+  kind       TEXT    NOT NULL DEFAULT 'spoke',
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS bot_replies_when ON bot_replies(created_at);
 `
+
+// WHAT BECAME OF A CALL THAT WAS BILLED. Three outcomes, not two.
+//
+// The first version had two and inferred them from the sign of msg_id, which was
+// fine while a call either spoke or had nothing to add. It is not fine now:
+// MEASURED, a reply the STORE refused — the cross-court duplicate rule, at the
+// third court, with the same short greeting — was recorded as a pass. So the
+// page reported "had nothing to add" for a reply that had been written, billed
+// at 300 micro-dollars, and never delivered to the room. That is the one outcome
+// an operator most needs to see, reported as the one that needs no attention.
+const (
+	botKindSpoke       = "spoke"
+	botKindPass        = "pass"        // the model answered PASS: nothing to add
+	botKindUndelivered = "undelivered" // written and billed, and the room refused it
+)
 
 // botKeyMetaK is the meta row the key lives in.
 const botKeyMetaK = "bot_api_key"
@@ -257,9 +282,9 @@ func (s *Store) RecordBotReply(ctx context.Context, chain, court string, msgID i
 	model string, inTok, outTok, costMicros int64) error {
 	_, err := s.w.ExecContext(ctx,
 		`INSERT OR IGNORE INTO bot_replies
-		   (msg_id, chain, court, model, in_tokens, out_tokens, cost_micros, created_at)
-		 VALUES (?,?,?,?,?,?,?,?)`,
-		msgID, chain, court, model, inTok, outTok, costMicros, s.Now().Unix())
+		   (msg_id, chain, court, model, in_tokens, out_tokens, cost_micros, kind, created_at)
+		 VALUES (?,?,?,?,?,?,?,?,?)`,
+		msgID, chain, court, model, inTok, outTok, costMicros, botKindSpoke, s.Now().Unix())
 	return err
 }
 
@@ -291,10 +316,10 @@ func (s *Store) BotReplyIDs(ctx context.Context, chain, court string, since int6
 // BotStats totals the table for the diagnostics page.
 func (s *Store) BotStats(ctx context.Context) (botStats, error) {
 	var (
-		st                  botStats
-		last, in, out, cost sql.NullInt64
-		spoke, passed       sql.NullInt64
-		model               sql.NullString
+		st                         botStats
+		last, in, out, cost        sql.NullInt64
+		spoke, passed, undelivered sql.NullInt64
+		model                      sql.NullString
 	)
 	/* THE TOKENS ARE EVERY ROW AND THE REPLIES ARE NOT, which is the whole point
 	   of these three sums being asked for together. A call that answered PASS
@@ -303,23 +328,27 @@ func (s *Store) BotStats(ctx context.Context) (botStats, error) {
 	   id of the message it wrote, and a call that wrote nothing carries a
 	   negative placeholder — see recordBotSpend for why negative. */
 	err := s.r.QueryRowContext(ctx,
-		`SELECT sum(CASE WHEN msg_id > 0 THEN 1 ELSE 0 END),
-		        sum(CASE WHEN msg_id < 0 THEN 1 ELSE 0 END),
-		        max(CASE WHEN msg_id > 0 THEN created_at END),
+		`SELECT sum(CASE WHEN kind=? THEN 1 ELSE 0 END),
+		        sum(CASE WHEN kind=? THEN 1 ELSE 0 END),
+		        sum(CASE WHEN kind=? THEN 1 ELSE 0 END),
+		        max(CASE WHEN kind=? THEN created_at END),
 		        sum(in_tokens), sum(out_tokens), sum(cost_micros)
-		   FROM bot_replies`).Scan(&spoke, &passed, &last, &in, &out, &cost)
+		   FROM bot_replies`,
+		botKindSpoke, botKindPass, botKindUndelivered, botKindSpoke).
+		Scan(&spoke, &passed, &undelivered, &last, &in, &out, &cost)
 	if err != nil {
 		return st, err
 	}
 	// The model most recently used, so the page reports what is actually running
 	// rather than what a flag said at some point.
 	if err := s.r.QueryRowContext(ctx,
-		`SELECT model FROM bot_replies WHERE msg_id > 0
+		`SELECT model FROM bot_replies WHERE kind='spoke'
 		   ORDER BY created_at DESC, msg_id DESC LIMIT 1`).
 		Scan(&model); err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return st, err
 	}
 	st.Replies, st.Passes, st.LastAt = spoke.Int64, passed.Int64, last.Int64
+	st.Undelivered = undelivered.Int64
 	if st.Failures, err = s.metaInt(ctx, botFailCountK); err != nil {
 		return st, err
 	}

@@ -621,7 +621,9 @@ func (b *Bot) answer(ctx context.Context, c botCandidate) error {
 		if errors.As(err, &bf) {
 			kind = bf.Kind
 		}
-		if rerr := b.Store.RecordBotFailure(ctx, kind); rerr != nil {
+		actx, done := acctCtx(ctx)
+		defer done()
+		if rerr := b.Store.RecordBotFailure(actx, kind); rerr != nil {
 			b.logf("chat bot: could not record a failed call: %v", rerr)
 		}
 		return err
@@ -632,7 +634,9 @@ func (b *Bot) answer(ctx context.Context, c botCandidate) error {
 	// would understate the bill.
 	if text == "" || strings.HasPrefix(strings.ToUpper(text), "PASS") {
 		b.logf("chat bot: passed on %s/%s (in=%d out=%d)", c.chain, c.court, in, out)
-		return b.Store.recordBotSpend(ctx, b.Model, in, out, b.costMicros(in, out))
+		actx, done := acctCtx(ctx)
+		defer done()
+		return b.Store.recordBotSpend(actx, b.Model, botKindPass, in, out, b.costMicros(in, out))
 	}
 	/* A GREETING IS CAPPED SHORT AND ANSWERED FAST; an answer gets the room's
 	   full limit and the full typing rate. Both halves were asked for, and it is
@@ -653,8 +657,15 @@ func (b *Bot) answer(ctx context.Context, c botCandidate) error {
 	if !b.pause(ctx, botWaitFor(text, c.greeting, b.cps(), b.typeMax())) {
 		// The context ended mid-pause. The spend already happened and is recorded;
 		// the message is simply never said, which is better than saying it into a
-		// process that is shutting down.
-		return b.Store.recordBotSpend(ctx, b.Model, in, out, b.costMicros(in, out))
+		// process that is shutting down. UNDELIVERED, for the same reason a
+		// refusal is: it was written and billed and nobody read it.
+		//
+		// THE DETACHED CONTEXT IS LOAD-BEARING HERE ABOVE ALL: this branch exists
+		// because ctx was cancelled, so writing through it recorded nothing.
+		actx, done := acctCtx(ctx)
+		defer done()
+		return b.Store.recordBotSpend(actx, b.Model, botKindUndelivered, in, out,
+			b.costMicros(in, out))
 	}
 	id, err := b.Store.Post(ctx, PostInput{
 		Chain: c.chain, Court: c.court,
@@ -665,8 +676,15 @@ func (b *Bot) answer(ctx context.Context, c botCandidate) error {
 		// A refused post is not an error worth stopping for: the room may have been
 		// frozen between the scan and now, or the phrase may have tripped the
 		// duplicate window. The spend still happened and is still recorded.
+		/* UNDELIVERED AND NOT A PASS. The model answered, we were billed, and the
+		   room refused the message — a court frozen between the scan and the
+		   post, or the duplicate rule. Reporting that as "nothing to add" hides
+		   the one outcome an operator can actually act on. */
 		b.logf("chat bot: post refused in %s/%s: %v", c.chain, c.court, err)
-		return b.Store.recordBotSpend(ctx, b.Model, in, out, b.costMicros(in, out))
+		actx, done := acctCtx(ctx)
+		defer done()
+		return b.Store.recordBotSpend(actx, b.Model, botKindUndelivered, in, out,
+			b.costMicros(in, out))
 	}
 	/* TELL THE ROOM. Ordered after the post and before the accounting: the
 	   readers are what the message is for, and a slow write to bot_replies must
@@ -675,7 +693,9 @@ func (b *Bot) answer(ctx context.Context, c botCandidate) error {
 		b.Wake(c.chain, c.court)
 	}
 	b.logf("chat bot: answered %s/%s as anon (in=%d out=%d)", c.chain, c.court, in, out)
-	return b.Store.RecordBotReply(ctx, c.chain, c.court, id, b.Model,
+	actx, done := acctCtx(ctx)
+	defer done()
+	return b.Store.RecordBotReply(actx, c.chain, c.court, id, b.Model,
 		in, out, b.costMicros(in, out))
 }
 
@@ -772,9 +792,14 @@ func (b *Bot) costMicros(in, out int64) int64 {
 	return (in*b.InPerMTok + out*b.OutPerMTok) / 1_000_000
 }
 
-// recordBotSpend files a call that produced no message — a PASS, or a post the
-// store refused. Charged, so counted.
-func (s *Store) recordBotSpend(ctx context.Context, model string, in, out, cost int64) error {
+// recordBotSpend files a call that was billed but put no message in a room, and
+// the KIND says which of the two that was.
+//
+// IT USED TO TAKE NEITHER, and both callers therefore landed in the same bucket:
+// a PASS and a post the store REFUSED were both reported as "had nothing to
+// add". MEASURED — the cross-court duplicate rule refused the third room's
+// greeting, and the page called it a pass. See botKindUndelivered.
+func (s *Store) recordBotSpend(ctx context.Context, model, kind string, in, out, cost int64) error {
 	// NEGATIVE IDS, descending, so these rows cannot collide with a message id and
 	// cannot be mistaken for one. BotReplyIDs only ever asks about ids above a
 	// watermark, which is never negative, so these are invisible to it — which is
@@ -790,9 +815,9 @@ func (s *Store) recordBotSpend(ctx context.Context, model string, in, out, cost 
 	}
 	_, err := s.w.ExecContext(ctx,
 		`INSERT INTO bot_replies
-		   (msg_id, chain, court, model, in_tokens, out_tokens, cost_micros, created_at)
-		 VALUES (?,'','',?,?,?,?,?)`,
-		id, model, in, out, cost, s.Now().Unix())
+		   (msg_id, chain, court, model, in_tokens, out_tokens, cost_micros, kind, created_at)
+		 VALUES (?,'','',?,?,?,?,?,?)`,
+		id, model, in, out, cost, kind, s.Now().Unix())
 	return err
 }
 
@@ -803,6 +828,20 @@ botFail carries WHICH KIND of nothing came back, so the diagnostics page can
 	words to a public page. The wrapped error is for the log, which is private;
 	only Kind reaches the payload.
 */
+/* ACCOUNTING OUTLIVES THE THING IT IS ACCOUNTING FOR.
+   Every write below records money that has ALREADY been spent, and several of
+   them are reached BECAUSE the context was cancelled — a shutdown during the
+   typing pause, a cancelled request. Handing that same cancelled context to the
+   INSERT meant the write failed and the spend was LOST: MEASURED, a reply
+   interrupted at shutdown left in_tokens at 0 for a call that had been billed
+   for 80. Silent, and in the direction that understates a bill.
+   WithoutCancel keeps the values and drops the cancellation; the timeout is so a
+   process that is stopping cannot be held open by a database that is not
+   answering. */
+func acctCtx(ctx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+}
+
 type botFail struct {
 	Kind string
 	Err  error

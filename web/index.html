@@ -18772,6 +18772,14 @@ function diagRows(d){
     rows.push(["Spent", diagCost(b.cost_micros),
       "At the prices this deployment was configured with. Those are operator "
       + "settings and not facts — the token counts above them are the reliable half."]);
+    /* WRITTEN, BILLED, AND NOBODY READ IT. Distinct from a pass because the two
+       ask opposite things of whoever is reading: a pass is the helper working as
+       designed, this is the helper paying for words that never reached a room —
+       a court frozen between the scan and the post, or the cross-court duplicate
+       rule. MEASURED: this was reported as a pass, which is the outcome that
+       needs no attention. */
+    if(b.undelivered > 0) rows.push(["Not delivered", b.undelivered,
+      "Answers that were written and charged for, and that the room then refused."]);
     /* THE FAILURES, AND THEY EARN THEIR PLACE. Without this row a helper whose
        key has been refused reads exactly like one nobody has asked anything —
        MEASURED: five rejected calls left every other number on this page at

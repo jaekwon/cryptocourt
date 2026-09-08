@@ -57,6 +57,7 @@ func TestDiagPublishesCountsAndNothingElse(t *testing.T) {
 		"enabled": true, "model": true, "replies": true, "passes": true,
 		"last_at": true, "in_tokens": true, "out_tokens": true, "cost_micros": true,
 		"failures": true, "last_fail_at": true, "fail_kind": true,
+		"undelivered": true,
 	}
 	if bot, ok := out["bot"].(map[string]any); ok {
 		for k := range bot {
@@ -393,6 +394,113 @@ func TestAFailureKindIsOneOfTwoWords(t *testing.T) {
 	// ...and the count still moved, because the number is the part that matters.
 	if st.Failures != 1 {
 		t.Errorf("the failure was dropped rather than recorded coarsely: %+v", st)
+	}
+}
+
+/*
+A REPLY THE ROOM REFUSED IS NOT A REPLY WITH NOTHING TO SAY.
+
+	MEASURED: with the same short greeting in three rooms, the cross-court
+	duplicate rule refuses the third — DupCourts is 2, so the third is the one
+	that trips — and the page reported passes=1. That is a reply which was
+	written, billed at 300 micro-dollars, and never delivered, shown to an
+	operator as the outcome that needs no attention. The two could not be further
+	apart in what they ask of somebody reading this page.
+*/
+func TestAnUndeliveredReplyIsNotCountedAsAPass(t *testing.T) {
+	srv, s, clock := newServer(t)
+	srv.BotEnabled = true
+	ctx := context.Background()
+	// One phrase, three rooms. The 40-character greeting cap makes this the
+	// likely shape rather than a contrived one.
+	m := &fakeModel{reply: "hey — what would you like to know?", in: 50, out: 10}
+	b := newBot(t, s, m)
+	b.MinGap = time.Minute
+	b.GreetAfter = 30 * time.Minute
+
+	for _, court := range []string{"orem", "ledger", "annex"} {
+		if _, err := post(t, s, court, "ip-r"+court, "hi"); err != nil {
+			t.Fatal(err)
+		}
+		if err := b.once(ctx); err != nil {
+			t.Fatal(err)
+		}
+		*clock = clock.Add(90 * time.Second)
+	}
+
+	// The third room got the greeting and no answer.
+	third, _ := s.Recent(ctx, "dev", "annex", 0, 50)
+	if len(third) != 1 {
+		t.Fatalf("expected the duplicate rule to refuse the third room, got %d messages "+
+			"— if DupCourts changed, this test is measuring nothing", len(third))
+	}
+
+	st, err := s.BotStats(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Undelivered != 1 {
+		t.Errorf("the refused reply should be one undelivered, got %+v", st)
+	}
+	if st.Passes != 0 {
+		t.Errorf("nothing passed here — the model answered every time: %+v", st)
+	}
+	if st.Replies != 2 {
+		t.Errorf("two rooms did get an answer: %+v", st)
+	}
+	// AND IT IS STILL IN THE BILL. The tokens were spent whatever became of the
+	// message; a cost that dropped undelivered replies would understate it.
+	if st.CostMicros != 300 {
+		t.Errorf("three billed calls at 100 each: %+v", st)
+	}
+	// It is also not a FAILURE: the model answered fine. Conflating the two would
+	// send an operator to the key when the fault is in the room.
+	if st.Failures != 0 {
+		t.Errorf("the model did not fail: %+v", st)
+	}
+}
+
+/*
+THE COLUMN ARRIVES ON AN EXISTING DATABASE, and the rows already in it are
+
+	read correctly. Before `kind` the outcome was inferred from the sign of
+	msg_id, so on an older database a negative id means a pass and nothing else —
+	which is what makes the backfill safe. Without it every old pass would read as
+	a reply, and the count of answers would jump on upgrade.
+*/
+func TestTheKindColumnBackfillsAnOlderDatabase(t *testing.T) {
+	s, _ := newStore(t)
+	ctx := context.Background()
+	// A row as the older code would have left it: negative id, and the column's
+	// default rather than a considered value.
+	if _, err := s.w.Exec(
+		`INSERT INTO bot_replies (msg_id, chain, court, model, in_tokens, out_tokens,
+		   cost_micros, kind, created_at) VALUES (-1,'','','m',10,1,11,'spoke',1)`); err != nil {
+		t.Fatal(err)
+	}
+	if err := migrate(s.w); err != nil {
+		t.Fatal(err)
+	}
+	st, err := s.BotStats(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Passes != 1 || st.Replies != 0 {
+		t.Errorf("an old negative-id row is a pass, not a reply: %+v", st)
+	}
+	// IDEMPOTENT: running it again must not move anything, and must not touch a
+	// row that has since been written with a considered kind.
+	if _, err := s.w.Exec(
+		`INSERT INTO bot_replies (msg_id, chain, court, model, in_tokens, out_tokens,
+		   cost_micros, kind, created_at) VALUES (-2,'','','m',5,1,6,'undelivered',2)`); err != nil {
+		t.Fatal(err)
+	}
+	if err := migrate(s.w); err != nil {
+		t.Fatal(err)
+	}
+	st, _ = s.BotStats(ctx)
+	if st.Undelivered != 1 || st.Passes != 1 {
+		t.Errorf("a second migration rewrote a considered kind: %+v", st)
 	}
 }
 

@@ -569,6 +569,57 @@ func TestAReaderSeesTheHelperAsSoonAsItSpeaks(t *testing.T) {
 	}
 }
 
+/*
+A REPLY INTERRUPTED BY SHUTDOWN WAS NEVER SAID, and must not be counted as
+
+	having been. The helper holds a reply back for as long as it would have taken
+	to type; if the process is stopping during that hold, the message is dropped —
+	which is right, saying it into a shutting-down process is worse. But the call
+	was billed, so it is recorded, and the KIND is what stops it inflating the
+	count of answers. MEASURED: recording it as "spoke" failed nothing until this
+	existed.
+*/
+func TestAReplyDroppedAtShutdownIsNotCountedAsSpoken(t *testing.T) {
+	s, _ := newStore(t)
+	m := &fakeModel{reply: "Open a claim from the docket to stake on it.", in: 80, out: 20}
+	b := newBot(t, s, m)
+	// A real hold, so there is a window to be interrupted in. The default rate
+	// would make this a nine-second test.
+	b.TypeCPS = 200
+	b.TypeMax = 3 * time.Second
+
+	if _, err := post(t, s, "orem", "ip-a", "how do i stake on a claim?"); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() { done <- b.once(ctx) }()
+	// Inside botReadPause, which is a second on its own, so the pause is
+	// certainly still running.
+	time.Sleep(150 * time.Millisecond)
+	cancel()
+	<-done
+
+	msgs, _ := s.Recent(context.Background(), "dev", "orem", 0, 50)
+	if len(msgs) != 1 {
+		t.Fatalf("the reply should never have been said: %d messages", len(msgs))
+	}
+	st, err := s.BotStats(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Replies != 0 {
+		t.Errorf("nothing was said, so nothing was answered: %+v", st)
+	}
+	if st.Undelivered != 1 {
+		t.Errorf("written, billed and never read is undelivered: %+v", st)
+	}
+	// AND THE BILL STILL HAS IT. The tokens were spent before the interruption.
+	if st.InTokens != 80 {
+		t.Errorf("the spend happened and must be counted: %+v", st)
+	}
+}
+
 func TestBotConsidersAMessageOnce(t *testing.T) {
 	s, clock := newStore(t)
 	ctx := context.Background()
