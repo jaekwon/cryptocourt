@@ -158,6 +158,15 @@ func sitePath(path string) string {
 		if parts[0] == helpPath {
 			return "#/"
 		}
+		// The parameters page differs from help in the one way that matters: the
+		// overlay HAS a counterpart for it, so the link can be exact rather than
+		// nearest-true. Named here because without an arm it falls through to
+		// "#/c/admin-params" — the court route, for a court that cannot exist,
+		// which is the very trap the comment above was written about. It shipped
+		// that way and a live page carried the broken link until this was added.
+		if parts[0] == adminParamsPath {
+			return "#/params"
+		}
 		return "#/c/" + parts[0]
 	}
 	switch parts[1] {

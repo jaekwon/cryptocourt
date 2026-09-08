@@ -160,6 +160,11 @@ func TestTheHeaderRoutesEachPageToItsCounterpart(cur realm, t *testing.T) {
 		// The help page is the realm's own and the overlay has no route for it,
 		// so it goes to the directory rather than to a court that cannot exist.
 		{helpPath, "https://kourt.xyz/#/"},
+		// THE PARAMETERS PAGE, and it must be the overlay's own route rather
+		// than "#/c/admin-params". Without its arm in sitePath the fallthrough
+		// builds a COURT link for a slug that can never exist — a dead link on
+		// a live page, which is exactly how this shipped before the arm existed.
+		{adminParamsPath, "https://kourt.xyz/#/params"},
 		// A malformed claim id is not a claim, so it routes to the court rather
 		// than fabricating a claim link.
 		{"sl3/notanumber", "https://kourt.xyz/#/c/sl3"},
