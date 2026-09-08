@@ -377,8 +377,18 @@ function chatPanelHtml(slug, moniker, note, heading) {
     + '<div class="chathead">'
     +   (heading === false ? ""
         : "<b>Chat</b> <span class=\"chatslug\">" + chatEsc(slug) + "</span>")
+    /* THE WARNING, AND THE BUTTON THAT PUTS IT AWAY.
+       It is the panel's one anti-scam affordance, so it is loud rather than
+       decorative — §6 measured what a plausible name is worth to a lure — and it
+       is dismissable, because a standing notice a reader has read ten times
+       stops being read at all and takes the space the transcript needs.
+       THE BUTTON IS INSIDE THE SPAN so one `hidden` removes both, and it carries
+       an aria-label because "×" alone tells a screen reader nothing about what
+       is being dismissed. */
     +   '<span class="chatwarn">names are unverified &mdash; nobody here is staff,'
-    +     " and nobody can move funds for you</span>"
+    +     " and nobody can move funds for you"
+    +     '<button class="chatwarnx" type="button"'
+    +       ' aria-label="dismiss this warning">&times;</button></span>'
     +   '<span class="chatdemo" hidden></span>'
     + "</div>"
     + '<ol class="chatlog" aria-live="polite"></ol>'
@@ -602,7 +612,30 @@ const CHATCSS = `
   font-size:.92em}
 .chathead{display:flex;align-items:baseline;gap:.5rem;flex-wrap:wrap;margin-bottom:.4rem}
 .chatslug{opacity:.6}
-.chatwarn{opacity:.6;font-size:.85em}
+/* THE WARNING IS THE ONE THING IN THIS HEAD THAT IS NOT DECORATION, and it read
+   as decoration: .85em at 60% opacity, dimmer than the court slug beside it. A
+   notice nobody can see is a notice nobody has been given, and this is the
+   panel's only defence against somebody calling themselves staff.
+   FULL OPACITY AND A WEIGHT, NOT A COLOUR. This file inherits its text colour on
+   purpose — it has no access to the page's tokens and must not grow a copy of
+   them — and the page it is embedded in has four themes. Opacity and weight are
+   the two levers that cannot fight any of them. */
+.chatwarn{opacity:1;font-size:.88em;font-weight:600}
+/* AND THE DISMISS, WHICH HAS TO BE HITTABLE. Padding rather than a bigger glyph,
+   so the × stays the size of the sentence it ends while the target is bigger
+   than the mark — the same lesson the name button in this file learned the hard
+   way, twice: a label that cannot be hit is a control that does not exist.
+   THE TARGET IS STATED, NOT DERIVED. The first version set .1rem of side padding
+   and rendered 11x12px while the comment beside it claimed 20; raising the
+   padding to .3rem gave 17x22, still a pixel short of what the check asked for.
+   Padding plus a glyph's advance width is not a size anybody can predict — a
+   min-width says the thing the comment means, and the browser check measures the
+   rendered box rather than trusting either of us. */
+.chatwarnx{background:none;border:0;color:inherit;font:inherit;font-weight:400;
+  cursor:pointer;opacity:.55;padding:.2rem;margin-left:.15rem;line-height:1;
+  min-width:1.25rem;min-height:1.25rem;
+  display:inline-flex;align-items:center;justify-content:center}
+.chatwarnx:hover,.chatwarnx:focus{opacity:1}
 /* max-height, not height: outside the rail this is still a panel on a page and
    must not grow without bound. Inside it, the rail's own flexing wins. */
 .chatlog{list-style:none;margin:0;padding:0;max-height:15rem;overflow-y:auto;
@@ -922,6 +955,33 @@ function mountChat(el, opts) {
    * already there to edit, which is what makes it a rename rather than a blank.
    * The submit path still treats a literal "anon" as no choice at all — see the
    * note there about storing a default the reader never made. */
+  /* THE WARNING'S DISMISSAL, REMEMBERED PER BROWSER.
+     WHY IT IS REMEMBERED AT ALL: the notice sits above a transcript that gets
+     zero pixels in a short rail, so a reader who has read it once is paying for
+     it with the only thing they came for. Dismissing it for this browser is the
+     smallest thing that helps.
+     WHY IT IS NOT REMEMBERED SERVER-SIDE: nothing here has sessions, and the one
+     identifier available is a hashed address — writing a reader's preference
+     against that would turn an anti-abuse key into a profile. localStorage is
+     the reader's own machine, which is where a reader's preference belongs.
+     GUARDED, like every other lookup in this file: a panel rendered by an older
+     shell has no button, and the mount must keep working rather than throw on
+     line one. Storage is guarded too — Safari in private browsing throws on
+     read, and a warning that cannot be dismissed is a better failure than a
+     chat that will not mount. */
+  const warnEl = el.querySelector(".chatwarn");
+  const WARNKEY = "kourt.chat.warnoff";
+  if (warnEl) {
+    let off = false;
+    try { off = window.localStorage.getItem(WARNKEY) === "1"; } catch (e) {}
+    warnEl.hidden = off;
+    const x = warnEl.querySelector(".chatwarnx");
+    if (x) x.addEventListener("click", () => {
+      warnEl.hidden = true;
+      try { window.localStorage.setItem(WARNKEY, "1"); } catch (e) {}
+    });
+  }
+
   const nameBtn = el.querySelector(".chatnamebtn");
   const nameShown = () => (nameEl.value.trim() || CHATDEFAULTNAME);
   const closeName = () => {
@@ -1222,12 +1282,29 @@ function mountChat(el, opts) {
          of a mount uses to skip the hold — and a withdrawal wants exactly that.
          Reusing it beats a second parameter threaded through chatFetch for the
          same effect.
-         AND A REFUSAL SAYS SO. deleted:0 means the rule said no — the newest
-         row is somebody else's, or already hidden by a moderator, or you have
-         withdrawn it once already. Silence there is indistinguishable from the
-         bug above, which is the state this was reported in. */
+         AND A REFUSAL DESCRIBES THE RULE, WHICH IS NOT THE SAME AS NAMING THE
+         REASON. deleted:0 means the rule said no, and the server returns that
+         one bit on purpose: a caller learns whether their own last message went
+         and nothing about anybody else's.
+         "NOTHING OF YOURS TO TAKE BACK" WAS THE FIRST WORDING AND IT WAS FALSE
+         from the reader's side. Reported as: "it says nothing of yours to take
+         back but the last chat was from a previous deployment from me". Measured
+         in the store: every one of the last six rows in that room WAS theirs,
+         and the three newest were already withdrawn — the newest ROW is a
+         tombstone, and the rule is "the newest row, if it is yours and still
+         visible", which refuses without walking backwards. That refusal is the
+         point (a cascade would let anybody erase their whole side of a
+         conversation one command at a time), but the sentence claimed the one
+         thing that was not true: that none of it was theirs.
+         So it states the rule instead. Every refusal this can see — a tombstone
+         on top, somebody else's line last, an empty room — is covered by it, and
+         it asserts nothing the client cannot know. */
       if (r.deleted !== undefined) {
-        if (!r.deleted) { note("nothing of yours to take back"); return; }
+        if (!r.deleted) {
+          note("nothing to take back — /delete removes the room's newest "
+             + "message, and only when it is yours and not already withdrawn");
+          return;
+        }
         first = true;
       }
       tick();
