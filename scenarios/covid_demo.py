@@ -1442,7 +1442,19 @@ s.expect("IsSetClaim", [SLUG, PENDING_CID], r"true", final=True)
 # reason the rest of this line is derived: a literal would encode whichever
 # claim happened to birth which set on the day it was written. A set a moderator
 # simply made carries 0, which is what .get's default says.
-_tree = ",".join(f"{FOLDER_ID[_p]}:{FOLDER_ID[_p[:-1]] if len(_p) > 1 else 0}:-"
+# THE FLAGS FIELD IS DERIVED TOO, and it was the last literal left in this line.
+# It said "-" for every row — no folder has a picture — while the seed itself
+# calls SetFolderImage on the Fauci folder a few hundred lines up, so FolderTree
+# answered "i" there and this expectation could never match. Caught on a
+# throwaway node; on the live host it would have been a twenty-minute reseed
+# ending in a failed expect.
+# That is exactly the failure the comment above warns about, one field over: a
+# check that looks precise while pinning something nobody builds. So the set of
+# picture-bearing folders is named here, beside the derivation that reads it, and
+# a second SetFolderImage in this scenario has to be added to it.
+FOLDER_IMGS = {FAUCI}
+_tree = ",".join(f"{FOLDER_ID[_p]}:{FOLDER_ID[_p[:-1]] if len(_p) > 1 else 0}"
+                 f":{'i' if _p in FOLDER_IMGS else '-'}"
                  f":{SET_CID.get(_p, 0)}"
                  for _p in sorted(SET_PATHS, key=lambda q: FOLDER_ID[q]))
 s.expect("FolderTree", [SLUG], _tree.replace("|", "[|]"), final=True)
