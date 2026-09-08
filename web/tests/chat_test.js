@@ -832,6 +832,96 @@ function mkDoc() {
        /could not send \(403\)/.test(empty.error), empty.error);
   }
 
+  /* ---- /delete has to be VISIBLE, not merely done ---------------------------
+     Reported as: "i typed /delete but it didn't remove it from my chat... after
+     i type /delete then type something else, then my previous text got replaced
+     with something else. but it didn't delete when i typed /delete immediately."
+     MEASURED THROUGH THE LIVE UI BEFORE CHANGING ANYTHING: the row was still on
+     screen 2s after /delete and gone by 8s. So the withdrawal always worked —
+     what failed was the repaint, and the reader's next message is what made it
+     visible, which is exactly the "replaced with something else" they saw.
+     WHY IT WAITED. The submit handler already called tick() straight away, but a
+     poll holds for CHATHOLD seconds until something NEWER than `seen` exists,
+     and hiding a row creates no new id. The server's wake cannot save it either:
+     it fires while the POST is being answered, before that poll has subscribed.
+     So the read blocked for the full hold and only then painted the window.
+     THE ASSERTION IS ON THE `wait` PARAMETER OF THE READ THAT FOLLOWS, not on
+     the log's contents — the stub decides what the log says next, so a content
+     assertion would pass on a build that still held for six seconds. The URL is
+     the only place the "read now" decision is observable. */
+  {
+    const row = (id, body) => ({id: id, moniker: "alice", body: body, country: "GB",
+                                suffix: "a1b2c3", created_at: Math.floor(Date.now() / 1000)});
+    const polls = () => FETCHES.filter(a => !(a[1] && a[1].method === "POST"))
+                               .map(a => String(a[0]));
+    FETCHES = [];
+    FETCH = async (url, init) => (init && init.method === "POST")
+      ? {ok: true, json: async () => ({deleted: 7})}
+      : {ok: true, json: async () => ({messages: [row(7, "take me back")],
+                                       you: {state: "ok"}, next: 7})};
+    const el = mkRoot();
+    const stop = mountChat(el, {cfg: {mode: "live", chat: "http://x"},
+                                court: "orem", chain: "dev"});
+    await tickMicro(); await tickMicro();
+    const n0 = polls().length;
+    el.k[".chatinput"].value = "/delete";
+    el.k[".chatform"].fire("submit");
+    await tickMicro(); await tickMicro(); await tickMicro();
+    const after = polls();
+    ok("a withdrawal is followed by a read", after.length > n0,
+       `${n0} polls before, ${after.length} after`);
+    /* A HOLD OF ZERO IS AN ABSENT `wait`, not `wait=0` — chatFetchUrl omits the
+       parameter rather than sending a zero, which is how "the first read does
+       not hold" above spells the same thing. Written as absence PLUS the poll's
+       own shape, so an empty or malformed URL cannot satisfy it: an absence
+       assertion on its own is true of every string that is not a poll. The
+       ablation confirms it is not vacuous — dropping `first = true` puts
+       `wait=6` on this very read. */
+    {
+      const last = after[after.length - 1] || "";
+      ok("...that does not hold for a message which will never come",
+         /\/api\/chat\/dev\/orem\?limit=50/.test(last) && !/[?&]wait=/.test(last), last);
+    }
+    ok("...and the composer is cleared like any other send",
+       el.k[".chatinput"].value === "");
+    stop();
+
+    // AND A REFUSAL IS NOT SILENCE. deleted:0 is the server's "the rule said no"
+    // — the newest row is somebody else's, or already hidden, or already
+    // withdrawn — and saying nothing there is indistinguishable from the bug
+    // above, which is the state this was reported in.
+    FETCHES = [];
+    FETCH = async (url, init) => (init && init.method === "POST")
+      ? {ok: true, json: async () => ({deleted: 0})}
+      : {ok: true, json: async () => ({messages: [row(9, "somebody else")],
+                                       you: {state: "ok"}, next: 9})};
+    const el2 = mkRoot();
+    const stop2 = mountChat(el2, {cfg: {mode: "live", chat: "http://x"},
+                                  court: "orem", chain: "dev"});
+    await tickMicro(); await tickMicro();
+    el2.k[".chatinput"].value = "/delete";
+    el2.k[".chatform"].fire("submit");
+    await tickMicro(); await tickMicro(); await tickMicro();
+    ok("a withdrawal that took nothing back says so",
+       /nothing of yours/i.test(el2.k[".chatnote"].textContent),
+       el2.k[".chatnote"].textContent);
+    stop2();
+
+    // The plumbing under both, asserted directly: an ordinary message answers
+    // {"id": N} and carries no `deleted` key at all, which is what lets the
+    // handler tell the two shapes apart.
+    FETCH = async (url, init) => (init && init.method === "POST")
+      ? {ok: true, json: async () => ({deleted: 11})}
+      : {ok: true, json: async () => ({messages: [], you: {state: "ok"}, next: 0})};
+    const del = await chatPost("http://x", "dev", "orem", "alice", "/delete");
+    ok("chatPost carries the withdrawal's id", del.ok === true && del.deleted === 11);
+    FETCH = async (url, init) => (init && init.method === "POST")
+      ? {ok: true, json: async () => ({id: 12})}
+      : {ok: true, json: async () => ({messages: [], you: {state: "ok"}, next: 0})};
+    const msg = await chatPost("http://x", "dev", "orem", "alice", "an ordinary line");
+    ok("...and a posted message carries none", msg.id === 12 && msg.deleted === undefined);
+  }
+
 
   /* ---- how the page decides there is a chat service at all -----------------
      This file evaluates chat.js whole and does not otherwise read index.html;

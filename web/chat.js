@@ -554,7 +554,14 @@ async function chatPost(base, chain, court, moniker, body) {
   });
   let d = null;
   try { d = await r.json(); } catch (e) { /* an error page is not JSON */ }
-  if (r.ok) return {ok: true, id: d && d.id};
+  /* THE WITHDRAWAL'S ANSWER IS CARRIED BACK, and it used to be dropped here.
+     A /delete is answered {"deleted": <id>} or {"deleted": 0} — the server's one
+     bit: your own last message went, or the rule said no. This returned only
+     `id`, which a withdrawal never carries, so the caller could not tell a
+     withdrawal from a message and could not tell a refusal from a success.
+     `deleted !== undefined` is what separates the two shapes: a posted message
+     answers {"id": N} and never carries this key at all. */
+  if (r.ok) return {ok: true, id: d && d.id, deleted: d ? d.deleted : undefined};
   /* A BODY THAT IS NOT JSON MEANS THIS NEVER REACHED THE CHAT, and saying so is
      the difference between a fixable message and a mystery. Reported as: "when
      i typed '/delete' it didn't delete my line above but said 403 could not
@@ -1199,6 +1206,30 @@ function mountChat(el, opts) {
     if (r.ok) {
       bodyEl.value = "";
       note("");
+      /* A WITHDRAWAL HAS NOTHING NEWER TO WAIT FOR, which is why /delete looked
+         broken. Reported as: "i typed /delete but it didn't remove it from my
+         chat... after i type /delete then type something else, then my previous
+         text got replaced" — the row did go, six to eight seconds later, and
+         the reader's next message is what made the repaint visible.
+         THE POLL WAS WAITING FOR A MESSAGE THAT WILL NEVER COME. tick() was
+         already called right here, but a poll holds for CHATHOLD seconds until
+         something NEWER than `seen` exists, and hiding a row creates no new id.
+         The server's wake cannot rescue it either: the wake fires while the POST
+         is being answered, before this poll has subscribed, so the read that
+         follows blocks for the whole hold and only then paints the window with
+         the row gone.
+         `first` IS THE EXISTING "READ NOW" PATH — the flag the very first poll
+         of a mount uses to skip the hold — and a withdrawal wants exactly that.
+         Reusing it beats a second parameter threaded through chatFetch for the
+         same effect.
+         AND A REFUSAL SAYS SO. deleted:0 means the rule said no — the newest
+         row is somebody else's, or already hidden by a moderator, or you have
+         withdrawn it once already. Silence there is indistinguishable from the
+         bug above, which is the state this was reported in. */
+      if (r.deleted !== undefined) {
+        if (!r.deleted) { note("nothing of yours to take back"); return; }
+        first = true;
+      }
       tick();
       return;
     }
