@@ -123,7 +123,7 @@ func main(cur realm) {
 // Output:
 // courts:             1
 // meta exists:        true
-// meta name:          Review Court
+// meta name:          Meta
 // meta symbol:        META
 // claims on meta:     0
 // admin is set:       false

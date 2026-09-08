@@ -38,7 +38,7 @@ const metaRealmPath = "gno.land/r/kourt/kourtv2"
 
 const (
 	metaPrefix   = "mod:"
-	metaCourtNm  = "Review Court"
+	metaCourtNm  = "Meta"
 	metaExecuted = "MetaExecuted"
 )
 

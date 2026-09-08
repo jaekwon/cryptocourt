@@ -1530,6 +1530,17 @@ def tree():
 for _who, _funds, _ in ACTORS:
     s.call(accounts[_who], "ClaimMetaFranchise", [])
 
+# AND THE META COURT SAYS WHAT ITS COIN IS, on chain rather than in the page.
+# The rule is a fact about the court, so it belongs in the court's own record —
+# asked for directly: "i thought this was supposed to be description of the court
+# on chain, not custom site language". Written by the seed so a reseed keeps it.
+# ONE PARAGRAPH, 240 CHARACTERS: mustCourtDesc refuses a newline and anything
+# longer, so this is measured rather than assumed.
+s.call(DEPLOYER, "SetCourtDesc", ["meta",
+       "This court's coin is not received for GNOT \u2014 it is earned. Every burn "
+       "for any other court's coin accrues here to whoever made it, one for one, "
+       "and waits as an entitlement until they claim it."])
+
 relations = []
 for a, b, kind, stance in REL:
     r = {"from": ids[a], "to": ids[b], "type": kind}
