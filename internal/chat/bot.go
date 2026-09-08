@@ -76,6 +76,22 @@ type Bot struct {
 	// Log receives one line per interesting event. Optional.
 	Log func(string, ...any)
 
+	// Wake tells the waiting readers that something was said. Server.Wake is the
+	// implementation.
+	//
+	// WITHOUT IT THE HELPER IS INVISIBLE FOR UP TO MaxWait, which is twenty
+	// seconds on the live site. MEASURED: the bot posted in 3ms and a reader
+	// holding a long poll did not see it until the poll expired 4 seconds later —
+	// the whole four, not a fraction of it. Every other writer here goes through
+	// the HTTP handler, which fires the pulse itself; the bot writes through the
+	// store, so nothing fired.
+	//
+	// That made the reply latency work pointless: a helper tuned to answer in
+	// 1.2s that a reader sees twenty seconds later has not answered in 1.2s.
+	//
+	// Optional like Subscribe, so a test can run the bot with no server attached.
+	Wake func(chain, court string)
+
 	// Subscribe, when set, hands back a channel that closes when anything is
 	// posted anywhere. Server.Subscribe is the implementation.
 	//
@@ -637,6 +653,12 @@ func (b *Bot) answer(ctx context.Context, c botCandidate) error {
 		// duplicate window. The spend still happened and is still recorded.
 		b.logf("chat bot: post refused in %s/%s: %v", c.chain, c.court, err)
 		return b.Store.recordBotSpend(ctx, b.Model, in, out, b.costMicros(in, out))
+	}
+	/* TELL THE ROOM. Ordered after the post and before the accounting: the
+	   readers are what the message is for, and a slow write to bot_replies must
+	   not sit between the message landing and anybody seeing it. */
+	if b.Wake != nil {
+		b.Wake(c.chain, c.court)
 	}
 	b.logf("chat bot: answered %s/%s as anon (in=%d out=%d)", c.chain, c.court, in, out)
 	return b.Store.RecordBotReply(ctx, c.chain, c.court, id, b.Model,

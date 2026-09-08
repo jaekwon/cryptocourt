@@ -3,6 +3,8 @@ package chat
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -496,6 +498,74 @@ func TestBotAnswersAGreetingOnlyWhenTheRoomWasQuiet(t *testing.T) {
 	// that is not a site question makes it refuse the very thing it was woken for.
 	if !strings.Contains(m.prompt, "greeting") {
 		t.Errorf("the greeting was not framed as one: %q", m.prompt)
+	}
+}
+
+/*
+A READER SEES THE HELPER AS SOON AS IT SPEAKS, not when their poll expires.
+
+	THE BUG THIS STANDS OVER, measured: the bot posted in 3ms and a reader holding
+	a long poll did not see it until the poll ran out four seconds later — the
+	whole four. On the live site MaxWait is twenty seconds. Every other writer
+	goes through the HTTP handler, which fires the pulse itself; the bot writes
+	through the store, so nothing fired, and a helper tuned to answer in 1.2s was
+	arriving twenty seconds late.
+	THROUGH A REAL SERVER AND A REAL GET, because the thing being tested is that
+	the waiter wakes — which is a property of the pulse, the handler and the bot
+	together, and none of it happens if the poll is faked.
+*/
+func TestAReaderSeesTheHelperAsSoonAsItSpeaks(t *testing.T) {
+	srv, s, _ := newServer(t)
+	ctx := context.Background()
+	m := &fakeModel{reply: "Open a claim from the docket to stake on it.", in: 40, out: 9}
+	b := newBot(t, s, m)
+	b.Wake = srv.Wake
+
+	if _, err := post(t, s, "orem", "ip-reader", "how do i stake on a claim?"); err != nil {
+		t.Fatal(err)
+	}
+	msgs, err := s.Recent(ctx, "dev", "orem", 0, 50)
+	if err != nil || len(msgs) == 0 {
+		t.Fatal(err)
+	}
+	top := msgs[len(msgs)-1].ID
+
+	ts := httptest.NewServer(srv.Routes())
+	defer ts.Close()
+
+	const wait = 4 * time.Second
+	held := make(chan time.Duration, 1)
+	go func() {
+		t0 := time.Now()
+		r, err := http.Get(fmt.Sprintf("%s/api/chat/dev/orem?wait=%d&seen=%d",
+			ts.URL, int(wait.Seconds()), top))
+		if err == nil {
+			io.Copy(io.Discard, r.Body)
+			r.Body.Close()
+		}
+		held <- time.Since(t0)
+	}()
+	// Let the poll settle into its wait, or it answers from the store before the
+	// bot has said anything and the test proves nothing.
+	time.Sleep(250 * time.Millisecond)
+
+	if err := b.once(ctx); err != nil {
+		t.Fatal(err)
+	}
+	took := <-held
+	// Generous, because this is a real HTTP round trip on a loaded test machine —
+	// but far below the wait, which is the only thing that distinguishes "woken"
+	// from "timed out". Without the wake this is the full four seconds.
+	if took > wait/2 {
+		t.Errorf("the reader waited %s for a message the bot posted at once; "+
+			"the poll was set to %s, so this timed out rather than woke",
+			took.Round(time.Millisecond), wait)
+	}
+	// ...AND THE MESSAGE IS ACTUALLY THERE. A wake with nothing behind it would
+	// satisfy the timing above and show the reader nothing.
+	after, _ := s.Recent(ctx, "dev", "orem", 0, 50)
+	if len(after) != 2 || after[len(after)-1].Moniker != "anon" {
+		t.Fatalf("the helper's reply is not in the room: %+v", after)
 	}
 }
 

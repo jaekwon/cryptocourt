@@ -301,6 +301,7 @@ func main() {
 			Site: *botSite, Repo: *botRepo, ChainDocs: *botDocs,
 			InPerMTok: *botIn, OutPerMTok: *botOut,
 			Subscribe: srv.Subscribe,
+			Wake:      srv.Wake,
 			Log:       lg.Printf,
 		}
 		go b.Run(context.Background())

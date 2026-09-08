@@ -246,3 +246,33 @@ func TestTheCountryHeaderWarningFiresOnlyWhereTheHeaderIsIgnored(t *testing.T) {
 		})
 	}
 }
+
+/*
+THE HELPER'S HOOKS ARE ACTUALLY WIRED, asked of main.go's SOURCE because that
+
+	is the one thing the package's own tests cannot reach: main() opens a
+	database, binds a port and never returns, so there is no seam to call it
+	through.
+	WHY IT IS WORTH A CHECK AT ALL. Bot.Wake and Bot.Subscribe are optional
+	fields — deliberately, so a test can run the helper with no server — and an
+	optional field that nothing sets fails silently and slowly. Wake is the
+	example: without it the bot posted in 3ms and a reader holding a long poll saw
+	nothing for the full twenty seconds of MaxWait. The bot's own tests pass
+	either way, because they set the field themselves.
+	ITS LIMITS, ADMITTED: this shows the lines are written, not that they run.
+*/
+func TestTheHelpersHooksAreWiredInMain(t *testing.T) {
+	src, err := os.ReadFile("main.go")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"Subscribe: srv.Subscribe", // so it reacts in about a second, not on a tick
+		"Wake:      srv.Wake",      // so the readers are told at once
+	} {
+		if !strings.Contains(string(src), want) {
+			t.Errorf("main.go does not wire %q — an unset optional hook fails "+
+				"silently, and this one costs a reader up to MaxWait", want)
+		}
+	}
+}
