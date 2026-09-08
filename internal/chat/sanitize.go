@@ -436,6 +436,52 @@ func fold(r rune) rune {
 // confusables, combining-mark noise, spacing and punctuation tricks, digit
 // substitution, and case. "ᏚᏟᎪᎷ", "s͡c͡a͡m", "S C A M" and "5cam" all reduce to
 // "scam", so a rule written once matches every spelling of it.
+// ClerkName is the helper's own name, and the one name a reader may not take.
+//
+// THE OWNER NAMED IT: "what do you want your name to be? one name" -> clerk,
+// "so say, 'i'm the clerk'". A court's clerk answers procedural questions,
+// judges nothing and takes no side, which is what this thing does — and it
+// reads as a ROLE rather than as a person, so nobody has to wonder whether they
+// are talking to one.
+const ClerkName = "clerk"
+
+// IsReservedName is whether a display name is the clerk's, however it is spelt.
+//
+// SKELETON, NOT EQUALITY, because equality defends nothing: "Clerk", "CLERK",
+// "c1erk", "cIerk" with a capital i, and "сlerk" with a Cyrillic es all read as
+// the clerk to somebody scanning a room, and only the last of those needs any
+// effort. Skeleton already folds case, digits, symbols, marks and the confusable
+// alphabets — it was built to catch "ᏚᏟᎪᎷ" — so this is one comparison in the
+// same currency the duplicate rule already uses.
+//
+// HOW GOOD THAT IS, stated plainly: the confusable table is hand-built and its
+// own doc says a miss is expected rather than surprising. So this REFUSES the
+// spellings it recognises and cannot promise to recognise every one. That is why
+// the clerk also calls out an impersonator who gets through — see
+// botImpersonation. A refusal is not a punishment and nothing here depends on
+// the table being exhaustive; the belt is this function and the braces are the
+// callout.
+func IsReservedName(s string) bool {
+	return nameSkeleton(s) == nameSkeleton(ClerkName)
+}
+
+// nameSkeleton is Skeleton plus the one fold a short NAME needs and a general
+// comparison must not have: capital I read as lowercase l.
+//
+// FOUND BY A TEST, not by reading. "cIerk" survived IsReservedName because
+// Skeleton lowercases AFTER folding, so the capital I became a plain i and
+// "cierk" is not "clerk" — and capital-I-for-l is the oldest Latin homoglyph
+// there is, the one nobody needs a Unicode chart for.
+//
+// NOT ADDED TO THE SHARED TABLE, deliberately. Skeleton also backs duplicate
+// detection and the scanner, where folding every i into an l would merge
+// unrelated sentences: "I said" and "l said" are not the same message. Here the
+// comparison is against a single five-letter word, so the fold has one place to
+// be wrong and it is cheap to check.
+func nameSkeleton(s string) string {
+	return strings.ReplaceAll(Skeleton(s), "i", "l")
+}
+
 func Skeleton(s string) string {
 	// NOT lowercased first. Folding has to happen before case does, because the
 	// table is keyed on the case each script actually uses — Cherokee's

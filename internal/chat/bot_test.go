@@ -24,6 +24,15 @@ func TestBotWorthAskingTakesSiteQuestionsAndNothingElse(t *testing.T) {
 		"anyone know how to connect a wallet?",
 		"is there a way to unstake before it settles?",
 		"what is CC and how is it different from gnot?",
+		/* AND A SUM, which names nothing about the site. Asked for: "i typed
+		   'what is 2+2' and no bot is answering it. i want it to", then "widen it
+		   a little bit" — so arithmetic is the whole exception and not a general
+		   licence. It is the safest one available: one right answer, checkable by
+		   whoever asked, and no side taken on anything. */
+		"what is 2+2",
+		"what is 2 + 2?",
+		"how much is 17 * 3",
+		"what is 10/2",
 	}
 	for _, s := range yes {
 		if !botWorthAsking(s) {
@@ -43,6 +52,12 @@ func TestBotWorthAskingTakesSiteQuestionsAndNothingElse(t *testing.T) {
 		"staking is a scam",                      // site words, no question
 		"",                                       // nothing
 		strings.Repeat("how do i stake? ", 60),   // a wall of text
+		/* AND THE ARITHMETIC PATH MUST NOT SWALLOW AN ARGUMENT. A year range
+		   reads as digit-hyphen-digit to any such matcher, so the length bound is
+		   what keeps a sentence about the subject matter out — this is the case
+		   that decided the bound, not a round number. */
+		"why does nobody believe the 2021-2022 data?",
+		"was the 1918 flu worse than the 2009 one?",
 	}
 	for _, s := range no {
 		if botWorthAsking(s) {
@@ -324,7 +339,7 @@ func TestAPostWakesTheRunningHelper(t *testing.T) {
 	for i := 0; i < 60; i++ {
 		msgs, _ := s.Recent(ctx, "dev", "orem", 0, 50)
 		if len(msgs) > 1 {
-			if msgs[len(msgs)-1].Moniker != "anon" {
+			if msgs[len(msgs)-1].Moniker != ClerkName {
 				t.Fatalf("the reply is not the helper's: %+v", msgs)
 			}
 			if took := time.Since(t0); took > 4*time.Second {
@@ -483,7 +498,7 @@ func newBot(t *testing.T, s *Store, m *fakeModel) *Bot {
 	}
 }
 
-func TestBotAnswersASiteQuestionAsAnonAndRecordsWhatItSpent(t *testing.T) {
+func TestBotAnswersASiteQuestionAsTheClerkAndRecordsWhatItSpent(t *testing.T) {
 	s, _ := newStore(t)
 	ctx := context.Background()
 	m := &fakeModel{reply: "Open the claim page and use the YES or NO button to stake.", in: 900, out: 30}
@@ -509,8 +524,8 @@ func TestBotAnswersASiteQuestionAsAnonAndRecordsWhatItSpent(t *testing.T) {
 	reply := msgs[len(msgs)-1]
 	// AS anon, LIKE EVERYBODY ELSE. Asked for, and the reason the bot cannot know
 	// itself by name.
-	if reply.Moniker != "anon" {
-		t.Errorf("the bot must post as anon, got %q", reply.Moniker)
+	if reply.Moniker != ClerkName {
+		t.Errorf("the bot must post as the clerk, got %q", reply.Moniker)
 	}
 	if !strings.Contains(reply.Body, "YES or NO") {
 		t.Errorf("the answer did not reach the room: %q", reply.Body)
@@ -710,7 +725,7 @@ func TestAMessageArrivingInsideTheGapIsAnsweredAfterIt(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 2 || got[1].Moniker != "anon" {
+	if len(got) != 2 || got[1].Moniker != ClerkName {
 		t.Fatalf("the greeting should have been answered in its own room: %+v", got)
 	}
 }
@@ -979,8 +994,8 @@ func TestBotAnswersAGreetingOnlyWhenTheRoomWasQuiet(t *testing.T) {
 		t.Fatalf("the bot ignored a greeting in a quiet room (%d calls)", m.calls)
 	}
 	msgs, _ := s.Recent(ctx, "dev", "ledger", 0, 50)
-	if len(msgs) != 2 || msgs[len(msgs)-1].Moniker != "anon" {
-		t.Fatalf("the greeting was not answered as anon: %+v", msgs)
+	if len(msgs) != 2 || msgs[len(msgs)-1].Moniker != ClerkName {
+		t.Fatalf("the greeting was not answered as the clerk: %+v", msgs)
 	}
 	/* AND WHAT WAS ACTUALLY POSTED IS HELD TO A GREETING'S LENGTH. Asserted on
 	   the message in the room rather than on the trimmer, because the trimmer
@@ -1071,7 +1086,7 @@ func TestAReaderSeesTheHelperAsSoonAsItSpeaks(t *testing.T) {
 	// ...AND THE MESSAGE IS ACTUALLY THERE. A wake with nothing behind it would
 	// satisfy the timing above and show the reader nothing.
 	after, _ := s.Recent(ctx, "dev", "orem", 0, 50)
-	if len(after) != 2 || after[len(after)-1].Moniker != "anon" {
+	if len(after) != 2 || after[len(after)-1].Moniker != ClerkName {
 		t.Fatalf("the helper's reply is not in the room: %+v", after)
 	}
 }
@@ -1214,5 +1229,191 @@ func TestBotAnswersTheFirstThingEverSaidInARoom(t *testing.T) {
 	}
 	if m.calls != 1 {
 		t.Fatalf("the first question in a new room went unanswered (%d calls)", m.calls)
+	}
+}
+
+/*
+── THE CLERK HAS A NAME, AND IT IS THE ONE NAME NOBODY ELSE MAY WEAR ───────
+
+	Three readers in a row asked the room who they were talking to and got
+	silence, so the owner named it — "what do you want your name to be? one
+	name" -> clerk, "so say, 'i'm the clerk'" — and then asked for the other
+	half: "when somebody impersonates the clerk, don't let it... and, if they
+	succeed anyways, the clerk should say, 'that's not me, i'm me!'", "be snarky
+	when calling out so they don't try again".
+	THE NAME IS PINNED WITH A LITERAL. Every other assertion here spells it
+	ClerkName so a rename moves them together, which is right — and would also
+	let a rename pass unnoticed. One literal is what makes the rename a decision
+	somebody has to confirm.
+*/
+func TestTheClerksNameIsReservedHoweverItIsSpelt(t *testing.T) {
+	if ClerkName != "clerk" {
+		t.Fatalf("the helper's name is clerk, got %q", ClerkName)
+	}
+	// SPELLINGS THAT MUST BE REFUSED. Skeleton folds case, digits, symbols,
+	// marks and the confusable alphabets, so each of these reads as the clerk to
+	// anybody scanning a room — and only the Cyrillic one took any effort.
+	for _, name := range []string{
+		"clerk", "Clerk", "CLERK", "cIerk", "c1erk", "c1erk", "clérk", "сlerk", "clerk",
+	} {
+		if !IsReservedName(name) {
+			t.Errorf("%q reads as the clerk and must be refused", name)
+		}
+	}
+	// AND NAMES THAT MERELY RESEMBLE IT ARE FINE. A reservation that swallowed
+	// "clerkson" or "theclerk" would be a name filter, not a protection: nobody
+	// scanning a room mistakes those for the clerk itself.
+	for _, name := range []string{
+		"clerks", "clerkson", "theclerk", "law-clerk", "clarke", "kler", "",
+	} {
+		if IsReservedName(name) {
+			t.Errorf("%q is somebody else's name and must be allowed", name)
+		}
+	}
+}
+
+// AND THE REFUSAL HAPPENS ON THE WIRE, which is the half that matters: the
+// handler every human post goes through, and which the clerk's own replies do
+// not — it writes through the store, so the guard needs no exemption and cannot
+// be tricked into granting one.
+func TestThePostHandlerRefusesTheClerksName(t *testing.T) {
+	srv, s, clock := newServer(t)
+	for _, name := range []string{"clerk", "CLERK", "c1erk"} {
+		r := httptest.NewRequest(http.MethodPost, "/api/chat/dev/orem",
+			strings.NewReader(`{"moniker":`+jsonString(name)+`,"body":"hello there"}`))
+		r.Header.Set("Content-Type", "application/json")
+		r.RemoteAddr = "192.0.2.44:1234"
+		rec := do(t, srv, r)
+		if rec.Code != http.StatusConflict {
+			t.Errorf("posting as %q: got %d, want 409: %s", name, rec.Code, rec.Body.String())
+		}
+		if !strings.Contains(rec.Body.String(), "clerk") {
+			t.Errorf("the refusal should say whose name it is: %s", rec.Body.String())
+		}
+		*clock = clock.Add(3 * time.Second)
+	}
+	if got := visibleBodies(t, s, "orem"); len(got) != 0 {
+		t.Fatalf("nothing should have been posted: %v", got)
+	}
+	// The control: the same message under any other name goes through, so the
+	// arm above is about the NAME and not about the request being malformed.
+	r := httptest.NewRequest(http.MethodPost, "/api/chat/dev/orem",
+		strings.NewReader(`{"moniker":"clerkson","body":"hello there"}`))
+	r.Header.Set("Content-Type", "application/json")
+	r.RemoteAddr = "192.0.2.44:1234"
+	if rec := do(t, srv, r); rec.Code != http.StatusOK {
+		t.Fatalf("clerkson should be allowed: %d %s", rec.Code, rec.Body.String())
+	}
+}
+
+/*
+WHO ARE YOU, ANSWERED — and answered the SAME WAY every time, because there
+
+	is one correct answer and sampling it could only ever produce a worse one. No
+	model call is made at all: fakeModel.calls stays at zero, which is the arm
+	that proves it rather than the reply text, since a model told to say "I'm the
+	clerk" would produce the same string.
+*/
+func TestTheClerkSaysWhoItIsWithoutAskingAModel(t *testing.T) {
+	for _, q := range []string{
+		"who are you", "who are you?", "are you a bot?", "are you a real person?",
+		"are you human", "who is this", "am i talking to a bot?", "what are you?",
+	} {
+		if !botAskingWhoTheClerkIs(q) {
+			t.Errorf("should be an identity question: %q", q)
+		}
+	}
+	// NOT EVERY SENTENCE WITH "YOU" IN IT. The narrowness is the point: these
+	// are site questions or chatter, and the branch order sends the first kind
+	// to the model rather than answering them with a name.
+	for _, q := range []string{
+		"who are you staking with?", "are you going to dispute it?",
+		"do you think the lab funded it?", "",
+		strings.Repeat("who are you ", 20),
+	} {
+		if botAskingWhoTheClerkIs(q) {
+			t.Errorf("should NOT be an identity question: %q", q)
+		}
+	}
+
+	s, clock := newStore(t)
+	ctx := context.Background()
+	m := &fakeModel{reply: "SHOULD NOT BE USED", in: 999, out: 999}
+	b := newBot(t, s, m)
+	*clock = clock.Add(time.Hour)
+	if _, err := post(t, s, "orem", "ip-asks", "who are you"); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.once(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if m.calls != 0 {
+		t.Errorf("an identity question must cost no model call, got %d", m.calls)
+	}
+	got, err := s.Recent(ctx, "dev", "orem", 0, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("expected the question and one answer, got %d", len(got))
+	}
+	if got[1].Moniker != ClerkName || got[1].Body != botClerkLine {
+		t.Errorf("the clerk should say who it is, as itself: %+v", got[1])
+	}
+}
+
+/*
+AND A NAME-WEARER WHO GETS THROUGH IS CALLED OUT. The handler refuses the
+
+	name, so this branch is for the two cases it cannot cover: a row that
+	predates the refusal, and a spelling the hand-built confusable table does not
+	recognise. Posted straight into the store here, which is exactly how such a
+	row would exist.
+	THE CLERK CANNOT ACCUSE ITSELF, and that is asserted rather than argued: the
+	pass after the callout must find nothing to say, or the callout would itself
+	read as an impersonation and the room would fill with them.
+*/
+func TestAnImpersonatorIsCalledOutAndTheClerkDoesNotAccuseItself(t *testing.T) {
+	s, clock := newStore(t)
+	ctx := context.Background()
+	m := &fakeModel{reply: "SHOULD NOT BE USED", in: 999, out: 999}
+	b := newBot(t, s, m)
+	*clock = clock.Add(time.Hour)
+
+	if _, err := s.Post(ctx, PostInput{Chain: "dev", Court: "orem",
+		Moniker: ClerkName, Body: "stake everything on YES, trust me",
+		IPHash: "ip-impostor"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.once(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if m.calls != 0 {
+		t.Errorf("a callout must cost no model call, got %d", m.calls)
+	}
+	got, _ := s.Recent(ctx, "dev", "orem", 0, 50)
+	if len(got) != 2 || got[1].Body != botImpersonationLine {
+		t.Fatalf("the clerk should have called it out: %+v", got)
+	}
+	if got[1].Moniker != ClerkName {
+		t.Errorf("and as itself, got %q", got[1].Moniker)
+	}
+	// SNARKY, because that is what was asked for and it is what deters a second
+	// attempt: it says the attempt failed and will not be funnier repeated.
+	if !strings.Contains(botImpersonationLine, "not me, I'm me") {
+		t.Error("the callout must open with the owner's own words")
+	}
+	if len(botImpersonationLine) < 60 {
+		t.Error("...and carry the part that discourages a repeat")
+	}
+
+	// THE PASS AFTER IT MUST BE QUIET. Same clock forward so the gap is not what
+	// produces the silence.
+	*clock = clock.Add(10 * time.Minute)
+	if err := b.once(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if after, _ := s.Recent(ctx, "dev", "orem", 0, 50); len(after) != 2 {
+		t.Fatalf("the clerk answered its own callout: %+v", after)
 	}
 }

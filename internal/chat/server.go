@@ -804,6 +804,22 @@ func (s *Server) post(w http.ResponseWriter, r *http.Request, chain, court strin
 		writeErr(w, http.StatusBadRequest, refusalText(fieldMoniker, err))
 		return
 	}
+	/* NOBODY MAY WEAR THE CLERK'S NAME. Asked for: "when somebody impersonates
+	   the clerk, don't let it".
+	   ENFORCED HERE, IN THE HANDLER, and that placement is the whole trick: every
+	   message a person sends arrives through this function, and the clerk's own
+	   replies do not — it writes through the store. So the check needs no
+	   exemption, no special case and no way to be tricked into exempting
+	   somebody, because the identity it protects is the one caller that never
+	   reaches this line.
+	   AFTER SanitizeMoniker, so padding and invisibles are already gone and the
+	   comparison sees the name the room would show. 409 rather than 400: the name
+	   is well formed, it is taken. */
+	if IsReservedName(moniker) {
+		writeErr(w, http.StatusConflict,
+			"that name belongs to the court's clerk — please pick another")
+		return
+	}
 	body, err := SanitizeBody(in.Body)
 	if err != nil {
 		writeErr(w, http.StatusBadRequest, refusalText(fieldBody, err))

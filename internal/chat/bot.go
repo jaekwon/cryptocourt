@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"regexp"
 	"runtime/debug"
 	"strings"
 	"time"
@@ -30,9 +31,16 @@ import (
 //  3. one reply per BotMinGap ACROSS ALL ROOMS, read from the database rather
 //     than from memory, so a crash loop cannot hand it a fresh allowance
 //
-// IT POSTS AS anon, like everybody else in the room — asked for, and the reason
-// it cannot know itself by name. It records the id of every message it writes,
-// so "was this mine" is a lookup and not a guess. See Store.BotReplyIDs.
+// IT POSTS AS THE CLERK, and it used to post as anon like everybody else. Both
+// were the owner's call: anon first, and then, when three readers in a row asked
+// the room who they were talking to and got silence, a name — "what do you want
+// your name to be? one name" -> clerk. A court's clerk answers procedural
+// questions, judges nothing and takes no side, and it reads as a role rather
+// than as a person, so nobody has to wonder whether they are talking to one.
+// THE NAME IS RESERVED, in the HTTP handler that every human post goes through
+// and this one does not: see IsReservedName. It records the id of every message
+// it writes, so "was this mine" is a lookup and not a guess — see
+// Store.BotReplyIDs.
 //
 // AND IT NEVER ANSWERS A REPLY OF ITS OWN, which the id table makes exact. The
 // failure that costs real money is a bot that answers itself: a reply becomes a
@@ -206,6 +214,23 @@ const (
 	   because a greeting's delay is the fixed botGreetWithin regardless of
 	   length — the "a hundred characters took four and a half seconds" reasoning
 	   above stopped applying to greetings when that beat became fixed. */
+	/* THE TWO THINGS THE CLERK SAYS WITHOUT ASKING A MODEL. Both are questions
+	   with exactly one correct answer, so sampling one would only ever be a way
+	   to get it wrong: a helper that says "I'm an AI assistant" one time and
+	   "I'm the clerk" the next has no identity at all, and a callout that
+	   paraphrases itself reads as another impersonator. Fixed text also costs
+	   nothing and cannot be talked into anything by whatever else is in the room.
+	   THE WORDS ARE THE OWNER'S: "so say, 'i'm the clerk'" and, for a name-wearer
+	   who gets through, "that's not me, i'm me!" — with the follow-up "be snarky
+	   when calling out so they don't try again", which is what the second half of
+	   that line is for. Dry rather than cruel: the room is a court, the clerk is
+	   part of the furniture, and a helper that sneers reads worse than one that is
+	   simply unimpressed. It says the thing that actually deters a repeat — that
+	   it did not work and is not funny — and then stops. */
+	botClerkLine         = "I'm the clerk. Ask me anything about how this site works."
+	botImpersonationLine = "That's not me, I'm me! Anyone can type a name in a box — " +
+		"nobody's fooled, and it won't be funnier the second time."
+
 	botGreetGrace   = 12
 	botGreetHardMax = botGreetMaxChars + botGreetGrace
 )
@@ -459,6 +484,9 @@ type botCandidate struct {
 	// which is answered on different terms: no site vocabulary is required of it,
 	// and the answer is a short line rather than an explanation.
 	greeting bool
+	// says, when set, is the exact line to post — and the signal that no model
+	// call is needed at all. See botClerkLine and botImpersonationLine.
+	says string
 	// transcript is the recent room, oldest first, for context.
 	transcript []string
 }
@@ -508,8 +536,33 @@ func (b *Bot) scan(ctx context.Context, chain, court string, now time.Time) (*bo
 			continue
 		}
 		switch {
+		/* SOMEBODY IS WEARING THE CLERK'S NAME. The handler refuses the name, so
+		   reaching this branch means either a row that predates the refusal or a
+		   spelling Skeleton did not recognise — and the owner asked for both
+		   halves: "when somebody impersonates the clerk, don't let it... and, if
+		   they succeed anyways, the clerk should say, 'that's not me, i'm me!'".
+		   THE CLERK CANNOT ACCUSE ITSELF, and that rests on the `mine[m.ID]` skip
+		   a few lines above: its own rows never reach this switch, so anything
+		   here that wears the name is not it. The body check is the belt for the
+		   one gap in that argument — a reply posted but never recorded in
+		   bot_replies, which takes a failed write that logs itself — and it stops
+		   a callout from being read as a fresh impersonation and answered again.
+		   FIRST, ahead of every other branch: what somebody typed matters less
+		   than who they are claiming to be while typing it. */
+		case IsReservedName(m.Moniker) && m.Body != botImpersonationLine:
+			best = &botCandidate{chain: chain, court: court, body: m.Body, at: at,
+				says: botImpersonationLine}
 		case botWorthAsking(m.Body):
 			best = &botCandidate{chain: chain, court: court, body: m.Body, at: at}
+		/* "WHO ARE YOU" IS A QUESTION WITH ONE ANSWER, and for three readers in a
+		   row it got silence: botWorthAsking wants a site word ("bot" and
+		   "person" are not site words) and botGreeting wants a bare hello, so an
+		   identity question fell between them and was dropped without a log line.
+		   AFTER botWorthAsking, so "who are you staking with?" stays a question
+		   about the site rather than being answered with a name. */
+		case botAskingWhoTheClerkIs(m.Body):
+			best = &botCandidate{chain: chain, court: court, body: m.Body, at: at,
+				says: botClerkLine}
 		case botGreeting(m.Body):
 			// A GREETING ONLY COUNTS IN A ROOM THAT HAD GONE QUIET, and the
 			// question is asked of the store rather than of the transcript: the
@@ -567,12 +620,20 @@ func botWorthAsking(body string) bool {
 			"how do i", "how does", "how can i", "what is", "what are", "what does",
 			"where do i", "where is", "why does", "can someone", "anyone know",
 			"is there a way", "help with", "i don't understand", "i dont understand",
+			// Added with the arithmetic path: both are plainly interrogative, and
+			// "how much is 17 * 3" was refused for want of an opening rather than
+			// for anything about what it asked.
+			"how much is", "how many",
 		} {
 			if strings.HasPrefix(s, p) || strings.Contains(s, " "+p) {
 				asks = true
 				break
 			}
 		}
+	}
+	// A BARE SUM NEEDS NO QUESTION SHAPE — see botPureSum.
+	if botPureSum(s) {
+		return true
 	}
 	if !asks {
 		return false
@@ -591,8 +652,54 @@ func botWorthAsking(body string) bool {
 			return true
 		}
 	}
-	return false
+	// ...OR BE A SUM. Reported: "i typed 'what is 2+2' and no bot is answering
+	// it. i want it to" — followed by "widen it a little bit" when the first
+	// attempt at this dropped the list above altogether.
+	return botArithmetic(s)
 }
+
+// botPureSum is a message that is nothing but a calculation: "2+2", "17 * 3",
+// "(4+5)/3". Worth answering without any interrogative shape at all, because
+// there is nothing else it could be asking for — and it is the one way to let a
+// bare sum through without letting prose that happens to contain a year range
+// buy a call.
+func botPureSum(s string) bool {
+	if s == "" || len(s) > 40 {
+		return false
+	}
+	return botOnlySum.MatchString(s) && botSumShape.MatchString(s)
+}
+
+var botOnlySum = regexp.MustCompile(`^[0-9\s+\-*/x×÷^%().=]+$`)
+
+/*
+A SELF-CONTAINED CALCULATION IS THE ONE THING WORTH ANSWERING THAT NAMES
+
+	NOTHING, and it is the whole of the widening — deliberately, because "a
+	little bit" is what was asked for and because arithmetic is the safest
+	possible exception: it has one right answer, it can be checked by the person
+	who asked, and answering it takes no side on anything.
+	WHY NOT SIMPLY ANSWER EVERY QUESTION. The first version of this removed the
+	site-word list, and a room arguing about virology would then have bought a
+	call per question to be told PASS. Worse, the questions in such a room are
+	exactly the ones the clerk must not answer: "who really funded the lab?" is
+	the subject matter of a claim, and an opinion on it from something that looks
+	like part of the site would be quoted as if it meant something.
+	DIGIT-OPERATOR-DIGIT, AND SHORT. The pattern alone is not enough: "the
+	2021-2022 data" reads as 1-2 to any such matcher, so the bound is what keeps a
+	year range in a sentence about the subject matter out. 40 characters holds
+	"what is 2+2" and "how much is 17 * 3" and excludes the arguments measured in
+	the test beside this.
+*/
+func botArithmetic(s string) bool {
+	if len(s) > 40 {
+		return false
+	}
+	return botSumShape.MatchString(s)
+}
+
+// A digit, an operator, a digit — with the spaces people actually type.
+var botSumShape = regexp.MustCompile(`[0-9]\s*[-+*/x×÷^%]\s*[0-9]`)
 
 // botGreeting is a bare hello and not much else.
 //
@@ -600,6 +707,84 @@ func botWorthAsking(body string) bool {
 // there a way to unstake" — that is a question and botWorthAsking already has
 // it. The length bound is the real filter: a greeting is a handful of
 // characters, so anything longer is a message that happens to open politely.
+// botAskingWhoTheClerkIs is somebody asking the room who they are talking to.
+//
+// THE GAP IT FILLS. botWorthAsking requires a site word, and "bot", "person" and
+// "human" are not site words; botGreeting requires a bare hello. So every way of
+// asking "are you a bot?" fell between the two and was dropped with no log line
+// at all. Measured on the live site: "who are you" and "are you a real person?
+// or are you a bot?" both got silence for 45 seconds while "what is kourt?" was
+// answered in 17 — and three real readers had already asked.
+//
+// DELIBERATELY NARROW, like the filters either side of it: a bounded length and
+// a list of shapes people actually type, so a paragraph that happens to contain
+// "who are you" does not buy a reply. It costs no API call either way — the
+// answer is fixed — but a room where the clerk introduces itself every few
+// messages would be its own kind of noise.
+func botAskingWhoTheClerkIs(body string) bool {
+	/* A QUESTION ABOUT THE SITE IS NOT A QUESTION ABOUT ME, and this line is
+	   what keeps the predicate honest on its own rather than only in the branch
+	   order below. "who are you staking with?" contains the shape "who are you"
+	   and is plainly a question about the room — the scan would send it to the
+	   model anyway, because botWorthAsking is checked first, but a predicate that
+	   claims it is a trap for the next caller. Found by its own test. */
+	if botWorthAsking(body) {
+		return false
+	}
+	s := strings.ToLower(strings.TrimSpace(body))
+	s = strings.Trim(s, ".!?,;:\u2026 ")
+	if s == "" || len(s) > 80 {
+		return false
+	}
+	s = strings.Join(strings.Fields(s), " ")
+	for _, shape := range []string{
+		"who are you", "who r u", "who is this", "who am i talking to",
+		"who are we talking to", "what are you",
+		"are you a bot", "are you a robot", "are you an ai", "are you ai",
+		"are you human", "are you a human", "are you a person",
+		"are you a real person", "are you real", "are you alive",
+		"is this a bot", "is this a person", "is this a real person",
+		"am i talking to a bot", "am i talking to a person", "bot or human",
+	} {
+		if strings.Contains(s, shape) {
+			return true
+		}
+	}
+	return false
+}
+
+// say posts a line the clerk did not have to ask anybody for.
+//
+// EVERYTHING EXCEPT THE MODEL CALL IS THE SAME as answering a question: the
+// typing pause, so it reads as a participant rather than a reflex; the room's
+// own Post, so the duplicate rule and a frozen court still apply; the wake, so
+// readers see it now; and the reply id, so the clerk never answers itself.
+// ZERO TOKENS AND ZERO COST, recorded as such. The row in bot_replies is what
+// the throttle reads, so a fixed line still spends the allowance — otherwise
+// "who are you" typed ten times would be ten replies — and the accounting stays
+// honest about a reply that cost nothing because nothing was bought.
+func (b *Bot) say(ctx context.Context, c botCandidate, line string) error {
+	if !b.pause(ctx, botWaitFor(line, true, b.cps(), b.typeMax())) {
+		return nil // shutting down; better unsaid than said into a dying process
+	}
+	id, err := b.Store.Post(ctx, PostInput{
+		Chain: c.chain, Court: c.court,
+		Moniker: ClerkName, Body: line,
+		IPHash: botIPHash,
+	})
+	if err != nil {
+		b.logf("chat bot: fixed line refused in %s/%s: %v", c.chain, c.court, err)
+		return nil
+	}
+	if b.Wake != nil {
+		b.Wake(c.chain, c.court)
+	}
+	b.logf("chat bot: said a fixed line in %s/%s as %s", c.chain, c.court, ClerkName)
+	actx, done := acctCtx(ctx)
+	defer done()
+	return b.Store.RecordBotReply(actx, c.chain, c.court, id, b.Model, 0, 0, 0)
+}
+
 func botGreeting(body string) bool {
 	s := strings.ToLower(strings.TrimSpace(body))
 	s = strings.Trim(s, ".!?,;:\u2026 ")
@@ -723,13 +908,19 @@ court votes into existence. It runs on gno.land, a proof-of-stake chain whose
 smart contracts are written in Gno, a Go-derived language, and the site's own
 state lives in a realm on that chain.
 
-Answer ONLY questions about how this site or this system works. In one short
-paragraph, under 300 characters, plain and concrete. No greeting, no sign-off,
-no emoji, no markdown headings.
+Answer the question you are given. Questions about how this site or this system
+works matter most and are why you are here, but a plain question with a plain
+answer gets one too, even when it has nothing to do with courts: "what is 2+2"
+is answered, not refused. In one short paragraph, under 300 characters, plain
+and concrete. No greeting, no sign-off, no emoji, no markdown headings.
 
-If the message is not a question about the site — if it is argument about the
-subject matter, small talk, abuse, or something you would have to guess at —
-reply with exactly: PASS
+NEVER TAKE A SIDE ON A CLAIM. The rooms you are in exist to settle questions of
+fact by staking and voting, and your opinion on one is worth nothing there and
+would be quoted as if it were worth something.
+
+If the message is not a question you can answer straight — if it is argument
+about the subject matter of a claim, small talk, abuse, or something you would
+have to guess at — reply with exactly: PASS
 
 Do not invent features, URLs, fees or numbers. If you do not know, say which
 page would say, or reply PASS.`
@@ -759,6 +950,12 @@ type botAPIResp struct {
 
 // answer asks the model, and posts if it had something to say.
 func (b *Bot) answer(ctx context.Context, c botCandidate) error {
+	// A FIXED LINE SKIPS THE MODEL ENTIRELY — no prompt, no call, no accounting
+	// for tokens nobody spent. It still goes through the typing pause and the
+	// throttle, because it is a message in a room like any other.
+	if c.says != "" {
+		return b.say(ctx, c, c.says)
+	}
 	prompt := "The court is \"" + c.court + "\" on " + b.Site + ".\n" +
 		"Recent messages, oldest first:\n" + strings.Join(c.transcript, "\n") +
 		"\n\nThe message to consider is the last one from a reader: " + c.body
@@ -839,7 +1036,7 @@ func (b *Bot) answer(ctx context.Context, c botCandidate) error {
 	}
 	id, err := b.Store.Post(ctx, PostInput{
 		Chain: c.chain, Court: c.court,
-		Moniker: "anon", Body: text,
+		Moniker: ClerkName, Body: text,
 		IPHash: botIPHash,
 	})
 	if err != nil {
@@ -862,7 +1059,7 @@ func (b *Bot) answer(ctx context.Context, c botCandidate) error {
 	if b.Wake != nil {
 		b.Wake(c.chain, c.court)
 	}
-	b.logf("chat bot: answered %s/%s as anon (in=%d out=%d)", c.chain, c.court, in, out)
+	b.logf("chat bot: answered %s/%s as %s (in=%d out=%d)", c.chain, c.court, ClerkName, in, out)
 	actx, done := acctCtx(ctx)
 	defer done()
 	return b.Store.RecordBotReply(actx, c.chain, c.court, id, b.Model,
