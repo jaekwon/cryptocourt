@@ -18886,6 +18886,35 @@ function diagCost(micros){
      information and start being noise. */
   return "$" + (d < 1 ? d.toFixed(4) : d.toFixed(2));
 }
+/* WHERE THE ROOM IS, IN WORDS THE PAYLOAD CAN ACTUALLY SUPPORT.
+   The service publishes counts per country for the connections it is holding, and
+   only for countries with at least two — see the carve-out written into diag.go,
+   which is the file that decides this, not this page. Everything else arrives
+   pre-summed as `here_elsewhere` and there is nothing here that could take it
+   apart.
+   THE FLAG COMES FROM chat.js's chatFlag, deliberately not from a second copy
+   here: it is strict about being exactly two ASCII letters, which is what stops a
+   code point being assembled out of a field that arrived over the network. A code
+   that fails that test renders as no flag rather than as a guess. */
+function diagWhere(d){
+  const rows = Array.isArray(d.here_by_country) ? d.here_by_country : [];
+  const other = Number(d.here_elsewhere || 0);
+  if(!d.geo_known)
+    return `<span class="dim">no country file loaded</span>`;
+  if(!rows.length && !other)
+    return `<span class="dim">nobody is holding a connection</span>`;
+  const said = rows.map(r=>{
+    const cc = String((r||{}).cc || "").toUpperCase();
+    const flag = typeof chatFlag === "function" ? chatFlag(cc) : "";
+    return (flag ? flag + " " : "") + safeInline(cc) + " " + Number((r||{}).n || 0);
+  });
+  /* SAID LAST AND NAMED PLAINLY. It is the countries under the floor and the
+     addresses the file does not cover, added together on the server; calling it
+     anything more specific than "elsewhere" would claim a precision the number
+     does not have. */
+  if(other) said.push(`<span class="dim">elsewhere ${other}</span>`);
+  return said.join(" · ");
+}
 function diagRows(d){
   const b = d.bot || {};
   const rows = [
@@ -18894,6 +18923,23 @@ function diagRows(d){
      + "so it counts CONNECTIONS rather than people — two tabs are two — and only "
      + "this server's."],
     ["Most at once", d.holding_peak, "The high-water mark since this process started."],
+    /* THE NUMBER THAT MAKES THE ONE ABOVE READABLE. "7 here" cannot tell seven
+       readers from one reader with seven tabs; this can, coarsely. */
+    ["Networks", d.here_networks,
+     "How many distinct networks those connections come from — a /24, or a /48 for "
+     + "IPv6, which is the same unit a range consequence applies to. One office or "
+     + "one household is ONE network, so this is a floor under how many people are "
+     + "here, never a count of them."],
+    ["Rooms being read", d.here_rooms,
+     "How many courts have somebody holding a connection right now. Which courts "
+     + "is not published. Distinct from the row below, which counts rooms by "
+     + "whether anything was SAID in them."],
+    ["Where", diagWhere(d),
+     "The held connections by country, largest first. A country appears only once "
+     + "at least two connections are in it — one would be a public statement about "
+     + "one person — and the rest are summed into 'elsewhere' along with every "
+     + "address the country file does not cover. Nothing here is attached to a "
+     + "name, a room or a message, and any VPN defeats it."],
     ["Rooms active", d.courts_active, "Courts with a message in the last hour."],
     ["Messages, last hour", d.messages_last_hour, "Across every room."],
   ];
@@ -18978,8 +19024,21 @@ on(/^\/diag$/, async ()=>{
     main.innerHTML = head
       + `<div class="prose" style="margin-top:16px"><p>What this server is doing
          right now. Nothing here names a person, an address or anything anybody
-         said — the service publishes counts and refuses the rest.</p></div>`
+         said — the service publishes counts and refuses the rest. The one
+         location it does publish is a count per country, and only for countries
+         with at least two connections in them.</p></div>`
       + diagRows(d)
+      /* THE ATTRIBUTION IS A LICENCE CONDITION, not a courtesy. The country file
+         is DB-IP's free IP-to-Country Lite, published CC-BY, and this is the page
+         that shows what it says. Rendered only when a file is actually loaded:
+         crediting a source on a deployment that has none would be a claim about
+         where the numbers came from. */
+      + (d.geo_known ? `<p class="small muted">Country data by <a
+           href="https://db-ip.com" rel="noopener">DB-IP</a>
+           (<a href="https://creativecommons.org/licenses/by/4.0/"
+           rel="noopener">CC-BY 4.0</a>). It is a guess from an address block: any
+           VPN defeats it and mobile carriers route through the wrong country
+           routinely.</p>` : "")
       + `<h2 class="sec">The site's answerer</h2>`
       + `<div class="prose"><p>${d.bot.enabled
           ? `Running. It answers questions about how the site works.`

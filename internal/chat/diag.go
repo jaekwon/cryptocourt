@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -22,6 +24,30 @@ import (
 //
 //	ALLOWED      how many, how often, how much, and whether a thing is on
 //	NOT ALLOWED  who, from where, what was said, and any secret or its shape
+//
+// "FROM WHERE" NOW HAS ONE CARVE-OUT, WRITTEN DOWN RATHER THAN LEFT IMPLICIT.
+// HereByCountry publishes counts per country for the connections being held. It
+// is a location, so the rule above had to either forbid it or say what it
+// permits, and a rule that is quietly contradicted by the struct beneath it is
+// worse than either.
+//
+// What makes it permissible is not that it is coarse — it is that it is
+// DETACHED. Nothing here joins a country to a moniker, a message, a hash or a
+// room: the payload says three connections are in Germany and cannot say which
+// three, or what any of them said. That is weaker than what the site already
+// discloses of its own accord, because a posted message carries its country as a
+// flag beside the name that wrote it — a location attached to an author, which
+// this deliberately is not.
+//
+// AND A SINGLE HOLDER IS NOT NAMED. A country appears only once at least
+// hereFloor connections are in it; the rest are summed into HereElsewhere, which
+// is a count with no location on it at all. With seven readers online that folds
+// most of the world into one row, and that is the intended trade: the row that
+// would be interesting is exactly the row that would place somebody.
+//
+// Still NOT allowed, and none of these got easier: the network hashes (only how
+// MANY there are), which rooms are being held (only how many), and any join
+// between a location and a person, a name or a message.
 //
 // In particular the bot's API key is never returned in any form — not the key,
 // not a prefix, not its length. BotKeySet is a bool, which is all a form needs
@@ -46,6 +72,46 @@ type diagPayload struct {
 	Holding     int64 `json:"holding"`
 	HoldingPeak int64 `json:"holding_peak"`
 
+	// HereNetworks is how many DISTINCT networks those connections come from,
+	// and it is the number that makes Holding readable. Holding counts
+	// connections, so one person with four tabs open is four; this counts the
+	// networks behind them, so that same person is one. Neither is the truth on
+	// its own, but "7 here from 3 networks" says something "7 here" cannot.
+	//
+	// A NETWORK IS THE /24 OR /48, not the address — the same unit NetPrefix
+	// defines for a range consequence, deliberately reused rather than redefined
+	// here. So it is coarser than it first sounds: two readers in one office, one
+	// household or one small ISP block are ONE network, and this number is a
+	// floor under "how many people", never a count of them.
+	//
+	// A COUNT OF KEYS, NEVER THE KEYS. The keys are the same hashed network
+	// identifiers a consequence is recorded against, and they do not appear in
+	// this payload in any form.
+	HereNetworks int `json:"here_networks"`
+
+	// HereRooms is how many distinct rooms are being held. Seven connections in
+	// one court and seven spread across seven are different rooms to walk into,
+	// and Holding cannot tell them apart. Which courts they are is not published.
+	HereRooms int `json:"here_rooms"`
+
+	// HereByCountry is the connections being held, per country, largest first —
+	// the carve-out described at the top of this file. Countries below the floor
+	// are not listed; see HereElsewhere.
+	HereByCountry []countryCount `json:"here_by_country"`
+
+	// HereElsewhere is every held connection not accounted for in the list
+	// above: the ones in countries under the floor, and the ones with no country
+	// at all. Two reasons, deliberately summed into one number — separating them
+	// would publish "one connection from a country we know and will not name",
+	// which is most of the way back to naming it.
+	HereElsewhere int `json:"here_elsewhere"`
+
+	// GeoKnown says whether a country file is loaded at all. Without it every
+	// connection lands in HereElsewhere, which is indistinguishable from a room
+	// full of readers in countries below the floor — the same "healthy and idle
+	// looks like broken" trap the bot's Failures field exists for.
+	GeoKnown bool `json:"geo_known"`
+
 	// Rooms with a message in the last hour, and how many messages that was.
 	// A count of rooms and a count of rows; neither says who or what.
 	CourtsActive     int `json:"courts_active"`
@@ -53,6 +119,49 @@ type diagPayload struct {
 
 	BotKeySet bool     `json:"bot_key_set"`
 	Bot       botStats `json:"bot"`
+}
+
+// countryCount is one row of the location tally: a two-letter code and how many
+// held connections are in it. No hash, no room, no name.
+type countryCount struct {
+	CC string `json:"cc"`
+	N  int    `json:"n"`
+}
+
+// hereFloor is how many connections a country needs before it is named.
+//
+// TWO, AND THE CHOICE IS THE WHOLE PRIVACY ARGUMENT. At one, a country with a
+// single reader in it is a public statement that one particular person is in
+// that country, and on a quiet site that is often the only reader there. At two,
+// the smallest thing the page can say is "two connections are in Norway", which
+// places neither of them and still shows the operator where the room is.
+//
+// It is not anonymity in any formal sense and is not claimed as such: two tabs
+// belonging to one person clear the floor, and a country with two readers is a
+// small set. It is the floor at which the page stops reporting individuals, and
+// the honest description of it is a reticence, not a guarantee.
+const hereFloor = 2
+
+// hereRows turns the live tally into the published list plus the elsewhere
+// count, applying the floor. Sorted by count descending, then by code, so the
+// page does not reshuffle between two polls that saw the same room.
+func hereRows(byCC map[string]int) ([]countryCount, int) {
+	rows := make([]countryCount, 0, len(byCC))
+	elsewhere := 0
+	for cc, n := range byCC {
+		if cc == "" || n < hereFloor {
+			elsewhere += n
+			continue
+		}
+		rows = append(rows, countryCount{CC: cc, N: n})
+	}
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].N != rows[j].N {
+			return rows[i].N > rows[j].N
+		}
+		return rows[i].CC < rows[j].CC
+	})
+	return rows, elsewhere
 }
 
 // botStats is what the page shows about the bot: how often it has answered and
@@ -438,9 +547,25 @@ func (s *Store) CountSince(ctx context.Context, since int64) (int, error) {
 
 // ------------------------------------------------------------------ gauge ----
 
-// holdGauge counts long-poll requests in flight, and remembers the high water
-// mark. Two atomics and no lock: this is instrumentation, and instrumentation
-// that can block the thing it measures is worse than no instrumentation.
+// holdGauge counts long-poll requests in flight, remembers the high water mark,
+// and keeps a tally of what those connections have in common.
+//
+// THE TWO NUMBERS THAT MATTER STAY LOCK-FREE. now and peak are atomics, as they
+// always were: this is instrumentation, and instrumentation that can block the
+// thing it measures is worse than no instrumentation.
+//
+// THE TALLIES DO TAKE A LOCK, and the earlier version of this comment said that
+// was disqualifying. It is not, and the reason is arithmetic rather than taste:
+// the lock is held for one map increment, and it is taken twice per LONG POLL —
+// once entering the wait and once leaving it, so once per reader per MaxWait,
+// which is twenty seconds. Seven readers is seven hundredths of a lock
+// acquisition per second. What could not be afforded is a lock on the path that
+// serves a request; this is not on it.
+//
+// KEYED, NOT LISTED. Each map holds a count per key and the key is deleted when
+// it reaches zero, so the maps are bounded by concurrent connections rather than
+// by history — nothing here accumulates, and a restart is the only reset the
+// peak has.
 //
 // The peak is monotonic for the life of the process and says so on the page. A
 // decaying peak would need a window, a timer and a decision about what "recent"
@@ -448,19 +573,82 @@ func (s *Store) CountSince(ctx context.Context, since int64) (int, error) {
 type holdGauge struct {
 	now  atomic.Int64
 	peak atomic.Int64
+
+	mu sync.Mutex
+	// byCC is connections per two-letter country, "" for the ones with no
+	// country — an address the file does not cover, or no file at all.
+	byCC map[string]int
+	// byNet is connections per network hash. THE HASHES NEVER LEAVE THIS MAP:
+	// only its SIZE is published, which answers the one question the raw count
+	// cannot — whether "7 here" is seven readers or one reader with seven tabs.
+	byNet map[string]int
+	// byRoom is connections per room, keyed by pulseKey. Only its size is
+	// published, for the same reason.
+	byRoom map[string]int
 }
 
-func (g *holdGauge) enter() {
+// holder is what a held connection has in common with others. Not a person and
+// not an identity: three keys that are only ever counted.
+type holder struct {
+	cc, net, room string
+}
+
+func (g *holdGauge) enter(h holder) {
 	n := g.now.Add(1)
 	for {
 		p := g.peak.Load()
 		if n <= p || g.peak.CompareAndSwap(p, n) {
-			return
+			break
 		}
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.byCC == nil {
+		g.byCC, g.byNet, g.byRoom = map[string]int{}, map[string]int{}, map[string]int{}
+	}
+	g.byCC[h.cc]++
+	if h.net != "" {
+		g.byNet[h.net]++
+	}
+	if h.room != "" {
+		g.byRoom[h.room]++
 	}
 }
 
-func (g *holdGauge) leave() { g.now.Add(-1) }
+func (g *holdGauge) leave(h holder) {
+	g.now.Add(-1)
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	drop(g.byCC, h.cc)
+	drop(g.byNet, h.net)
+	drop(g.byRoom, h.room)
+}
+
+// drop decrements a key and forgets it at zero, which is what keeps these maps
+// the size of the room rather than the size of the log.
+func drop(m map[string]int, k string) {
+	if m == nil {
+		return
+	}
+	if n := m[k] - 1; n > 0 {
+		m[k] = n
+	} else {
+		delete(m, k)
+	}
+}
+
+// snapshot copies the tallies out under the lock. Copied rather than returned by
+// reference: the caller marshals JSON, and a map still being written to while
+// encoding is a data race and a torn payload.
+func (g *holdGauge) snapshot() (byCC map[string]int, nets, rooms int) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	byCC = make(map[string]int, len(g.byCC))
+	for k, v := range g.byCC {
+		byCC[k] = v
+	}
+	return byCC, len(g.byNet), len(g.byRoom)
+}
 
 // ---------------------------------------------------------------- handlers ---
 
@@ -477,6 +665,13 @@ func (s *Server) diag(w http.ResponseWriter, r *http.Request) {
 	hourAgo := s.Store.Now().Add(-time.Hour).Unix()
 
 	out := diagPayload{OK: true, Holding: s.hold.now.Load(), HoldingPeak: s.hold.peak.Load()}
+	byCC, nets, rooms := s.hold.snapshot()
+	out.HereByCountry, out.HereElsewhere = hereRows(byCC)
+	out.HereNetworks, out.HereRooms = nets, rooms
+	// A country FILE, not a country header: the header answers per request and
+	// cannot be reported on without one in hand, and a deployment with neither is
+	// the case this flag exists to make visible.
+	out.GeoKnown = s.Geo != nil
 	if h, err := s.Store.Health(ctx); err == nil {
 		out.OK = h.OK
 	}

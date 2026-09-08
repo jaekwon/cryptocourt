@@ -184,6 +184,13 @@ func main() {
 
 		geoLoc    = flag.String("geo-locations", "", "MaxMind GeoLite2-Country-Locations-en.csv")
 		geoBlocks = flag.String("geo-blocks", "", "comma-separated GeoLite2-Country-Blocks-IPv{4,6}.csv")
+
+		// THE ONE THAT NEEDS NO ACCOUNT, which is why it exists beside the two
+		// above. The MaxMind pair is a licence key and a signup away, so the geo
+		// feature shipped switched off and stayed that way; a range file can be
+		// fetched by the deploy script.
+		geoRanges = flag.String("geo-ranges", "",
+			"country file as first,last,CC rows (DB-IP IP-to-Country Lite)")
 	)
 	flag.Parse()
 	lg := log.New(os.Stderr, "kourtchat: ", log.LstdFlags)
@@ -267,13 +274,28 @@ func main() {
 	}
 	// Flags are decoration, so a missing or broken geo database must never stop the
 	// server: it logs and carries on with no flags at all.
-	if *geoLoc != "" && *geoBlocks != "" {
-		tab, err := geo.LoadMaxMind(*geoLoc, strings.Split(*geoBlocks, ",")...)
-		if err != nil {
+	//
+	// THE MAXMIND PAIR WINS WHEN BOTH ARE GIVEN, because an operator who went to
+	// the trouble of a licence key meant it. Neither is consulted if a trusted
+	// CDN is already answering the question — see Server.countryOf, where the
+	// header takes precedence over whatever file this loads.
+	switch {
+	case *geoLoc != "" && *geoBlocks != "":
+		if tab, err := geo.LoadMaxMind(*geoLoc, strings.Split(*geoBlocks, ",")...); err != nil {
 			lg.Printf("no flags: %v", err)
 		} else {
 			srv.Geo = tab
-			lg.Printf("geo: %d prefixes loaded", tab.Len())
+			lg.Printf("geo: %d spans, %d countries (maxmind)", tab.Len(), tab.Countries())
+		}
+	case *geoRanges != "":
+		if tab, err := geo.LoadRanges(*geoRanges); err != nil {
+			lg.Printf("no flags: %v", err)
+		} else {
+			srv.Geo = tab
+			// THE COUNTRY COUNT IS THE USEFUL HALF OF THIS LINE. A file that
+			// parsed to a million spans and three countries loaded wrong in a way
+			// the span count cannot show.
+			lg.Printf("geo: %d spans, %d countries (ranges)", tab.Len(), tab.Countries())
 		}
 	}
 
