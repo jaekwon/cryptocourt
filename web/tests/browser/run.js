@@ -100,6 +100,8 @@ const ALL = ["embed_layout.js", "tagrow_layout.js", "route_crawl.js",
              // /delete scrubs the message from every tab, because the server
              // stopped sending it
              "chat_delete.js",
+             // the count is a link, and where it goes shows nothing personal
+             "chat_here_page.js",
              "court_burn_pay.js",
              "vote_commit.js",
              // the two marks, and the pupil that must not move between them

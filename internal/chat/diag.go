@@ -652,6 +652,64 @@ func (g *holdGauge) snapshot() (byCC map[string]int, nets, rooms int) {
 
 // ---------------------------------------------------------------- handlers ---
 
+/*
+WHO IS IN THE ROOM, FOR THE PEOPLE IN IT — the reader-facing half of the
+
+	presence tally, and a separate endpoint from /diag on purpose.
+	WHY NOT JUST LINK READERS AT /diag. That payload also carries what the site's
+	own answerer has been doing: whether it is enabled, how often it has spoken,
+	what it has cost. This deployment's standing requirement is that nobody is
+	told there is an answerer at all, and a link from the chat panel to a payload
+	that names it is that requirement undone by one devtools tab. So the panel
+	points here, and here carries presence and nothing else.
+	IT PUBLISHES NO GRAND TOTAL, deliberately. The chat line counts the reader
+	asking, and the country tally counts placed connections; a total on this page
+	would visibly disagree with the number the reader clicked on, and explaining
+	the difference is not something this endpoint can honestly do. So it reports
+	the distribution and lets the panel keep the count.
+	THE PRIVACY RULES ARE hereRows' AND NOT RESTATED HERE: a country appears only
+	once at least hereFloor connections are in it, everything else — including
+	every connection with no country at all — is one number with no location on
+	it. Nothing joins a country to a moniker, a message, a hash or a room.
+*/
+type herePayload struct {
+	// Placed is the connections a country could be named for; Elsewhere is all
+	// the rest, whether under the floor or simply unknown.
+	ByCountry []countryCount `json:"by_country"`
+	Elsewhere int            `json:"elsewhere"`
+
+	// Networks and Rooms are shape without location: seven readers behind one
+	// network in one room is a different room to walk into than seven spread
+	// across seven, and neither says which networks or which rooms.
+	Networks int `json:"networks"`
+	Rooms    int `json:"rooms"`
+
+	// GeoKnown distinguishes "everybody is under the floor" from "this server
+	// has no country file at all", which are the same empty list otherwise —
+	// the healthy-looks-like-broken trap the bot's Failures field exists for.
+	GeoKnown bool `json:"geo_known"`
+}
+
+// herePresence answers it. GET only, and never cached: it is a live count.
+//
+// NOT called here(): that name is already the TOTAL the poll reply carries, and
+// the two are deliberately different numbers — see herePayload on why this one
+// publishes no total.
+func (s *Server) herePresence(w http.ResponseWriter, r *http.Request) {
+	if s.cors(w, r) {
+		return
+	}
+	if r.Method != http.MethodGet {
+		writeErr(w, http.StatusMethodNotAllowed, "GET only")
+		return
+	}
+	byCC, nets, rooms := s.hold.snapshot()
+	out := herePayload{Networks: nets, Rooms: rooms, GeoKnown: s.Geo != nil}
+	out.ByCountry, out.Elsewhere = hereRows(byCC)
+	w.Header().Set("Cache-Control", "no-store")
+	writeJSON(w, http.StatusOK, out)
+}
+
 // diag answers the public diagnostics payload. GET only.
 func (s *Server) diag(w http.ResponseWriter, r *http.Request) {
 	if s.cors(w, r) {

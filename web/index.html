@@ -2029,6 +2029,14 @@ tr.youare .mono{font-weight:600}
    IT BRIGHTENS WITH ITS OWN NODE on hover and selection, which is what makes it
    readable exactly when a reader is asking about that claim, and invisible the
    rest of the time. */
+/* WHO IS HERE. A bar per country, sized against the largest, because the
+   comparison a reader is making is between the rows and not against any total —
+   there is deliberately no total on that page. */
+.herelist td{padding:4px 8px}
+.hereflag{font-size:1.1em; width:1.6em; text-align:center}
+.herecell{width:50%}
+.herebar{display:block; height:8px; background:var(--muted); opacity:.45;
+  border-radius:2px; min-width:2px}
 .mcmt-d{fill:var(--muted); opacity:.62}
 /* THE ELLIPSIS IS TEXT, NOT A CIRCLE, and white rather than the dots' muted
    grey — asked for that way, and right: a circle in this figure means one
@@ -18962,6 +18970,99 @@ on(/^\/params$/, async ()=>{
                from a sub-realm identity that is never created, so no key to it
                exists and nothing can ever be spent from it.` : `.`}</p>`
        : "");
+});
+
+/* ---- who is here ---------------------------------------------------------
+   WHERE THE PEOPLE READING THIS ARE, and nothing else about them. Reached from
+   the count above the chat box.
+   IT READS /api/chat/here AND NOT /api/chat/diag. The diagnostics payload also
+   reports what the site's own answerer has been doing; pointing readers at it
+   would undo, in one devtools tab, the thing this deployment asks for. So the
+   service publishes presence separately and this page reads that.
+   AND IT PRINTS NO TOTAL. The count in the chat panel includes the reader
+   looking at it; the country tally counts placed connections. A total here would
+   visibly disagree with the number they clicked, so the rows are the answer and
+   the panel keeps the count.
+   NOTHING PERSONAL IS AVAILABLE TO SHOW: a country is named only once at least
+   two connections are in it, everything else is one number with no location on
+   it at all, and nothing joins a country to a name, a message or a room. The
+   floor lives in the service — see hereFloor — so this page cannot lower it. */
+const HERE_MS = 5000;
+function hereFlag(cc){
+  /* THE FLAG IS DERIVED, NOT A TABLE. Two ASCII letters offset into the regional
+     indicator block is the whole of it, so every country the service can name
+     has one and there is no list to fall out of step. A platform without the
+     glyphs shows two letters, which is the same information. */
+  if(!/^[A-Z]{2}$/.test(cc)) return "";
+  return String.fromCodePoint(...[...cc].map(c=>0x1F1E6 + c.charCodeAt(0) - 65));
+}
+function hereRowsHtml(d){
+  const rows = Array.isArray(d.by_country)? d.by_country : [];
+  const placed = rows.reduce((a,r)=>a + Number(r.n||0), 0);
+  const other = Number(d.elsewhere||0);
+  if(!placed && !other){
+    return `<p class="prose">Nobody is holding the chat open just now — the count
+      beside the box includes you, and this page counts held connections.</p>`;
+  }
+  const most = Math.max(1, ...rows.map(r=>Number(r.n||0)));
+  const bar = n => `<span class="herebar" style="width:${Math.round(100*n/most)}%"></span>`;
+  return `<table class="tbl herelist"><tbody>`
+    + rows.map(r=>`<tr>
+        <td class="hereflag">${hereFlag(String(r.cc||""))}</td>
+        <td class="mono">${safeInline(String(r.cc||""))}</td>
+        <td class="herecell">${bar(Number(r.n||0))}</td>
+        <td class="tnum">${fmtN(Number(r.n||0))}</td></tr>`).join("")
+    + (other? `<tr><td class="hereflag">·</td><td class="dim">elsewhere</td>
+        <td class="herecell"></td><td class="tnum">${fmtN(other)}</td></tr>` : "")
+    + `</tbody></table>`;
+}
+on(/^\/here$/, async ()=>{
+  const head = crumbs([{label:"Directory",href:"#/"},{label:"Who is here"}])
+    + `<h1 class="page-h">Who is here</h1>`;
+  const base = chatBase();
+  if(!base){
+    main.innerHTML = head + `<div class="prose" style="margin-top:16px"><p>This
+      count comes from the chat service, and this page is not configured to reach
+      one.</p></div>`;
+    return;
+  }
+  main.innerHTML = head + `<div class="dim" style="margin-top:16px">Reading…</div>`;
+  const seq0 = renderSeq;
+  const draw = async ()=>{
+    if(renderSeq !== seq0) return false;
+    let d = null;
+    try{
+      const r = await fetch(base + "/api/chat/here", {cache:"no-store"});
+      if(r.ok) d = await r.json();
+    }catch(_){}
+    if(renderSeq !== seq0) return false;
+    if(!d){
+      main.innerHTML = head + `<div class="notice refuse" style="margin-top:16px">
+        <span class="g">✕</span> The chat service did not answer.</div>`;
+      return true;
+    }
+    /* THE NETWORK AND ROOM COUNTS ARE NOT SHOWN HERE, though the service does
+       publish them and /diag does print them. They are operator shape: a reader
+       learns nothing from "nine networks", and a page that mentions counting
+       networks at all reads as more watching than is actually going on. This
+       page answers one question — where are the people — and stops. */
+    main.innerHTML = head
+      + `<div class="prose" style="margin-top:16px"><p>Where the people with a
+         chat open are reading from, right now. A country is named only once at
+         least two connections are in it — otherwise it would say where one
+         particular person is — and everything else is counted with no location
+         on it at all. Nothing here is joined to a name or to anything anybody
+         said.</p></div>`
+      + hereRowsHtml(d)
+      + (d.geo_known? "" : `<p class="small muted">This server has no country
+         file loaded, so nobody can be placed and every connection is counted
+         under “elsewhere”.</p>`);
+    return true;
+  };
+  if(!await draw()) return;
+  const tick = setInterval(async ()=>{
+    if(renderSeq !== seq0 || !(await draw())) clearInterval(tick);
+  }, HERE_MS);
 });
 
 /* ---- diagnostics ---------------------------------------------------------
