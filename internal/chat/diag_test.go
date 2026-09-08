@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -678,6 +679,91 @@ func TestARequestThatDoesNotWaitIsNotCounted(t *testing.T) {
 		t.Errorf("twenty non-waiting reads must never have been counted, "+
 			"peak=%v — the gauge is being taken for requests rather than waits",
 			d["holding_peak"])
+	}
+}
+
+/*
+MANY WAITERS, SOME HANGING UP, AND MODERATION FIRING THROUGHOUT — the only
+
+	test here that exercises the gauge and both pulse paths concurrently, and
+	worth having because every other one is sequential.
+	WHAT IT WOULD CATCH: a leak that only appears when exits interleave, and a
+	race in the peak's compare-and-swap. Run it with -race for the second.
+	THE PEAK IS THE WITNESS, not a live sampler. A first version of this polled
+	the payload in a goroutine and never saw more than one waiter at a time — the
+	diagnostics read is serialised against waiters that come and go in
+	milliseconds — and would have reported success while measuring nothing. The
+	peak is monotonic, so it cannot miss having climbed.
+*/
+func TestTheGaugeSurvivesManyWaitersAtOnce(t *testing.T) {
+	srv, s, _ := newServer(t)
+	ctx := context.Background()
+
+	// A baseline, so a reader asking for "anything after this" actually WAITS.
+	// Without it HasSince is true, the wait block is skipped, and nothing is held
+	// at all — which is how the first version of this measured a peak of zero.
+	if _, err := post(t, s, "orem", "ip-seed", "a seed message"); err != nil {
+		t.Fatal(err)
+	}
+	msgs, err := s.Recent(ctx, "dev", "orem", 0, 50)
+	if err != nil || len(msgs) == 0 {
+		t.Fatal(err)
+	}
+	top := msgs[len(msgs)-1].ID
+
+	ts := httptest.NewServer(srv.Routes())
+	var wg sync.WaitGroup
+	const readers = 10
+
+	for i := 0; i < readers; i++ {
+		wg.Add(1)
+		go func(n int) {
+			defer wg.Done()
+			for j := 0; j < 3; j++ {
+				// Staggered deadlines, so the exits interleave rather than all
+				// landing together: hang-ups and timeouts mixed.
+				rctx, c := context.WithTimeout(ctx, time.Duration(60+n*11)*time.Millisecond)
+				req, err := http.NewRequestWithContext(rctx, http.MethodGet,
+					fmt.Sprintf("%s/api/chat/dev/orem?wait=2&seen=%d", ts.URL, top), nil)
+				if err == nil {
+					if r, err := http.DefaultClient.Do(req); err == nil {
+						io.Copy(io.Discard, r.Body)
+						r.Body.Close()
+					}
+				}
+				c()
+			}
+		}(i)
+	}
+	// The other pulse path, running at the same time.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		for j := 0; j < 15; j++ {
+			srv.WakeAll()
+			time.Sleep(12 * time.Millisecond)
+		}
+	}()
+	wg.Wait()
+	ts.Close()
+
+	// Give the last handlers a moment to unwind their defers.
+	var holding any
+	for i := 0; i < 40; i++ {
+		holding = diagOf(t, srv)["holding"]
+		if holding == float64(0) {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	d := diagOf(t, srv)
+	if p, ok := d["holding_peak"].(float64); !ok || p < 2 {
+		t.Fatalf("no concurrent waiters were ever observed (peak=%v) — this test "+
+			"is measuring nothing, and the seed message above is what makes them wait",
+			d["holding_peak"])
+	}
+	if holding != float64(0) {
+		t.Errorf("the gauge leaked under concurrent load: holding=%v", holding)
 	}
 }
 
