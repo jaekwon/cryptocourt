@@ -949,13 +949,64 @@ function mountChat(el, opts) {
   const nowSec = () => Math.floor((o.now ? o.now() : Date.now()) / 1000) + serverSkew;
   const note = t => { if (live()) noteEl.textContent = t || ""; };
 
-  // Writing the log has to preserve the reader's scroll position, or someone reading
-  // back through a thread gets yanked to the bottom every few seconds.
+  /* WRITING THE LOG HAS TO PRESERVE THE READER'S SCROLL POSITION, or someone
+     reading back through a thread gets yanked to the bottom every few seconds.
+     That is what the `atBottom` test is for and it stays.
+
+     BUT IT CANNOT BE THE ONLY THING, and the bug it caused was reported as "the
+     chat sometimes doesn't scroll down to the latest message on loading".
+     Sometimes, because it depends on whether the box had been laid out yet: the
+     first transcript can arrive before the panel has a height, and then
+     scrollTop is set to a scrollHeight that is about to change. Once layout
+     happens the content is taller than the box and the reader is looking at the
+     TOP of the thread, with nothing left to retry the scroll — a paint was the
+     only thing that ever scrolled.
+
+     TWO MECHANISMS, for two different moments:
+       1. re-pinned in a rAF as well as immediately — the frame in which the
+          browser has actually measured what was just written. This is what fixes
+          the reported bug; MEASURED, by removing it and watching chat_scroll
+          fail.
+       2. while the reader has not scrolled away, a change in the BOX's size
+          re-pins it: a rail opening, a window made taller, the panel getting its
+          height late.
+
+     AND WHAT (2) DOES NOT COVER, said plainly because the first draft of this
+     comment claimed it did: a ResizeObserver on the log does NOT fire when the
+     log's CONTENT grows. The box has a fixed height, so a late webfont or a late
+     image changes scrollHeight and not the observed size — MEASURED: the
+     callback ran on observe and on a height change, and not once when the rows
+     were doubled. Content growth is covered by the next paint instead, which
+     re-pins if the reader is still at the foot, and the panel paints on every
+     poll.
+
+     `pinned` is kept current from the scroll event and not only from paints, or
+     a reader who scrolled up would be dragged back by the next box resize. */
+  let pinned = true;
+  const pinToBottom = () => { if (live()) logEl.scrollTop = logEl.scrollHeight; };
+  const nearBottom = () =>
+    logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 24;
+  logEl.addEventListener("scroll", () => { pinned = nearBottom(); }, {passive: true});
+  if (typeof ResizeObserver === "function") {
+    const ro = new ResizeObserver(() => {
+      if (!live()) { ro.disconnect(); return; }
+      if (pinned) pinToBottom();
+    });
+    ro.observe(logEl);
+  }
   function paintLog(msgs) {
     if (!live()) return;
-    const atBottom = logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 24;
+    /* MEASURED BEFORE THE WRITE, which is also why there is no separate
+       "first paint" case: on the first paint the log is empty, so scrollHeight
+       and clientHeight agree and this is true anyway. A flag for it was carried
+       here for a while and removed — it could not be made to fail. */
+    const atBottom = nearBottom();
     logEl.innerHTML = chatLogHtml(msgs, nowSec(), court);
-    if (atBottom) logEl.scrollTop = logEl.scrollHeight;
+    pinned = atBottom;
+    if (atBottom) {
+      pinToBottom();
+      if (typeof requestAnimationFrame === "function") requestAnimationFrame(pinToBottom);
+    }
   }
 
   // Separate from paintLog, and it has to stay separate: a refused POST carries a
