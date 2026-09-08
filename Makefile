@@ -161,6 +161,11 @@ height-shim:
 # went unrun while it had something to say. A target is a name a failure wears;
 # this one was wearing somebody else's.
 web-guards:
+	@# A top-level const built from one declared BELOW it throws on load and takes
+	@# the whole script with it — and no source harness can see it, because a
+	@# harness evaluates a slice and sets the names it needs as globals first.
+	@# Twice in one week before this existed, both reaching a deployed page.
+	python3 scripts/check-tdz.py
 	python3 scripts/check-web-dupes.py
 	python3 scripts/check-web-css.py
 	python3 scripts/check-web-selectors.py
