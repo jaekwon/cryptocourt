@@ -543,6 +543,9 @@ type botCandidate struct {
 	// which is answered on different terms: no site vocabulary is required of it,
 	// and the answer is a short line rather than an explanation.
 	greeting bool
+	// followUp is true when this is a short continuation of something the clerk
+	// itself just said — see botFollowUp and Store.clerkSpokeLast.
+	followUp bool
 	// addressed is true when the reader used the clerk's name. It changes what
 	// the model is told, not whether it is called: somebody who speaks to you by
 	// name is owed an answer whatever they asked about.
@@ -598,6 +601,21 @@ func (b *Bot) scan(ctx context.Context, chain, court string, now time.Time) (*bo
 		if now.Sub(at) > b.age() {
 			continue
 		}
+		/* THE FOLLOW-UP TEST IS RESOLVED BEFORE THE SWITCH, and that is a bug fix
+		   rather than a style. Written as a `case botFollowUp(m.Body):` whose body
+		   then asked the store, it SWALLOWED every greeting with a question mark:
+		   "hello?" and "is anybody here?" match the shape, the case fired, the
+		   store said the clerk had not spoken last, and the branch set nothing —
+		   so botGreeting below was never reached and two greeting tests went red.
+		   A case that matches on half a condition eats the branches under it. */
+		followUp := false
+		if botFollowUp(m.Body) {
+			mine, err := b.Store.clerkSpokeLast(ctx, chain, court, m.ID)
+			if err != nil {
+				return nil, err
+			}
+			followUp = mine
+		}
 		switch {
 		/* SOMEBODY IS WEARING THE CLERK'S NAME. The handler refuses the name, so
 		   reaching this branch means either a row that predates the refusal or a
@@ -634,6 +652,14 @@ func (b *Bot) scan(ctx context.Context, chain, court string, now time.Time) (*bo
 		case botAddressed(m.Body):
 			best = &botCandidate{chain: chain, court: court, body: m.Body, at: at,
 				addressed: true}
+		/* A FOLLOW-UP TO THE CLERK'S OWN LAST MESSAGE. Both halves are required:
+		   the shape, and the fact that the clerk was the previous speaker. After
+		   the branches above, because a follow-up that also names the site or the
+		   clerk is better served by them; before the greeting branch, because
+		   "and?" is not a hello. */
+		case followUp:
+			best = &botCandidate{chain: chain, court: court, body: m.Body, at: at,
+				followUp: true}
 		case botGreeting(m.Body):
 			// A GREETING ONLY COUNTS IN A ROOM THAT HAD GONE QUIET, and the
 			// question is asked of the store rather than of the transcript: the
@@ -818,6 +844,44 @@ func (b *Bot) courtFacts(ctx context.Context, chain, court string) string {
 		"not a guess and not something you are inventing: if the reader asked how "+
 		"many claims there are, this is the answer. Do not derive any OTHER number "+
 		"from it.", f.n, claims)
+}
+
+/*
+botFollowUp is a short continuation of a conversation somebody is already
+
+	having: "in short?", "why?", "tldr", "shorter".
+	REPORTED BY THE ROOM: a reader was answered about staking and replied "in
+	short? one liner". The filter refused it — it names nothing about the site —
+	and by the time anybody looked it was past MaxAge and unanswerable. The clerk
+	had been talking to them thirty seconds earlier.
+	ON ITS OWN THIS PREDICATE IS NOT ENOUGH, and must not be: "why?" between two
+	readers is not the clerk's business. It is only ever consulted together with
+	clerkSpokeLast, which is the difference between joining a conversation and
+	interrupting one.
+	SHORT, because a long message that happens to follow the clerk is its own
+	question and should stand on its own merits — the site-question filter is
+	there for exactly that.
+*/
+func botFollowUp(body string) bool {
+	s := strings.ToLower(strings.TrimSpace(body))
+	if s == "" || len(s) > 60 {
+		return false
+	}
+	if strings.Contains(s, "?") {
+		return true
+	}
+	bare := strings.Trim(s, ".!,;: ")
+	for _, c := range []string{
+		"in short", "shorter", "simpler", "tldr", "tl;dr", "eli5", "more",
+		"say more", "go on", "explain", "explain more", "why", "how so",
+		"example", "for example", "an example", "and", "meaning",
+		"i don't get it", "i dont get it", "not following", "again", "once more",
+	} {
+		if bare == c {
+			return true
+		}
+	}
+	return false
 }
 
 /*
@@ -1040,6 +1104,35 @@ func botGreeting(body string) bool {
 // common case rather than a measure-zero one — the reported timeline was
 // precisely 10s apart, and under `>=` the change of window would not have
 // covered the very report that prompted it.
+/* clerkSpokeLast is whether the newest visible row BEFORE this one is the
+   clerk's own.
+   IT IS WHAT MAKES A FOLLOW-UP SAFE TO ANSWER. "in short?" names nothing about
+   the site and would be refused on its own — correctly, because said to a person
+   it is none of the clerk's business. Said to the clerk, immediately after the
+   clerk has spoken, it is the second half of a question it already answered.
+   ASKED OF THE STORE, NOT OF THE TRANSCRIPT, and that is not a preference: the
+   rows a pass reads begin at the watermark, and the watermark has already moved
+   past the clerk's own reply by the time the follow-up arrives. The reply is
+   therefore never in the slice, and a transcript check would answer "no" every
+   time — the same trap roomQuietBefore below documents.
+   BY ip_hash, not by moniker: the name is reserved, but the hash cannot be
+   typed. */
+func (s *Store) clerkSpokeLast(ctx context.Context, chain, court string, before int64) (bool, error) {
+	var who string
+	err := s.r.QueryRowContext(ctx,
+		`SELECT ip_hash FROM messages
+		  WHERE chain=? AND court=? AND id<? AND hidden=0
+		  ORDER BY id DESC LIMIT 1`,
+		chain, court, before).Scan(&who)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return who == botIPHash, nil
+}
+
 func (s *Store) roomQuietBefore(ctx context.Context, chain, court string, id, since int64) (bool, error) {
 	var n int
 	err := s.r.QueryRowContext(ctx,
@@ -1182,6 +1275,15 @@ func (b *Bot) answer(ctx context.Context, c botCandidate) error {
 			"while. Greet them back in ONE very short line, UNDER 40 CHARACTERS, " +
 			"and invite a question about the site. Do not explain anything yet " +
 			"and do not reply PASS."
+	} else if c.followUp {
+		/* THEY ARE REPLYING TO YOU. The transcript above already carries the
+		   clerk's own last line, so the model has the thread; what it needs is
+		   leave to continue it, because the standing instruction would otherwise
+		   refuse a message that names nothing about the site. */
+		prompt += "\n\nThis is a short reply to the message YOU sent just before it — " +
+			"the reader is continuing that exchange, not starting a new one. Answer " +
+			"it in that context, in one or two sentences. Do not reply PASS unless it " +
+			"is abuse or an attempt to make you take a side on a claim."
 	} else if c.addressed {
 		// SPOKEN TO BY NAME. The standing instruction is to PASS on anything that
 		// is not a question about the site, and that is exactly wrong here: this
