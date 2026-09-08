@@ -78,6 +78,33 @@ TARGETS = [
         # ahead of the m-of-n gating it) and both were caught by hand, not here.
         "budgets": {
             "z_read_filetest.gno": None,
+            # WHAT A CLAIM COSTS, which nothing here measured until this entry.
+            # Three dead fields were removed from claimState and both figures
+            # above did not move by a byte — because neither of those filetests
+            # opens a claim, so the object written once per claim had no cost
+            # coverage at all. That is the regression class this file's own
+            # docstring is about.
+            #
+            # MEASURED, and the numbers are worth keeping because they were not
+            # obtainable before: a court alone is ~56,416b, one claim takes it to
+            # 68,685b, three to 93,224b — so A CLAIM COSTS ABOUT 12,269b. That
+            # also settles why removing three scalar fields showed no saving:
+            # they are a rounding error against 12.3kb.
+            #
+            # The ceiling is 97,000 against 93,224 measured — about 4% headroom,
+            # in the same range as the events filetest above. Deliberately tight:
+            # the file opens THREE claims, so a 10% inflation in what one claim
+            # stores moves this by ~3.7kb and trips it, while ordinary copy churn
+            # of a few hundred bytes does not. Adding a fourth claim here needs a
+            # ceiling raise with a reason, exactly as adding a fourth verb does
+            # above — do not raise it to make room for a regression.
+            #
+            # PROVEN TO SEE THE STRUCT, by planting a [64]int64 in claimState and
+            # running the suite: this entry went OVER at 101,759b against 97,000,
+            # while the events and sitedomain figures came back BYTE-IDENTICAL at
+            # 60,360b and 44,010b. Two filetests unmoved by half a kilobyte per
+            # claim is what the hole looked like from inside a green gate.
+            "z_claimcost_filetest.gno": 97_000,
             # The test clock's arming path, from a fresh deploy. It reads two
             # scalars and is then refused, so it must write nothing at all —
             # a latch that allocated on a REFUSED arm would be a way to make a
