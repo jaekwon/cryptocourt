@@ -76,6 +76,25 @@ const MAPKVOV = (() => {
     document.querySelectorAll('.mnode-a')[k]
       .dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true}));
   }, i);
+  /* THE CAMERA, MEASURED OFF THE viewBox — which is what the camera IS. apply()
+     writes `${cx-w/2} ${cy-h/2} ${w} ${h}` with w = fit.w/z, so z is exactly
+     proportional to 1/width and a ratio of two widths is a ratio of two zooms,
+     with no 1.35 spring and no font rounding anywhere in it.
+     TITLE PIXELS WERE THE FIRST INSTRUMENT HERE and they cannot carry the
+     staged-zoom arms below: the spring supplies most of the growth on this
+     fixture, so the whole difference between "half the zoom" and "all of it"
+     was 33px against 38px, both standing on a `before` of 20px that is itself
+     a rounded rect height. The title arms are still worth having — they are the
+     reader's question — but "how far did the camera go" needs the camera. */
+  const camW = () => page.evaluate(() => {
+    const el = document.querySelector('.mapwrap svg');
+    const vb = el && el.getAttribute('viewBox');
+    return vb ? parseFloat(vb.trim().split(/\s+/)[2]) : null;
+  });
+  const selTitleH = () => page.evaluate(() => {
+    const t = document.querySelector('.mnode-a.selected text.mtitle');
+    return t ? t.getBoundingClientRect().height : null;
+  });
 
   await openMap();
   const n = await page.evaluate(() => document.querySelectorAll('.mnode-a').length);
@@ -95,6 +114,25 @@ const MAPKVOV = (() => {
     const n = m.match(/matrix\(([^)]+)\)/);
     return n ? parseFloat(n[1].split(",")[0]) : NaN;
   });
+  /* THE PEAK OF THE FLIGHT, NOT ONE SAMPLE PARTWAY THROUGH IT. Both overshoot
+     arms below used to read the transform once, 130ms after the click, and that
+     went red once in four runs on an unchanged page: the transition can start a
+     frame or two late, so the lone sample lands before the curve has passed 1
+     and an overshoot that did happen reads as absent (measured: mid 1.33558
+     against a settled 1.35 — a fail on a build with a perfectly good spring).
+     The claim is "at some point it goes past its landing", so the instrument is
+     a MAX over the flight: the same assertion, sampled where it can be seen.
+     Still a real measurement of a real overshoot — a plain ease never exceeds
+     its target at any sample, so it fails this exactly as it failed the old
+     one. */
+  const peakOf = async (read, ms = 300) => {
+    let hi = 0;
+    for (let t = 0; t < ms; t += 20) {
+      hi = Math.max(hi, await read());
+      await new Promise(r => setTimeout(r, 20));
+    }
+    return hi;
+  };
   const before = await page.evaluate(() => {
     const a = document.querySelector('.mnode-a'), r = a.getBoundingClientRect();
     const cs = getComputedStyle(a), t = a.querySelector('text.mtitle');
@@ -105,13 +143,13 @@ const MAPKVOV = (() => {
             boxH: a.querySelector('.mnode').getBBox().height};
   });
   const scale0 = await scaleOf();
+  const vb0 = await camW();
   await clickNode(0);
-  // Mid-flight. A back-out curve is PAST its destination at this point; a plain
-  // ease has not reached it. That difference is the whole "boing" — and it has
-  // to be read off the transform, because the camera glide is moving at the same
+  // Mid-flight. A back-out curve goes PAST its destination somewhere in here; a
+  // plain ease never does. That difference is the whole "boing" — and it has to
+  // be read off the transform, because the camera glide is moving at the same
   // time and would otherwise be indistinguishable from the spring.
-  await new Promise(r => setTimeout(r, 130));
-  const midScale = await scaleOf();
+  const midScale = await peakOf(scaleOf);
   await new Promise(r => setTimeout(r, 900));
   const scale1 = await scaleOf();
   const after = await page.evaluate(() => {
@@ -140,12 +178,90 @@ const MAPKVOV = (() => {
      alone can only ever deliver its own 1.35; anything past that came from the
      camera, which is the half the transform cannot do. 1.6 therefore fails a
      build where selection stopped zooming, and the absolute floor beside it
-     stops a tiny court satisfying the ratio while still being unreadable. */
+     stops a tiny court satisfying the ratio while still being unreadable.
+     MEASURED ON THE COMPLETING PICK, not on the first one. The camera now
+     arrives in two steps (see the staged-zoom block below), so "is the picked
+     title readable" is a question about where the zoom ENDS — asking it after
+     the first click would pin half a zoom as the readable size and quietly
+     re-open the bug this arm was written for. */
+  const {vb1, vbRel, vb2, vb3, full} = await (async () => {
+    /* THE ZOOM ARRIVES IN TWO PICKS — half the distance on the first, the rest
+       on the next. The owner asked for exactly that: "instead of zooming all the
+       way to the node at once ... rather zoom half as much so that i need to
+       click it again to get the full zoom effect."
+       FOUR MORE CLICKS FOR TWO PICKS, and the ones in between are the point. A
+       re-click on a held claim RELEASES it — deliberate, owner-reported, and
+       covered further down — so the gesture that completes the zoom is the next
+       PICK of that node: click, put out, pick again. The release is measured
+       too: dismissing a node is not a request to travel, and a camera that
+       moved on it would be gliding toward something the reader just put away.
+       AND A THIRD PICK MUST MOVE NOTHING, which is the arm that separates "the
+       second pick completes it" from "every pick halves what is left". Under
+       repeated halving both steps above still go inward, so neither would
+       notice, and the camera would creep toward a reading size it never
+       reaches — the Zeno case the tolerable-for-panning blend beside it can
+       live with and a readability threshold cannot. */
+    const vb1 = await camW();
+    await clickNode(0);                        // releases the held claim
+    await new Promise(r => setTimeout(r, 700));
+    const vbRel = await camW();
+    await clickNode(0);                        // ...and THIS pick completes the zoom
+    await new Promise(r => setTimeout(r, 900));
+    const vb2 = await camW(), full = await selTitleH();
+    await clickNode(0);                        // out again
+    await new Promise(r => setTimeout(r, 300));
+    await clickNode(0);                        // a third pick: already all the way in
+    await new Promise(r => setTimeout(r, 900));
+    return {vb1, vbRel, vb2, vb3: await camW(), full};
+  })();
+
+  ok(`the first pick zooms in (viewBox ${vb0} -> ${vb1})`,
+     vb0 > 0 && vb1 < vb0 * 0.999,
+     "a viewBox that did not narrow is a camera that did not move");
+  ok(`...but only partway — the next pick goes further in (${vb1} -> ${vb2})`,
+     vb2 < vb1 * 0.99, "one click zoomed all the way in, which is what was asked away");
   {
-    const ratio = after.titleH / before.titleH;
-    ok(`the picked title is readable, not just bigger (${before.titleH}px -> ${after.titleH}px, ${ratio.toFixed(2)}x)`,
-       ratio >= 1.6 && after.titleH >= 30,
+    // HALF IN LOG UNITS, because that is the unit the wheel, the slider and
+    // glideTo all work in. Bracketed rather than pinned: the fraction is exact
+    // arithmetic on the camera, but zMax and the LOD floor can both clamp the
+    // target, and the claim being made is "about half", not a specific decimal.
+    const frac = Math.log(vb0 / vb1) / Math.log(vb0 / vb2);
+    ok(`...and the first pick covered about half of the zoom (${frac.toFixed(2)} of it)`,
+       frac > 0.3 && frac < 0.8, `vb ${vb0} -> ${vb1} -> ${vb2}`);
+  }
+  ok(`releasing a node does not travel (${vb1} -> ${vbRel})`,
+     Math.abs(vbRel / vb1 - 1) < 0.002, "the camera moved on a click that put a node out");
+  ok(`...and a third pick has nowhere left to go (${vb2} -> ${vb3})`,
+     Math.abs(vb3 / vb2 - 1) < 0.002,
+     "the zoom is still creeping inward, so it never arrives");
+  {
+    const ratio = full / before.titleH;
+    ok(`the picked title is readable, not just bigger (${before.titleH}px -> ${full}px, ${ratio.toFixed(2)}x)`,
+       ratio >= 1.6 && full >= 30,
        "the 1.35 spring alone would give " + (before.titleH * 1.35).toFixed(1) + "px");
+  }
+  /* A DEEP LINK ARRIVES ALL THE WAY IN, IN ONE MOVE. Staging the zoom is about
+     the CLICK: a click is a step toward a node, and the reader can stop halfway.
+     ?focus=<id> is a claim page's "map →" saying "this one" — the choice was
+     made before the map existed, and landing that reader at half a zoom would
+     make the link keep half its promise.
+     ASSERTED AGAINST THE CLICK PATH'S OWN FINISHED ZOOM rather than a literal.
+     Both are fit.w/tz for the same tz, so they must agree exactly — and a
+     literal here would be a second copy of a number that moves with the
+     fixture, passing on a map it no longer describes. This is also the only arm
+     that says the two routes to a selected node end in the same place. */
+  {
+    const id0 = await page.evaluate(() => {
+      const a = document.querySelector('.mnode-a[data-id]');
+      return a ? a.getAttribute('data-id') : null;
+    });
+    await page.evaluate((s, i) => { location.hash = `/c/${s}/map?focus=${i}`; }, slug, id0);
+    await new Promise(r => setTimeout(r, 1600));
+    const vbF = await camW();
+    ok(`?focus= lands at the finished zoom, not half of it (${vbF} vs ${vb2})`,
+       vbF != null && Math.abs(vbF / vb2 - 1) < 0.002,
+       `id=${id0} — half a zoom from this fixture's fit would be about ` +
+       (Math.sqrt(vb0 * vb2)).toFixed(1));
   }
   ok("...quickly — under a quarter second",
      parseFloat(before.dur) > 0 && parseFloat(before.dur) <= 0.25, "dur=" + before.dur);
@@ -280,8 +396,7 @@ const MAPKVOV = (() => {
       const n = m.match(/matrix\(([^)]+)\)/);
       return n ? parseFloat(n[1].split(",")[0]) : NaN;
     }, k);
-    await new Promise(r => setTimeout(r, 130));
-    const wMid = await mtx(kind);
+    const wMid = await peakOf(() => mtx(kind));
     await new Promise(r => setTimeout(r, 900));
     const w1 = await page.evaluate(k =>
       document.querySelector(k).classList.contains('selected'), kind) ? await mtx(kind) : null;
