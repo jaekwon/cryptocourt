@@ -125,10 +125,17 @@ const PAGE = 'file://' + path.join(__dirname, '..', '..', 'index.html');
      JSON.stringify(filled));
   const metaRow = filled.find(c => c.slug === "meta");
   if (metaRow) {
-    ok("...while the meta court says where its coin comes from",
-       /earned by burning on other courts/.test(metaRow.small), JSON.stringify(metaRow));
-    ok("...and does not print its structural zero as a measurement",
-       !/GNOT burned/.test(metaRow.small), JSON.stringify(metaRow));
+    /* META'S BURN IS REAL, UNRECORDED, AND RECOVERABLE. Same curve as every
+       court — a position implies the GNOT that reached it — so the figure is
+       computed rather than read, and the label says where the burning happened.
+       Read live at a position of 2,007,984,062: the curve gives 2,015,999,997
+       µGNOT against 2,016.0 GNOT of entitlement actually consumed, the same
+       number to a rounding remainder of one micro-unit. */
+    ok("...while the meta court names where the burning happened",
+       /on other courts/.test(metaRow.small), JSON.stringify(metaRow));
+    ok("...and gives the figure rather than its structural zero",
+       /GNOT/.test(metaRow.small) && !/^0(\.0+)? GNOT/.test(metaRow.small),
+       JSON.stringify(metaRow));
   }
   /* AND NO PRICE. The unit price is on the court's own page, where a reader who
      wants to buy is already standing. "µGNOT/unit" was the old cell's caption

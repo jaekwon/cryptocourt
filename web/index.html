@@ -4454,6 +4454,26 @@ async function balanceOf(slug,addr){
    ONE READ, and it is not court-scoped: the entitlement is a property of the
    ADDRESS, earned across every court it has ever bought into. */
 const META_SLUG = "meta";
+/* WHAT WAS BURNED TO EARN META'S COIN, which the realm does not record and can
+   still be stated exactly. Every court's coin sits on the same curve — cost is
+   ceil(minted²/2e9), so a position implies the GNOT that reached it — and meta
+   is no exception. What is different is only WHERE the burn was recorded: Buy
+   calls reindexBurn beside the mint, and ClaimMetaFranchise does not, because
+   the GNOT was already burned into whichever court the claimant bought.
+   SO CourtBurnedGNOT("meta") IS ZERO FOREVER, by construction, and the honest
+   figure is the curve's own: read live on kourt.xyz at a position of
+   2,007,984,062, this gives 2,015,999,997 µGNOT against 2,016.0 GNOT of
+   entitlement actually consumed by the three claims that reached it — the same
+   number, to a rounding remainder of one micro-unit.
+   EXACT WHILE NOTHING HAS BEEN BURNED BACK. Coin burns move supply without
+   moving the curve position, which is why this reads the POSITION rather than
+   the supply; the same reason check-demo-physics derives minted the way it does.
+   Called only for meta: every other court has a recorded figure, and a recorded
+   one is the truth wherever it exists. */
+const metaBurnFromCurve = minted =>
+  Number.isFinite(minted) && minted > 0
+    ? Math.ceil((minted * minted) / 2_000_000_000)
+    : (minted === 0 ? 0 : null);
 async function franchiseOf(addr){
   if(!addr) return 0;
   if(!isLive()) return Object.hasOwn(DEMO_FRANCHISE, addr)? DEMO_FRANCHISE[addr] : 0;
@@ -7896,7 +7916,8 @@ on(/^\/$/, async ()=>{
          is what was spent to build it; meta's is where its coin comes from. */
       if(el&&s) el.innerHTML = `<b>${cc(s.supply, c.slug)}</b>`
         + `<small>${c.slug === META_SLUG
-            ? "earned by burning on other courts"
+            ? ((b => b == null ? "earned by burning on other courts"
+                               : gnotAmt(b) + " burned on other courts")(metaBurnFromCurve(s.minted)))
             : (Number.isFinite(s.burned)? gnotAmt(s.burned)+" burned" : "burn unread")}</small>`;
       if(s && c.claims==null){
         // a featured court occupying a deep-window slot: the render skips it
@@ -12518,7 +12539,17 @@ function courtStatsHtml(slug, s){
     // gnotAmt, not ugnot: three cells share the left column, so "13053599975
     // µGNOT" does not fit and reads worse than "13,054 GNOT" anyway. That
     // helper already handles the dust case where GNOT rounds to a bare 0.
-    statTile("GNOT burned", Number.isFinite(s.burned)? gnotAmt(s.burned) : "—",
+    /* META'S BURN IS REAL AND UNRECORDED, so the tile computes it rather than
+       printing the structural zero. Same curve as every court — a position
+       implies the GNOT that reached it — and the only difference is that
+       ClaimMetaFranchise does not call reindexBurn, because the GNOT was already
+       burned into whichever court the claimant bought. The label says where. */
+    slug === META_SLUG
+      ? statTile("GNOT burned for this coin",
+          (b => b == null ? "—" : gnotAmt(b))(metaBurnFromCurve(s.minted)),
+          "burned on other courts, and earned here — this court's own burn is "
+          + "always zero, because nothing is ever burned directly for it")
+      : statTile("GNOT burned", Number.isFinite(s.burned)? gnotAmt(s.burned) : "—",
       sinceLabel(burnSer, s.nowUnix),
       tileSpark(burnSer)),
   ];

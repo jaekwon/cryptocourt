@@ -17,7 +17,7 @@
 // WHICH IS THE PART THAT HAS TO BE SAID OUT LOUD. "Supply 0" beside a live
 // entitlement is not a small omission; it is the page stating the opposite of
 // what is true. Every assertion here is about the page saying it.
-const { src, fn } = require("./srcslice");
+const { src, fn, slice } = require("./srcslice");
 
 let fail = 0;
 const ok = (n, c, d) => { if (!c) { fail++; console.log("FAIL:", n, d || ""); } else console.log("ok:", n); };
@@ -269,6 +269,27 @@ ok("...and has some waiting too", /const DEMO_FRANCHISE = \{ \[DEMO_ME\]: [0-9_]
 ok("...declared after the address it is keyed by, not inside the demo object",
    src.indexOf("const DEMO_ME =") < src.indexOf("const DEMO_FRANCHISE ="),
    `DEMO_ME at ${src.indexOf("const DEMO_ME =")}, map at ${src.indexOf("const DEMO_FRANCHISE =")}`);
+
+/* ---- what was burned to earn meta's coin -----------------------------------
+   The realm records nothing: Buy calls reindexBurn beside the mint and
+   ClaimMetaFranchise does not, because the GNOT was already burned into
+   whichever court the claimant bought. So CourtBurnedGNOT("meta") is zero
+   forever, by construction — and the figure is still exactly recoverable,
+   because meta sits on the SAME curve as every other court and a position
+   implies the GNOT that reached it. */
+const burn = eval(slice("const metaBurnFromCurve", "\nasync function").replace(/^const /, "var ") + "; metaBurnFromCurve");
+/* PINNED TO A MEASUREMENT, NOT TO THE ARITHMETIC RESTATED. Read off kourt.xyz
+   after three accounts claimed: CurvePosition("meta") was 2,007,984,062, and the
+   entitlement those three claims consumed was 2,016.0 GNOT. The curve gives
+   2,015,999,997 µGNOT — the same number to a rounding remainder of one
+   micro-unit, which is what makes this a derivation rather than a guess. */
+ok("the curve cost of meta's live position matches what was actually consumed",
+   burn(2007984062) === 2015999997, String(burn(2007984062)));
+ok("...and it is ceil, so a part-unit of burn is never rounded away",
+   burn(1) === 1 && burn(44721) === 1, `${burn(1)} ${burn(44721)}`);
+ok("a court at position zero has burned nothing", burn(0) === 0);
+ok("...and an unread position gives no figure rather than a wrong one",
+   burn(null) === null && burn(undefined) === null);
 
 /* ---- the wiring ------------------------------------------------------------ */
 ok("the read is by ADDRESS, not by court — it is earned everywhere",
