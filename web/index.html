@@ -13691,11 +13691,26 @@ function mountMap(slug, data, focusId, focusPath){
      THE ZOOM INTERPOLATES GEOMETRICALLY. Scale reads logarithmically, so a linear
      ramp from 1 to 4 spends most of its time already zoomed in and lands with a
      lurch; z0*(tz/z0)^e keeps the apparent rate even.
+     ONE MOVEMENT, WHICH IS A CLAIM ABOUT THE VELOCITY AND NOT ONLY ABOUT THE
+     NUMBER OF TWEENS. An ease-out leaves at three times its average speed and
+     arrives at nothing, and a reader sees that as two movements rather than one:
+     a lurch, then a creep that follows it. Measured on the live covid map, a
+     single glide moved 72 world units in its first frame and 1 in its last, and
+     it was reported as "two movements, it isn't continuous".
+     SO THE CURVE IS STILL AT BOTH ENDS. Smoothstep peaks halfway through at one
+     and a half times the average and is motionless where the eye looks for a
+     seam, which is the whole of what makes a sweep read as continuous.
+     AND THE DURATION FOLLOWS THE DISTANCE. A flick to the neighbouring node and
+     a sweep across the graph cannot honestly take the same time: at a fixed
+     220ms the long one has to cover a third of its travel per frame no matter
+     how it is eased. Measured in viewports, so it is the same judgement at every
+     zoom, and capped at one so crossing three viewports is not three times the
+     wait.
      THE FRAME CAP IS NOT DECORATION. A host that runs requestAnimationFrame
      synchronously — the map's own test harness does — would otherwise recurse
      once per iteration until the wall clock ran out, thousands deep. Capped, that
      host completes the glide in 120 nested calls and lands exactly on target; a
-     real browser needs about 13 frames and never reaches it. */
+     real browser needs about 30 frames and never reaches it. */
   function glideTo(tx, ty, tz){
     stopTween();
     const still = Math.abs(tx-cx)<0.5 && Math.abs(ty-cy)<0.5 && Math.abs(Math.log2(tz/z))<0.01;
@@ -13703,12 +13718,17 @@ function mountMap(slug, data, focusId, focusPath){
                 && matchMedia("(prefers-reduced-motion: reduce)").matches;
     if(still || reduce){ cx=tx; cy=ty; z=tz; schedule(); return; }
     const clock = ()=> typeof performance==="object" && performance.now? performance.now() : 0;
-    const x0=cx, y0=cy, z0=z, t0=clock(), MS=220;
+    const x0=cx, y0=cy, z0=z, t0=clock();
+    // How far this is, in viewports of pan and in halvings of zoom, whichever
+    // asks for more time.
+    const span = Math.min(1, Math.max(Math.hypot(tx-x0, ty-y0)/(fit.w/z0),
+                                      Math.abs(Math.log2(tz/z0))/2));
+    const MS = 200 + 260*span;
     tweenFrames=0;
     const step=()=>{
       let k=Math.min(1, (clock()-t0)/MS);
       if(++tweenFrames>=120) k=1;
-      const e=1-Math.pow(1-k,3);            // ease-out: fastest at the start
+      const e=k*k*(3-2*k);      // smoothstep: still at both ends, quick in the middle
       cx=x0+(tx-x0)*e; cy=y0+(ty-y0)*e; z=z0*Math.pow(tz/z0, e);
       apply();
       tween = k<1? requestAnimationFrame(step) : 0;
