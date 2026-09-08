@@ -1079,6 +1079,19 @@ a.card:hover{border-color:var(--line-2)}
   .rail.chatbig .nav{padding-top:0}
   .rail.chatbig .brand .tag{display:none}
   .rail.chatbig .railchat .chatlog{max-height:none}
+  /* AND THE FOOT IS SPENT TOO, for the same reason the nav is. It holds the
+     node/source controls — demo or live, the RPC endpoint — and nobody retunes
+     which chain they are reading while they are talking on it. Measured at
+     1440x900: 86px of the rail, which is ten points of log, taking the expanded
+     panel from 59% to 69%. It returns on collapse, exactly as the nav does.
+     THE BRAND STAYS, TRIMMED. Once the nav is folded the mark is the only way
+     back to the directory, so hiding it is not available: it buys eight points
+     and takes the exit with it. Its 22px of padding is worth two points on its
+     own and leaves a 265x32 link, which is the trade this takes. Measured, both
+     of them, at 1440x900 and 1440x700 — the numbers above are from the second
+     rail this file has, not from arithmetic. */
+  .rail.chatbig .foot{display:none}
+  .rail.chatbig .brand{padding:8px 12px}
 }
 /* The court coin's name, everywhere it is written. One hardcoded purple rather
    than a theme token: the token IS the colour, and it must read the same in
