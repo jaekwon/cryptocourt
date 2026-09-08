@@ -784,6 +784,88 @@ func TestTheDefaultGreetWindowAnswersSomebodyTalkingToThemselves(t *testing.T) {
 	}
 }
 
+// A GREETING ONE WORD OVER BUDGET IS PRINTED, NOT CHOPPED. Found by the
+// ten-minute health probe against the live site: a new reader's "hi" was
+// answered with
+//
+//	"Hey! Got questions about how Kourt"
+//
+// which is a question cut off before its verb, with no punctuation, and it was
+// the first thing that reader ever saw from this site. The model had returned
+// "Hey! Got questions about how Kourt works?" — 41 characters against a limit
+// of 40 — and botTrimTo did what it is told: no sentence end past the halfway
+// mark (the "!" sits at index 3), so it fell through to the last word boundary.
+//
+// THE FIXTURE IS THE MEASURED STRING. A test written with some other 41-char
+// greeting would pass on a build that still chopped this one, because what
+// makes it chop is WHERE the punctuation falls, not the length alone.
+//
+// AND THE TWO NUMBERS ARE PINNED WITH LITERALS. They have different jobs — 40
+// is what the model is asked for, 52 is what will be printed — so an edit to
+// either should be a deliberate act with a test to change, not a silent
+// widening of what a "greeting" may be.
+func TestAGreetingJustOverBudgetIsNotChoppedMidSentence(t *testing.T) {
+	if botGreetMaxChars != 40 || botGreetHardMax != 52 {
+		t.Fatalf("the asked-for and printed caps are 40 and 52, got %d and %d",
+			botGreetMaxChars, botGreetHardMax)
+	}
+	const measured = "Hey! Got questions about how Kourt works?"
+	if len(measured) != 41 {
+		t.Fatalf("the fixture must be the 41-character reply, got %d", len(measured))
+	}
+	if got := botTrimTo(measured, botGreetHardMax); got != measured {
+		t.Errorf("a greeting one word over budget must survive whole:\n got  %q\n want %q", got, measured)
+	}
+	// AND THE OLD LIMIT IS WHAT THE BUG WAS, kept as the control: this is the
+	// exact output that was reported, so the arm above is measuring the change
+	// and not merely restating the string.
+	if got := botTrimTo(measured, botGreetMaxChars); got != "Hey! Got questions about how Kourt" {
+		t.Errorf("the 40-char limit should still chop it — the control has moved: %q", got)
+	}
+	// A REPLY THAT IS WILDLY OVER IS STILL CUT. The grace is a word, not a
+	// licence, so a paragraph answered to "hi" is trimmed as before.
+	long := "Hello there! You can stake on any claim, dispute a verdict, " +
+		"file your own claim, and appeal to the meta court if you disagree."
+	got := botTrimTo(long, botGreetHardMax)
+	if len(got) > botGreetHardMax {
+		t.Errorf("a long greeting must still be cut to %d, got %d: %q", botGreetHardMax, len(got), got)
+	}
+	if got == "" || strings.HasSuffix(got, " ") {
+		t.Errorf("...and must still read as a line: %q", got)
+	}
+
+	/* AND THROUGH THE GREETING PATH, WHICH IS THE ARM THAT MATTERS. Everything
+	   above calls botTrimTo directly, and ABLATION PROVED THAT INSUFFICIENT:
+	   pointing answer() back at the 40-char cap left every assertion above green,
+	   because the trimmer was never the thing that changed — the caller was. A
+	   test that cannot see the wiring it was written for is a test of the wrong
+	   function.
+	   So the bot is driven for real: a quiet room, a bare "hi", a model that
+	   returns the measured 41-character line, and the assertion is on what LANDED
+	   IN THE ROOM. */
+	s, clock := newStore(t)
+	ctx := context.Background()
+	m := &fakeModel{reply: measured, in: 60, out: 12}
+	b := newBot(t, s, m)
+	*clock = clock.Add(time.Hour) // a room nobody has spoken in
+	if _, err := post(t, s, "orem", "ip-greet", "hi"); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.once(ctx); err != nil {
+		t.Fatal(err)
+	}
+	msgs, err := s.Recent(ctx, "dev", "orem", 0, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(msgs) != 2 {
+		t.Fatalf("expected the greeting and one reply, got %d", len(msgs))
+	}
+	if said := msgs[1].Body; said != measured {
+		t.Errorf("the greeting the room received was chopped:\n got  %q\n want %q", said, measured)
+	}
+}
+
 func TestBotAnswersAGreetingOnlyWhenTheRoomWasQuiet(t *testing.T) {
 	s, clock := newStore(t)
 	ctx := context.Background()
@@ -831,9 +913,14 @@ func TestBotAnswersAGreetingOnlyWhenTheRoomWasQuiet(t *testing.T) {
 	   here noticed. The model is given a 54-character line on purpose, longer
 	   than the cap, so the cap has something to do. */
 	said := msgs[len(msgs)-1].Body
-	if len(said) > botGreetMaxChars {
+	/* HELD TO WHAT IS PRINTABLE, WHICH IS NOT WHAT THE MODEL IS ASKED FOR. The
+	   prompt says UNDER 40 CHARACTERS and this is the number that gets enforced
+	   after the fact — botGreetMaxChars plus one short word, so a model that
+	   misses its budget by a word is printed rather than chopped mid-sentence.
+	   See botGreetHardMax for the measurement that made the difference matter. */
+	if len(said) > botGreetHardMax {
 		t.Errorf("a greeting reply must be held to %d chars, got %d: %q",
-			botGreetMaxChars, len(said), said)
+			botGreetHardMax, len(said), said)
 	}
 	if said == "" {
 		t.Error("...and it must still say something")

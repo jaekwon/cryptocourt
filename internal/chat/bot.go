@@ -187,6 +187,27 @@ const (
 	// paragraph appearing instantly is what gives a helper away.
 	botGreetWithin   = 1200 * time.Millisecond
 	botGreetMaxChars = 40
+	/* AND WHAT IS REFUSED IS NOT THE SAME NUMBER AS WHAT IS ASKED FOR. The model
+	   is told UNDER 40 CHARACTERS and mostly obeys; when it misses, it misses by
+	   a word, and cutting there is worse than printing the word.
+	   MEASURED ON THE LIVE SITE: "Hey! Got questions about how Kourt works?" is
+	   41 characters against a limit of 40, and botTrimTo turned it into "Hey! Got
+	   questions about how Kourt" — a question chopped before its verb, with no
+	   punctuation. A greeting that reads as broken is worse than a greeting one
+	   character over budget, and this was the FIRST thing a new reader saw.
+	   WHY THE TRIMMER IS NOT THE PLACE TO FIX IT. Its fallback prefers a
+	   sentence end past the halfway mark and then a word boundary, and that order
+	   is right for the 360-character ANSWER path it also serves: preferring any
+	   sentence end would turn a long answer opening with "Hi." into a three-
+	   character reply. The greeting is the caller that needs the slack, so the
+	   greeting is where the slack belongs.
+	   DERIVED, NOT A SECOND LITERAL, so the two can never drift: this is the
+	   asked-for length plus one short word. It costs nothing in plausibility
+	   because a greeting's delay is the fixed botGreetWithin regardless of
+	   length — the "a hundred characters took four and a half seconds" reasoning
+	   above stopped applying to greetings when that beat became fixed. */
+	botGreetGrace   = 12
+	botGreetHardMax = botGreetMaxChars + botGreetGrace
 )
 
 // botIPHash is the ip_hash the bot's own rows carry.
@@ -770,7 +791,7 @@ func (b *Bot) answer(ctx context.Context, c botCandidate) error {
 	   the LENGTH that reconciles them: hold a greeting to what a greeting is and
 	   the ~1s follows from the same model that makes a paragraph take twenty. */
 	if c.greeting {
-		text = botTrimTo(text, botGreetMaxChars)
+		text = botTrimTo(text, botGreetHardMax)
 	} else {
 		text = botTrim(text)
 	}
