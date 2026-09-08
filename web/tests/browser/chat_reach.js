@@ -239,7 +239,24 @@ const HEIGHTS = [1000, 900, 800, 760, 700, 620];
         const t = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
         at = t && typeof t.className === "string" ? t.className : (t ? t.tagName : "none"); }
       const btn = document.getElementById('chatbig');
+      /* THE RAIL, THE FOOT AND THE WAY HOME. The arms above prove the log grows
+         and the nav folds; none of them says how much of the SIDEBAR the reader
+         actually gets, which is the thing that was asked for. And once the nav
+         is folded the brand mark is the only route back to the directory, so it
+         has to be hit-tested rather than assumed present. */
+      const rail = document.querySelector('.rail');
+      const foot = document.querySelector('.rail .foot');
+      const mark = document.querySelector('.brand .mark');
+      const mr = mark ? mark.getBoundingClientRect() : null;
+      let home = "none";
+      if (mr && mr.width > 0) {
+        const t = document.elementFromPoint(mr.left + mr.width / 2, mr.top + mr.height / 2);
+        home = t && t.closest('.brand .mark') ? "mark" : (t ? "blocked" : "none");
+      }
       return {log: hgt(log), nav: hgt(link), send: at,
+              rail: hgt(rail), foot: hgt(foot), home,
+              homeBox: mr ? Math.round(mr.width) + "x" + Math.round(mr.height) : "none",
+              share: hgt(rail) ? Math.round(100 * hgt(log) / hgt(rail)) : 0,
               label: btn ? btn.textContent.trim() : null,
               expanded: btn ? btn.getAttribute('aria-expanded') : null};
     });
@@ -265,6 +282,40 @@ const HEIGHTS = [1000, 900, 800, 760, 700, 620];
     ok(`...and collapsing puts both back exactly (${shut.log}px log, ${shut.nav}px nav)`,
        shut.log === before.log && shut.nav === before.nav,
        `expected ${before.log}/${before.nav}`);
+    /* AND THE READER GETS MOST OF THE SIDEBAR, which is the ask this whole
+       toggle answers. Measured on this fixture: 0% -> 47% at 700 and 9% -> 63%
+       at 1000. The floors are set from what the mode achieved BEFORE the foot
+       was folded away — 22% and 45% — so each arm fails on the version that
+       left the node controls in place rather than merely restating today's
+       number. The rest is not waste: the composer, the heading that carries
+       this button, and the count above the box are what the panel is for.
+       THE BRAND'S TRIMMED PADDING IS NOT PINNED, and that is deliberate rather
+       than an oversight: it is worth two points, so any floor low enough to
+       survive without it is too low to catch the foot regression these arms
+       exist for. Measured — reverting the trim leaves every arm here green. The
+       padding is an optimisation; the foot is the feature. */
+    ok(`at ${h}px the expanded log takes most of the rail (${before.share}% -> ${open.share}%)`,
+       open.share >= (h >= 1000 ? 55 : 40),
+       `${open.log}px of a ${open.rail}px rail`);
+    /* THE NODE CONTROLS FOLD WITH THE NAV. Demo-or-live and the RPC endpoint are
+       settings, and nobody retunes which chain they are reading while they are
+       talking on it. 174px on this fixture, and the arm pairs with the
+       restoration one below: a setting that folds away and does not come back is
+       a setting the reader has lost. */
+    ok(`...by folding the node controls too (foot ${before.foot}px -> ${open.foot}px)`,
+       before.foot > 0 && open.foot === 0,
+       "the source controls still hold rail height while the chat is expanded");
+    ok(`...and they come back on collapse (${shut.foot}px)`,
+       shut.foot === before.foot, `expected ${before.foot}px`);
+    /* AND THE WAY OUT SURVIVES. With the nav folded, the brand mark is the only
+       link back to the directory in the rail. Trimming its padding to buy log
+       height is fine; trimming it until it stops taking a click is not, and
+       hiding it outright — which buys eight more points — would leave a reader
+       expanded with no exit but this button. Hit-tested at its centre, not
+       measured, because a link under something else is not a link. */
+    ok(`...and the way home is still clickable while expanded (${open.homeBox})`,
+       open.home === "mark", `the centre of the brand mark reached ${open.home}`);
+
     /* THE 15rem CAP COMES OFF, and only a tall window can say so: at 700 the
        freed height is under the cap, so the arm above passes either way. At
        1000 there is 453px of room and chat.js's max-height would stop the log
