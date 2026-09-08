@@ -2988,6 +2988,46 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
               because refusing a bad exhibit in front of the author is the whole
               job and guessing at those rules would be worse than not offering
               the feature. See docs/CLAIM_MEDIA.md. -->
+<script data-early>
+/* MARKED data-early, AND THE ATTRIBUTE IS LOAD-BEARING TWICE OVER. Two guards
+   find "the script body" by searching for an opening script tag with no
+   attributes on it: check-web-dupes takes everything from the first one to the
+   last closing tag, and a selftest control arm plants a misspelling over it to
+   prove that scan can fail loudly. A second attribute-less one broke both — the
+   dupes scan started here and swallowed the two src tags as text, and the
+   control arm's anchor matched twice, so its plant became a no-op. That is the
+   failure this repo calls a BROKEN CONTROL: the guard runs against an
+   unmodified tree and proves nothing. check-control-anchors caught it.
+   An attribute keeps this block out of both, and it declares no names a
+   duplicate scan would want to see.
+   THE COMMENT MUST NOT SPELL THE TAG EITHER. The anchor is a plain substring
+   search over the whole file, so an explanation that quoted the thing it was
+   explaining counted as two more occurrences and kept the arm broken. */
+/* A TRAILING SLASH MOVES chat.js, SO IT IS STRIPPED BEFORE chat.js IS ASKED FOR.
+   The two script tags below are RELATIVE, which is what keeps this file working
+   from a file:// path and out of a webroot alike. Relative to WHAT is decided by
+   the document's own URL: served at /covid the base is /, so chat.js is
+   /chat.js; served at /covid/ the base is /covid/, so chat.js is
+   /covid/chat.js — which nginx answers with the fallback, meaning the page loads
+   ITSELF as JavaScript, mountChat never exists and the court page has no chat
+   panel. Measured: /covid/ resolved to the right route and still reported
+   panel:false, input:false.
+   SO IT MUST HAPPEN HERE, above the tags. The adopt block at the bottom of the
+   file fixes the ROUTE and runs far too late to fix the base — by then the
+   wrong script has already been fetched.
+   AND IT IS A REAL NAVIGATION, not replaceState: the base URL is fixed when the
+   document is fetched, so the only way to change where a relative src points is
+   to fetch the document again. One extra request, for a URL shape nothing on
+   this site links to.
+   file:// IS EXEMPT because there is no fallback to be confused by, every
+   browser check here runs from a file:// path ending in index.html, and
+   rewriting that would point the page at file:///chat.js. Loop-free: the
+   condition is false the moment the slash is gone. */
+if(location.protocol !== "file:" && location.pathname !== "/"
+   && /\/$/.test(location.pathname))
+  location.replace(location.pathname.replace(/\/+$/, "")
+    + location.search + location.hash);
+</script>
 <script src="chat.js"></script>
 <script src="media.js"></script>
 <script>
