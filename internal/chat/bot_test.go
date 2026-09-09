@@ -1882,6 +1882,57 @@ func TestTheSystemPromptSaysWhatTheBellIs(t *testing.T) {
 }
 
 /*
+AND THE PROMPT MUST NAME THE WEIGHTING THE REALM ACTUALLY USES, because the one
+it named had been deleted from the realm.
+
+	MEASURED IN A PROBE ROOM: asked how staking works, the clerk closed with
+	"newly minted court coin on top of it, weighted by how long you held it and
+	how right you were". The first half is conviction and correct. The second is
+	an invention, and it came from the prompt: the payout paragraph said winners
+	are weighted "by an adjudicated quality tier", so the model glossed an
+	adjudicated tier as a judgement of the staker.
+	THE ADJUDICATED TIER IS GONE. openrewards.gno says so in as many words —
+	"THE MULTIPLIER IS THE CLAIM'S OWN SIZE now, not a voted band (tier.gno). It
+	was mustMul(cs.tier, midGross) with tier in {0,1,2}" — and the replacement is
+	tierBpsFor, which computes xBarFrozen × tierParBps / tierRef and clamps it,
+	where tierRefAt is documented as "the claim size that earns exactly 1×,
+	resolved at the answer and then frozen" against "THE COURT'S OWN TYPICAL
+	CLAIM". Live in the reward path at openrewards.gno:437, not just in comments.
+	SO IT IS MECHANICAL, NOT A VERDICT ON THE STAKER: a claim of average size for
+	its court earns par by construction, and within the winning side what varies
+	is stake × time and the claim's size — never how right anyone was, since
+	everyone on the winning side won.
+	ASSERTED ON THE PROMPT for the reason the tests above give. This one is the
+	first divergence found between the prompt and a realm that moved underneath
+	it, rather than a gap the prompt never filled.
+*/
+func TestTheSystemPromptNamesTheRealWeighting(t *testing.T) {
+	p := strings.Join(strings.Fields(botSystem), " ")
+	for _, phrase := range []string{
+		"conviction",                            // the first weight, unchanged
+		"claim's own size measured against",     // the second, as the realm computes it
+		"typically worth",                       // and what it is measured against
+		"Nothing weights a winner by how right", // said as an instruction
+	} {
+		if !strings.Contains(p, phrase) {
+			t.Errorf("the system prompt must name the real weighting, missing %q", phrase)
+		}
+	}
+	// AND IT MUST NOT NAME THE DELETED ONE, nor the gloss it produced.
+	for _, wrong := range []string{
+		"adjudicated quality tier",
+		"quality tier",
+		"how right you were",
+		"weighted by how right",
+		"voted band",
+	} {
+		if strings.Contains(strings.ToLower(p), strings.ToLower(wrong)) {
+			t.Errorf("the prompt names a weighting the realm no longer has: %q", wrong)
+		}
+	}
+}
+
+/*
 THE CLERK CAN SEE HOW MANY CLAIMS THE ROOM HAS.
 
 	REPORTED TWICE, in the same words: "the clerk doesn't answer anything related

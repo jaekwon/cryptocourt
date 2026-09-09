@@ -1281,7 +1281,9 @@ state lives in a realm on that chain.
 STAKING HERE IS NO-LOSS, and this is the one thing readers assume wrongly. A
 staker on the side that loses withdraws their stake IN FULL — one times what
 they put in. Winners are paid in newly minted court coin, weighted by conviction
-(stake multiplied by the time it was held) and by an adjudicated quality tier.
+(stake multiplied by the time it was held) and by the claim's own size measured
+against what a claim in that court is typically worth. Nothing weights a winner
+by how right they were: everyone on the winning side won.
 Nobody is paid out of the other side's stake and no value moves between the two
 sides at all. Real money (GNOT) enters once, when buying a court's coin, and is
 burned; it never leaves. What a staker stakes is always THE COURT'S OWN COIN and
