@@ -13127,11 +13127,23 @@ function franchiseHtml(slug, pending, supply, hasMeta, held, onChainDesc){
          claimed by an ordinary transaction and there was nowhere on the site to
          make it. No arguments — ClaimMetaFranchise reads the caller off the
          crossing frame and mints whatever that address has accrued. */
+      /* THE FIGURE AND THE BUTTON, AND NOTHING ELSE. This said the entitlement
+         was "claimable as meta coin at whatever the curve stands at when you
+         claim", and carried a second sentence under the button about what the
+         transaction would and would not touch — three sentences for a reader
+         who has already been told the rule two lines above, in the paragraph
+         that begins "Burning". Both of the removed clauses were that same rule
+         said again in different words, which is worse than saying it once: two
+         phrasings of one fact read as two facts, and the reader goes looking
+         for the difference.
+         THE RULE KEEPS THE PRICING. "How much of that coin the credit becomes
+         depends on the meta court's price on the day you claim it" is the
+         sentence that carries it, it is directly above, and it is now the only
+         place the panel says it. What is left here is the part only this line
+         can say: how much, in the units the entitlement is actually kept in. */
       ? `<p class="fr-mine"><span class="fr-k">yours, waiting</span> `
-        + `<b class="tnum">${gnotAmt(pending)}</b> of burn — claimable as `
-        + `${esc(META_SLUG)} coin at whatever the curve stands at when you claim.</p>`
-        + btn("Claim your meta coin", "ClaimMetaFranchise", {}, "",
-              "mints what you have accrued; the rest of your holdings are untouched")
+        + `<b class="tnum">${gnotAmt(pending)}</b> of burn</p>`
+        + btn("Claim your meta coin", "ClaimMetaFranchise", {}, "")
       : `<p class="fr-mine muted">You have nothing waiting here yet — burn for any `
         + `court's coin and it starts accruing.</p>`;
   /* NOTHING AT ALL WHEN THERE IS NOTHING TO SAY. On meta's own page with the

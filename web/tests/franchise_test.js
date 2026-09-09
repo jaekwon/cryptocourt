@@ -94,7 +94,12 @@ ok("every court page carries the heading", /The meta franchise/.test(anon) && /T
 const mine = html("covid", 554400000, 5105763090, true, null, "");
 ok("a pending entitlement is shown as the GNOT it came from",
    /554\.4 GNOT/.test(mine), mine.slice(mine.indexOf("fr-mine"), mine.indexOf("fr-mine") + 140));
-ok("...and says it is claimable", /claimable as meta coin/.test(mine));
+/* THE BUTTON IS WHAT SAYS IT IS CLAIMABLE. The line used to say "claimable as
+   meta coin at whatever the curve stands at when you claim" and then a control
+   labelled "Claim your meta coin" sat under it saying the same thing. The label
+   is the shorter of the two and it is the one you can press. */
+ok("...and offers it as a labelled control rather than as prose",
+   /Claim your meta coin/.test(mine) && !/claimable as/.test(mine));
 /* AND A WAY TO TAKE IT. Telling a reader what is owed and offering no control is
    the same silence one step on — the entitlement is claimed by an ordinary
    transaction and there was nowhere on the site to make it. */
@@ -102,8 +107,13 @@ ok("...and offers the transaction that takes it",
    /data-func="ClaimMetaFranchise"/.test(mine), mine.slice(mine.indexOf("<button"), 200));
 ok("...with no arguments, because the realm reads the caller off the frame",
    /data-args='\{\}'/.test(mine));
-ok("...and says what it will and will not touch",
-   /the rest of your holdings are untouched/.test(mine));
+/* AND CARRIES NO SECOND SENTENCE UNDER IT. There was a sub-line reading "mints
+   what you have accrued; the rest of your holdings are untouched" — true, and
+   a third statement of a rule the paragraph two lines above already makes. The
+   stubbed btn() renders a sub as <span class="sub">, so its absence is
+   measurable rather than a matter of reading the source. */
+ok("...with no explanatory sub-line under the button",
+   !/class="sub"/.test(mine), mine.slice(mine.indexOf("<button"), mine.indexOf("<button") + 220));
 ok("the confirmation names the claim", /ClaimMetaFranchise: "your meta claim"/.test(src));
 /* ZERO IS NOT THE SAME AS NOT CONNECTED. A connected wallet with nothing waiting
    gets told how to start; an unconnected one is told nothing about itself,
@@ -163,8 +173,16 @@ ok("...and the ones that are shown wear meta's", /CC:META/.test(holds));
    true — GNOT burned — and the sentence says what turns it into coin. */
 ok("the waiting figure is stated in the units it is kept in",
    /of burn/.test(mine) && !/of burn.{0,40}CC:META/.test(mine));
-ok("...and says the curve decides what it becomes",
-   /at whatever the curve stands at when you claim/.test(mine));
+/* AND THE PRICING IS SAID ONCE. It is the rule's job — "how much of that coin
+   the credit becomes depends on the meta court's price on the day you claim it"
+   — and the waiting line used to say it again in its own words. Two phrasings
+   of one fact read as two facts, and a reader goes looking for the difference.
+   ASSERTED AS ONCE, NOT MERELY AS PRESENT, because "present" is what let the
+   duplicate sit there through three rewordings. */
+ok("...and the panel prices the claim exactly once",
+   (mine.match(/on the day you claim/g) || []).length === 1
+   && !/curve stands at/.test(mine),
+   JSON.stringify((mine.match(/on the day you claim|curve stands at/g) || [])));
 
 /* ---- the supply, when it is known ----------------------------------------- */
 /* THE SUPPLY IS NOT REPEATED IN THE PANEL. It is the coin supply, and the stat
