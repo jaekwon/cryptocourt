@@ -154,11 +154,39 @@ const CHATHIDDENPOLL = 15000;
 // narrow. The WORDS stay in aria-label, because a glyph tells a screen reader
 // nothing.
 //
-// EMOJI RATHER THAN A DRAWN MARK, deliberately: these come from the system's own
-// emoji font, so unlike the hieroglyph marks elsewhere in the overlay they need
-// no embedded face and are not the business of check-mark-font.
-const CHATBELLON = "\u{1F514}";   // 🔔
-const CHATBELLOFF = "\u{1F515}";  // 🔕
+// DRAWN, NOT EMOJI — and this reverses what stood here, so the old argument is
+// kept rather than deleted. It said emoji "come from the system's own font, so
+// unlike the hieroglyph marks elsewhere they need no embedded face". True, and
+// it left out what a system font also decides: 🔔 is a gold three-dimensional
+// cartoon on Apple, a flat yellow one on Android, a line drawing on Windows,
+// and 🔕 adds a red stroke on some and not others. The one control in this row
+// looked like a different object on every platform, and none of them looked
+// like the rest of the panel.
+//
+// A PATH NEEDS NO FONT AT ALL, which is strictly better than either: not the
+// emoji font, not the embedded hieroglyph face, and not check-mark-font's
+// business either. It inherits currentColor, so it dims with the row and follows
+// the theme, and it is filled rather than stroked to match the temple in
+// index.html — see TEMPLE_D, the same house style.
+//
+// THE SLASH IS NOT THE ONLY SIGNAL. .chatbell[aria-pressed="false"] already
+// dims to .45, so silenced reads as both struck through and quieter; at 1em the
+// slash alone would be a couple of pixels. The WORDS stay in aria-label, because
+// a glyph tells a screen reader nothing.
+const CHATBELLPATH = "M7 1.1a1.05 1.05 0 0 1 1.05 1.05v.35A4.2 4.2 0 0 1 11.2 6.6"
+  + "v2.15l1.3 1.9H1.5l1.3-1.9V6.6A4.2 4.2 0 0 1 5.95 2.5v-.35A1.05 1.05 0 0 1 7 1.1Z";
+const CHATBELLCLAP = "M5.5 11.35h3a1.5 1.5 0 0 1-3 0Z";
+function chatBellSvg(on) {
+  return '<svg class="chatbellicn" viewBox="0 0 14 14" aria-hidden="true">'
+    + '<path fill="currentColor" d="' + CHATBELLPATH + '"/>'
+    + '<path fill="currentColor" d="' + CHATBELLCLAP + '"/>'
+    // fill="none" is not belt-and-braces: a <path> with no fill attribute fills
+    // black, and this one is an open two-point line whose fill happens to be
+    // empty. Saying so keeps it that way if the stroke ever becomes a shape.
+    + (on ? "" : '<path fill="none" stroke="currentColor" stroke-width="1.5"'
+      + ' d="M1.6 12.4 12.4 1.6"/>')
+    + "</svg>";
+}
 
 function chatBellOn() {
   try { return window.localStorage.getItem(CHATBELLKEY) !== "0"; } catch (e) { return true; }
@@ -241,6 +269,13 @@ const CHATBELLVOL = 0.11;
 // one that rang LONGER than any of the keepers and was refused for being bright.
 // The quality wanted was darkness, not resonance. Emmanuel measures 642 with a
 // 9.8s decay, darker and longer than anything else found.
+//
+// CUT BEFORE THE SECOND STRIKE, which is the whole reason the clip is 3.15s and
+// not longer. Emmanuel is a SWINGING bell: it comes back and strikes again, and
+// at seven seconds the recording caught the return — reported as "the bell
+// chimes twice". Measured in the envelope: a clean decay to 0.25 of the peak by
+// 3.00s, then a 1.73x rise at 3.25s. The linear fade now reaches silence before
+// that, so what is heard is one chime.
 //
 // A SEPARATE FILE RATHER THAN A DATA URI, so the page stays the size it is: this
 // is fetched once, on the first ring, and cached by the browser thereafter.
@@ -624,7 +659,7 @@ function chatPanelHtml(slug, moniker, note, heading) {
     +   '<button class="chatbell" type="button" aria-pressed="true"'
     +     ' aria-label="Ring a bell when somebody posts !?"'
     +     ' title="Ring a bell when somebody posts !? — click to silence it">'
-    +     CHATBELLON + '</button>'
+    +     chatBellSvg(true) + '</button>'
     + "</div>"
     + '<ol class="chatlog" aria-live="polite"></ol>'
     + '<div class="chatstate"></div>'
@@ -861,6 +896,9 @@ const CHATCSS = `
    dimmed so the two read as one control in two positions. */
 .chatbell{background:none;border:0;color:inherit;font:inherit;font-size:1em;
   line-height:1;cursor:pointer;opacity:.8;padding:0 .1rem;margin-left:auto}
+/* 1em SQUARE AND ON THE TEXT BASELINE, so it sits in this row like the glyph it
+   replaced rather than like an image dropped into it. */
+.chatbellicn{width:1em; height:1em; display:block}
 .chatbell:hover{opacity:1}
 .chatbell[aria-pressed="false"]{opacity:.45}
 /* AND THE DISMISS, WHICH HAS TO BE HITTABLE. Padding rather than a bigger glyph,
@@ -1251,7 +1289,9 @@ function mountChat(el, opts) {
     const paintBell = () => {
       const on = chatBellOn();
       bellEl.setAttribute("aria-pressed", on ? "true" : "false");
-      bellEl.textContent = on ? CHATBELLON : CHATBELLOFF;
+      // innerHTML, because the glyph is markup now. Safe: the only thing
+      // written is chatBellSvg's own static path data, never a message body.
+      bellEl.innerHTML = chatBellSvg(on);
     };
     paintBell();
     bellEl.addEventListener("click", () => {
