@@ -129,14 +129,32 @@ function chatFlag(cc) {
                               0x1f1e6 + s.charCodeAt(1) - 65);
 }
 
-// CHATBELLRE is the attention signal: "!?" or "?!" anywhere in a message.
+// CHATBELLRE is the attention signal: a message that ENDS in an exclamation, or
+// carries "!?" / "?!" anywhere in it.
 //
 // A DELIBERATE MARK RATHER THAN EVERY ARRIVAL. A bell on every message is a bell
 // nobody keeps switched on, and one on nothing is a feature nobody finds. This
-// is a thing a reader TYPES when they mean "look at this", so the room decides
-// when it rings.
-const CHATBELLRE = /!\?|\?!/;
+// is punctuation a reader TYPES when they mean "look at this", so the room
+// decides when it rings.
+//
+// IT STARTED AT "!?" ONLY AND THAT WAS TOO NARROW: "Whoa!" is plainly the same
+// signal and was silent. So a trailing "!" counts — trailing, not anywhere,
+// because "don't! stake on that" is an ordinary sentence and would ring on a
+// word in the middle of it. Closing quotes and brackets are allowed after the
+// mark, since "Whoa!" and «Whoa!» are the same act.
+const CHATBELLRE = /!\?|\?!|![\s"'\u2019\u201d)\]}]*$/;
 const CHATBELLKEY = "kourt.chat.bell";
+
+// THE SWITCH WEARS ITS STATE. A bell and a struck-through bell say on and off
+// without a word, which is what the rest of this row does — and the row is
+// narrow. The WORDS stay in aria-label, because a glyph tells a screen reader
+// nothing.
+//
+// EMOJI RATHER THAN A DRAWN MARK, deliberately: these come from the system's own
+// emoji font, so unlike the hieroglyph marks elsewhere in the overlay they need
+// no embedded face and are not the business of check-mark-font.
+const CHATBELLON = "\u{1F514}";   // 🔔
+const CHATBELLOFF = "\u{1F515}";  // 🔕
 
 function chatBellOn() {
   try { return window.localStorage.getItem(CHATBELLKEY) !== "0"; } catch (e) { return true; }
@@ -600,7 +618,9 @@ function chatPanelHtml(slug, moniker, note, heading) {
     +       ' aria-label="dismiss this warning">&times;</button></span>'
     +   '<span class="chatdemo" hidden></span>'
     +   '<button class="chatbell" type="button" aria-pressed="true"'
-    +     ' title="Ring a bell when somebody posts !? — click to silence it">bell</button>'
+    +     ' aria-label="Ring a bell when somebody posts !?"'
+    +     ' title="Ring a bell when somebody posts !? — click to silence it">'
+    +     CHATBELLON + '</button>'
     + "</div>"
     + '<ol class="chatlog" aria-live="polite"></ol>'
     + '<div class="chatstate"></div>'
@@ -832,12 +852,13 @@ const CHATCSS = `
    them — and the page it is embedded in has four themes. Opacity and weight are
    the two levers that cannot fight any of them. */
 .chatwarn{opacity:1;font-size:.88em;font-weight:600}
-/* The bell switch: a word, not a glyph. An icon here would need a font this file
-   does not control, and "bell" struck through says what it is in any of them. */
-.chatbell{background:none;border:0;color:inherit;font:inherit;font-size:.85em;
-  cursor:pointer;opacity:.75;padding:0 .15rem;margin-left:auto}
+/* The bell switch. The glyph itself carries the state — a bell, or a bell with a
+   stroke through it — so nothing here needs to underline the point; off is only
+   dimmed so the two read as one control in two positions. */
+.chatbell{background:none;border:0;color:inherit;font:inherit;font-size:1em;
+  line-height:1;cursor:pointer;opacity:.8;padding:0 .1rem;margin-left:auto}
 .chatbell:hover{opacity:1}
-.chatbell[aria-pressed="false"]{opacity:.4;text-decoration:line-through}
+.chatbell[aria-pressed="false"]{opacity:.45}
 /* AND THE DISMISS, WHICH HAS TO BE HITTABLE. Padding rather than a bigger glyph,
    so the × stays the size of the sentence it ends while the target is bigger
    than the mark — the same lesson the name button in this file learned the hard
@@ -1223,7 +1244,11 @@ function mountChat(el, opts) {
 
   const bellEl = el.querySelector(".chatbell");
   if (bellEl) {
-    const paintBell = () => bellEl.setAttribute("aria-pressed", chatBellOn() ? "true" : "false");
+    const paintBell = () => {
+      const on = chatBellOn();
+      bellEl.setAttribute("aria-pressed", on ? "true" : "false");
+      bellEl.textContent = on ? CHATBELLON : CHATBELLOFF;
+    };
     paintBell();
     bellEl.addEventListener("click", () => {
       const off = chatBellOn();

@@ -45,14 +45,21 @@ const {PAGE, demoPage} = require('./harness');
   await page.goto(PAGE + '#/c/orem', {waitUntil: 'domcontentloaded'});
   await new Promise(r => setTimeout(r, 1200));
 
-  /* THE MARK, AND ONLY THE MARK. "!?" and "?!" ring; an ordinary sentence, an
-     ordinary exclamation and a bare question do not — otherwise every message in
-     a busy room is a summons. */
+  /* THE MARK, AND ONLY THE MARK. A message that ENDS in an exclamation rings, as
+     does "!?" or "?!" anywhere in it. An ordinary sentence, a bare question and
+     a trailing-off thought do not — otherwise every message in a busy room is a
+     summons.
+     IT STARTED AT "!?" ONLY, and "Whoa!" was silent, which was reported straight
+     back: plainly the same signal. TRAILING rather than anywhere, because
+     "don't! stake on that" is an ordinary sentence with an exclamation buried in
+     it and must stay quiet — that case is the whole reason this is anchored. */
   const re = (s) => page.evaluate(s => CHATBELLRE.test(s), s);
-  for (const s of ["look at this !?", "what?!", "!?", "is that right!?"]) {
+  for (const s of ["Whoa!", "whoa?!", "what!?", "look at this!", "!?",
+                   "(Whoa!)", "Whoa!  "]) {
     ok(`"${s}" rings`, await re(s) === true);
   }
-  for (const s of ["hello", "really!", "why?", "what is 2+2?", "!!", "??"]) {
+  for (const s of ["hello", "why?", "what is 2+2?", "??", "wait...",
+                   "don't! stake on that"]) {
     ok(`"${s}" does not`, await re(s) === false);
   }
 
@@ -122,12 +129,23 @@ const {PAGE, demoPage} = require('./harness');
   const bell = await page.evaluate(() => {
     const b = document.querySelector('.chatbell');
     return b ? {on: b.getAttribute('aria-pressed'), text: (b.textContent || '').trim(),
+                aria: b.getAttribute('aria-label') || '',
                 w: Math.round(b.getBoundingClientRect().width)} : null;
   });
   ok("the panel offers a bell switch", !!bell, JSON.stringify(bell));
   ok(`...on by default (aria-pressed=${bell && bell.on})`, bell && bell.on === "true");
-  ok(`...labelled in words rather than a glyph ("${bell && bell.text}")`,
-     !!(bell && /[a-z]/i.test(bell.text)), JSON.stringify(bell));
+  /* A GLYPH, WITH THE WORDS KEPT WHERE A SCREEN READER CAN FIND THEM. This arm
+     used to assert the opposite — that the switch was labelled in words, on the
+     reasoning that an icon would need a font the overlay does not control. That
+     reasoning was wrong for emoji specifically: 🔔 comes from the system's own
+     emoji font, needs no embedded face, and is not the business of
+     check-mark-font. So the label moved to aria-label, and this arm now holds
+     the thing that actually matters — that removing the word did not remove it
+     from assistive technology. */
+  ok(`...shown as a bell glyph ("${bell && bell.text}")`,
+     !!(bell && /[\u{1F514}\u{1F515}]/u.test(bell.text)), JSON.stringify(bell));
+  ok("...and still named in words for a screen reader",
+     !!(bell && /bell/i.test(bell.aria || "")), JSON.stringify(bell && bell.aria));
 
   await page.click('.chatbell');
   await new Promise(r => setTimeout(r, 200));
@@ -135,9 +153,14 @@ const {PAGE, demoPage} = require('./harness');
     pressed: document.querySelector('.chatbell').getAttribute('aria-pressed'),
     stored: (() => { try { return localStorage.getItem("kourt.chat.bell"); } catch (e) { return "?"; } })(),
     on: chatBellOn(),
+    glyph: (document.querySelector('.chatbell').textContent || '').trim(),
   }));
   ok("clicking it silences the bell", off.pressed === "false" && off.on === false,
      JSON.stringify(off));
+  /* AND THE GLYPH ITSELF CHANGES, which is the whole reason a glyph can replace
+     the word: struck-through bell means off, and nothing else has to say so. */
+  ok("...and the glyph changes to a struck-through bell",
+     /\u{1F515}/u.test(off.glyph || ""), JSON.stringify(off.glyph));
   ok("...and the choice is written down", off.stored === "0", JSON.stringify(off));
 
   /* SWITCHING IT BACK ON RINGS ONCE, which is not decoration: that click is also
