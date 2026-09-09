@@ -1243,6 +1243,42 @@ function mkDoc() {
        && !/(bot|helper|assistant|online|connected)/i.test(FN), FN.slice(0, 200));
   }
 
+  /* THE BELL'S GLYPH IN THE SHELL, WHICH THE BROWSER CANNOT SEE.
+     chat_bell.js measures the rendered icon — its ink, its size, its colour —
+     and it cannot measure this one thing: mountChat calls paintBell()
+     unconditionally the moment it wires the button up, so whatever
+     chatPanelHtml put there is replaced before any assertion runs.
+     MEASURED, which is why this exists: putting the emoji back into the shell
+     markup failed ZERO browser arms. The shell's glyph is the state a reader
+     sees if the script dies between rendering and wiring, so it is worth
+     asserting — and only a source test can, because chatPanelHtml is a pure
+     function and the browser only ever shows its successor. */
+  {
+    const shell = chatPanelHtml("orem", "anon", "", false);
+    const btn = shell.slice(shell.indexOf('<button class="chatbell"'));
+    ok("the shell renders the bell as a drawn glyph",
+       /<svg[^>]*class="chatbellicn"/.test(btn), btn.slice(0, 200));
+    ok("...and not as an emoji", !/[\u{1F514}\u{1F515}]/u.test(shell),
+       btn.slice(0, 200));
+    /* AND IT IS THE SAME FUNCTION THE TOGGLE USES, not a copy of the path. Two
+       literals would drift the first time the shape changed, and the drift
+       would show only in the instant before mount — which nobody would ever
+       catch. So the shell must CALL chatBellSvg rather than inline it. */
+    ok("...built by the same function the toggle paints with",
+       /chatBellSvg\(true\)/.test(PANELSRC.slice(PANELSRC.indexOf("function chatPanelHtml("),
+         PANELSRC.indexOf("function chatPanelHtml(") + 3000)),
+       "the shell inlines its own copy of the glyph");
+    /* THE TWO STATES DIFFER BY THE STROKE AND NOTHING ELSE. The bell is the
+       same bell either way; silenced adds a line through it. If the "on" glyph
+       ever grew a stroke of its own, the browser's path-count check would be
+       measuring a coincidence. */
+    const on = chatBellSvg(true), offSvg = chatBellSvg(false);
+    ok("the ringing glyph has no stroke of its own", !/stroke=/.test(on), on);
+    ok("...and the silenced one adds exactly one",
+       (offSvg.match(/stroke="currentColor"/g) || []).length === 1, offSvg);
+    ok("...over the same bell", offSvg.includes(on.replace("</svg>", "")), offSvg);
+  }
+
   console.log(fail ? `\n${fail} FAILURES` : "\nALL PASS");
   process.exit(fail ? 1 : 0);
 })();
