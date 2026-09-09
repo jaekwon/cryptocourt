@@ -559,38 +559,112 @@ func (s *Store) CountSince(ctx context.Context, since int64) (int, error) {
 // the lock is held for one map increment, and it is taken twice per LONG POLL —
 // once entering the wait and once leaving it, so once per reader per MaxWait,
 // which is twenty seconds. Seven readers is seven hundredths of a lock
-// acquisition per second. What could not be afforded is a lock on the path that
-// serves a request; this is not on it.
+// acquisition per second.
 //
-// KEYED, NOT LISTED. Each map holds a count per key and the key is deleted when
-// it reaches zero, so the maps are bounded by concurrent connections rather than
-// by history — nothing here accumulates, and a restart is the only reset the
-// peak has.
+// AND IT IS NOW ON THE PATH THAT SERVES A REPLY, which this comment used to say
+// could not be afforded. That was true of the design it described and is no
+// longer true of this one: here() reports the windowed count, so building a poll
+// reply takes the lock once and sweeps the three maps. The bound is what makes
+// it affordable — the maps are the size of the recently-connected, not of the
+// log, so a sweep is a walk over a few tens of keys with no allocation. What is
+// still refused is anything unbounded on that path, and a lock whose hold time
+// grows with history would be exactly that. If this site ever holds thousands of
+// connections at once, the windowed total wants caching behind an atomic; at
+// this scale that would be a cache with nothing to gain.
+//
+// KEYED, NOT LISTED. Each map holds a count per key and the key is forgotten
+// once nothing is in flight for it and its window has passed, so the maps are
+// bounded by recent connections rather than by history — nothing here
+// accumulates, and a restart is the only reset the peak has.
 //
 // The peak is monotonic for the life of the process and says so on the page. A
 // decaying peak would need a window, a timer and a decision about what "recent"
 // means, none of which a diagnostics line is worth.
+//
+// ---- THE WINDOW, WHICH IS THE ONE THING THIS DOES BEYOND COUNTING ----
+//
+// REPORTED: "i'm on the chat but i don't see myself in the map". Two causes,
+// and this is the second of them. A long poll is not held continuously — it
+// returns, the client works, and it re-polls — so a gauge that counts requests
+// IN FLIGHT reports a reader who is plainly sitting there as absent for part of
+// every cycle. MEASURED against the live site with one reader on it, sampling
+// every 1.5s for 36s: present in 14 of 24 samples, a clean ~6s-on/~4s-off
+// beat. The page intermittently said nobody was holding the chat open.
+//
+// THAT IS NOT COSMETIC. A country is named only once hereFloor connections are
+// in it, so two readers in one country clear the floor only in the instants
+// their polls happen to overlap — a genuinely populated map would drop dots
+// between beats.
+//
+// A WINDOWED MAXIMUM, NOT A LINGER COUNT, and the difference is the whole bug
+// this could have shipped. "Keep counting a connection for W after it leaves"
+// double-counts the reader who re-polls four seconds later: they are one live
+// connection plus one lingering ghost, and the page says two. So each key
+// remembers the MOST that were in flight at once (peak) and WHEN that was last
+// achieved, and reports that for W afterwards. One reader polling forever holds
+// a steady 1; two readers hold 2; a reader who closes the tab decays to 0 once
+// W has passed with nothing in flight.
+//
+// WHAT THE WINDOW COSTS, said plainly. The number becomes "held just now"
+// rather than "held this instant", so somebody who closes the tab is counted
+// for up to W afterwards. That is the trade being made deliberately: a steady
+// number that is a few seconds stale is more honest to a reader than a correct
+// number that flickers to nothing while they watch.
+//
+// IT DOES NOT WEAKEN THE FLOOR. Naming a country still requires hereFloor
+// connections to have been in flight AT ONCE — the peak is a maximum of
+// simultaneous holds, never a sum over time — so no country is ever named on
+// the strength of one reader polling repeatedly.
+//
+// /diag's Holding IS DELIBERATELY NOT WINDOWED. That line is an operator fact
+// about this process — how many requests are parked in it right now — and the
+// atomics above answer it exactly. The window belongs to the reader-facing
+// number, which is answering a different question.
+const holdLinger = 45 * time.Second
+
+// keyState is one tally key's recent history: what is in flight now, and the
+// most that were in flight at once within the window.
+type keyState struct {
+	live   int
+	peak   int
+	peakAt time.Time
+}
+
 type holdGauge struct {
 	now  atomic.Int64
 	peak atomic.Int64
 
 	mu sync.Mutex
+	// clock is injectable so the window can be tested without sleeping. nil
+	// means time.Now.
+	clock func() time.Time
 	// byCC is connections per two-letter country, "" for the ones with no
 	// country — an address the file does not cover, or no file at all.
-	byCC map[string]int
+	byCC map[string]*keyState
 	// byNet is connections per network hash. THE HASHES NEVER LEAVE THIS MAP:
 	// only its SIZE is published, which answers the one question the raw count
 	// cannot — whether "7 here" is seven readers or one reader with seven tabs.
-	byNet map[string]int
+	byNet map[string]*keyState
 	// byRoom is connections per room, keyed by pulseKey. Only its size is
 	// published, for the same reason.
-	byRoom map[string]int
+	byRoom map[string]*keyState
 }
 
 // holder is what a held connection has in common with others. Not a person and
 // not an identity: three keys that are only ever counted.
+//
+// STABLE ACROSS A READER'S POLLS, which is what makes the window above possible
+// at all: the same reader re-polling produces the same three keys, so their next
+// poll updates a tally rather than adding a second one.
 type holder struct {
 	cc, net, room string
+}
+
+func (g *holdGauge) tick() time.Time {
+	if g.clock != nil {
+		return g.clock()
+	}
+	return time.Now()
 }
 
 func (g *holdGauge) enter(h holder) {
@@ -604,14 +678,17 @@ func (g *holdGauge) enter(h holder) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	if g.byCC == nil {
-		g.byCC, g.byNet, g.byRoom = map[string]int{}, map[string]int{}, map[string]int{}
+		g.byCC = map[string]*keyState{}
+		g.byNet = map[string]*keyState{}
+		g.byRoom = map[string]*keyState{}
 	}
-	g.byCC[h.cc]++
+	t := g.tick()
+	bump(g.byCC, h.cc, t)
 	if h.net != "" {
-		g.byNet[h.net]++
+		bump(g.byNet, h.net, t)
 	}
 	if h.room != "" {
-		g.byRoom[h.room]++
+		bump(g.byRoom, h.room, t)
 	}
 }
 
@@ -624,16 +701,67 @@ func (g *holdGauge) leave(h holder) {
 	drop(g.byRoom, h.room)
 }
 
-// drop decrements a key and forgets it at zero, which is what keeps these maps
-// the size of the room rather than the size of the log.
-func drop(m map[string]int, k string) {
+// bump records one more in-flight poll for a key, and re-stamps the peak when
+// this is the most that have been in flight at once.
+//
+// GREATER-OR-EQUAL RATHER THAN GREATER, and it is NOT load-bearing — measured,
+// after the comment here first claimed it was. The claim was that re-achieving
+// the same peak must refresh the clock or a steady poller would expire after one
+// window; changing it to `>` fails no test, because sweep re-stamps an expired
+// key that still has something in flight and that is what actually keeps a
+// steady poller in the room. The `>=` is kept for saying plainly what a bump
+// means, not because anything depends on it.
+func bump(m map[string]*keyState, k string, t time.Time) {
+	s := m[k]
+	if s == nil {
+		s = &keyState{}
+		m[k] = s
+	}
+	s.live++
+	if s.live >= s.peak {
+		s.peak = s.live
+		s.peakAt = t
+	}
+}
+
+// drop decrements what is in flight for a key. It does NOT forget the key —
+// that is the window's job, in present() — but it never lets live go negative,
+// because a leave without a matching enter would otherwise poison the tally for
+// the life of the process.
+func drop(m map[string]*keyState, k string) {
 	if m == nil {
 		return
 	}
-	if n := m[k] - 1; n > 0 {
-		m[k] = n
-	} else {
-		delete(m, k)
+	if s := m[k]; s != nil && s.live > 0 {
+		s.live--
+	}
+}
+
+// present is what a key counts for right now: its recent peak while the window
+// holds, and only what is actually in flight once it has passed.
+func (s *keyState) present(t time.Time) int {
+	if t.Sub(s.peakAt) <= holdLinger {
+		return s.peak
+	}
+	return s.live
+}
+
+// sweep forgets keys with nothing in flight and an expired window, and resets a
+// stale peak back to what is really there. Called under the lock from snapshot,
+// so the maps stay the size of the room without needing a timer.
+func (g *holdGauge) sweep(t time.Time) {
+	for _, m := range []map[string]*keyState{g.byCC, g.byNet, g.byRoom} {
+		for k, s := range m {
+			if t.Sub(s.peakAt) <= holdLinger {
+				continue
+			}
+			if s.live == 0 {
+				delete(m, k)
+				continue
+			}
+			s.peak = s.live
+			s.peakAt = t
+		}
 	}
 }
 
@@ -643,11 +771,35 @@ func drop(m map[string]int, k string) {
 func (g *holdGauge) snapshot() (byCC map[string]int, nets, rooms int) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
+	t := g.tick()
+	g.sweep(t)
 	byCC = make(map[string]int, len(g.byCC))
 	for k, v := range g.byCC {
-		byCC[k] = v
+		if n := v.present(t); n > 0 {
+			byCC[k] = n
+		}
 	}
+	// len IS SAFE HERE, and only because sweep ran first. An earlier version of
+	// this counted present() > 0 per key, with a comment about keys that survive
+	// a sweep while counting nothing. There are none: an unexpired key has
+	// peak >= 1 by construction, and an expired one is either deleted or has its
+	// peak reset to a live count above zero. The loop was guarding a state that
+	// cannot occur, which is worse than no guard — it invites the reader to
+	// believe in it.
 	return byCC, len(g.byNet), len(g.byRoom)
+}
+
+// presentTotal is every held connection the window can see, country known or
+// not. This is the reader-facing count — the one the chat panel prints — and it
+// is a sum over byCC because byCC keys every connection, using "" for the ones
+// with no country.
+func (g *holdGauge) presentTotal() int64 {
+	byCC, _, _ := g.snapshot()
+	var n int64
+	for _, v := range byCC {
+		n += int64(v)
+	}
+	return n
 }
 
 // ---------------------------------------------------------------- handlers ---
