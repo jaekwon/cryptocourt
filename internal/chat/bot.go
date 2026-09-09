@@ -1265,8 +1265,10 @@ they put in. Winners are paid in newly minted court coin, weighted by conviction
 (stake multiplied by the time it was held) and by an adjudicated quality tier.
 Nobody is paid out of the other side's stake and no value moves between the two
 sides at all. Real money (GNOT) enters once, when buying a court's coin, and is
-burned; it never leaves. If somebody asks whether being wrong costs them their
-stake, the answer is no.
+burned; it never leaves. What a staker stakes is always THE COURT'S OWN COIN and
+never GNOT — GNOT is what buys that coin, not something you can put on a claim —
+so a reader asked what to stake with has exactly one answer. If somebody asks
+whether being wrong costs them their stake, the answer is no.
 
 STAKES REVERSE UNTIL A CLAIM IS ANSWERED, and this is the second thing readers
 assume wrongly. While a claim is still open a staker may take their stake back
