@@ -3,6 +3,7 @@ package chat
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -1420,6 +1421,68 @@ func TestTheClerkSaysWhoItIsWithoutAskingAModel(t *testing.T) {
 	   it went missing. */
 	if got[1].Country != ClerkCountry {
 		t.Errorf("the clerk should fly its own flag, got %q", got[1].Country)
+	}
+}
+
+/*
+AND IT KEEPS SAYING IT, ROOM AFTER ROOM. Measured on the live site rather than
+
+	imagined — an identity probe went unanswered and the journal named the cause:
+
+	  chat bot: fixed line refused in kourt-1/zz-probe-1788980459: the same
+	  message was just posted in several courts; post something different, or wait
+
+	The clerk's line is required VERBATIM, it posts under one ip_hash, and the
+	cross-court duplicate rule counts distinct courts inside DupWindow — so the
+	line accumulates rooms until DupCourts and then stops being deliverable, and
+	the reader sees nothing at all. say() marks these rows Fixed to sit outside
+	that rule; store_test's exemption test covers the rule's half, and this one
+	covers say()'s half, which is the half that goes silent if it is dropped.
+*/
+func TestTheClerkStillSaysItsLineAfterSayingItInOtherRooms(t *testing.T) {
+	s, clock := newStore(t)
+	ctx := context.Background()
+	m := &fakeModel{reply: "SHOULD NOT BE USED", in: 999, out: 999}
+	b := newBot(t, s, m)
+	*clock = clock.Add(time.Hour)
+
+	// The line has already gone out in exactly enough other rooms to trip it.
+	for i := 0; i < DupCourts; i++ {
+		court := fmt.Sprintf("earlier-%d", i)
+		if _, err := s.Post(ctx, PostInput{Chain: "dev", Court: court,
+			Moniker: ClerkName, Body: botClerkLine,
+			IPHash: botIPHash, Fixed: true}); err != nil {
+			t.Fatalf("seeding %s: %v", court, err)
+		}
+		*clock = clock.Add(MinInterval)
+	}
+	/* AND THE RULE IS ARMED RIGHT NOW, proven instead of assumed: the same words
+	   from the same ip_hash without the flag must be refused at this instant. If
+	   a constant or the window moved, this fails here rather than handing the
+	   assertion below a pass it did not earn. */
+	if _, err := post(t, s, "armed", botIPHash, botClerkLine); !errors.Is(err, ErrDuplicate) {
+		t.Fatalf("the duplicate rule is not armed after %d rooms, got %v — "+
+			"this fixture would pass whether say() marks its rows or not",
+			DupCourts, err)
+	}
+	*clock = clock.Add(MinInterval)
+
+	if _, err := post(t, s, "orem", "ip-asks", "who are you"); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.once(ctx); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.Recent(ctx, "dev", "orem", 0, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("the clerk went silent in a new room after saying its required "+
+			"line in %d others; the room holds %d rows", DupCourts, len(got))
+	}
+	if got[1].Moniker != ClerkName || got[1].Body != botClerkLine {
+		t.Errorf("expected the required line verbatim, got %+v", got[1])
 	}
 }
 

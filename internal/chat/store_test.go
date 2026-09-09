@@ -1541,6 +1541,66 @@ func TestABroadcastLureIsStillRefusedInTheThirdCourt(t *testing.T) {
 	}
 }
 
+// AND IT MUST NOT REFUSE THE CLERK, whose fixed lines are the same string every
+// time by design.
+//
+// MEASURED IN A LIVE ROOM: asked "who are you?", the clerk said nothing, and the
+// log named the cause — "fixed line refused ...: the same message was just posted
+// in several courts". The identity line is constant text, so it accumulates
+// courts until DupCourts is reached and then simply stops working. What a reader
+// sees is silence, which is indistinguishable from a helper with no answer.
+//
+// PAIRED, and the pair is the whole point: the exemption belongs to
+// VERBATIM-REQUIRED text, not to the clerk and not to that sentence. The same
+// words with Fixed unset are still refused in the third court, so this fixture
+// fails if the rule is deleted as readily as if the exemption is.
+//
+// NOT KEYED ON THE BOT'S ip_hash, which is what the first cut did — that
+// exempted the clerk's MODEL answers too and turned diag_test's
+// TestAnUndeliveredReplyIsNotCountedAsAPass green-by-vacuum, since it
+// manufactures an undelivered reply out of exactly this rule.
+//
+// The length assertion is not decoration: below DupMinSkeleton the rule never
+// engages, and this fixture would pass while measuring nothing.
+func TestVerbatimRequiredTextIsExemptFromTheCrossCourtRule(t *testing.T) {
+	line := botClerkLine
+	if n := len([]rune(Skeleton(line))); n < DupMinSkeleton {
+		t.Fatalf("the clerk's line skeletonises to %d runes, under DupMinSkeleton=%d — "+
+			"this fixture would not reach the rule it is testing", n, DupMinSkeleton)
+	}
+	fixed := func(s *Store, court string) error {
+		_, err := s.Post(context.Background(), PostInput{
+			Chain: "dev", Court: court, Moniker: ClerkName, Body: line,
+			IPHash: botIPHash, Fixed: true,
+		})
+		return err
+	}
+
+	// The clerk, in more courts than DupCourts, saying its one required line.
+	s, clock := newStore(t)
+	for _, court := range []string{"a", "b", "c", "d"} {
+		if err := fixed(s, court); err != nil {
+			t.Fatalf("court %s refused the clerk's fixed line: %v — it is required to say "+
+				"exactly this, so the rule must not count it", court, err)
+		}
+		*clock = clock.Add(MinInterval)
+	}
+
+	// THE SAME WORDS WITHOUT Fixed ARE STILL REFUSED, from the bot's own ip_hash,
+	// so what is exempt is provably the flag and not the poster or the sentence.
+	s2, clock2 := newStore(t)
+	for _, court := range []string{"a", "b"} {
+		if _, err := post(t, s2, court, botIPHash, line); err != nil {
+			t.Fatalf("court %s: %v", court, err)
+		}
+		*clock2 = clock2.Add(MinInterval)
+	}
+	if _, err := post(t, s2, "c", botIPHash, line); !errors.Is(err, ErrDuplicate) {
+		t.Fatalf("the same line with Fixed unset must still be refused in the third "+
+			"court, got %v", err)
+	}
+}
+
 // THE REPLAY GUARD, which is what stops two scanners punishing one message twice.
 //
 // `infractions_once` is UNIQUE(evidence_id, kind) WHERE evidence_id IS NOT NULL AND revoked_at IS

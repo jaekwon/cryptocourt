@@ -1093,6 +1093,10 @@ func (b *Bot) say(ctx context.Context, c botCandidate, line string) error {
 		Moniker: ClerkName, Body: line,
 		Country: ClerkCountry,
 		IPHash:  botIPHash,
+		// This line is required verbatim, so the cross-court duplicate rule
+		// cannot apply to it — it would eventually refuse the clerk for saying
+		// the one thing it must say word for word. See store.go's guard.
+		Fixed: true,
 	})
 	if err != nil {
 		b.logf("chat bot: fixed line refused in %s/%s: %v", c.chain, c.court, err)

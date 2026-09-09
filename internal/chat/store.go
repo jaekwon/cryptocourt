@@ -535,6 +535,12 @@ type PostInput struct {
 	Moniker, Body   string
 	IPHash, NetHash string
 	Country, Suffix string
+
+	// Fixed marks a body the system requires VERBATIM — the clerk's identity
+	// line, its impersonation callout, its acknowledgement. Only the
+	// cross-court duplicate rule reads it, and only to skip itself; every other
+	// limit still applies. Nothing a client sends can set it.
+	Fixed bool
 }
 
 // throttleTx deliberately ignores `hidden` and `frozen`, unlike almost everything else here.
@@ -615,7 +621,34 @@ func throttleTx(ctx context.Context, tx *sql.Tx, in PostInput, now time.Time) er
 	// this message and writes no infraction. As a punishment it was a mass-harm
 	// primitive — on a shared address an attacker types one sentence in three
 	// courts and a stranger is kicked — and it fires on the honest announcement.
-	if sk := Skeleton(in.Body); len(sk) >= DupMinSkeleton {
+	// VERBATIM-REQUIRED TEXT IS EXEMPT, because this rule can only ever be
+	// satisfied by rewording and that text may not be reworded.
+	//
+	// MEASURED, not reasoned about. Asked "who are you?" in a fresh room, the
+	// clerk went silent and the log said why:
+	//
+	//	chat bot: fixed line refused in kourt-1/zz-probe-...: the same message
+	//	was just posted in several courts; post something different, or wait
+	//
+	// The identity line, the impersonation callout and the acknowledgement are
+	// constant strings by design, so each accumulates courts until DupCourts is
+	// reached and then stops working. What the reader sees is silence, which is
+	// indistinguishable from a helper that had no answer.
+	//
+	// NARROW ON PURPOSE — in.Fixed, not "the bot". The first cut of this exempted
+	// every row carrying the bot's ip_hash, and diag_test's
+	// TestAnUndeliveredReplyIsNotCountedAsAPass went red, correctly: it drives a
+	// fakeModel whose reply repeats, and it exists to prove the diag page counts a
+	// refused reply as undelivered rather than as a pass. A MODEL answer is
+	// generated fresh and can be reworded, so the rule still applies to it and
+	// that accounting stays under test. Only text the system will not let vary is
+	// exempt.
+	//
+	// AND IT REMOVES NO PROTECTION. The rule exists against a human repeating one
+	// sentence across rooms; nothing a client sends sets Fixed, the clerk cannot
+	// start a conversation, and its own MinGap already caps it at one reply per
+	// ten seconds across every room at once.
+	if sk := Skeleton(in.Body); len(sk) >= DupMinSkeleton && !in.Fixed {
 		// OTHER courts, excluding this one: two already plus this one is the
 		// third, which is where the rule was described as biting. Repeating
 		// yourself in a court you have already used is the per-address
