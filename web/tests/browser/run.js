@@ -111,6 +111,7 @@ const ALL = ["embed_layout.js", "tagrow_layout.js", "route_crawl.js",
              "map_glide.js",
              "clean_path.js",
              "chat_warn.js",
+             "chat_bell.js",
              // a set's own page: the mark beside its name, and the way in
              "set_page.js",
              // the meta franchise, as it actually reaches a reader

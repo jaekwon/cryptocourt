@@ -129,6 +129,53 @@ function chatFlag(cc) {
                               0x1f1e6 + s.charCodeAt(1) - 65);
 }
 
+// CHATBELLRE is the attention signal: "!?" or "?!" anywhere in a message.
+//
+// A DELIBERATE MARK RATHER THAN EVERY ARRIVAL. A bell on every message is a bell
+// nobody keeps switched on, and one on nothing is a feature nobody finds. This
+// is a thing a reader TYPES when they mean "look at this", so the room decides
+// when it rings.
+const CHATBELLRE = /!\?|\?!/;
+const CHATBELLKEY = "kourt.chat.bell";
+
+function chatBellOn() {
+  try { return window.localStorage.getItem(CHATBELLKEY) !== "0"; } catch (e) { return true; }
+}
+
+// chatBell rings, and SYNTHESISES the sound rather than fetching one.
+//
+// The overlay's one promise is that it is self-contained — no CDN, no assets
+// directory — and an audio file would break that for a two-note ding. Two sine
+// oscillators with an exponential decay is the whole bell.
+//
+// EVERY FAILURE IS SILENT, deliberately. A browser that blocks audio until the
+// reader has interacted with the page is the NORMAL case, not an error: the
+// first ring in a fresh tab may simply not sound, and the second will. Nothing
+// here is worth a console line, let alone a note in the room.
+let chatBellCtx = null;
+function chatBell() {
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    if (!chatBellCtx) chatBellCtx = new AC();
+    if (chatBellCtx.state === "suspended" && chatBellCtx.resume) chatBellCtx.resume();
+    const t = chatBellCtx.currentTime;
+    // Two notes a fifth apart, the second a beat later: a ding rather than a beep.
+    for (const [hz, at] of [[880, 0], [1318.5, 0.085]]) {
+      const o = chatBellCtx.createOscillator(), g = chatBellCtx.createGain();
+      o.type = "sine";
+      o.frequency.value = hz;
+      g.gain.setValueAtTime(0.0001, t + at);
+      g.gain.exponentialRampToValueAtTime(0.16, t + at + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + at + 0.34);
+      o.connect(g);
+      g.connect(chatBellCtx.destination);
+      o.start(t + at);
+      o.stop(t + at + 0.38);
+    }
+  } catch (e) { /* blocked, unsupported, or no output device: say nothing */ }
+}
+
 // chatWhen renders an age, coarsely and without a locale.
 //
 // Coarse is the point: a per-second timestamp on an anonymous message is a traffic
@@ -400,6 +447,8 @@ function chatPanelHtml(slug, moniker, note, heading) {
     +     '<button class="chatwarnx" type="button"'
     +       ' aria-label="dismiss this warning">&times;</button></span>'
     +   '<span class="chatdemo" hidden></span>'
+    +   '<button class="chatbell" type="button" aria-pressed="true"'
+    +     ' title="Ring a bell when somebody posts !? — click to silence it">bell</button>'
     + "</div>"
     + '<ol class="chatlog" aria-live="polite"></ol>'
     + '<div class="chatstate"></div>'
@@ -631,6 +680,12 @@ const CHATCSS = `
    them — and the page it is embedded in has four themes. Opacity and weight are
    the two levers that cannot fight any of them. */
 .chatwarn{opacity:1;font-size:.88em;font-weight:600}
+/* The bell switch: a word, not a glyph. An icon here would need a font this file
+   does not control, and "bell" struck through says what it is in any of them. */
+.chatbell{background:none;border:0;color:inherit;font:inherit;font-size:.85em;
+  cursor:pointer;opacity:.75;padding:0 .15rem;margin-left:auto}
+.chatbell:hover{opacity:1}
+.chatbell[aria-pressed="false"]{opacity:.4;text-decoration:line-through}
 /* AND THE DISMISS, WHICH HAS TO BE HITTABLE. Padding rather than a bigger glyph,
    so the × stays the size of the sentence it ends while the target is bigger
    than the mark — the same lesson the name button in this file learned the hard
@@ -1014,6 +1069,20 @@ function mountChat(el, opts) {
     });
   }
 
+  const bellEl = el.querySelector(".chatbell");
+  if (bellEl) {
+    const paintBell = () => bellEl.setAttribute("aria-pressed", chatBellOn() ? "true" : "false");
+    paintBell();
+    bellEl.addEventListener("click", () => {
+      const off = chatBellOn();
+      try { window.localStorage.setItem(CHATBELLKEY, off ? "0" : "1"); } catch (e) {}
+      paintBell();
+      // Ring once on the way ON, which is also the click that unblocks audio in
+      // a fresh tab — so the reader hears what they have just switched on.
+      if (off === false) chatBell();
+    });
+  }
+
   const nameBtn = el.querySelector(".chatnamebtn");
   const nameShown = () => (nameEl.value.trim() || CHATDEFAULTNAME);
   const closeName = () => {
@@ -1244,6 +1313,8 @@ function mountChat(el, opts) {
      already showing it. It is the watermark the server compares against to decide
      whether to answer now or hold. */
   let seen = 0;
+  // The ids this panel posted, so its own attention marks do not ring at it.
+  const mine = new Set();
   let first = true;
   async function tick() {
     if (!live()) return;
@@ -1271,6 +1342,12 @@ function mountChat(el, opts) {
          changes". */
       const d = await chatFetch(base, chain, court, o.limit || 50,
                                 (first || idleNow) ? 0 : (o.hold || CHATHOLD), seen);
+      /* CAPTURED BEFORE THEY ARE ADVANCED. `first` and `seen` are both about to
+         be overwritten, and the bell needs the OLD values: what counts as new is
+         "past the last id drawn", and the opening read of a room is history
+         rather than news — ringing for fifty stored messages on arrival is the
+         one behaviour that would get this switched off for ever. */
+      const wasFirst = first, wasSeen = seen;
       first = false;
       if (!live()) return;
       // AFTER the fetch resolves and before the paint, so a message that arrives
@@ -1279,6 +1356,15 @@ function mountChat(el, opts) {
       // Before painting, so the ages in this very repaint are already corrected.
       learnSkew(d);
       paint(d.messages, d.you);
+      /* AFTER THE PAINT, so the message being announced is already on screen when
+         the sound arrives. NOT for your own "!?" — you know what you just typed —
+         and never on the opening read. One ring for a batch, however many
+         arrived: a bell is a summons, not a counter. */
+      if (!wasFirst && chatBellOn()
+          && (d.messages || []).some(m => m && m.id > wasSeen && !mine.has(m.id)
+                                          && CHATBELLRE.test(String(m.body || "")))) {
+        chatBell();
+      }
       showHere(d.here);
       // NOT note("") — a refusal the reader caused is held for NOTEHOLD; see note.
       noteClear();
@@ -1323,6 +1409,7 @@ function mountChat(el, opts) {
     if (!live()) return;
     sendEl.disabled = false;
     if (r.ok) {
+      if (r.id) mine.add(r.id);
       bodyEl.value = "";
       note("");
       /* A WITHDRAWAL HAS NOTHING NEWER TO WAIT FOR, which is why /delete looked
