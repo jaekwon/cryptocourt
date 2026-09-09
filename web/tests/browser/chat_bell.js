@@ -188,6 +188,20 @@ const {PAGE, demoPage} = require('./harness');
   ok("...and only messages past the last id drawn",
      /m\.id > wasSeen/.test(gate), gate.slice(0, 200));
 
+  /* A BACKGROUND TAB STILL HEARS IT PROMPTLY. The panel backs off when hidden,
+     which is right — a court left open overnight must not poll like a watched
+     one, and must not hold a socket either — but at the original sixty seconds
+     the bell could arrive a full minute after the message that rang it, which is
+     an echo rather than a notification. Pinned as a RANGE, not a number: the
+     floor is what makes a background ring feel prompt, and the ceiling is what
+     stops a hidden tab from polling like a foreground one. */
+  const hidden = await page.evaluate(() =>
+    typeof CHATHIDDENPOLL === "number" ? CHATHIDDENPOLL : null);
+  ok(`a hidden tab re-reads often enough to ring promptly (${hidden}ms)`,
+     hidden !== null && hidden <= 20000, String(hidden));
+  ok("...but still slower than a watched one", hidden !== null && hidden >= 10000,
+     String(hidden));
+
   ok("the page threw nothing while doing all that", errs.length === 0, errs.join(" | "));
   await browser.close();
   console.log(fail ? "\n" + fail + " FAILURES" : "\nALL PASS");

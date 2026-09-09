@@ -145,6 +145,10 @@ function chatFlag(cc) {
 const CHATBELLRE = /!\?|\?!|![\s"'\u2019\u201d)\]}]*$/;
 const CHATBELLKEY = "kourt.chat.bell";
 
+// How long a HIDDEN tab waits between reads. See the back-off at the end of the
+// poll for why it is this and not sixty seconds.
+const CHATHIDDENPOLL = 15000;
+
 // THE SWITCH WEARS ITS STATE. A bell and a struck-through bell say on and off
 // without a word, which is what the rest of this row does — and the row is
 // narrow. The WORDS stay in aria-label, because a glyph tells a screen reader
@@ -1559,10 +1563,17 @@ function mountChat(el, opts) {
       note("Chat is unreachable right now.");
     }
     if (!live()) return;
-    // Backing off while the tab is hidden, because a court page left open in a
-    // background tab overnight is otherwise a poller nobody is reading.
+    /* Backing off while the tab is hidden, because a court page left open in a
+       background tab overnight is otherwise a poller nobody is reading.
+       FIFTEEN SECONDS, NOT SIXTY, AND THE BELL IS WHY. The back-off is still
+       right — a hidden tab must not poll like a watched one, and it must not
+       hold a long-poll socket open either — but at sixty the bell could arrive a
+       full minute after the message that rang it, which is not a notification,
+       it is an echo. Fifteen keeps the tab quiet enough (a quarter of the
+       foreground rate) while making a background ring feel like one.
+       The cost is stated rather than hidden: four times the idle requests. */
     const idle = typeof document !== "undefined" && document.hidden;
-    timer = setTimeout(tick, idle ? 60000 : (o.interval || 6000));
+    timer = setTimeout(tick, idle ? CHATHIDDENPOLL : (o.interval || 6000));
   }
 
   formEl.addEventListener("submit", async ev => {
