@@ -293,7 +293,7 @@ const CHATBELLVOL = 0.11;
 // digest from web/bell.mp3 and refuses a mismatch, which is the only way this
 // stays true — a version somebody has to remember to bump is a version that
 // is wrong the first time it matters.
-const CHATBELLSRC = "bell.mp3?v=0dd9fd3272bb";
+const CHATBELLSRC = "bell.mp3?v=70e7f52579c1";
 
 let chatBellCtx = null, chatBellBuf = null, chatBellFetching = false, chatBellGone = false;
 
