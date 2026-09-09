@@ -6497,6 +6497,11 @@ async function adenaSign(func, args, el){
         }
       }
       landed = true;
+      /* THE FOLLOW-UP OPENS HERE, NOT AFTER THE SETTLE. It used to sit below the
+         repaint seven seconds down, which is what "came up pretty slow" was.
+         The sentence it carries needs nothing from the chain; only the figure
+         does, and that fills in from the timeout below. */
+      if(func === "Buy") franchiseFollowup(args && args.slug);
       /* A COUNTDOWN, NOT A BARE SPINNER. Seven seconds of a spinning button says
          "working"; it does not say for how long, and an unbounded spinner is what
          a stalled page looks like. Counting down says the wait is expected and
@@ -6535,10 +6540,10 @@ async function adenaSign(func, args, el){
            through to the whole-route render rather than leaving stale figures. */
         if(TX_REWARD.has(func) && await refreshClaimRewards()) return;
         const y = window.scrollY; await render(); window.scrollTo(0, y);
-        /* AND THE ONE FOLLOW-UP THIS PAGE OFFERS. After the repaint, so the
-           panel the dialog points at is already on screen behind it, and so the
-           figure it quotes includes the burn that opened it. */
-        if(func === "Buy") franchiseFollowup(args && args.slug);
+        /* AND THE FIGURE THE DIALOG LEFT BLANK, now that the chain has the
+           burn. After the repaint, so the panel it points at is already on
+           screen behind it. */
+        if(func === "Buy") franchiseFollowupFigure();
       }, 7000);
     }
     else if(res.code===4000){ note("Rejected in the wallet."); }
@@ -13216,19 +13221,24 @@ const FRANCHISE_SEEN = "cc.franchise";
 async function franchiseFollowup(slug){
   if(!slug || slug === META_SLUG) return;
   if(store.get(FRANCHISE_SEEN)) return;
-  let r;
-  try{ r = await franchiseRead(); }catch(_){ return; }
-  const rule = franchiseRule(slug, r.hasMeta, "");
+  /* THE RULE NEEDS NO CHAIN READ, and waiting for one is what made this slow.
+     hasMeta only decides whether the court's name is a link: live, the meta
+     court exists from init, and in the sample it either carries the court or it
+     does not — both answers are already in hand. */
+  const hasMeta = isLive() || !!demoCourt(META_SLUG);
+  const rule = franchiseRule(slug, hasMeta, "");
   if(!rule) return;
-  /* WHAT IS WAITING, IN THE UNITS IT IS KEPT IN. The entitlement banks GNOT
-     BURNED; what that becomes depends on where meta's curve stands when it is
-     claimed, and the realm exposes no quote to read instead. So the figure
-     shown is the one that is true, and the sentence says what turns it into
-     coin — the same choice the panel makes, for the same reason. */
-  const waiting = r.pending != null && r.pending > 0
-    ? `<p>You now have <b class="tnum">${gnotAmt(r.pending)}</b> of burn waiting `
-      + `as ${esc(META_SLUG)} coin, claimable whenever you like.</p>`
-    : "";
+  /* THE FIGURE ARRIVES LATER, AND THAT IS THE POINT. Reported as "the metacoin
+     popup came up pretty slow after page refresh": the dialog used to wait out
+     the same seven-second settle the button waits out, because it quoted a
+     total that is only true once the chain has the burn. Measured against the
+     live node, the three reads behind that total cost about 230ms all together
+     — the seven seconds were the whole of the delay.
+     So the explanation opens now, at the moment the reader acted, and the
+     number fills into this slot when it becomes true. Empty and hidden until
+     then: a row reading "—" where a figure belongs is worse than no row, the
+     same rule the Join panel's held-balance row already follows. */
+  const waiting = `<p id="frwait" hidden></p>`;
   const dlg = document.createElement("dialog");
   dlg.className = "helper";
   dlg.id = "frdlg";
@@ -13241,7 +13251,7 @@ async function franchiseFollowup(slug){
     + `court page, with the button to claim it.</p>`
     + `<div class="actions" style="margin-top:12px">`
     + `<button type="button" class="btn" data-frdismiss>Got it</button>`
-    + (r.hasMeta? ` <a class="small" href="#/c/${esc(META_SLUG)}">Open the meta court →</a>` : "")
+    + (hasMeta? ` <a class="small" href="#/c/${esc(META_SLUG)}">Open the meta court →</a>` : "")
     + `</div></div>`;
   document.body.appendChild(dlg);
   const close = ()=>{ store.set(FRANCHISE_SEEN,"1"); try{ dlg.close(); }catch(_){} dlg.remove(); };
@@ -13251,6 +13261,28 @@ async function franchiseFollowup(slug){
      was closed the wrong way is the nag this is written to avoid. */
   dlg.addEventListener("close", ()=>{ store.set(FRANCHISE_SEEN,"1"); dlg.remove(); });
   dlg.showModal();
+}
+/* THE OTHER HALF OF THE FOLLOW-UP: the figure, once the chain has the burn that
+   opened the dialog. Called from the same seven-second settle the button waits
+   out, so what it quotes includes the transaction just made rather than the
+   total from before it.
+   DOES NOTHING IF THE DIALOG IS GONE, which is the common case — a reader reads
+   one sentence and presses Got it long before this fires. Checked again AFTER
+   the read, because the dismissal can land while it is in flight. */
+async function franchiseFollowupFigure(){
+  if(!document.getElementById("frwait")) return;
+  let r;
+  try{ r = await franchiseRead(); }catch(_){ return; }
+  const slot = document.getElementById("frwait");
+  if(!slot) return;
+  if(r.pending == null || !(r.pending > 0)) return;
+  /* IN THE UNITS THE ENTITLEMENT IS KEPT IN. It banks GNOT BURNED; what that
+     becomes depends on where meta's curve stands when it is claimed, and the
+     realm exposes no quote to read instead. The same choice the panel makes,
+     for the same reason. */
+  slot.innerHTML = `You now have <b class="tnum">${gnotAmt(r.pending)}</b> of `
+    + `burn waiting as ${esc(META_SLUG)} coin, claimable whenever you like.`;
+  slot.hidden = false;
 }
 function courtStatsHtml(slug, s){
   const burnSer = parseSeries(s.burnHist);

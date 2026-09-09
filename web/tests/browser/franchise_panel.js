@@ -116,6 +116,26 @@ const {PAGE, demoPage} = require('./harness');
   ok("...and says where to find it again",
      /Join this court/.test((dlg && dlg.text) || ""));
 
+  /* THE FIGURE IS A SECOND STAGE, and the slot must not show as an empty row
+     while it is missing. "The metacoin popup came up pretty slow after page
+     refresh" was the dialog waiting out the burn's seven-second settle so it
+     could quote a total; it opens immediately now and the number arrives when
+     the chain has it. With no wallet connected there is no number to arrive,
+     which is the case this arm covers: the slot stays hidden rather than
+     rendering a blank line where a figure belongs. */
+  const slot = await page.evaluate(async () => {
+    const at_open = (() => { const e = document.getElementById("frwait");
+      return e ? (e.hidden ? "present, hidden" : "present, SHOWING") : "absent"; })();
+    if (typeof franchiseFollowupFigure !== "function") return {err: "NO franchiseFollowupFigure"};
+    await franchiseFollowupFigure();
+    const e = document.getElementById("frwait");
+    return {at_open, after: e ? (e.hidden ? "still hidden" : "showing: " + e.textContent) : "absent"};
+  });
+  ok("the dialog carries an empty slot for the figure", slot.at_open === "present, hidden",
+     slot.err || JSON.stringify(slot));
+  ok("...and with nothing to report it stays hidden, not blank",
+     slot.after === "still hidden", JSON.stringify(slot));
+
   const after = await page.evaluate(async () => {
     const d = document.getElementById("frdlg");
     const btn = d && d.querySelector("[data-frdismiss]");

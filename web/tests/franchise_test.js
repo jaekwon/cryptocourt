@@ -455,8 +455,16 @@ ok("...and handed the description the route already read",
    same reader at two moments. */
 const frDlg = (src.match(/async function franchiseFollowup\(slug\)\{[\s\S]*?\n\}/) || [""])[0];
 ok("the dialog exists at all", !!frDlg);
+/* NOT PINNED TO HOW hasMeta IS SPELLED, only to the sentence coming from the
+   shared function. The dialog used to take it from a chain read's result and
+   now works it out without reading anything — which is a different second
+   argument and the same property. */
 ok("...and takes its sentence from the same franchiseRule the panel uses",
-   /franchiseRule\(slug, r\.hasMeta, ""\)/.test(frDlg));
+   /franchiseRule\(slug, /.test(frDlg));
+/* AND ASKS THE CHAIN FOR NOTHING TO SAY IT. This is what made the dialog wait
+   out the seven-second settle: the sentence needs no read, only the figure
+   does. An await in here is that regression coming back. */
+ok("...without waiting on a read to do it", !/await franchiseRead\(\)/.test(frDlg));
 /* NOT ON META, where a burn earns no franchise at all: accrueFranchise skips it
    because Buy mints there directly. Without this the dialog congratulates a
    reader for earning something they did not. */
@@ -468,11 +476,27 @@ ok("...and never fires on meta's own court", /slug === META_SLUG\) return;/.test
 ok("...and is dismissed for good, not per-burn",
    /store\.get\(FRANCHISE_SEEN\)\) return;/.test(frDlg)
    && (frDlg.match(/store\.set\(FRANCHISE_SEEN,"1"\)/g) || []).length >= 2);
-/* AFTER THE SETTLE, NOT AT THE SIGNATURE, so the figure it quotes is the chain's
-   answer after this burn rather than the one from before it. The hook sits below
-   the render inside the same 7s timeout the button already waits out. */
-ok("the buy hook runs after the repaint, not before it",
-   /await render\(\); window\.scrollTo\(0, y\);\n[\s\S]{0,400}?if\(func === "Buy"\) franchiseFollowup\(args && args\.slug\);/.test(src));
+/* TWO MOMENTS, AND THEY ARE DIFFERENT ON PURPOSE. Reported as "the metacoin
+   popup came up pretty slow after page refresh": the whole dialog used to sit
+   below the repaint, seven seconds after the reader pressed the button, because
+   it quoted a total that is only true once the chain holds the burn. The three
+   reads behind that total measure about 230ms against the live node — the seven
+   seconds were the whole delay.
+   SO THE SENTENCE OPENS AT THE LANDING and the FIGURE fills after the settle.
+   Both halves are asserted, because either one drifting back to the other's
+   moment is a regression: the first would be slow again, the second would quote
+   a pre-burn total. */
+ok("the dialog opens the moment the transaction lands",
+   /landed = true;\n[\s\S]{0,400}?if\(func === "Buy"\) franchiseFollowup\(args && args\.slug\);/.test(src));
+ok("...and only the figure waits for the repaint",
+   /await render\(\); window\.scrollTo\(0, y\);\n[\s\S]{0,400}?if\(func === "Buy"\) franchiseFollowupFigure\(\);/.test(src));
+/* THE FIGURE IS THE HALF THAT READS, and it re-checks the dialog is still there
+   after the read — a reader who presses Got it while three reads are in flight
+   must not be written to. */
+const frFig = (src.match(/async function franchiseFollowupFigure\(\)\{[\s\S]*?\n\}/) || [""])[0];
+ok("the figure reads the chain and the sentence does not", /await franchiseRead\(\)/.test(frFig));
+ok("...and gives up if the dialog was dismissed mid-read",
+   (frFig.match(/getElementById\("frwait"\)/g) || []).length >= 2, frFig.slice(0, 200));
 /* AND IT NAMES WHERE THE COPY LIVES. This dialog cannot be reopened once
    dismissed, so telling the reader where the rule stays is what makes
    dismissing it safe. */
