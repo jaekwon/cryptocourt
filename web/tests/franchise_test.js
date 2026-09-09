@@ -35,6 +35,13 @@ global.cc = (n, slug) => `${n} CC:${String(slug).toUpperCase()}`;
 global.btn = (label, func, args, cls, sub) =>
   `<button data-func="${func}" data-args='${JSON.stringify(args||{})}'>${label}</button>`
   + (sub? `<span class="sub">${sub}</span>` : "");
+/* THE RULE SENTENCE LIVES BESIDE franchiseHtml NOW, NOT INSIDE IT, because it is
+   said in two places: the Join panel a reader can come back to, and the dialog
+   that follows their first burn. Sliced in the same way and in dependency order
+   — this harness evaluates one function at a time, so a callee that is not
+   pulled in is a ReferenceError at call time rather than at parse time. */
+eval(fn("franchiseMetaName"));
+eval(fn("franchiseRule"));
 const html = eval(fn("franchiseHtml") + "; franchiseHtml");
 
 /* ---- the rule is stated whether or not anyone is connected ---------------- */
@@ -399,7 +406,19 @@ ok("the read is by ADDRESS, not by court — it is earned everywhere",
    && /one\(`FranchiseOf\(\$\{gstr\(addr\)\}\)`\)/.test(src));
 ok("...and the realm read it calls is the one the realm exports",
    /FranchiseOf\(/.test(src));
-ok("every court page carries the slot", /\+ franchiseSlotHtml\(slug\)/.test(src));
+/* WHERE THE SLOT IS, not merely that it exists. It used to be a section of its
+   own between the stat strip and the folders — a rule about what a burn earns
+   you elsewhere, printed above the reader had burned anything. It is inside the
+   Join panel now, which is both where the burn happens and where a reader
+   returns to claim.
+   ASSERTED AS "inside #join", because "the call exists somewhere" is what this
+   arm used to say and that stayed true through the move. Matching the panel's
+   own markup is what makes the arm able to fail. */
+const joinSrc = (src.match(/function joinPanel\(slug, s\)\{[\s\S]*?\n\}/) || [""])[0];
+ok("the Join panel is where the slot lives", /franchiseSlotHtml\(slug\)/.test(joinSrc),
+   joinSrc? "found joinPanel, no slot in it" : "could not slice joinPanel at all");
+ok("...and no second copy is left at the top of the court page",
+   !/\+ franchiseSlotHtml\(slug\)\n/.test(src));
 /* NOT GATED ON isLive(), unlike the fills around it: the rule is true of the
    sample too, and the sample is the default mode — which is where the silence
    would have been loudest, since most readers never leave it. */
@@ -410,7 +429,38 @@ ok("...and it is filled in demo mode as well as live",
    second read for a string the page is holding. */
 ok("...and handed the description the route already read",
    /async function fillFranchise\(slug, desc\)\{/.test(src)
-   && /franchiseHtml\(slug, pending, supply, hasMeta, held, desc\)/.test(src));
+   && /franchiseHtml\(slug, r\.pending, r\.supply, r\.hasMeta, r\.held, desc\)/.test(src));
+/* ---- the follow-up dialog -------------------------------------------------- */
+/* THE SAME SENTENCE IN BOTH PLACES, which is the whole reason franchiseRule was
+   pulled out of franchiseHtml. Said twice in two hand-written copies, a rule
+   this easy to paraphrase drifts — and the two readers who see them are the
+   same reader at two moments. */
+const frDlg = (src.match(/async function franchiseFollowup\(slug\)\{[\s\S]*?\n\}/) || [""])[0];
+ok("the dialog exists at all", !!frDlg);
+ok("...and takes its sentence from the same franchiseRule the panel uses",
+   /franchiseRule\(slug, r\.hasMeta, ""\)/.test(frDlg));
+/* NOT ON META, where a burn earns no franchise at all: accrueFranchise skips it
+   because Buy mints there directly. Without this the dialog congratulates a
+   reader for earning something they did not. */
+ok("...and never fires on meta's own court", /slug === META_SLUG\) return;/.test(frDlg));
+/* ONCE, EVER. The panel is the copy that persists; a dialog after every burn is
+   a nag. Both exits write the flag, because a native dialog closes on Escape
+   and on the backdrop whatever the button says — and a follow-up that came back
+   because it was closed the wrong way is exactly the nag being avoided. */
+ok("...and is dismissed for good, not per-burn",
+   /store\.get\(FRANCHISE_SEEN\)\) return;/.test(frDlg)
+   && (frDlg.match(/store\.set\(FRANCHISE_SEEN,"1"\)/g) || []).length >= 2);
+/* AFTER THE SETTLE, NOT AT THE SIGNATURE, so the figure it quotes is the chain's
+   answer after this burn rather than the one from before it. The hook sits below
+   the render inside the same 7s timeout the button already waits out. */
+ok("the buy hook runs after the repaint, not before it",
+   /await render\(\); window\.scrollTo\(0, y\);\n[\s\S]{0,400}?if\(func === "Buy"\) franchiseFollowup\(args && args\.slug\);/.test(src));
+/* AND IT NAMES WHERE THE COPY LIVES. This dialog cannot be reopened once
+   dismissed, so telling the reader where the rule stays is what makes
+   dismissing it safe. */
+ok("...and points the reader back at the Join panel",
+   /Join this court/.test(frDlg));
+
 ok("the fill decides on the link from whether the court answered",
    /const hasMeta = isLive\(\)\? Number\.isFinite\(supply\) : !!demoCourt\(META_SLUG\);/.test(src));
 ok("the fill asks for all three at once — pending, supply, and what is held",

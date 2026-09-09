@@ -6535,6 +6535,10 @@ async function adenaSign(func, args, el){
            through to the whole-route render rather than leaving stale figures. */
         if(TX_REWARD.has(func) && await refreshClaimRewards()) return;
         const y = window.scrollY; await render(); window.scrollTo(0, y);
+        /* AND THE ONE FOLLOW-UP THIS PAGE OFFERS. After the repaint, so the
+           panel the dialog points at is already on screen behind it, and so the
+           figure it quotes includes the burn that opened it. */
+        if(func === "Buy") franchiseFollowup(args && args.slug);
       }, 7000);
     }
     else if(res.code===4000){ note("Rejected in the wallet."); }
@@ -12779,9 +12783,21 @@ function joinPanel(slug, s){
      Filled after the paint, because it needs the chain and the panel must not
      wait on it. Hidden until it has an answer: a row reading "—" where a balance
      should be is worse than no row. */
+  /* THE META FRANCHISE SITS UNDER THE BURN, not at the top of the court page.
+     It was a section of its own between the stat strip and the folders, which
+     put a rule about what a burn earns you ELSEWHERE above the reader had done
+     anything — and a reader who has not burned yet has no use for it, while the
+     one who just did had scrolled past it.
+     HERE IT IS THE ANSWER TO THE PANEL IT SITS IN: this is where the burn
+     happens, so this is where "and it also earns you meta" belongs, and it is
+     also where a reader comes BACK to when they want to claim. The dialog after
+     a first burn says it once at the moment it becomes true; this is the copy
+     that stays. Both take their sentence from franchiseRule, so they cannot
+     drift apart. */
   return `<div class="panel" id="join" tabindex="-1"><h2>Join this court</h2>
         <div class="kv oneline" id="joinheld" hidden><div class="k">You have</div><div class="v tnum" id="joinheldv"></div></div>
         ${body}
+        ${franchiseSlotHtml(slug)}
        </div>`;   /* the worst-case paragraph moved into #help-buy too */
 }
 /* One read, and it says nothing rather than guessing when it fails: a wrong
@@ -13011,6 +13027,45 @@ function statTile(k, v, sub, spark){
 function franchiseSlotHtml(slug){
   return `<section id="franchise" class="franchise" data-slug="${esc(slug)}"></section>`;
 }
+/* THE NAME IS A LINK ONLY WHERE THERE IS SOMETHING TO OPEN — the same rule the
+   page applies to a claim reference, and for the same reason. The offline sample
+   has no meta court, so a link there dead-ends on "No court by that slug";
+   route_crawl found it the first time this shipped. The SENTENCE is true either
+   way and is said either way; only the anchor is conditional. */
+function franchiseMetaName(hasMeta){
+  return hasMeta ? `<a href="#/c/${esc(META_SLUG)}">meta court</a>` : "meta court";
+}
+/* THE RULE, IN ONE PLACE, BECAUSE IT IS NOW SAID IN TWO. It is in the Join
+   panel, where a reader can come back to it, and in the dialog that follows
+   their first burn — and a rule this easy to state slightly differently is
+   exactly the kind that drifts once it is written twice.
+   THE REGISTER IS BURN AND RECEIVE, NEVER BUY — the owner's call, and
+   vocab_receive.js holds the rendered page to it: GNOT goes one way to a
+   keyless address and coin comes back, so "buy" would carry a seller, a price
+   and a way out at that price, and there is none of the three. This copy said
+   "buying", "purchase" and "buy into" in its first draft and the check caught
+   all three on the rendered page.
+   ON META'S OWN PAGE THE CHAIN SAYS THIS, NOT THE SITE. The rule is meta's court
+   DESCRIPTION now — written to the realm with SetCourtDesc — and the court page
+   already renders a description in its lead. Printing it again would be the site
+   restating a chain fact three inches below the chain's own words. The fallback
+   is kept for a deployment whose moderators never wrote one, so the sentence is
+   skipped only when the chain HAS one. */
+function franchiseRule(slug, hasMeta, onChainDesc){
+  const meta = slug === META_SLUG;
+  const metaName = franchiseMetaName(hasMeta);
+  const chainSays = meta && typeof onChainDesc === "string" && onChainDesc.trim() !== "";
+  return meta
+    ? (chainSays ? ""
+       : `This court's coin is not received for GNOT — it is <b>earned</b>. Every GNOT `
+         + `burned for any other court's coin is credited here to whoever burned it; how `
+         + `much of this coin that credit becomes depends on this court's price on the `
+         + `day they claim it.`)
+    : `Burning GNOT for this court's coin also earns you the ${metaName}'s coin: the `
+      + `same GNOT credited again there, on top of the coin you receive here. How much `
+      + `of that coin the credit becomes depends on the ${metaName}'s price on the day `
+      + `you claim it.`;
+}
 function franchiseHtml(slug, pending, supply, hasMeta, held, onChainDesc){
   const meta = slug === META_SLUG;
   /* THE NAME IS A LINK ONLY WHERE THERE IS SOMETHING TO OPEN — the same rule the
@@ -13018,8 +13073,7 @@ function franchiseHtml(slug, pending, supply, hasMeta, held, onChainDesc){
      sample has no meta court, so a link there dead-ends on "No court by that
      slug"; route_crawl found it the first time this shipped. The SENTENCE is
      true either way and is said either way; only the anchor is conditional. */
-  const metaName = hasMeta
-    ? `<a href="#/c/${esc(META_SLUG)}">meta court</a>` : "meta court";
+  const metaName = franchiseMetaName(hasMeta);
   /* THE REGISTER IS BURN AND RECEIVE, NEVER BUY — the owner's call, and
      vocab_receive.js holds the rendered page to it: GNOT goes one way to a
      keyless address and coin comes back, so "buy" would carry a seller, a price
@@ -13037,17 +13091,7 @@ function franchiseHtml(slug, pending, supply, hasMeta, held, onChainDesc){
      ON ANY OTHER COURT THE SENTENCE STAYS, and it is not a duplicate there: it
      is about what burning HERE earns you SOMEWHERE ELSE, which is not that
      court's description and is not on its page in any other form. */
-  const chainSays = meta && typeof onChainDesc === "string" && onChainDesc.trim() !== "";
-  const rule = meta
-    ? (chainSays ? ""
-       : `This court's coin is not received for GNOT — it is <b>earned</b>. Every GNOT `
-         + `burned for any other court's coin is credited here to whoever burned it; how `
-         + `much of this coin that credit becomes depends on this court's price on the `
-         + `day they claim it.`)
-    : `Burning GNOT for this court's coin also earns you the ${metaName}'s coin: the `
-      + `same GNOT credited again there, on top of the coin you receive here. How much `
-      + `of that coin the credit becomes depends on the ${metaName}'s price on the day `
-      + `you claim it.`;
+  const rule = franchiseRule(slug, hasMeta, onChainDesc);
   /* NOTHING IS MINTED UNTIL IT IS ASKED FOR, and that is the whole reason meta
      can read as empty. Said plainly, because "supply 0" next to a live
      entitlement is the exact thing that misleads. */
@@ -13096,7 +13140,10 @@ function franchiseHtml(slug, pending, supply, hasMeta, held, onChainDesc){
      body, which reads as a section that failed to load rather than one with
      nothing to report. A heading is not content. */
   if(!rule && !heldLine && !have && !mine) return "";
-  return `<h2 class="sec-h">The meta franchise</h2>`
+  /* h3, NOT h2. The panel this now sits inside opens with "Join this court",
+     so a second h2 under it would claim to be its sibling rather than its
+     part — and a screen reader reads that outline out loud. */
+  return `<h3 class="sec-h">The meta franchise</h3>`
     /* "THIS COURT'S SUPPLY" WAS WRONG ON EVERY PAGE BUT ONE. The panel sits on
        covid's page and the supply it is talking about is META's, so "this
        court" named the wrong one — read live on kourt.xyz and fixed there. On
@@ -13112,23 +13159,86 @@ function franchiseHtml(slug, pending, supply, hasMeta, held, onChainDesc){
     + have
     + mine;
 }
+/* THE THREE READS, ONCE, because the panel and the follow-up dialog both want
+   them and a second copy of this Promise.all is a second chance to read a
+   different set of figures than the panel is showing. */
+async function franchiseRead(){
+  const [pending, supply, held] = await Promise.all([
+    CFG.addr? franchiseOf(CFG.addr) : Promise.resolve(null),
+    isLive()? one(`CoinSupply(${gstr(META_SLUG)})`).catch(()=>null)
+            : Promise.resolve((demoCourt(META_SLUG)||{}).supply),
+    // What this reader already holds there — the "have" half of the question.
+    CFG.addr? balanceOf(META_SLUG, CFG.addr).catch(()=>null) : Promise.resolve(null),
+  ]);
+  /* THE COURT HAS TO BE THERE FOR THE NAME TO BE A LINK. Live: the supply read
+     answering at all is the proof. Demo: the sample either carries the court
+     or it does not. */
+  const hasMeta = isLive()? Number.isFinite(supply) : !!demoCourt(META_SLUG);
+  return {pending, supply, held, hasMeta};
+}
 async function fillFranchise(slug, desc){
   const slot = document.getElementById("franchise");
   if(!slot) return;
   try{
-    const [pending, supply, held] = await Promise.all([
-      CFG.addr? franchiseOf(CFG.addr) : Promise.resolve(null),
-      isLive()? one(`CoinSupply(${gstr(META_SLUG)})`).catch(()=>null)
-              : Promise.resolve((demoCourt(META_SLUG)||{}).supply),
-      // What this reader already holds there — the "have" half of the question.
-      CFG.addr? balanceOf(META_SLUG, CFG.addr).catch(()=>null) : Promise.resolve(null),
-    ]);
-    /* THE COURT HAS TO BE THERE FOR THE NAME TO BE A LINK. Live: the supply read
-       answering at all is the proof. Demo: the sample either carries the court
-       or it does not. */
-    const hasMeta = isLive()? Number.isFinite(supply) : !!demoCourt(META_SLUG);
-    slot.innerHTML = franchiseHtml(slug, pending, supply, hasMeta, held, desc);
+    const r = await franchiseRead();
+    slot.innerHTML = franchiseHtml(slug, r.pending, r.supply, r.hasMeta, r.held, desc);
   }catch(_){ /* an unread franchise leaves the rest of the court page intact */ }
+}
+/* THE FOLLOW-UP, ONCE, AT THE MOMENT IT BECOMES TRUE.
+   The rule is in the Join panel for anyone who goes looking, and that is the
+   copy that stays — but a reader who has just burned GNOT for the first time
+   has earned something on a court they have never opened, and nothing told
+   them at the moment it happened. This does, once, and then never again.
+   AFTER THE REPAINT, NOT AT THE SIGNATURE. It runs from the same 7-second
+   settle the button already waits out, so the figure it quotes is the chain's
+   answer AFTER this burn rather than the one from before it. Quoting a pending
+   total that does not yet include what the reader just did would be worse than
+   saying nothing.
+   DISMISSED FOR GOOD, in the reader's browser, the same way the intro note is.
+   A follow-up that returns after every burn is a nag, and the panel is the
+   thing that is meant to persist.
+   NOT ON META ITSELF, where a burn earns no franchise — accrueFranchise skips
+   it because Buy mints there directly — so the dialog would be telling a
+   reader they had earned something they had not. */
+const FRANCHISE_SEEN = "cc.franchise";
+async function franchiseFollowup(slug){
+  if(!slug || slug === META_SLUG) return;
+  if(store.get(FRANCHISE_SEEN)) return;
+  let r;
+  try{ r = await franchiseRead(); }catch(_){ return; }
+  const rule = franchiseRule(slug, r.hasMeta, "");
+  if(!rule) return;
+  /* WHAT IS WAITING, IN THE UNITS IT IS KEPT IN. The entitlement banks GNOT
+     BURNED; what that becomes depends on where meta's curve stands when it is
+     claimed, and the realm exposes no quote to read instead. So the figure
+     shown is the one that is true, and the sentence says what turns it into
+     coin — the same choice the panel makes, for the same reason. */
+  const waiting = r.pending != null && r.pending > 0
+    ? `<p>You now have <b class="tnum">${gnotAmt(r.pending)}</b> of burn waiting `
+      + `as ${esc(META_SLUG)} coin, claimable whenever you like.</p>`
+    : "";
+  const dlg = document.createElement("dialog");
+  dlg.className = "helper";
+  dlg.id = "frdlg";
+  dlg.innerHTML = `<div class="hd"><h3>You also earned meta coin</h3></div>`
+    + `<div class="bd"><p>${rule}</p>${waiting}`
+    /* WHERE TO FIND IT AGAIN, because a dialog a reader dismisses is a dialog
+       they cannot get back, and this one is dismissed for good. Naming the
+       panel is what makes dismissing it safe. */
+    + `<p class="small muted">This stays under <b>Join this court</b> on any `
+    + `court page, with the button to claim it.</p>`
+    + `<div class="actions" style="margin-top:12px">`
+    + `<button type="button" class="btn" data-frdismiss>Got it</button>`
+    + (r.hasMeta? ` <a class="small" href="#/c/${esc(META_SLUG)}">Open the meta court →</a>` : "")
+    + `</div></div>`;
+  document.body.appendChild(dlg);
+  const close = ()=>{ store.set(FRANCHISE_SEEN,"1"); try{ dlg.close(); }catch(_){} dlg.remove(); };
+  dlg.addEventListener("click", ev => { if(ev.target.closest("[data-frdismiss]")) close(); });
+  /* ESCAPE AND THE BACKDROP COUNT AS DISMISSAL TOO. A native dialog closes on
+     Escape whatever this listener says, and a dialog that came back because it
+     was closed the wrong way is the nag this is written to avoid. */
+  dlg.addEventListener("close", ()=>{ store.set(FRANCHISE_SEEN,"1"); dlg.remove(); });
+  dlg.showModal();
 }
 function courtStatsHtml(slug, s){
   const burnSer = parseSeries(s.burnHist);
@@ -13344,7 +13454,6 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
      The pager stays with the docket: it pages claims, not folders. */
   return `<div class="cols"><div id="qscope">`
     + courtStatsHtml(slug, s)
-    + franchiseSlotHtml(slug)
     + foldersSec
     + searchHead
     + qBarHtml("title, set or #id", idleCap)
