@@ -1534,8 +1534,6 @@ function mountChat(el, opts) {
      already showing it. It is the watermark the server compares against to decide
      whether to answer now or hold. */
   let seen = 0;
-  // The ids this panel posted, so its own attention marks do not ring at it.
-  const mine = new Set();
   let first = true;
   async function tick() {
     if (!live()) return;
@@ -1578,11 +1576,16 @@ function mountChat(el, opts) {
       learnSkew(d);
       paint(d.messages, d.you);
       /* AFTER THE PAINT, so the message being announced is already on screen when
-         the sound arrives. NOT for your own "!?" — you know what you just typed —
-         and never on the opening read. One ring for a batch, however many
-         arrived: a bell is a summons, not a counter. */
+         the sound arrives. Never on the opening read. One ring for a batch,
+         however many arrived: a bell is a summons, not a counter.
+         YOUR OWN MARK RINGS TOO, and it used not to. The reasoning was that you
+         know what you just typed — which is true and turned out not to be the
+         point: reported twice as "it still doesn't ring when I type what?!". A
+         reader ringing a bell deliberately wants to hear that it rang, and the
+         suppression made a working bell look broken from the one seat that most
+         needed the confirmation. */
       if (!wasFirst && chatBellOn()
-          && (d.messages || []).some(m => m && m.id > wasSeen && !mine.has(m.id)
+          && (d.messages || []).some(m => m && m.id > wasSeen
                                           && CHATBELLRE.test(String(m.body || "")))) {
         chatBell();
       }
@@ -1637,7 +1640,6 @@ function mountChat(el, opts) {
     if (!live()) return;
     sendEl.disabled = false;
     if (r.ok) {
-      if (r.id) mine.add(r.id);
       bodyEl.value = "";
       note("");
       /* A WITHDRAWAL HAS NOTHING NEWER TO WAIT FOR, which is why /delete looked

@@ -128,22 +128,71 @@ const {PAGE, demoPage} = require('./harness');
      page". */
   const bell = await page.evaluate(() => {
     const b = document.querySelector('.chatbell');
-    return b ? {on: b.getAttribute('aria-pressed'), text: (b.textContent || '').trim(),
-                aria: b.getAttribute('aria-label') || '',
-                w: Math.round(b.getBoundingClientRect().width)} : null;
+    if (!b) return null;
+    const svg = b.querySelector('svg');
+    const r = b.getBoundingClientRect();
+    // getBBox is the union of what is actually PAINTED, in the viewBox's own
+    // units — the one measurement that can tell a bell from an empty <svg>.
+    const box = svg ? svg.getBBox() : null;
+    const vb = svg ? (svg.getAttribute('viewBox') || '').split(/\s+/).map(Number) : null;
+    return {
+      on: b.getAttribute('aria-pressed'),
+      text: (b.textContent || '').trim(),
+      aria: b.getAttribute('aria-label') || '',
+      w: Math.round(r.width), h: Math.round(r.height),
+      svg: !!svg,
+      paths: svg ? svg.querySelectorAll('path').length : 0,
+      // every path must take its colour from the row rather than carry its own
+      inherits: svg ? [...svg.querySelectorAll('path')].every(p => {
+        const f = p.getAttribute('fill'), st = p.getAttribute('stroke');
+        return (f === 'currentColor' || st === 'currentColor');
+      }) : false,
+      fill: box ? +(box.width / (vb[2] || 1)).toFixed(2) : 0,
+      tall: box ? +(box.height / (vb[3] || 1)).toFixed(2) : 0,
+      // the rendered glyph, in CSS pixels, against the row's own font size
+      px: svg ? Math.round(svg.getBoundingClientRect().height) : 0,
+      em: Math.round(parseFloat(getComputedStyle(b).fontSize)),
+    };
   });
   ok("the panel offers a bell switch", !!bell, JSON.stringify(bell));
   ok(`...on by default (aria-pressed=${bell && bell.on})`, bell && bell.on === "true");
-  /* A GLYPH, WITH THE WORDS KEPT WHERE A SCREEN READER CAN FIND THEM. This arm
-     used to assert the opposite — that the switch was labelled in words, on the
-     reasoning that an icon would need a font the overlay does not control. That
-     reasoning was wrong for emoji specifically: 🔔 comes from the system's own
-     emoji font, needs no embedded face, and is not the business of
-     check-mark-font. So the label moved to aria-label, and this arm now holds
-     the thing that actually matters — that removing the word did not remove it
-     from assistive technology. */
-  ok(`...shown as a bell glyph ("${bell && bell.text}")`,
-     !!(bell && /[\u{1F514}\u{1F515}]/u.test(bell.text)), JSON.stringify(bell));
+
+  /* A DRAWN BELL, AND THIS ARM HAS NOW BEEN WRONG TWICE — kept as a record
+     rather than quietly rewritten a third time.
+       FIRST it asserted the switch was labelled in WORDS, reasoning that an icon
+     would need a font the overlay does not control.
+       THEN that reasoning was called wrong for emoji specifically: 🔔 comes from
+     the system's own emoji font, needs no embedded face, and is not the business
+     of check-mark-font. All true, and it left out what a system font also
+     decides — 🔔 is a gold three-dimensional cartoon on Apple, flat yellow on
+     Android, a line drawing on Windows, and 🔕 adds a red stroke on some and not
+     others. RENDERED SIDE BY SIDE against the rest of the panel, the emoji was
+     the only thing on the row that did not look like it belonged to the page.
+       NOW it is a path, which needs no font at all: not the emoji font, not the
+     embedded hieroglyph face, not check-mark-font's business either.
+     WHAT SURVIVED BOTH REVERSALS is the arm below it — the words live in
+     aria-label, so none of this removed the switch from assistive technology.
+     That one has never had to change and is the point of the pair. */
+  ok("...shown as a drawn glyph rather than an emoji",
+     !!(bell && bell.svg && !/[\u{1F514}\u{1F515}]/u.test(bell.text)), JSON.stringify(bell));
+  /* AND IT IS A BELL, NOT AN EMPTY BOX. The comment-cluster work taught this the
+     expensive way: a glyph too small or too faint to see passed every assertion
+     that only asked whether the element existed. So what is measured is the
+     PAINTED extent — a path whose ink fills two thirds of its own viewBox in
+     both directions cannot be blank, clipped or collapsed. */
+  ok(`...whose ink fills its viewBox (${bell && bell.fill} wide, ${bell && bell.tall} tall)`,
+     !!(bell && bell.fill >= 0.6 && bell.tall >= 0.6), JSON.stringify(bell));
+  /* ...AT THE SIZE OF THE TEXT BESIDE IT, because 1em is what makes it read as a
+     glyph in the row rather than an image dropped into it. A generous band: what
+     this rejects is the 0px collapse and the 3em intrusion, not a pixel of
+     rounding. */
+  ok(`...at about the row's own text size (${bell && bell.px}px against ${bell && bell.em}px)`,
+     !!(bell && bell.px >= bell.em * 0.7 && bell.px <= bell.em * 1.6), JSON.stringify(bell));
+  /* ...IN THE ROW'S OWN COLOUR. The panel is embedded in a page with four themes
+     and has no access to its tokens, so a hardcoded fill would be wrong in at
+     least one of them — the same reason .chatwarn is opacity and weight only. */
+  ok("...taking its colour from the row rather than carrying its own",
+     !!(bell && bell.inherits), JSON.stringify(bell));
   ok("...and still named in words for a screen reader",
      !!(bell && /bell/i.test(bell.aria || "")), JSON.stringify(bell && bell.aria));
 
@@ -154,13 +203,25 @@ const {PAGE, demoPage} = require('./harness');
     stored: (() => { try { return localStorage.getItem("kourt.chat.bell"); } catch (e) { return "?"; } })(),
     on: chatBellOn(),
     glyph: (document.querySelector('.chatbell').textContent || '').trim(),
+    // the struck-through state is one more path than the ringing one
+    paths: document.querySelectorAll('.chatbell svg path').length,
+    strokes: [...document.querySelectorAll('.chatbell svg path')]
+      .filter(p => p.getAttribute('stroke') === 'currentColor').length,
+    dim: +getComputedStyle(document.querySelector('.chatbell')).opacity,
   }));
   ok("clicking it silences the bell", off.pressed === "false" && off.on === false,
      JSON.stringify(off));
   /* AND THE GLYPH ITSELF CHANGES, which is the whole reason a glyph can replace
-     the word: struck-through bell means off, and nothing else has to say so. */
-  ok("...and the glyph changes to a struck-through bell",
-     /\u{1F515}/u.test(off.glyph || ""), JSON.stringify(off.glyph));
+     the word: a bell with a stroke through it means off, and nothing else has to
+     say so. The stroke is COUNTED rather than looked for by shape — one more
+     path than the ringing state, and a stroked one, which is exactly what the
+     "off" branch adds and nothing else in the glyph is. */
+  ok(`...and the glyph gains a stroke through it (${off.paths} paths, ${off.strokes} stroked)`,
+     off.paths === (bell.paths + 1) && off.strokes === 1, JSON.stringify(off));
+  /* ...AND DIMS AS WELL, which is not redundancy. At 1em the slash is a pixel and
+     a half wide; on a phone, at a glance, the difference in weight is what the
+     reader actually notices first. Two signals for one state, deliberately. */
+  ok(`...and dims (opacity ${off.dim})`, off.dim > 0 && off.dim < 0.75, JSON.stringify(off));
   ok("...and the choice is written down", off.stored === "0", JSON.stringify(off));
 
   /* SWITCHING IT BACK ON RINGS ONCE, which is not decoration: that click is also
@@ -184,7 +245,14 @@ const {PAGE, demoPage} = require('./harness');
   ok("the ring is gated on the poll's own arrival test", gate.length > 0,
      "no ring gate found in chat.js");
   ok("...it skips the opening read of a room", /!wasFirst/.test(gate), gate.slice(0, 120));
-  ok("...it skips your own messages", /!mine\.has\(m\.id\)/.test(gate), gate.slice(0, 200));
+  /* YOUR OWN MARK RINGS TOO. This arm asserted the opposite — that the gate
+     skipped your own messages, on the reasoning that you know what you just
+     typed. True, and not the point: reported twice as "it still doesn't ring
+     when I type what?!". Somebody ringing a bell on purpose wants to hear that
+     it rang, and the suppression made a working bell look broken from the one
+     seat that most needed the confirmation. Now asserted as an ABSENCE, so the
+     old behaviour cannot creep back unnoticed. */
+  ok("...and does not exclude your own messages", !/\bmine\b/.test(gate), gate.slice(0, 220));
   ok("...and only messages past the last id drawn",
      /m\.id > wasSeen/.test(gate), gate.slice(0, 200));
 
