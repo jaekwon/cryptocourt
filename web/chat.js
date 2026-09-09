@@ -279,7 +279,21 @@ const CHATBELLVOL = 0.11;
 //
 // A SEPARATE FILE RATHER THAN A DATA URI, so the page stays the size it is: this
 // is fetched once, on the first ring, and cached by the browser thereafter.
-const CHATBELLSRC = "bell.mp3";
+// THE QUERY IS THE FILE'S OWN FINGERPRINT, and it is what makes force-cache
+// below safe rather than a trap.
+//
+// REPORTED TWICE AS "the bell rings twice". The first time it was true — the
+// clip had caught the swing back — and the second time the file on the server
+// was already a single strike while readers went on hearing the old one.
+// bell.mp3 is served with NO cache-control at all, so a browser caches it
+// heuristically, and force-cache tells it not even to revalidate. A corrected
+// recording under an unchanged URL therefore never arrives.
+//
+// So the URL changes when the bytes do. check-bell-version recomputes this
+// digest from web/bell.mp3 and refuses a mismatch, which is the only way this
+// stays true — a version somebody has to remember to bump is a version that
+// is wrong the first time it matters.
+const CHATBELLSRC = "bell.mp3?v=0dd9fd3272bb";
 
 let chatBellCtx = null, chatBellBuf = null, chatBellFetching = false, chatBellGone = false;
 
@@ -1295,12 +1309,20 @@ function mountChat(el, opts) {
     };
     paintBell();
     bellEl.addEventListener("click", () => {
-      const off = chatBellOn();
-      try { window.localStorage.setItem(CHATBELLKEY, off ? "0" : "1"); } catch (e) {}
+      const wasOn = chatBellOn();
+      try { window.localStorage.setItem(CHATBELLKEY, wasOn ? "0" : "1"); } catch (e) {}
       paintBell();
-      // Ring once on the way ON, which is also the click that unblocks audio in
-      // a fresh tab — so the reader hears what they have just switched on.
-      if (off === false) chatBell();
+      /* EVERY CLICK RINGS, not only the ones that switch it on.
+         It rang on the way ON only, which is correct and was reported as "I have
+         to click it twice": the bell STARTS on, so a reader's first click mutes
+         it silently and only the second is audible. A bell you press should
+         sound — that is what a bell is — and the click is also the gesture that
+         unblocks audio in a fresh tab, so it is the one moment a preview is both
+         wanted and possible.
+         MUTING RINGS ONCE TOO, which is the deliberate cost of that: you hear
+         what you are switching off. One three-second toll, on a button nobody
+         presses twice by accident. */
+      chatBell();
     });
   }
 

@@ -191,12 +191,33 @@ const {PAGE, demoPage} = require('./harness');
   ok(`...and the fastest moment is in the middle (${(fast.at * 100).toFixed(0)}% through)`,
      fast.at > 0.15 && fast.at < 0.85, `${f.vel.length} intervals measured`);
   /* LONG ENOUGH TO FOLLOW. "You're testing my reaction speed" was the other half
-     of the report, and a fixed 220ms is what a glide across the graph had. The
-     duration follows the distance now, so this is asserted on a flight that was
-     chosen to be the longest available. Bounded above too: a camera that takes
-     most of a second to cross the map is no longer explaining anything. */
-  ok(`a long glide lasts long enough to read (${f.ms}ms)`, f.ms >= 260 && f.ms <= 800,
-     "the duration should follow the distance, and this was the furthest node");
+     of the report, and a fixed 220ms is what a glide across the graph had.
+     THE FLOOR CAME FROM ONE LUCKY RUN and was wrong. It was set at 260 from a
+     single 268ms measurement; six clean flights on an idle machine then read
+     250, 267, 269, 267, 267, 250, so the arm failed about a third of the time
+     under the full runner and said "the duration should follow the distance"
+     while it did. 240 sits centred in the gap instead — 10ms under the slowest
+     healthy run, 23ms over the 217ms that restoring a flat MS measures — and
+     that gap is the whole resolution this instrument has.
+     WHY IT HAS NO MORE THAN THAT. What is timed is the first viewBox write to
+     the last, which is not the tween: the head and the tail fall outside it by
+     a variable 60-80ms. Bracketing from the click instead does not recover them
+     either. So this arm separates a flat duration from a scaled one, and it is
+     not evidence about any particular number of milliseconds.
+     AND IT IS DELIBERATELY NOT COMPARED AGAINST A PREDICTION. Computing an
+     expected MS here from the measured travel means copying glideTo's own
+     arithmetic into the test, which tests the copy — and the first draft of that
+     got it wrong anyway, dividing by the current viewBox width where glideTo
+     divides by fit.w/z0, predicting 336ms for a flight that took 277.
+     NOR AGAINST A SHORTER FLIGHT, which was the other idea and is the better
+     shape of assertion in general: a near node and a far node, and the far one
+     must take longer. It does not work on this map. The sample court's eleven
+     nodes are a RING, so the nearest clickable node is 426 units out and the
+     furthest is 434 — a 2% difference, and both predict the same duration to
+     within 3ms. There is no distance contrast to measure from one click.
+     Bounded above too: a camera that takes most of a second is not explaining. */
+  ok(`a long glide lasts long enough to read (${f.ms}ms)`, f.ms >= 240 && f.ms <= 800,
+     "a flat duration reads as a flick; the healthy band here is 250-270ms");
 
   ok("the page threw nothing while doing all that", errs.length === 0, errs.join(" | "));
   await browser.close();

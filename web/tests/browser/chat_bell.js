@@ -196,9 +196,11 @@ const {PAGE, demoPage} = require('./harness');
   ok("...and still named in words for a screen reader",
      !!(bell && /bell/i.test(bell.aria || "")), JSON.stringify(bell && bell.aria));
 
+  await page.evaluate(() => { window.__rings = 0; });
   await page.click('.chatbell');
-  await new Promise(r => setTimeout(r, 200));
+  await new Promise(r => setTimeout(r, 400));
   const off = await page.evaluate(() => ({
+    rang: window.__rings,
     pressed: document.querySelector('.chatbell').getAttribute('aria-pressed'),
     stored: (() => { try { return localStorage.getItem("kourt.chat.bell"); } catch (e) { return "?"; } })(),
     on: chatBellOn(),
@@ -211,6 +213,12 @@ const {PAGE, demoPage} = require('./harness');
   }));
   ok("clicking it silences the bell", off.pressed === "false" && off.on === false,
      JSON.stringify(off));
+  /* AND THAT CLICK SOUNDED. It used to ring only on the way ON, so a reader
+     whose bell was already on — which is the default — had to click TWICE to
+     hear anything, and reported exactly that. A bell you press should sound.
+     Muting rings once as the cost of it: you hear what you are switching off. */
+  ok(`...and pressing it sounds, even on the way off (${off.rang})`,
+     off.rang > 0, JSON.stringify(off));
   /* AND THE GLYPH ITSELF CHANGES, which is the whole reason a glyph can replace
      the word: a bell with a stroke through it means off, and nothing else has to
      say so. The stroke is COUNTED rather than looked for by shape — one more
