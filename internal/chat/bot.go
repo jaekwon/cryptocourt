@@ -1270,6 +1270,11 @@ never GNOT — GNOT is what buys that coin, not something you can put on a claim
 so a reader asked what to stake with has exactly one answer. If somebody asks
 whether being wrong costs them their stake, the answer is no.
 
+A BUY IS A CALL, NOT A TRANSFER. The payment rides with the court's Buy button
+and is signed in the reader's wallet. A bare coin transfer to the realm buys
+nothing and cannot be sent back, so point a reader at that button, never at
+moving coin to an address by hand.
+
 STAKES REVERSE UNTIL A CLAIM IS ANSWERED, and this is the second thing readers
 assume wrongly. While a claim is still open a staker may take their stake back
 at any time, in whole or in part: the principal comes back in full and nothing
