@@ -2309,6 +2309,21 @@ tr.youare .mono{font-weight:600}
      applied to a box the map was not filling. MEASURED both ways. */
   .mapwrap{height:62vh}
   .mapsel{max-height:none; overflow-y:visible}
+  /* AND THE HOLDER HAS TO BE ABLE TO SCROLL, which is the whole of "i can't
+     scroll down to see the selected info".
+     .mapfull is position:fixed at inset:0, so the DOCUMENT's scroll cannot move
+     it — measured: window.scrollTo(0,100) took scrollY to 100 and left the card
+     at exactly the same 634px from the top of the screen. And with overflow-y
+     visible the holder is not a scroll container either, so its own scrollTop
+     does nothing: setting it to 100 read back 0. Content past the fold was
+     therefore reachable by no gesture at all.
+     MEASURED ON A 390x844 VIEWPORT: 1159px of content in an 844px box, the card
+     running from y=634 to y=862. Flipping this one declaration makes the same
+     scrollTop assignment take and moves the card to 534.
+     THE ROWS ABOVE ARE WHAT MAKE THIS SAFE. `auto auto` with align-items:start
+     lets the card take its content instead of dividing a fixed height with the
+     map, so there is something to scroll TO rather than a squashed box. */
+  .mapfull{overflow-y:auto}
 }
 .mapsel-h{display:flex; align-items:center; gap:8px; margin-bottom:6px}
 .mapsel-h .mono{font-weight:600}
@@ -14446,6 +14461,50 @@ function mountMap(slug, data, focusId, focusPath){
     else panel.innerHTML = mapFolderCard(L.folders[selFold], data, slug);
     const x = document.getElementById("msel-x");
     if(x) x.addEventListener("click", ()=>{ select(null); });
+    /* AND THE CARD IS BROUGHT TO THE READER. Reported as "on the mobile i can
+       zoom now but i can't scroll down to see the selected info", and the phone
+       layout's own comment says what was supposed to happen: "the page scrolls,
+       which is the right behaviour on a phone: tap a node, then read".
+       IT COULD NOT BE READ BECAUSE IT COULD NOT BE REACHED. The map carries
+       touch-action:none so it answers no swipe of the browser's, and at 62vh it
+       owns most of the screen — measured on a 390x844 viewport, y=100 to 621 —
+       so a swipe up almost anywhere lands on the map and pans it instead of
+       scrolling the page. The card sat at y=634 running to 862, past the bottom
+       of an 844 viewport, and further past it on a real phone once the browser's
+       own chrome takes its share.
+       NO BREAKPOINT IS NAMED HERE, deliberately: the condition is not "is this a
+       phone" but "is the card off screen", which is false on the desktop layout
+       because there the card sits BESIDE the map and is already in view. One
+       test, no second copy of the 860px the stylesheet owns.
+       IT SCROLLS THE HOLDER, NOT THE WINDOW, and that was the second thing this
+       got wrong. .mapfull is fixed at inset:0, so window.scrollBy moves the
+       document underneath a container that does not move with it: the first
+       version reported scrollY going 0 -> 18 while the card sat at 634 before
+       and after. The element that scrolls is the nearest ancestor that actually
+       can, which is found rather than named.
+       AND scrollIntoView WAS THE FIRST THING IT GOT WRONG. block:"nearest" did
+       nothing at all — instrumented, it fired on #mapsel at top 634, bottom 862
+       against 844 and moved nothing, because "nearest" asks whether the closest
+       edge is in view and the card's TOP was. "end" would move, and would also
+       yank a card that is already fully visible.
+       SO THE AMOUNT IS COMPUTED: exactly the overhang, never more than brings
+       the card's top to the top of the box. A reader who has scrolled somewhere
+       is not thrown to a new position by a tap. */
+    const scroller = (()=>{
+      for(let e=panel.parentElement; e; e=e.parentElement){
+        if(e.scrollHeight > e.clientHeight + 1
+           && /auto|scroll/.test(getComputedStyle(e).overflowY)) return e;
+      }
+      return null;
+    })();
+    if(scroller){
+      const box = scroller.getBoundingClientRect();
+      const r = panel.getBoundingClientRect();
+      const over = r.bottom - box.bottom;
+      const by = over > 0 ? Math.min(over, Math.max(0, r.top - box.top))
+               : r.top < box.top ? r.top - box.top : 0;
+      if(by !== 0) scroller.scrollBy({top:by, behavior:"smooth"});
+    }
     // A claim named on a folder card selects it, so the map is browsable in
     // place: folder, its claims, then the claim's own card and its page.
     panel.querySelectorAll(".mapsel-c").forEach(b=>

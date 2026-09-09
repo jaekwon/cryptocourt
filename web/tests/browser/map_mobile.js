@@ -181,6 +181,78 @@ const SIZES = [
   ok("one finger pans and does not zoom",
      !!drag && drag.w0 === drag.w1 && drag.x0 !== drag.x1, JSON.stringify(drag));
 
+  /* ---- AND THE CARD CAN BE REACHED ------------------------------------------
+     Reported as "on the mobile i can zoom now but i can't scroll down to see
+     the selected info", and the phone layout's own comment says what was meant
+     to happen: "the page scrolls, which is the right behaviour on a phone: tap
+     a node, then read". Nothing scrolled.
+     TWO THINGS WERE WRONG AND THE FIRST FIX FOUND NEITHER. .mapfull is
+     position:fixed at inset:0, so the DOCUMENT's scroll cannot move it —
+     measured, window.scrollTo(0,100) took scrollY to 100 and left the card at
+     the same 634px from the top of the screen — and with overflow-y:visible the
+     holder was not a scroll container either, so its own scrollTop read back 0
+     after being set to 100. 1159px of content in an 844px box, reachable by no
+     gesture at all.
+     SO BOTH ARE ASSERTED: that the holder can scroll, and that selecting brings
+     the card into view. The second was written twice before it worked —
+     scrollIntoView({block:"nearest"}) moved nothing because the card's top edge
+     was already on screen, and window.scrollBy moved a document that the fixed
+     holder does not travel with. */
+  await page.setViewport({width: 390, height: 844});
+  await page.goto(PAGE + '#/', {waitUntil: 'networkidle0'});
+  await page.goto(PAGE + '#/c/orem/map', {waitUntil: 'networkidle0'});
+  await new Promise(z => setTimeout(z, 1300));
+  const holder = await page.evaluate(() => {
+    const f = document.querySelector('.mapfull');
+    if (!f) return null;
+    const before = f.scrollTop;
+    f.scrollBy({top: 120});
+    return {overflowY: getComputedStyle(f).overflowY, pos: getComputedStyle(f).position,
+            overflows: f.scrollHeight > f.clientHeight + 1,
+            scrollH: f.scrollHeight, clientH: f.clientHeight,
+            moved: f.scrollTop > before};
+  });
+  ok("the map holder can be scrolled to what is under the map",
+     !!holder && holder.overflows && holder.moved, JSON.stringify(holder));
+
+  /* AND A TAP DOES IT FOR THE READER, so the card does not have to be hunted
+     for. The scroll is the least that works — the overhang and no more — so a
+     reader who has already scrolled is not thrown somewhere new. */
+  await page.goto(PAGE + '#/', {waitUntil: 'networkidle0'});
+  await page.goto(PAGE + '#/c/orem/map', {waitUntil: 'networkidle0'});
+  await new Promise(z => setTimeout(z, 1300));
+  const brought = await page.evaluate(async () => {
+    const sel = document.getElementById('mapsel');
+    const see = () => { const r = sel.getBoundingClientRect();
+      const f = document.querySelector('.mapfull').getBoundingClientRect();
+      return {top: Math.round(r.top), bottom: Math.round(r.bottom),
+              fully: r.top >= f.top - 1 && r.bottom <= f.bottom + 1}; };
+    const a = document.querySelector('.mnode-a');
+    const r = a.getBoundingClientRect();
+    a.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true, view: window,
+      clientX: r.x + r.width / 2, clientY: r.y + r.height / 2}));
+    const atOnce = see();
+    await new Promise(z => setTimeout(z, 900));
+    return {atOnce, settled: see()};
+  });
+  ok("selecting a node brings its card fully into view",
+     !!brought && brought.settled.fully, JSON.stringify(brought));
+
+  /* THE DESKTOP LAYOUT IS NOT DRAGGED INTO THIS. The declaration lives in the
+     max-width:860px block, and beside the map the card needs no scrolling — an
+     arm here so a later move out of that block is noticed. */
+  await page.setViewport({width: 1440, height: 900});
+  await page.goto(PAGE + '#/', {waitUntil: 'networkidle0'});
+  await page.goto(PAGE + '#/c/orem/map', {waitUntil: 'networkidle0'});
+  await new Promise(z => setTimeout(z, 1300));
+  const desk = await page.evaluate(() => {
+    const f = document.querySelector('.mapfull');
+    return {overflowY: getComputedStyle(f).overflowY,
+            overflows: f.scrollHeight > f.clientHeight + 1};
+  });
+  ok("the desktop map holder still needs no scrolling",
+     desk.overflowY === 'visible' && !desk.overflows, JSON.stringify(desk));
+
   ok("no page errors", errs.length === 0, errs.slice(0, 2).join(" | "));
 
   console.log(fail ? `\n${fail} FAILURES` : "\nALL PASS");
