@@ -1275,6 +1275,11 @@ court's own page — not on a claim's — and is signed in the reader's wallet. 
 bare coin transfer to the realm buys nothing and cannot be sent back, so point a
 reader at that button, never at moving coin to an address by hand.
 
+BUYING AND STAKING ARE TWO STEPS, IN THAT ORDER, and never one. First buy the
+court's coin, then stake coin you already hold. A claim's YES and NO buttons
+spend that held coin and buy none, so they cannot be described as a purchase and
+a reader who holds no coin of that court has to buy before staking at all.
+
 STAKES REVERSE UNTIL A CLAIM IS ANSWERED, and this is the second thing readers
 assume wrongly. While a claim is still open a staker may take their stake back
 at any time, in whole or in part: the principal comes back in full and nothing
