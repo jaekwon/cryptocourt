@@ -1711,7 +1711,8 @@ func TestTheSystemPromptSaysBuyingIsACallNotATransfer(t *testing.T) {
 	p := strings.Join(strings.Fields(botSystem), " ")
 	for _, phrase := range []string{
 		"A BUY IS A CALL, NOT A TRANSFER",      // the rule
-		"rides with the court's Buy button",    // where the payment goes
+		"Buy button on the court's own page",   // where the payment goes
+		"not on a claim's",                     // and where the button is NOT
 		"buys nothing and cannot be sent back", // what a transfer does, and that it is final
 		"moving coin to an address by hand",    // said as an instruction
 	} {
@@ -1720,16 +1721,23 @@ func TestTheSystemPromptSaysBuyingIsACallNotATransfer(t *testing.T) {
 		}
 	}
 	// AND IT MUST NOT INSTRUCT A BARE SEND. The first two are verbatim what the
-	// live clerk said; the rest are the neighbouring ways to say it.
+	// live clerk said; the rest are the neighbouring ways to say it. The last
+	// two are the wrong PLACE rather than the wrong mechanism: measured after
+	// the fix above, the clerk said "go to that claim's page ... click the Buy
+	// button", and the control renders only from courtBody via joinPanel, so a
+	// claim page has no Buy on it at all. Cheap to be wrong about — the reader
+	// just cannot find the button — but it is still a wrong instruction.
 	for _, wrong := range []string{
 		"sending gnot to the court",
 		"send gnot to the court",
 		"send gnot to the realm",
 		"send your gnot to",
 		"transfer gnot to the court",
+		"buy button on the claim",
+		"buy button on that claim",
 	} {
 		if strings.Contains(strings.ToLower(p), wrong) {
-			t.Errorf("the prompt instructs a bare transfer, which cannot be undone: %q", wrong)
+			t.Errorf("the prompt instructs a bare transfer or names the wrong page: %q", wrong)
 		}
 	}
 }
