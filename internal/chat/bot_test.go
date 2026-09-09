@@ -1629,6 +1629,62 @@ func TestTheSystemPromptStatesThatStakesReverse(t *testing.T) {
 }
 
 /*
+AND THE PROMPT MUST NAME WHAT A STAKE IS DENOMINATED IN, the third gap of the
+same kind found by the same probe.
+
+	MEASURED IN A LIVE ROOM: "enter your stake amount in GNOT or court coin".
+	Only one of those is stakable. Stake debits the court's own CC — mustStakable
+	panics "not enough unstaked CC" — while GNOT reaches the system through one
+	door only, buy.gno's bonding curve, where it is spent on that coin and
+	burned. So the reply sent a reader off to try a denomination the realm has no
+	entrypoint for.
+	THE PROMPT NAMED GNOT WITHOUT SCOPING IT: "Real money (GNOT) enters once,
+	when buying a court's coin" is true and says nothing about what a stake is
+	made of, and the model read the mention as permission. Unlike the lock story
+	this one DRIFTS — four earlier replies in the same week said "court coin"
+	correctly — which is the argument for pinning it rather than waiting to see
+	it again.
+	ASSERTED ON THE PROMPT for the reason the two tests above give.
+*/
+func TestTheSystemPromptNamesTheStakingDenomination(t *testing.T) {
+	p := strings.Join(strings.Fields(botSystem), " ")
+	for _, phrase := range []string{
+		"THE COURT'S OWN COIN",                 // what a stake is made of
+		"never GNOT",                           // and what it is not
+		"not something you can put on a claim", // what GNOT is not for
+		"exactly one answer",                   // said as an instruction
+	} {
+		if !strings.Contains(p, phrase) {
+			t.Errorf("the system prompt must name the staking denomination, missing %q", phrase)
+		}
+	}
+	// AND IT MUST NOT OFFER GNOT AS A STAKE. The first is verbatim what the live
+	// clerk said; the rest are the neighbouring ways to say it.
+	for _, wrong := range []string{
+		"in gnot or",
+		"gnot or court coin",
+		"stake gnot",
+		"staking gnot",
+		"gnot or the court",
+	} {
+		if strings.Contains(strings.ToLower(p), wrong) {
+			t.Errorf("the prompt offers GNOT as something to stake: %q", wrong)
+		}
+	}
+	// AND IT MUST NOT OVERCLAIM IN THE OTHER DIRECTION. The first draft of the
+	// sentence above scoped GNOT by saying it "buys that coin and buys nothing
+	// else here", which is false: courtburn.gno takes GNOT through
+	// unsafe.OriginSend to start a court and burns the whole payment. Narrowing
+	// a denomination is worth doing; inventing an exclusivity to do it with is
+	// the "do not invent" rule the prompt ends on.
+	for _, over := range []string{"buys nothing else", "only thing gnot", "gnot does nothing else"} {
+		if strings.Contains(strings.ToLower(p), over) {
+			t.Errorf("the prompt claims GNOT has one use; starting a court burns it too: %q", over)
+		}
+	}
+}
+
+/*
 THE CLERK CAN SEE HOW MANY CLAIMS THE ROOM HAS.
 
 	REPORTED TWICE, in the same words: "the clerk doesn't answer anything related
