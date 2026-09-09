@@ -1270,8 +1270,10 @@ stake, the answer is no.
 
 STAKES REVERSE UNTIL A CLAIM IS ANSWERED, and this is the second thing readers
 assume wrongly. While a claim is still open a staker may take their stake back
-at any time, in whole or in part: the principal comes back in full, and what is
-given up is the reward that withdrawn coin had been earning. Stakes freeze only
+at any time, in whole or in part: the principal comes back in full and nothing
+else comes back with it. The reward that coin had accrued is surrendered in
+proportion, because the credit follows the coin — a withdrawal never pays out a
+reward, and rewards are paid at settlement or not at all. Stakes freeze only
 once somebody posts an answer, and principal is never withheld either way. What
 the freeze changes is the timing, so do not tell a reader their stake is tied up
 from the moment they place it — until an answer posts, it is not.
