@@ -178,6 +178,7 @@ web-guards:
 	python3 scripts/check-curation-reachable.py
 	python3 scripts/check-chat-limits.py
 	python3 scripts/check-bell-version.py
+	python3 scripts/check-bell-strike.py
 	python3 scripts/check-mark-font.py
 
 # The overlay's own regression suite. It lived in a scratch directory until r31,

@@ -1665,6 +1665,28 @@ control("no version on the URL at all", CHATJS,
         "under a versioned URL",
         argv=["python3", "scripts/check-bell-version.py"])
 
+print("\ncheck-bell-strike")
+# A GUARD ON A BINARY CANNOT BE ARMED BY EDITING WHAT IT READS. Planting a text
+# find/replace into an mp3 is not a defect, it is a corrupt file, and every
+# detector would object to it for the wrong reason. So the guard manufactures
+# its own defect — the clip overlaid on a delayed copy of itself, which is
+# exactly a second strike landing on a decaying tail — and both arms below move
+# the one threshold that decides, in opposite directions.
+# THE FIRST IS THE ONE THAT MATTERS. A detector that has stopped detecting
+# reports every bell healthy for ever, and that is the failure mode every guard
+# in scripts/ is capable of; the guard's own positive control is what closes it,
+# and this proves the control is load-bearing rather than decorative.
+control("a detector blind to a doubled strike", "scripts/check-bell-strike.py",
+        "RISE_MAX = 1.27", "RISE_MAX = 99.0",
+        "does not fire on a doubled strike",
+        argv=["python3", "scripts/check-bell-strike.py"])
+# And the other branch: the measurement of the SHIPPED file is live, not a
+# constant that happens to sit above whatever is there.
+control("a bell whose envelope climbs", "scripts/check-bell-strike.py",
+        "RISE_MAX = 1.27", "RISE_MAX = 1.05",
+        "envelope RISES",
+        argv=["python3", "scripts/check-bell-strike.py"])
+
 print("\ncheck-web-constants")
 # WEEK is not decoration: the overlay passes it INTO realm reads — TrailingOI and
 # TrailingYes both take it as the trailing window — so a drift from periodBlocks
