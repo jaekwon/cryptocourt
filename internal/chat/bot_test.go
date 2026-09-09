@@ -1561,6 +1561,56 @@ func TestTheSystemPromptStatesTheNoLossRule(t *testing.T) {
 }
 
 /*
+AND THE PROMPT MUST STATE THAT A STAKE CAN BE TAKEN BACK, for the same reason
+and with the same failure mode as the payout rule above.
+
+	MEASURED IN THREE LIVE ROOMS, on three different days, asked how staking
+	works: "Your stake is held until the claim is settled", "Your stake is locked
+	until the claim is settled", "Your stake is locked in until the settling
+	window closes". The realm says the opposite — Stake's own doc line is "Free
+	to reverse until the answer", and Unstake refuses ONLY once cs.frozenAt != 0,
+	which an answer sets. So a claim spends most of its life reversible and the
+	clerk told readers it was not.
+	THE PROMPT WAS SILENT ON IT: the no-loss paragraph settles who gets paid at
+	settlement and says nothing about getting out before it, so the model filled
+	the gap the same way it filled the payout gap — with the intuition that a bet,
+	once placed, is placed. This is consequential in the direction that costs the
+	site readers: "my money is stuck for weeks" is a reason not to try it.
+	ASSERTED ON THE PROMPT, not on a reply, for the reason given above: a test
+	that called a model would be a test of the model. Both halves again — the
+	freedom without the freeze invites "so I can pull out after the answer too?"
+	answered by invention, and the forfeit is what stops "then why hold at all".
+*/
+func TestTheSystemPromptStatesThatStakesReverse(t *testing.T) {
+	p := botSystem
+	for _, phrase := range []string{
+		"REVERSE UNTIL A CLAIM IS ANSWERED", // when it is free
+		"in whole or in part",               // and that a part is allowed
+		"principal comes back in full",      // what returns
+		"the reward that withdrawn coin",    // what does not
+		"freeze only",                       // and when the freedom ends
+	} {
+		if !strings.Contains(p, phrase) {
+			t.Errorf("the system prompt must state that stakes reverse, missing %q", phrase)
+		}
+	}
+	// AND IT MUST NOT TELL THE OPPOSITE STORY. The first three are verbatim what
+	// the live clerk said while the prompt was silent.
+	for _, wrong := range []string{
+		"held until the claim is settled",
+		"locked until the claim is settled",
+		"locked in until",
+		"locked until settle",
+		"cannot take it back",
+		"stuck until",
+	} {
+		if strings.Contains(strings.ToLower(p), strings.ToLower(wrong)) {
+			t.Errorf("the prompt says a live stake cannot be withdrawn: %q", wrong)
+		}
+	}
+}
+
+/*
 THE CLERK CAN SEE HOW MANY CLAIMS THE ROOM HAS.
 
 	REPORTED TWICE, in the same words: "the clerk doesn't answer anything related
