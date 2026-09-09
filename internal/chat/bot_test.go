@@ -1580,22 +1580,37 @@ and with the same failure mode as the payout rule above.
 	that called a model would be a test of the model. Both halves again — the
 	freedom without the freeze invites "so I can pull out after the answer too?"
 	answered by invention, and the forfeit is what stops "then why hold at all".
+	THE FORFEIT NEEDED SAYING TWICE. The first repair named it as "what is given
+	up", and the live clerk inverted it within one exchange: "get back your
+	principal plus the reward it earned up to that point". So the forfeit is now
+	stated as a surrender and repeated as an instruction, and the three phrasings
+	of the inversion are banned below beside the three of the lock story.
 */
 func TestTheSystemPromptStatesThatStakesReverse(t *testing.T) {
-	p := botSystem
+	// MATCHED ON THE UNWRAPPED PROMPT, because the prompt is a wrapped string
+	// literal and a phrase that happens to straddle a line break is not a
+	// different statement. Collapsing the whitespace is what keeps this test
+	// about the sentence rather than about where the 79th column fell.
+	p := strings.Join(strings.Fields(botSystem), " ")
 	for _, phrase := range []string{
 		"REVERSE UNTIL A CLAIM IS ANSWERED", // when it is free
 		"in whole or in part",               // and that a part is allowed
 		"principal comes back in full",      // what returns
-		"the reward that withdrawn coin",    // what does not
+		"surrendered in proportion",         // what does not
+		"never pays out a reward",           // said again as an instruction
 		"freeze only",                       // and when the freedom ends
 	} {
 		if !strings.Contains(p, phrase) {
 			t.Errorf("the system prompt must state that stakes reverse, missing %q", phrase)
 		}
 	}
-	// AND IT MUST NOT TELL THE OPPOSITE STORY. The first three are verbatim what
-	// the live clerk said while the prompt was silent.
+	// AND IT MUST NOT TELL EITHER OPPOSITE STORY. The first three phrasings are
+	// verbatim what the live clerk said while the prompt was silent; the last
+	// three are what it said on the FIRST repair, when naming the forfeit as
+	// "what is given up" left it soft enough to invert — "get back your
+	// principal plus the reward it earned up to that point", which is wrong
+	// twice over, since a withdrawal pays no reward at all and the accrued
+	// credit is the thing surrendered.
 	for _, wrong := range []string{
 		"held until the claim is settled",
 		"locked until the claim is settled",
@@ -1603,9 +1618,12 @@ func TestTheSystemPromptStatesThatStakesReverse(t *testing.T) {
 		"locked until settle",
 		"cannot take it back",
 		"stuck until",
+		"plus the reward",
+		"principal plus",
+		"reward it earned up to",
 	} {
 		if strings.Contains(strings.ToLower(p), strings.ToLower(wrong)) {
-			t.Errorf("the prompt says a live stake cannot be withdrawn: %q", wrong)
+			t.Errorf("the prompt tells the wrong withdrawal story: %q", wrong)
 		}
 	}
 }
