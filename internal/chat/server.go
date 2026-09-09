@@ -136,7 +136,11 @@ func (s *Server) pulse() *pulse {
 // lone reader see "0 here" on their own screen. Adding one for the asker is not
 // a fudge: they are in the room, they are just not asleep at this instant.
 func (s *Server) here() int64 {
-	n := s.hold.now.Load() + 1
+	// THE WINDOWED COUNT, NOT THE IN-FLIGHT ONE. A long poll is not held
+	// continuously, so hold.now dips to zero between a reader's polls and this
+	// line used to print "1 here" to somebody sitting in a room with two other
+	// people in it. See holdLinger.
+	n := s.hold.presentTotal() + 1
 	if s.BotEnabled {
 		n++
 	}

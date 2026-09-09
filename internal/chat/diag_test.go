@@ -240,9 +240,33 @@ func TestHereCountsTheAskerAndTheHelper(t *testing.T) {
 	if got := srv.here(); got != 4 {
 		t.Fatalf("two waiters plus the asker plus the helper is 4, got %d", got)
 	}
+	/* AND A WAITER BETWEEN POLLS STILL COUNTS, which reverses what this arm used
+	   to assert. It required the count to drop the instant a poll returned, and
+	   that was measured on the live site as the reader-visible bug it is: a long
+	   poll is not held continuously, so with one reader on the page the count
+	   was right for about six seconds out of every ten. See holdLinger. */
 	srv.hold.leave(b)
+	if got := srv.here(); got != 4 {
+		t.Fatalf("a waiter between two polls is still in the room, got %d", got)
+	}
+	/* ...UNTIL THE WINDOW PASSES. The clock is injected rather than slept on,
+	   which is the only reason this can assert both sides of a 45-second
+	   window in a unit test. */
+	base := time.Now()
+	srv.hold.mu.Lock()
+	srv.hold.clock = func() time.Time { return base.Add(holdLinger + time.Second) }
+	srv.hold.mu.Unlock()
 	if got := srv.here(); got != 3 {
-		t.Fatalf("a waiter that left must stop counting, got %d", got)
+		t.Fatalf("a waiter gone longer than the window must stop counting, got %d", got)
+	}
+	/* AND IT IS THE DEPARTED ONE THAT WENT, not just "one of them". Checking the
+	   total again would assert the same 3 twice and distinguish nothing: a
+	   window that expired on age alone would drop `a` — which never left — and
+	   still print 3 by keeping `b`. So the tally itself is read. */
+	byCC, nets, _ := srv.hold.snapshot()
+	if byCC["DE"] != 1 || byCC["US"] != 0 || nets != 1 {
+		t.Fatalf("the waiter still polling must survive the window and the one "+
+			"that left must not: %v, %d nets", byCC, nets)
 	}
 }
 
@@ -802,14 +826,132 @@ func TestHoldGaugeRemembersItsPeak(t *testing.T) {
 	if p := g.peak.Load(); p != 3 {
 		t.Fatalf("the peak should survive them leaving, got %d", p)
 	}
-	/* AND THE TALLIES DO NOT. They are what is HELD, not what was ever held, and
-	   the maps must be empty rather than full of zeroes — a key kept at zero
-	   would make HereNetworks count everyone who has ever polled, which climbs
-	   for the life of the process and means nothing within an hour. */
+	/* AND THE TALLIES HOLD FOR THE WINDOW, then empty. This arm used to require
+	   them to empty the INSTANT the last poll returned, and that requirement was
+	   the bug: a reader between two polls has not left the room. What must still
+	   be true is that they empty EVENTUALLY — a key kept forever would make
+	   HereNetworks count everyone who has ever polled, which climbs for the life
+	   of the process and means nothing within an hour. */
+	if byCC, nets, rooms := g.snapshot(); byCC["DE"] != 2 || nets != 3 || rooms != 2 {
+		t.Fatalf("between polls the room is still the room: %v, %d nets, %d rooms",
+			byCC, nets, rooms)
+	}
+	base := time.Now()
+	g.mu.Lock()
+	g.clock = func() time.Time { return base.Add(holdLinger + time.Second) }
+	g.mu.Unlock()
 	byCC, nets, rooms := g.snapshot()
 	if len(byCC) != 0 || nets != 0 || rooms != 0 {
-		t.Fatalf("the tallies must empty as connections leave: %v, %d nets, %d rooms",
+		t.Fatalf("once the window has passed with nothing in flight the tallies "+
+			"must empty: %v, %d nets, %d rooms", byCC, nets, rooms)
+	}
+	/* AND THE MAPS THEMSELVES ARE GONE, not merely reporting zero. The published
+	   numbers come from present(), so a map full of expired keys would report
+	   correctly while growing without bound — the leak this test was written to
+	   catch in the first place, which a check on the reported counts alone can
+	   no longer see. */
+	g.mu.Lock()
+	sizes := [3]int{len(g.byCC), len(g.byNet), len(g.byRoom)}
+	g.mu.Unlock()
+	if sizes != [3]int{0, 0, 0} {
+		t.Fatalf("expired keys were reported as absent but never forgotten: %v", sizes)
+	}
+	/* A READER WHO KEEPS POLLING NEVER EXPIRES, which is the other half and the
+	   one that would empty a busy room if it were wrong. Same gauge, same jumped
+	   clock: enter again and the tally must come back and stay. */
+	g.enter(h[0])
+	if byCC, _, _ := g.snapshot(); byCC["DE"] != 1 {
+		t.Fatalf("a reader polling after the window must count again: %v", byCC)
+	}
+}
+
+// AND THE COUNT COMES BACK DOWN WHEN A ROOM PARTLY EMPTIES. The window holds
+// the recent maximum, so the thing that must be proved is that the maximum
+// DECAYS to what is actually there rather than standing forever.
+//
+// MEASURED AS A GAP FIRST: deleting the peak reset from sweep failed zero tests.
+// Without it, a room that once had three readers in it reports three for the
+// life of the process — every sweep re-stamps the stale peak, so it never even
+// expires. The page would name a country on the strength of readers who left an
+// hour ago, which is the floor's argument quietly turned into a lie.
+func TestAPartlyEmptiedRoomDecaysToWhatIsLeft(t *testing.T) {
+	var g holdGauge
+	base := time.Now()
+	at := base
+	g.clock = func() time.Time { return at }
+	h := []holder{
+		{cc: "SE", net: "n1", room: "r1"},
+		{cc: "SE", net: "n2", room: "r1"},
+		{cc: "SE", net: "n3", room: "r1"},
+	}
+	for _, x := range h {
+		g.enter(x)
+	}
+	if byCC, nets, _ := g.snapshot(); byCC["SE"] != 3 || nets != 3 {
+		t.Fatalf("three in flight: %v, %d nets", byCC, nets)
+	}
+	g.leave(h[1])
+	g.leave(h[2])
+	// WITHIN THE WINDOW THEY ARE STILL THERE — this is the feature, and it is
+	// what makes the decay below a real question rather than a tautology.
+	at = at.Add(5 * time.Second)
+	if byCC, _, _ := g.snapshot(); byCC["SE"] != 3 {
+		t.Fatalf("just after leaving, the room is still three: %v", byCC)
+	}
+	// PAST IT, ONLY THE ONE STILL HOLDING COUNTS.
+	at = at.Add(holdLinger + time.Second)
+	if byCC, nets, rooms := g.snapshot(); byCC["SE"] != 1 || nets != 1 || rooms != 1 {
+		t.Fatalf("the window passed, so only the holder is left: %v, %d nets, %d rooms",
 			byCC, nets, rooms)
+	}
+	// AND IT DOES NOT CREEP BACK. A sweep that re-stamped a stale peak would
+	// report three again on the next read.
+	at = at.Add(holdLinger + time.Second)
+	if byCC, _, _ := g.snapshot(); byCC["SE"] != 1 {
+		t.Fatalf("the old peak came back: %v", byCC)
+	}
+}
+
+// A READER WHO KEEPS POLLING IS NEVER DROPPED, ACROSS ANY LENGTH OF TIME — the
+// property the whole window exists to provide, and the one no other arm covers.
+//
+// WHY IT NEEDS ITS OWN TEST. The arms above enter and leave once, so they cannot
+// see the case that actually broke: a peak RE-ACHIEVED at the same level must
+// re-stamp its clock. With `>` instead of `>=` in bump, a lone reader sets
+// peak=1 at t0 and never refreshes it, so 45 seconds later the window has
+// expired underneath somebody who never left and the count goes back to
+// flickering with their poll cycle — the original bug, restored, with every
+// other test still green.
+func TestASteadyPollerNeverFallsOutOfTheRoom(t *testing.T) {
+	var g holdGauge
+	base := time.Now()
+	at := base
+	g.clock = func() time.Time { return at }
+	h := holder{cc: "NO", net: "n1", room: "r1"}
+
+	// Six seconds holding, four between, for five times the window.
+	for at.Sub(base) < 5*holdLinger {
+		g.enter(h)
+		at = at.Add(6 * time.Second)
+		if byCC, _, _ := g.snapshot(); byCC["NO"] != 1 {
+			t.Fatalf("in flight at %s: %v", at.Sub(base), byCC)
+		}
+		g.leave(h)
+		at = at.Add(4 * time.Second)
+		// BETWEEN POLLS IS THE ASSERTION. This is the moment the live count is
+		// zero and only the window is holding the reader in the room.
+		if byCC, _, _ := g.snapshot(); byCC["NO"] != 1 {
+			t.Fatalf("between polls at %s the reader vanished: %v", at.Sub(base), byCC)
+		}
+		if n := g.presentTotal(); n != 1 {
+			t.Fatalf("between polls at %s the total was %d", at.Sub(base), n)
+		}
+	}
+	// AND THEY DO LEAVE EVENTUALLY. Without this the test would pass on a gauge
+	// that never forgets anybody.
+	at = at.Add(holdLinger + time.Second)
+	if n := g.presentTotal(); n != 0 {
+		t.Fatalf("after the window with no poll the room should be empty, got %d", n)
 	}
 }
 
