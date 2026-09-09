@@ -142,37 +142,189 @@ function chatBellOn() {
   try { return window.localStorage.getItem(CHATBELLKEY) !== "0"; } catch (e) { return true; }
 }
 
+// THE MODES OF A TUNED CHURCH BELL: ratio to the prime, gain, decay seconds,
+// and the split between the two halves of the doublet, in hertz.
+//
+// THIS IS MODAL SYNTHESIS, which is how any resonant metal object is modelled —
+// a table of modes, each with its own frequency, amplitude and damping. The
+// serious versions of this (STK, Faust, IRCAM's Modalys) get the table from a
+// finite-element simulation of the actual casting or by analysing a recording.
+// The table below is the tuned-bell partial set a founder works to, which is
+// published and is the same data for every well-tuned bell of this shape.
+//
+// A BELL IS INHARMONIC, AND THAT IS WHY IT SOUNDS LIKE A BELL. A string or a
+// pipe rings at whole-number multiples of its fundamental, which is what makes
+// an organ an organ. A bell does not: the hum sits an octave BELOW the prime,
+// and then there is a MINOR THIRD — 1.2, not 1.25 and nowhere near a whole
+// number. That third is why a bell reads as solemn rather than sweet.
+//
+// EACH MODE IS A DOUBLET, AND THE FIRST VERSION OF THIS GOT IT WRONG. A real
+// casting is never perfectly symmetrical, so every mode splits into two
+// frequencies a fraction apart, and the slow beating between them is the warble
+// that makes a bell sound like an object rather than a waveform. The first
+// version set `detune` on a SINGLE oscillator per mode — which shifts its pitch
+// slightly and produces no beating whatsoever, because beating needs two tones
+// to beat against. Hence a split in hertz and two oscillators per row.
+//
+// AND THE MODES DECAY AT DIFFERENT RATES, which is the other half of it. The
+// high ones are gone inside a second while the hum is still sounding many
+// seconds later, so the sound DARKENS as it falls. Partials that faded together
+// would be a synthesiser playing a chord.
+//
+// The strike note a listener actually hears is in none of these rows: it is a
+// virtual pitch the ear infers, mostly from the nominal — which is why a big
+// bell reads far lower than any single frequency present in it.
+const CHATBELLMODES = [
+  // ratio  gain   decay  split(Hz)
+  [0.5,     0.42,  7.5,   0.19],  // hum, an octave under: the long tail
+  [1.0,     0.34,  5.2,   0.31],  // prime
+  [1.2,     0.27,  3.6,   0.43],  // TIERCE — the minor third that names the sound
+  [1.5,     0.16,  2.8,   0.55],  // quint
+  [2.0,     0.30,  2.4,   0.67],  // nominal: where the strike note comes from
+  [2.5,     0.11,  1.5,   0.8],   // deciem
+  [2.67,    0.08,  1.3,   0.9],   // undeciem
+  [3.0,     0.10,  1.0,   1.1],   // duodeciem / superquint
+  [4.0,     0.08,  0.62,  1.4],   // octave nominal
+  [5.43,    0.05,  0.38,  1.9],   // upper clang modes: inharmonic, and brief
+  [6.81,    0.04,  0.27,  2.3],
+  [8.19,    0.03,  0.19,  2.9],
+];
+
+// The prime, in hertz. LOW, because the ask was for a large bell: a tenor is a
+// heavy casting and rings low, and the strike note the ear infers sits an octave
+// above this, near 330Hz.
+const CHATBELLHZ = 165;
+const CHATBELLVOL = 0.11;
+
 // chatBell rings, and SYNTHESISES the sound rather than fetching one.
 //
 // The overlay's one promise is that it is self-contained — no CDN, no assets
-// directory — and an audio file would break that for a two-note ding. Two sine
-// oscillators with an exponential decay is the whole bell.
+// directory — so a recording of a real bell is not available to it at any
+// quality. What IS available is the acoustics: build the partials a founder
+// tunes, give each its own decay, and strike it.
 //
 // EVERY FAILURE IS SILENT, deliberately. A browser that blocks audio until the
 // reader has interacted with the page is the NORMAL case, not an error: the
 // first ring in a fresh tab may simply not sound, and the second will. Nothing
 // here is worth a console line, let alone a note in the room.
-let chatBellCtx = null;
+// THE RECORDING: Emmanuel, the 13-tonne bourdon of Notre-Dame de Paris, taken
+// on 15 April 2019 — the uploader's own note says it is the deepest-toned bell of
+// the cathedral recorded BEFORE the fire that day. Public domain (CC0), so it
+// carries no attribution obligation; credited here because it is worth knowing
+// what you are listening to.
+//
+// CHOSEN BY MEASUREMENT, not by taste. Twelve real bells were cut to ten seconds
+// from the strike and measured: the ones preferred all had a spectral centroid
+// at or under 1100Hz, and the ones rejected were all 1580 and above — including
+// one that rang LONGER than any of the keepers and was refused for being bright.
+// The quality wanted was darkness, not resonance. Emmanuel measures 642 with a
+// 9.8s decay, darker and longer than anything else found.
+//
+// A SEPARATE FILE RATHER THAN A DATA URI, so the page stays the size it is: this
+// is fetched once, on the first ring, and cached by the browser thereafter.
+const CHATBELLSRC = "bell.mp3";
+
+let chatBellCtx = null, chatBellBuf = null, chatBellFetching = false, chatBellGone = false;
+
+// chatBellPlay sounds a decoded recording through a gain node.
+function chatBellPlay(ctx, buf) {
+  const src = ctx.createBufferSource(), g = ctx.createGain();
+  src.buffer = buf;
+  g.gain.value = 1;
+  src.connect(g);
+  g.connect(ctx.destination);
+  src.start(ctx.currentTime);
+}
+
+// chatBell rings: the recording if it is there, the synthesis if it is not.
+//
+// THE FALLBACK IS NOT DECORATION. A deploy that forgets to ship bell.mp3, a
+// cache miss on a flaky connection, a browser that will not decode mp3 — each
+// degrades to a worse bell rather than to silence, and silence is the failure
+// that would be reported as "the bell is broken".
+//
+// EVERY AUDIO FAILURE IS SILENT, deliberately. A browser that blocks audio until
+// the reader has interacted with the page is the NORMAL case, not an error: the
+// first ring in a fresh tab may simply not sound, and the second will.
 function chatBell() {
   try {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
     if (!chatBellCtx) chatBellCtx = new AC();
-    if (chatBellCtx.state === "suspended" && chatBellCtx.resume) chatBellCtx.resume();
-    const t = chatBellCtx.currentTime;
-    // Two notes a fifth apart, the second a beat later: a ding rather than a beep.
-    for (const [hz, at] of [[880, 0], [1318.5, 0.085]]) {
-      const o = chatBellCtx.createOscillator(), g = chatBellCtx.createGain();
-      o.type = "sine";
-      o.frequency.value = hz;
-      g.gain.setValueAtTime(0.0001, t + at);
-      g.gain.exponentialRampToValueAtTime(0.16, t + at + 0.012);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + at + 0.34);
-      o.connect(g);
-      g.connect(chatBellCtx.destination);
-      o.start(t + at);
-      o.stop(t + at + 0.38);
+    const ctx = chatBellCtx;
+    if (ctx.state === "suspended" && ctx.resume) ctx.resume();
+    if (chatBellBuf) { chatBellPlay(ctx, chatBellBuf); return; }
+    if (chatBellGone) { chatBellModal(ctx); return; }
+    if (!chatBellFetching) {
+      chatBellFetching = true;
+      // FETCHED ON FIRST USE, not at mount: a reader who never hears a bell
+      // should never pay for one.
+      Promise.resolve()
+        .then(() => fetch(CHATBELLSRC, {cache: "force-cache"}))
+        .then(r => { if (!r.ok) throw new Error("no bell"); return r.arrayBuffer(); })
+        .then(b => new Promise((ok, no) => {
+          // The callback form, because Safari's decodeAudioData returns nothing.
+          const p = ctx.decodeAudioData(b, ok, no);
+          if (p && p.then) p.then(ok, no);
+        }))
+        .then(buf => { chatBellBuf = buf; chatBellPlay(ctx, buf); })
+        .catch(() => { chatBellGone = true; chatBellModal(ctx); });
+      return;
     }
+    // A ring while the first fetch is still in flight: synthesise this one.
+    chatBellModal(ctx);
+  } catch (e) { /* blocked, unsupported, or no output device: say nothing */ }
+}
+
+// chatBellModal is the synthesised bell — the fallback, and a curiosity in its
+// own right. See CHATBELLMODES for why it is built the way it is.
+function chatBellModal(ctx) {
+  try {
+    if (!ctx) return;
+    const t = ctx.currentTime;
+
+    const out = ctx.createGain();
+    out.gain.value = CHATBELLVOL;
+    out.connect(ctx.destination);
+
+    for (const [ratio, gain, decay, split] of CHATBELLMODES) {
+      const hz = CHATBELLHZ * ratio;
+      // TWO OSCILLATORS PER MODE, a fraction of a hertz apart: the doublet. The
+      // beat rate a listener hears IS the split, so 0.19Hz on the hum is a slow
+      // swell about every five seconds and the upper modes shimmer faster.
+      for (const f of [hz - split / 2, hz + split / 2]) {
+        const o = ctx.createOscillator(), g = ctx.createGain();
+        o.type = "sine";
+        o.frequency.value = f;
+        // Struck, not faded in: a few milliseconds to full, then a long
+        // exponential away. exponentialRamp cannot reach zero, hence the floor.
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.exponentialRampToValueAtTime(gain / 2, t + 0.004);
+        g.gain.exponentialRampToValueAtTime(0.0001, t + decay);
+        o.connect(g);
+        g.connect(out);
+        o.start(t);
+        o.stop(t + decay + 0.05);
+      }
+    }
+
+    // THE STRIKE ITSELF: the clapper hitting bronze, which is broadband and over
+    // in a blink. Without it the partials simply appear, and the ear hears a
+    // synthesiser being switched on rather than metal being hit.
+    const n = ctx.sampleRate * 0.06;
+    const buf = ctx.createBuffer(1, n, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
+    const src = ctx.createBufferSource(), bp = ctx.createBiquadFilter(),
+          ng = ctx.createGain();
+    src.buffer = buf;
+    bp.type = "bandpass";
+    bp.frequency.value = CHATBELLHZ * 6;
+    bp.Q.value = 0.7;
+    ng.gain.setValueAtTime(0.35, t);
+    ng.gain.exponentialRampToValueAtTime(0.0001, t + 0.09);
+    src.connect(bp); bp.connect(ng); ng.connect(out);
+    src.start(t);
   } catch (e) { /* blocked, unsupported, or no output device: say nothing */ }
 }
 

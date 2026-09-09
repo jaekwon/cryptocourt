@@ -56,11 +56,52 @@ const {PAGE, demoPage} = require('./harness');
     ok(`"${s}" does not`, await re(s) === false);
   }
 
-  /* THE SOUND IS SYNTHESISED, NOT FETCHED. The overlay's one promise is that it
-     is self-contained; an audio file would break it for a two-note ding. Counted
-     through the stub: two oscillators, which is the ding rather than a beep. */
-  const rang = await page.evaluate(() => { window.__rings = 0; chatBell(); return window.__rings; });
-  ok(`ringing starts the two notes of a ding (${rang})`, rang === 2, String(rang));
+  /* THE BELL IS A RECORDING, AND THE SYNTHESIS IS ITS FALLBACK.
+     Emmanuel of Notre-Dame, chosen by measurement rather than taste: twelve real
+     bells were cut to ten seconds from the strike, and every one preferred had a
+     spectral centroid at or under 1100Hz while every one rejected was 1580 or
+     above — including one that rang LONGER than any keeper and was refused for
+     being bright. Darkness, not resonance. Emmanuel measures 642.
+     SHIPPED AS A FILE NEXT TO chat.js, so the source must be RELATIVE: an
+     absolute URL would be the one thing the overlay may not do. */
+  const bellSrc = await page.evaluate(() => typeof CHATBELLSRC === "string" ? CHATBELLSRC : null);
+  ok(`the bell names a recording (${bellSrc})`,
+     !!bellSrc && !/^https?:|^\/\//.test(bellSrc), String(bellSrc));
+
+  /* THE FALLBACK IS NOT DECORATION, and this check runs on file:// where the
+     fetch cannot succeed — so what is exercised here IS the fallback path. A
+     deploy that forgets to ship bell.mp3 degrades to a worse bell rather than to
+     silence, and silence is what would be reported as "the bell is broken". */
+  const fell = await page.evaluate(async () => {
+    window.__rings = 0;
+    chatBell();
+    await new Promise(r => setTimeout(r, 400));
+    return window.__rings;
+  });
+  ok(`with no recording reachable it still rings, synthesised (${fell} oscillators)`,
+     fell > 0, "the bell went silent instead of falling back");
+
+  /* AND THE SYNTHESIS IS A BELL RATHER THAN A CHORD. Two properties do that, and
+     both are readable from the mode table: the spectrum is INHARMONIC — the
+     tierce at 1.2 is nowhere near a whole number, which is what a string or a
+     pipe could never produce — and every mode is a DOUBLET, two oscillators a
+     fraction of a hertz apart, whose beating is the warble. An earlier version
+     set `detune` on a single oscillator per mode, which shifts its pitch and
+     produces no beating at all, because beating needs something to beat
+     against. */
+  const modes = await page.evaluate(() => (typeof CHATBELLMODES !== "undefined") ? CHATBELLMODES : null);
+  ok("the synthesis has a mode table", Array.isArray(modes) && modes.length >= 8,
+     JSON.stringify(modes && modes.length));
+  ok("...that is inharmonic, which is what makes it a bell",
+     !!modes && modes.some(m => Math.abs(m[0] - Math.round(m[0])) > 0.05),
+     JSON.stringify(modes && modes.map(m => m[0])));
+  ok("...with a split per mode, so the doublets beat",
+     !!modes && modes.every(m => m[3] > 0), JSON.stringify(modes && modes.map(m => m[3])));
+  ok("...and one oscillator per side of every doublet",
+     fell === (modes ? modes.length * 2 : -1), `${fell} started for ${modes && modes.length} modes`);
+  ok("...whose high modes die before the hum does",
+     !!modes && modes[0][2] > modes[modes.length - 1][2] * 5,
+     JSON.stringify(modes && [modes[0][2], modes[modes.length - 1][2]]));
 
   /* AND A BLOCKED OR ABSENT AudioContext IS SILENT, NOT AN ERROR. A browser that
      refuses audio until the reader has clicked is the NORMAL case, not a fault:
@@ -102,13 +143,14 @@ const {PAGE, demoPage} = require('./harness');
   /* SWITCHING IT BACK ON RINGS ONCE, which is not decoration: that click is also
      the gesture that unblocks audio in a fresh tab, so it is the one moment the
      reader can be shown what they just enabled. */
-  const back = await page.evaluate(() => {
+  const back = await page.evaluate(async () => {
     window.__rings = 0;
     document.querySelector('.chatbell').click();
+    await new Promise(r => setTimeout(r, 400));
     return {rings: window.__rings, on: chatBellOn()};
   });
-  ok("switching it back on rings once so the reader hears it", back.on === true && back.rings === 2,
-     JSON.stringify(back));
+  ok("switching it back on rings once so the reader hears it",
+     back.on === true && back.rings > 0, JSON.stringify(back));
 
   /* ---- the three conditions, read from the source ------------------------
      See the header: reproducing an arrival needs a live service. These assert

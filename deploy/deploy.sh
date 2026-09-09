@@ -457,6 +457,11 @@ NEW=".$DEPLOYID.new"
 "${SCP[@]}" "$STAMPED" "$HOST:$WEBROOT/index.html$NEW"
 "${SCP[@]}" web/chat.js "$HOST:$WEBROOT/chat.js$NEW"
 "${SCP[@]}" web/media.js "$HOST:$WEBROOT/media.js$NEW"
+# THE BELL. A recording rather than a script, and the only binary the overlay
+# asks for: chat.js fetches it once, and falls back to synthesising a bell if it
+# is missing — so a deploy that forgot this line degrades to a worse sound rather
+# than to silence, which is exactly why the line is easy to forget.
+"${SCP[@]}" web/bell.mp3 "$HOST:$WEBROOT/bell.mp3$NEW"
 # `[ ... ] && cmd` would abort the whole script under `set -e` when the test is
 # false, which is the ordinary case of a page with no card.
 if [ -n "${OGFILE:-}" ]; then
@@ -492,6 +497,7 @@ say "installing and restarting kourtchat"
     mv $WEBROOT/chat.js$NEW $WEBROOT/chat.js
     chmod 0644 $WEBROOT/chat.js
     mv $WEBROOT/media.js$NEW $WEBROOT/media.js
+    mv $WEBROOT/bell.mp3$NEW $WEBROOT/bell.mp3
     chmod 0644 $WEBROOT/media.js
     # the link-preview card, before index.html — so the page never names a file
     # that is not there yet
