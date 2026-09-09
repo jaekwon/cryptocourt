@@ -126,6 +126,43 @@ func TestBotGreetingCoversEveryPresenceSpelling(t *testing.T) {
 	}
 }
 
+// A GREETING MAY ADDRESS THE ROOM, and the third instance of one bug.
+//
+// MEASURED IN A PROBE ROOM: "hi all" got no reply in 33 seconds, the room held
+// the row, the service had not restarted, and journalctl held no "chat bot"
+// line for the window at all — which the loop's own key reads as both local
+// filters refusing it. botGreeting compares for EQUALITY after normalising, and
+// nothing stripped the address, so a person saying hi to the room dropped
+// silently. Precisely the shape of the "is anybody here" report.
+//
+// STRIPPED, NOT ENUMERATED, for the reason the function argues at length: the
+// cross product of nine greetings and seven addresses is sixty-three literals
+// and the next report would be the one spelling nobody listed. Each row below
+// is a spelling a person actually types; the negatives are the ones that must
+// still fall through, including a bare address with no greeting on it.
+func TestAGreetingMayAddressTheRoom(t *testing.T) {
+	for _, s := range []string{
+		"hi all", "hi All", "hello everyone", "hey folks", "sup guys",
+		"hi everybody", "yo all", "good morning all", "hey y'all", "hi yall",
+		"hello all!", " hey folks ",
+	} {
+		if !botGreeting(s) {
+			t.Errorf("a greeting that addresses the room is still a greeting: %q", s)
+		}
+	}
+	// AND STRIPPING THE ADDRESS MUST NOT MANUFACTURE ONE. The residue has to be
+	// a greeting on its own — an address by itself is not a hello, and a
+	// sentence that merely ends in one is not either.
+	for _, s := range []string{
+		"all", "everyone", "folks", "guys",
+		"what is cc all", "who are you all", "is the docket down folks",
+	} {
+		if botGreeting(s) {
+			t.Errorf("not a greeting once the address comes off: %q", s)
+		}
+	}
+}
+
 func TestBotGreetingIsABareHelloAndNotAnOpening(t *testing.T) {
 	for _, s := range []string{"hi", "Hello", "hey!", "HELLO?", "gm", "yo",
 		"good morning", "anyone here?", "howdy", " hi "} {

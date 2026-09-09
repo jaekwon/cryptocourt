@@ -1135,6 +1135,25 @@ func botGreeting(body string) bool {
 	s = strings.TrimPrefix(s, "is there ")
 	s = strings.TrimPrefix(s, "is ")
 	s = strings.ReplaceAll(s, "anybody", "anyone")
+	/* AND A GREETING MAY ADDRESS THE ROOM, which is the same argument one more
+	   time. MEASURED: "hi all" in a quiet probe room got nothing, and the log
+	   was empty — both filters refused it, so it dropped silently exactly as
+	   "is anybody here" once did. Enumerating {hi, hello, hey, yo, ...} x {all,
+	   everyone, folks, ...} is the literal-list mistake the block above exists
+	   to avoid, so the ADDRESS is stripped and the family collapses onto the
+	   entries already here.
+	   SAFE FOR THE SAME REASON as the leading "is": the 24-character bound has
+	   already run, and whatever is left must still equal a greeting exactly.
+	   "hi everyone, is the docket down?" is 32 characters and never reaches
+	   here — a pinned negative in bot_test.go says so. */
+	for _, a := range []string{
+		" all", " everyone", " everybody", " folks", " guys", " y'all", " yall",
+	} {
+		if cut := strings.TrimSuffix(s, a); cut != s {
+			s = cut
+			break
+		}
+	}
 	for _, g := range []string{
 		"hi", "hii", "hey", "heya", "hello", "hallo", "yo", "sup", "gm",
 		"good morning", "good evening", "good afternoon", "greetings",
