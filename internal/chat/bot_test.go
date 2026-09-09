@@ -1789,6 +1789,62 @@ func TestTheSystemPromptSeparatesBuyingFromStaking(t *testing.T) {
 }
 
 /*
+AND THE PROMPT MUST SAY WHAT THE BELL IS, because a reader asked and got three
+features that do not exist.
+
+	MEASURED IN COVID, id 558, answering "does the bell work for newcomers?":
+	"The bell is a notification feature that alerts you when a claim you're
+	watching settles or when someone stakes on your side — it works the same way
+	for everyone, new or not. Check the claim's detail page to see if you ca[n]".
+	Every specific in that sentence is invented. There is no claim-watch, no
+	settle alert, no stake alert, and no notification control on a claim page.
+	WHAT THE BELL ACTUALLY IS, from the code that ships it: CHATBELLRE matches
+	"!?" or "?!" anywhere, or a "!" at the end (closing quotes and brackets
+	allowed after), and rings a sound in the chat panel. The toggle is the
+	.chatbell button, whose own aria-label reads "Ring a bell when somebody posts
+	!?", persisted under the key "kourt.chat.bell". Grepping HEAD's chat.js for
+	settle, watch or stake finds a comment, a demo fixture and a polling remark —
+	no feature.
+	THE PROMPT HAD NEVER HEARD OF IT. The bell shipped the same day, and a
+	feature the prompt does not describe is a feature the model will describe
+	anyway. That is the fifth instance of one pattern today, and the worst: the
+	others were wrong about a mechanism the reader could still find, while this
+	one sends them looking for a control that was never built.
+	ASSERTED ON THE PROMPT for the reason the tests above give. Deliberately
+	coarse about WHOSE messages ring — that detail changed twice in an afternoon,
+	and a test pinned to it would break on the next tweak without anything being
+	wrong.
+*/
+func TestTheSystemPromptSaysWhatTheBellIs(t *testing.T) {
+	p := strings.Join(strings.Fields(botSystem), " ")
+	for _, phrase := range []string{
+		"THE BELL IS A CHAT SOUND AND NOTHING MORE", // the rule
+		"rings a bell for anyone who has it switched on",
+		"bell button in the chat panel silences it", // where the control is
+		"no alert for a claim settling",             // and the two inventions
+		"no alert for somebody staking",
+		"no per-claim notification setting",
+	} {
+		if !strings.Contains(p, phrase) {
+			t.Errorf("the system prompt must say what the bell is, missing %q", phrase)
+		}
+	}
+	// AND IT MUST NOT INVENT THE FEATURES THE LIVE REPLY INVENTED. All five are
+	// lifted from id 558.
+	for _, wrong := range []string{
+		"claim you're watching",
+		"when a claim settles",
+		"stakes on your side",
+		"claim's detail page",
+		"notification feature",
+	} {
+		if strings.Contains(strings.ToLower(p), strings.ToLower(wrong)) {
+			t.Errorf("the prompt invents a notification the site does not have: %q", wrong)
+		}
+	}
+}
+
+/*
 THE CLERK CAN SEE HOW MANY CLAIMS THE ROOM HAS.
 
 	REPORTED TWICE, in the same words: "the clerk doesn't answer anything related

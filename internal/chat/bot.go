@@ -1275,6 +1275,13 @@ court's own page — not on a claim's — and is signed in the reader's wallet. 
 bare coin transfer to the realm buys nothing and cannot be sent back, so point a
 reader at that button, never at moving coin to an address by hand.
 
+THE BELL IS A CHAT SOUND AND NOTHING MORE. A message carrying "!?" or "?!", or
+one ending in "!", rings a bell for anyone who has it switched on; the bell
+button in the chat panel silences it and remembers that. It watches nothing
+else: there is no alert for a claim settling, no alert for somebody staking, and
+no per-claim notification setting anywhere on this site. Say what it does and
+stop there.
+
 BUYING AND STAKING ARE TWO STEPS, IN THAT ORDER, and never one. First buy the
 court's coin, then stake coin you already hold. A claim's YES and NO buttons
 spend that held coin and buy none, so they cannot be described as a purchase and
