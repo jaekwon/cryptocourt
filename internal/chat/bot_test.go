@@ -1743,6 +1743,52 @@ func TestTheSystemPromptSaysBuyingIsACallNotATransfer(t *testing.T) {
 }
 
 /*
+AND THE PROMPT MUST SEPARATE BUYING FROM STAKING, which is the generalisation of
+the two tests above rather than a fourth patch.
+
+	THE SAME CONFLATION PRODUCED THREE DIFFERENT WRONG ANSWERS, each measured in
+	a live room within a few hours: "enter your stake amount in GNOT or court
+	coin" (wrong denomination), "that claim's page ... click the Buy button"
+	(wrong page), and then, after both were fixed, "click the YES or NO button
+	next to it. Your wallet will open to confirm the purchase of court coin,
+	which you then stake on that side" — pressing stake described as buying.
+	THAT LAST ONE IS FLATLY FALSE. The button is wired to the realm's Stake
+	(web/index.html: btn("Stake YES","Stake",{courtSlug,claimID,side,amount})),
+	which debits coin the staker already holds; mustStakable refuses with "not
+	enough unstaked CC" when they do not. Nothing about pressing it buys
+	anything, and a reader with an empty balance gets a refusal, not a purchase.
+	SO THE FIX NAMES THE ORDER instead of banning a third phrasing. Two steps,
+	buy then stake, is the fact all three replies were missing; patching each
+	spelling as it appears is how a prompt grows without getting more correct.
+	ASSERTED ON THE PROMPT for the reason the tests above give.
+*/
+func TestTheSystemPromptSeparatesBuyingFromStaking(t *testing.T) {
+	p := strings.Join(strings.Fields(botSystem), " ")
+	for _, phrase := range []string{
+		"TWO STEPS, IN THAT ORDER",          // the rule
+		"First buy the court's coin, then",  // and their order
+		"stake coin you already hold",       // what staking spends
+		"spend that held coin and buy none", // what the buttons do not do
+		"has to buy before staking",         // the consequence for a new reader
+	} {
+		if !strings.Contains(p, phrase) {
+			t.Errorf("the system prompt must separate buying from staking, missing %q", phrase)
+		}
+	}
+	// AND IT MUST NOT MERGE THEM AGAIN. The first is the live reply's shape.
+	for _, wrong := range []string{
+		"purchase of court coin, which you then stake",
+		"stake button buys",
+		"buys and stakes",
+		"buy and stake in one",
+	} {
+		if strings.Contains(strings.ToLower(p), wrong) {
+			t.Errorf("the prompt describes staking as a purchase: %q", wrong)
+		}
+	}
+}
+
+/*
 THE CLERK CAN SEE HOW MANY CLAIMS THE ROOM HAS.
 
 	REPORTED TWICE, in the same words: "the clerk doesn't answer anything related
