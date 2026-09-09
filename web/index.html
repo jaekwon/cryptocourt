@@ -2060,7 +2060,13 @@ p.sub{font-size:13.5px; color:var(--ink-2); max-width:54ch; margin-top:6px}
 .mapctl{display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin:10px 0}
 .mapctl .pill{cursor:pointer; font:inherit}
 .mapctl .pill[aria-pressed="true"]{background:var(--accent-wash); color:var(--accent-2); border-color:var(--accent)}
-.mapctl input[type=range]{accent-color:var(--accent); width:140px}
+/* 24px OF HEIGHT, NOT 16. Measured on a 390px viewport while chasing "I
+   can't zoom on the map view in mobile": the slider rendered 140x16, and 16
+   is not a thumb. The - and + beside it were already 26x33 and fine; this
+   was the one zoom control that failed the 24px this file holds itself to
+   elsewhere (SC 2.5.8). The track is styled by the platform, so the height
+   is set on the input and the thumb grows with it. */
+.mapctl input[type=range]{accent-color:var(--accent); width:140px; height:24px}
 .mlegend{display:flex; gap:14px; flex-wrap:wrap; margin-top:10px; font-size:12px; color:var(--ink-2); align-items:center}
 .mlegend span{display:inline-flex; gap:6px; align-items:center}
 /* `hidden` on a legend key would do NOTHING without this: the rule above is a
@@ -14169,8 +14175,51 @@ function mountMap(slug, data, focusId, focusPath){
     setZ(z*Math.pow(MAPK.wheelRate, -ev.deltaY), toWorld(ev));
   }, {passive:false});
   let drag=null, dragged=false;
+  /* PINCH, BECAUSE NOTHING ELSE WAS GOING TO DO IT. Reported as "I can't zoom on
+     the map view in mobile", and the cause is one line of CSS meeting one
+     missing handler: .mapwrap svg carries touch-action:none, which tells the
+     browser to run no touch gesture of its own, and the only zoom in here was
+     the wheel. A phone has no wheel.
+     WORSE THAN NOTHING, MEASURED. Two fingers did not simply fail to zoom —
+     the first of them drove the single-finger drag, so a pinch PANNED. On a
+     synthetic spread the viewBox went from `422.15 368.22 339.69 251.56` to
+     `357.54 368.22 339.69 251.56`: x moved, width and height did not. (The
+     first version of that measurement compared the whole viewBox string and
+     reported the pan as a successful zoom. Only width and height are zoom.)
+     THE BUTTONS WERE NOT THE ANSWER. -, + and the slider are all on screen on
+     a 390px viewport and all work, but they measure 26x33 and the slider is
+     16px tall, and a reader who reaches for a map reaches with two fingers.
+     INCREMENTAL, NOT ANCHORED TO THE START. Each move scales by the ratio to
+     the PREVIOUS spread rather than the initial one, so the zoom cannot drift
+     against a midpoint that is itself moving, and two fingers travelling
+     together still pan the map through the same anchor arithmetic setZ already
+     does for the wheel. */
+  const touches = new Map();          // pointerId -> {x,y}, touch only
+  let pinch = null;                   // {d} the spread at the previous move
+  const twoUp = () => [...touches.values()].slice(0, 2);
+  const spread = () => { const [a,b] = twoUp(); return Math.hypot(a.x-b.x, a.y-b.y); };
+  const midpoint = () => { const [a,b] = twoUp();
+    return {clientX:(a.x+b.x)/2, clientY:(a.y+b.y)/2}; };
+  const dropTouch = id => {
+    touches.delete(id);
+    /* A PINCH THAT LOSES A FINGER DOES NOT BECOME A DRAG. drag is left null so
+       the remaining finger has to lift and press again — otherwise the map
+       lurches from a drag origin recorded two gestures ago. */
+    if(touches.size < 2){ pinch = null; drag = null; }
+  };
   box.addEventListener("pointerdown", ev=>{
     const el=svgEl(); if(!el) return;
+    if(ev.pointerType === "touch"){
+      touches.set(ev.pointerId, {x:ev.clientX, y:ev.clientY});
+      if(touches.size === 2){
+        pinch = {d: spread()};
+        // The drag has to go, and its capture with it: a captured first finger
+        // keeps sending pointermove to the box while the second is ignored.
+        if(drag){ try{ box.releasePointerCapture(drag.pid); }catch(_){} }
+        drag = null; dragged = true;   // and this gesture is not a tap
+        return;
+      }
+    }
     let inv=null; try{ const m=el.getScreenCTM(); inv=m&&m.inverse(); }catch(_){}
     if(!inv) return;
     // NO capture yet: capturing on pointerdown retargets the compat click to
@@ -14180,6 +14229,15 @@ function mountMap(slug, data, focusId, focusPath){
     drag={x:ev.clientX, y:ev.clientY, cx0:cx, cy0:cy, inv, live:false, pid:ev.pointerId};
   });
   box.addEventListener("pointermove", ev=>{
+    if(ev.pointerType === "touch" && touches.has(ev.pointerId))
+      touches.set(ev.pointerId, {x:ev.clientX, y:ev.clientY});
+    if(pinch && touches.size >= 2){
+      const d = spread();
+      if(d > 0 && pinch.d > 0) setZ(z * (d / pinch.d), toWorld(midpoint()));
+      pinch.d = d;
+      dragged = true;
+      return;                          // never both zoom and pan on one move
+    }
     if(!drag) return;
     if(!(ev.buttons&1)){ drag=null; return; } // the press ended outside the box
     if(!drag.live){
@@ -14191,8 +14249,8 @@ function mountMap(slug, data, focusId, focusPath){
     const b=new DOMPoint(ev.clientX,ev.clientY).matrixTransform(drag.inv);
     cx=drag.cx0-(b.x-a.x); cy=drag.cy0-(b.y-a.y); schedule();
   });
-  box.addEventListener("pointerup", ()=>{ drag=null; });
-  box.addEventListener("pointercancel", ()=>{ drag=null; });
+  box.addEventListener("pointerup", ev=>{ dropTouch(ev.pointerId); drag=null; });
+  box.addEventListener("pointercancel", ev=>{ dropTouch(ev.pointerId); drag=null; });
   /* WHAT A CLICK LIGHTS: the node, the edges that touch it, and what is at the
      far end of those edges. ONE RULE FOR ALL THREE KINDS OF NODE, which is the
      whole point of rewriting this — the three used to disagree, and the
