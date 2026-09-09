@@ -1685,6 +1685,56 @@ func TestTheSystemPromptNamesTheStakingDenomination(t *testing.T) {
 }
 
 /*
+AND THE PROMPT MUST SAY THAT A BUY IS A CALL, because the one way to lose money
+here is to follow that instruction literally.
+
+	MEASURED IN A LIVE ROOM, asked how to stake: "Buy it by sending GNOT to the
+	court (this burns the GNOT and mints court coin to your address)". Read as a
+	description of Buy that is fair — the payment does ride with the call. Read
+	as an instruction it is a way to destroy funds: Buy is a crossing function
+	that requires prev.IsUserCall() and reads the coin envelope, so a plain
+	transfer to the realm calls nothing, credits nobody, and mints no CC. And it
+	cannot be undone. Buy's own remainder refund is the SOLE sanctioned path for
+	GNOT to reach a user again — check-nontransferable exists to keep it that
+	way, and courtburn.gno's comment records a refund being removed for exactly
+	that reason. So a hand-sent payment sits in the realm forever.
+	THE PROMPT DESCRIBED THE ECONOMICS AND NOT THE MECHANISM: "Real money (GNOT)
+	enters once, when buying a court's coin, and is burned" says where the money
+	goes and nothing about how it gets there, so "sending GNOT to the court" was
+	the model's own shortest paraphrase. The overlay has had a Buy button all
+	along, wired through the reader's wallet.
+	ASSERTED ON THE PROMPT for the reason the tests above give. The bans are
+	worded to catch an INSTRUCTION to send, which is why the prompt's own
+	prohibition is phrased with "transfer" and "moving coin" instead.
+*/
+func TestTheSystemPromptSaysBuyingIsACallNotATransfer(t *testing.T) {
+	p := strings.Join(strings.Fields(botSystem), " ")
+	for _, phrase := range []string{
+		"A BUY IS A CALL, NOT A TRANSFER",      // the rule
+		"rides with the court's Buy button",    // where the payment goes
+		"buys nothing and cannot be sent back", // what a transfer does, and that it is final
+		"moving coin to an address by hand",    // said as an instruction
+	} {
+		if !strings.Contains(p, phrase) {
+			t.Errorf("the system prompt must say a buy is a call, missing %q", phrase)
+		}
+	}
+	// AND IT MUST NOT INSTRUCT A BARE SEND. The first two are verbatim what the
+	// live clerk said; the rest are the neighbouring ways to say it.
+	for _, wrong := range []string{
+		"sending gnot to the court",
+		"send gnot to the court",
+		"send gnot to the realm",
+		"send your gnot to",
+		"transfer gnot to the court",
+	} {
+		if strings.Contains(strings.ToLower(p), wrong) {
+			t.Errorf("the prompt instructs a bare transfer, which cannot be undone: %q", wrong)
+		}
+	}
+}
+
+/*
 THE CLERK CAN SEE HOW MANY CLAIMS THE ROOM HAS.
 
 	REPORTED TWICE, in the same words: "the clerk doesn't answer anything related
