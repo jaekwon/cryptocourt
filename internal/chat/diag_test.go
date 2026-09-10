@@ -1023,18 +1023,27 @@ func TestHereTalliesComeFromTheHeldConnections(t *testing.T) {
 	if d["geo_known"] != true {
 		t.Errorf("a loaded country file should say so: %v", d["geo_known"])
 	}
-	// Two in Germany clears the floor and is named; the one in the United States
-	// does not and is folded into elsewhere with no location on it.
+	/* BOTH COUNTRIES ARE NAMED. Two in Germany and one in the United States, and
+	   with the floor at one the lone holder is named too — that is the change
+	   made on "i want everyone to see the same thing". This used to assert the
+	   opposite: one row for DE, with the American folded into elsewhere.
+	   Largest first, so the page does not reshuffle between polls. */
 	rows, _ := d["here_by_country"].([]any)
-	if len(rows) != 1 {
-		t.Fatalf("want exactly the one country at or above the floor, got %v", d["here_by_country"])
+	if len(rows) != 2 {
+		t.Fatalf("both countries should be named, got %v", d["here_by_country"])
 	}
-	row, _ := rows[0].(map[string]any)
-	if row["cc"] != "DE" || row["n"] != float64(2) {
-		t.Errorf("want DE with 2, got %v", row)
+	first, _ := rows[0].(map[string]any)
+	second, _ := rows[1].(map[string]any)
+	if first["cc"] != "DE" || first["n"] != float64(2) {
+		t.Errorf("want DE with 2 first, got %v", first)
 	}
-	if d["here_elsewhere"] != float64(1) {
-		t.Errorf("the lone holder belongs in elsewhere, got %v", d["here_elsewhere"])
+	if second["cc"] != "US" || second["n"] != float64(1) {
+		t.Errorf("want US with 1 second, got %v", second)
+	}
+	// ELSEWHERE IS EMPTY NOW: nothing is withheld for being small, and all three
+	// of these addresses are in the country file.
+	if d["here_elsewhere"] != float64(0) {
+		t.Errorf("nothing should be withheld, got %v", d["here_elsewhere"])
 	}
 	/* THREE ADDRESSES, TWO NETWORKS — and getting this wrong is what the
 	   assertion is for. A network here is the /24, the same unit a range
@@ -1100,23 +1109,30 @@ func TestHereCountsKeysWithoutPublishingThem(t *testing.T) {
 	}
 }
 
-// THE FLOOR, on its own, because it is the privacy argument and it should be
-// readable without holding any connections open.
-func TestHereFloorNamesNoLoneHolder(t *testing.T) {
+// THE FLOOR, on its own, because it decides what the map is allowed to say and
+// it should be readable without holding any connections open.
+//
+// THIS TEST USED TO BE CALLED NamesNoLoneHolder, and that guarantee is gone on
+// purpose: the floor was lowered to one on the instruction "i want everyone to
+// see the same thing", so a country with a single connection IS named now. The
+// old name is recorded here because a test whose title asserts the opposite of
+// the behaviour is worse than no test — it is a claim somebody will quote.
+func TestHereFloorNamesEveryCountryWithAnybody(t *testing.T) {
 	rows, elsewhere := hereRows(map[string]int{"DE": 3, "FR": 2, "NO": 1, "": 4})
-	if len(rows) != 2 {
-		t.Fatalf("only the countries at or above the floor are named, got %v", rows)
+	if len(rows) != 3 {
+		t.Fatalf("every country with a connection is named, got %v", rows)
 	}
 	// Largest first, so the page does not reshuffle between two polls that saw
 	// the same room.
-	if rows[0].CC != "DE" || rows[0].N != 3 || rows[1].CC != "FR" || rows[1].N != 2 {
-		t.Errorf("want DE=3 then FR=2, got %v", rows)
+	if rows[0].CC != "DE" || rows[0].N != 3 || rows[1].CC != "FR" || rows[1].N != 2 ||
+		rows[2].CC != "NO" || rows[2].N != 1 {
+		t.Errorf("want DE=3, FR=2, NO=1 in that order, got %v", rows)
 	}
-	// The lone Norwegian and the four unknowns are one number with no location
-	// on it. Split apart, "one connection from a country we will not name" is
-	// most of the way back to naming it.
-	if elsewhere != 5 {
-		t.Errorf("want 1 below the floor plus 4 unknown, got %d", elsewhere)
+	// ELSEWHERE IS NOW ONLY THE UNPLACEABLE. It used to carry the lone Norwegian
+	// as well; with the floor at one there is nothing withheld for being small,
+	// so anything in here is a connection whose country the file could not name.
+	if elsewhere != 4 {
+		t.Errorf("want the 4 unknown and nothing else, got %d", elsewhere)
 	}
 	// And a country at exactly the floor IS named — the boundary, stated.
 	if rows, _ := hereRows(map[string]int{"JP": hereFloor}); len(rows) != 1 {

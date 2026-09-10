@@ -19470,10 +19470,14 @@ on(/^\/params$/, async ()=>{
    looking at it; the country tally counts placed connections. A total here would
    visibly disagree with the number they clicked, so the rows are the answer and
    the panel keeps the count.
-   NOTHING PERSONAL IS AVAILABLE TO SHOW: a country is named only once at least
-   two connections are in it, everything else is one number with no location on
-   it at all, and nothing joins a country to a name, a message or a room. The
-   floor lives in the service — see hereFloor — so this page cannot lower it. */
+   WHAT IS AND IS NOT SHOWN, and the first half of this changed. Every country
+   with a connection in it is named now, down to one — asked for as "i want
+   everyone to see the same thing", which a floor that hides the only reader in
+   a country cannot be. So a lone reader's country IS public, and the prose on
+   the page was rewritten to say that rather than promise the opposite.
+   What still holds: nothing joins a country to a name, a message or a room, and
+   these are held connections rather than people. The floor lives in the service
+   — see hereFloor — so this page can neither lower it nor raise it back. */
 const HERE_MS = 5000;
 function hereFlag(cc){
   /* THE FLAG IS DERIVED, NOT A TABLE. Two ASCII letters offset into the regional
@@ -19706,11 +19710,11 @@ on(/^\/here$/, async ()=>{
   main.innerHTML = head + `<div class="dim" style="margin-top:16px">Reading…</div>`;
   const seq0 = renderSeq;
   const prose = `<div class="prose" style="margin-top:16px"><p>Where the people
-     with a chat open are reading from, right now. A country is named only once
-     at least two connections are in it — otherwise it would say where one
-     particular person is — and everything else is counted with no location on
-     it at all. Nothing here is joined to a name or to anything anybody
-     said.</p><p class="small muted">The dark half is where the sun is below the
+     with a chat open are reading from, right now. Every country with anybody in
+     it is named, down to a single connection — so if you are the only person
+     reading from yours, this map says so. What it never says is who: nothing
+     here is joined to a name, to a message, or to a room, and connections are
+     counted rather than people.</p><p class="small muted">The dark half is where the sun is below the
      horizon just now, and the map flashes when anything happens in any
      court.</p></div>`;
   const nogeo = `<p class="small muted">This server has no country file loaded,

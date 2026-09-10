@@ -130,17 +130,24 @@ type countryCount struct {
 
 // hereFloor is how many connections a country needs before it is named.
 //
-// TWO, AND THE CHOICE IS THE WHOLE PRIVACY ARGUMENT. At one, a country with a
-// single reader in it is a public statement that one particular person is in
-// that country, and on a quiet site that is often the only reader there. At two,
-// the smallest thing the page can say is "two connections are in Norway", which
-// places neither of them and still shows the operator where the room is.
+// ONE, WHICH IS THE OWNER'S CALL AND A REAL TRADE. It was two, and the argument
+// for two is still true: at one, a country with a single reader in it is a
+// public statement that one particular person is in that country, and on a
+// quiet site that is often the only reader there. At two the smallest thing the
+// page could say was "two connections are in Norway", which places neither.
 //
-// It is not anonymity in any formal sense and is not claimed as such: two tabs
-// belonging to one person clear the floor, and a country with two readers is a
-// small set. It is the floor at which the page stops reporting individuals, and
-// the honest description of it is a reticence, not a guarantee.
-const hereFloor = 2
+// It was changed on the instruction "i want everyone to see the same thing",
+// after the alternative was put and declined — the reader's own country sent
+// only to that reader, which would have shown each person their own position
+// and nobody else's. The point of this page is now that everyone sees the same
+// map, and a map that hides the only reader in a country is not that.
+//
+// SO THE RETICENCE IS GONE AND THE PAGE SAYS SO. What is still true: nothing
+// joins a country to a name, a message, or a room, and the count is of held
+// connections rather than of people. What is no longer true is that a lone
+// reader is unplaced — see the prose on the page, which was corrected with
+// this line rather than left promising it.
+const hereFloor = 1
 
 // hereRows turns the live tally into the published list plus the elsewhere
 // count, applying the floor. Sorted by count descending, then by code, so the
