@@ -113,7 +113,16 @@ async function liftEmbed(page, slug, id, chartHtml, theme) {
     // Nothing that runs, and nothing that points at a live control.
     emb.querySelectorAll("script,button,[onclick]").forEach(e => e.remove());
     const css = [...document.querySelectorAll("style")].map(e => e.textContent).join("\n");
-    return {emb: emb.outerHTML, css, theme: theme || null};
+    /* THE ICON COMES TOO, and leaving it out cost 622KB per impression. A
+       document that declares no icon makes the browser ask for /favicon.ico,
+       and that path has no file behind it — so nginx's SPA fallback answered
+       with index.html, 637KB of markup delivered as an image. Measured on the
+       served copy: two requests, 120KB for the card and 622KB for the icon
+       that was really the whole application. The page's own icon is an inline
+       data: URI, which is why the application itself never asks. */
+    const icon = document.querySelector('link[rel~="icon"]');
+    return {emb: emb.outerHTML, css, theme: theme || null,
+            icon: icon ? icon.outerHTML : ""};
   }, chartHtml, theme);
 }
 
@@ -125,6 +134,7 @@ function pageHtml(slug, id, o) {
   return `<!doctype html><html lang="en" data-theme="${esc(o.theme || "dark")}"><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Kourt — ${esc(slug)} #${esc(String(id))}</title>
+${o.icon || ""}
 <!-- A CERTIFIED COPY of this claim's record, cut from the pages themselves: the
      embed's own markup, carrying the claim page's chart. No script and no chain
      read — this file is the whole of what it needs, which is what lets a CDN
@@ -163,7 +173,8 @@ ${o.emb.replace(/<\/div>\s*$/, `<span class="cc-stamp">${esc(asOf)}</span></div>
     const dir = path.join(OUTDIR, slug);
     fs.mkdirSync(dir, {recursive: true});
     const file = path.join(dir, idS + ".html");
-    fs.writeFileSync(file, pageHtml(slug, id, {emb: e.emb, css: e.css, theme: e.theme, stamp: c.stamp}));
+    fs.writeFileSync(file, pageHtml(slug, id, {emb: e.emb, css: e.css, theme: e.theme,
+                                              icon: e.icon, stamp: c.stamp}));
     console.log(`make-copies: web/embed/${slug}/${idS}.html — `
       + `${Math.round(fs.statSync(file).size / 1024)}KB, `
       + `${c.stamp.h != null ? "block " + c.stamp.h : "unstamped"}, `

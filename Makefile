@@ -237,6 +237,19 @@ setup:
 
 # `deploy` is also the name of a DIRECTORY in this repo, so without the .PHONY
 # on line 1 make finds it up to date and does nothing — silently, exit 0.
+# CERTIFIED COPIES: static, CDN-cacheable embeds, pre-rendered from the live
+# chain. Not part of `make check` and not part of a deploy — they read a chain
+# and a deploy must not depend on one answering. Run it when the record has
+# moved, or from cron on the box:
+#
+#   make copies COPIES="covid/22 covid/24"
+#
+# Each file names the block it was taken at, so a stale copy says so rather
+# than pretending. deploy ships whatever is in web/embed/ at the time.
+copies:
+	@if ! command -v node >/dev/null 2>&1; then echo "node not installed - no copies"; exit 0; fi; \
+	node scripts/make-copies.js $(COPIES)
+
 deploy:
 	@test -n "$(HOST)" || { echo 'usage: make deploy HOST=user@host'; exit 2; }
 	./deploy/deploy.sh $(HOST)
