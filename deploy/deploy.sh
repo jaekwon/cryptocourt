@@ -457,6 +457,17 @@ NEW=".$DEPLOYID.new"
 "${SCP[@]}" "$STAMPED" "$HOST:$WEBROOT/index.html$NEW"
 "${SCP[@]}" web/chat.js "$HOST:$WEBROOT/chat.js$NEW"
 "${SCP[@]}" web/media.js "$HOST:$WEBROOT/media.js$NEW"
+
+# CERTIFIED COPIES, IF ANY HAVE BEEN MADE. Shipped as a tree rather than staged
+# with the $NEW dance the three files above use: there is no atomicity to buy
+# here, because every copy is independently valid and already says which block
+# it speaks for. A deploy never MAKES them — that would make shipping the site
+# depend on a chain answering — so this only carries across what `make copies`
+# has already written.
+if [ -d web/embed ]; then
+  say "shipping $(find web/embed -name '*.html' | wc -l | tr -d ' ') certified copies"
+  tar -cz -C web embed | "${SSH[@]}" "$HOST" "tar -xz -C $WEBROOT && chmod -R a+rX $WEBROOT/embed"
+fi
 # THE BELL. A recording rather than a script, and the only binary the overlay
 # asks for: chat.js fetches it once, and falls back to synthesising a bell if it
 # is missing — so a deploy that forgot this line degrades to a worse sound rather
