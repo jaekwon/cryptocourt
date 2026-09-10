@@ -34,7 +34,23 @@ const HERE = {
       const u = String(url);
       window.__asked.push(u);
       if (/\/api\/chat\/here/.test(u)) {
-        return new Response(JSON.stringify(here),
+        window.__hereReqs = (window.__hereReqs || 0) + 1;
+        /* THE STUB HOLDS THE REQUEST, because the real service does and the
+           page's pacing depends on it. A stub that answered instantly put the
+           page on its slow fallback path — correctly, that is what an older
+           service looks like — and a strike then took up to five seconds to
+           appear, which read as "the flash does not work". So this waits for the
+           change counter to move, exactly as the long poll does. */
+        const q = new URL(u, location.href).searchParams;
+        const since = Number(q.get("since"));
+        if (q.get("wait") && since === (window.__ev || 0)) {
+          const t0 = Date.now();
+          while (since === (window.__ev || 0) && Date.now() - t0 < 4000) {
+            await new Promise(r => setTimeout(r, 40));
+          }
+        }
+        return new Response(JSON.stringify(Object.assign({}, here,
+          {events: window.__ev || 0})),
           {status: 200, headers: {"Content-Type": "application/json"}});
       }
       if (/\/api\/chat\/health/.test(u)) {
@@ -284,10 +300,193 @@ const HERE = {
   ok("an unplaceable or empty country code draws no dot",
      odd.dots === 1 && odd.titles.join() === "US · 2", JSON.stringify(odd));
 
+  /* ---- THE NIGHT SIDE, CHECKED AGAINST THE SKY RATHER THAN AGAINST ITSELF ---
+     Asked for as "the night time city lights". The shaded half is where the sun
+     is really below the horizon, so the honest way to test it is with facts
+     about the Earth that hold independently of the formula being tested.
+     THE POLAR PAIR IS THE DECISIVE ONE. In June the arctic is lit at EVERY
+     longitude and in December it is dark at every longitude — and closing the
+     filled region along the wrong map edge inverts precisely that while still
+     looking like a plausible day/night picture at mid latitudes. That was a real
+     risk here, not a hypothetical: which edge to close is read from the sign of
+     the solar declination, and getting it backwards is a one-character mistake
+     that renders beautifully and is wrong for half the year. */
+  const sky = await page.evaluate(() => {
+    const NS = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("viewBox", "0 0 720 280");
+    const pth = document.createElementNS(NS, "path");
+    svg.appendChild(pth);
+    document.body.appendChild(svg);
+    const night = (iso, lat, lon) => {
+      pth.setAttribute("d", hereNightPath(new Date(iso)));
+      const p = svg.createSVGPoint(), xy = hereXY(lat, lon);
+      p.x = xy[0]; p.y = xy[1];
+      return pth.isPointInFill(p);
+    };
+    const lons = [-150, -90, -30, 0, 30, 90, 150];
+    const r = {
+      juneArctic: lons.map(l => night("2026-06-21T12:00:00Z", 80, l)),
+      decArctic: lons.map(l => night("2026-12-21T12:00:00Z", 80, l)),
+      noonAt0: night("2026-06-21T12:00:00Z", 0, 0),
+      midnightAt180: night("2026-06-21T12:00:00Z", 0, 180),
+      noonAt180: night("2026-06-21T00:00:00Z", 0, 180),
+      midnightAt0: night("2026-06-21T00:00:00Z", 0, 0),
+      london: night("2026-06-21T12:00:00Z", 51.5, 0),
+      losAngeles: night("2026-06-21T12:00:00Z", 34, -118),
+      equinoxLen: hereNightPath(new Date("2026-03-20T06:00:00Z")).length,
+    };
+    svg.remove();
+    return r;
+  });
+  ok("in June the arctic is lit at every longitude",
+     sky.juneArctic.every(v => v === false), JSON.stringify(sky.juneArctic));
+  ok("...and in December it is dark at every longitude",
+     sky.decArctic.every(v => v === true), JSON.stringify(sky.decArctic));
+  /* AND THE CLOCK TURNS IT. Longitude 0 at 12:00 UTC is local solar noon and
+     longitude 180 is local midnight; twelve hours later they swap. True in any
+     season, so this holds the hour-angle half without depending on the date. */
+  ok("the equator is in daylight at its local solar noon",
+     sky.noonAt0 === false && sky.noonAt180 === false, JSON.stringify(sky));
+  ok("...and in darkness at its local midnight",
+     sky.midnightAt180 === true && sky.midnightAt0 === true, JSON.stringify(sky));
+  ok("London is in daylight at noon UTC in June", sky.london === false);
+  ok("...and Los Angeles, where it is about four in the morning, is not",
+     sky.losAngeles === true);
+  /* THE EQUINOX DOES NOT DIVIDE BY ZERO. tan(declination) is zero within hours
+     of it, and the terminator becomes a pair of meridians rather than a curve —
+     an infinity that atan handles and a 0/0 that it does not. A path that came
+     out empty or full of NaN would still "draw", silently, as nothing. */
+  ok(`the equinox still produces a path (${sky.equinoxLen} chars, no NaN)`,
+     sky.equinoxLen > 200, JSON.stringify(sky.equinoxLen));
+  const nanFree = await page.evaluate(() =>
+    ["2026-03-20T06:00:00Z", "2026-09-22T18:00:00Z", "2026-06-21T00:00:00Z"]
+      .every(iso => !/NaN|Infinity|undefined/.test(hereNightPath(new Date(iso)))));
+  ok("...and no path anywhere in the year contains NaN or Infinity", nanFree);
+
+  /* ---- THE LIGHTS ARE LIGHTS ---------------------------------------------- */
+  const neon = await page.evaluate(() => {
+    const svg = document.querySelector("main svg.heremap");
+    const g = svg.querySelector(".heremapdots");
+    const bloom = g.querySelector("circle.heremapbloom");
+    return {
+      layers: ["heremaphalo", "heremapbloom", "heremapdot"]
+        .map(c => g.querySelectorAll("circle." + c).length),
+      filter: bloom ? getComputedStyle(bloom).filter : "",
+      hasNight: !!svg.querySelector("path.heremapnight"),
+      hasTerm: !!svg.querySelector("path.heremapterm"),
+      flashEmpty: svg.querySelector(".heremapflash").children.length === 0,
+    };
+  });
+  ok(`each country is three circles — wash, bloom, core (${JSON.stringify(neon.layers)})`,
+     neon.layers.every(n => n === 3), JSON.stringify(neon.layers));
+  /* THE BLOOM IS WHAT MAKES IT NEON rather than a bigger dot: a blurred copy
+     under a hard core. Asserted through the computed filter, so deleting the
+     filter reference fails here even though the circle would still draw. */
+  ok(`...and the bloom really is filtered (${neon.filter})`,
+     /url\(/.test(neon.filter), JSON.stringify(neon.filter));
+  ok("the map has a night side and an edge to it",
+     neon.hasNight && neon.hasTerm, JSON.stringify(neon));
+  ok("...and nothing is striking before anything has happened",
+     neon.flashEmpty === true, JSON.stringify(neon));
+
+  /* ---- THE STRIKE ---------------------------------------------------------
+     "make it look like lightning every time somebody does anything on the
+     court. on the map, like bzzt." */
+  const strike = await page.evaluate(async () => {
+    const svg = () => document.querySelector("main svg.heremap");
+    const flash = () => svg().querySelector(".heremapflash");
+    const land = svg().querySelector("path.heremapland");
+    // ONE CHANGE.
+    window.__ev = (window.__ev || 0) + 1;
+    await new Promise(r => setTimeout(r, 2500));
+    const after = {
+      children: flash().children.length,
+      wash: flash().querySelectorAll("rect.hereflashwash").length,
+      bolts: flash().querySelectorAll("path.hereflashbolt").length,
+      // THE SHELL MUST NOT HAVE BEEN REBUILT. Same node, not merely same shape.
+      sameLand: svg().querySelector("path.heremapland") === land,
+    };
+    return after;
+  });
+  ok(`a change strikes the map (${strike.children} elements)`,
+     strike.children > 0, JSON.stringify(strike));
+  ok("...as a wash over the whole map plus at least one bolt",
+     strike.wash === 1 && strike.bolts >= 1, JSON.stringify(strike));
+  /* AND THE COASTLINE WAS NOT REDRAWN. The land is seventeen kilobytes of path
+     data and this fires on every message the site sees; a full innerHTML per
+     strike would re-parse all of it several times a second and restart every
+     light's flicker. Node identity is the only honest way to check that. */
+  ok("...without rebuilding the map underneath it", strike.sameLand === true,
+     JSON.stringify(strike));
+
+  /* THE RATE CAP, WHICH IS A SAFETY LIMIT AND NOT A PREFERENCE. Flashing above
+     roughly three times a second is a seizure risk, and a busy court would
+     otherwise drive one strike per message.
+     ASSERTED AS A RATE UNDER LOAD, which is the property that actually matters.
+     A first version compared the markup before and after two changes and called
+     the pair "inside the cap" — they were 1400ms apart, so the second was
+     correctly allowed to strike and the test was simply wrong about its own
+     premise. Counting distinct strikes during a burst cannot be wrong that way:
+     changes are fed in far faster than the cap, and what is measured is how
+     often the map actually lit up. */
+  const capped = await page.evaluate(async () => {
+    const flash = () => document.querySelector("main svg.heremap .heremapflash");
+    let last = flash().innerHTML, strikes = 0;
+    const t0 = Date.now();
+    // A change every 150ms for three seconds — twenty of them, against a cap
+    // that should let through three or four.
+    const feed = setInterval(() => { window.__ev = (window.__ev || 0) + 1; }, 150);
+    while (Date.now() - t0 < 3000) {
+      await new Promise(r => setTimeout(r, 50));
+      const now = flash().innerHTML;
+      if (now !== last) { strikes++; last = now; }
+    }
+    clearInterval(feed);
+    return {strikes, seconds: (Date.now() - t0) / 1000,
+            fed: Math.floor((Date.now() - t0) / 150)};
+  });
+  const rate = capped.strikes / capped.seconds;
+  /* UNDER TWO A SECOND, comfortably beneath the three-a-second threshold that
+     makes flashing content a hazard, however fast changes arrive. */
+  ok(`${capped.fed} changes in ${capped.seconds}s produced ${capped.strikes} strikes `
+     + `(${rate.toFixed(2)}/s, cap is one per ${'0.9'}s)`,
+     rate < 2, JSON.stringify(capped));
+  /* AND IT DID NOT STOP ALTOGETHER. A cap that let nothing through would pass
+     the arm above, which is exactly the failure a rate check invites. */
+  ok("...and the map did keep striking", capped.strikes >= 2, JSON.stringify(capped));
+
+  /* AND A READER WHO ASKED FOR NO MOTION GETS NONE. The whole feature is
+     motion, so there is no softened version: the flicker stops and the strike
+     does not animate. Checked with the media feature actually emulated, because
+     a rule that exists in the stylesheet and does not match is not a fix. */
+  await page.emulateMediaFeatures([{name: "prefers-reduced-motion", value: "reduce"}]);
+  const still = await page.evaluate(async () => {
+    window.__ev++;
+    await new Promise(r => setTimeout(r, 1600));
+    const svg = document.querySelector("main svg.heremap");
+    const bloom = svg.querySelector("circle.heremapbloom");
+    const wash = svg.querySelector("rect.hereflashwash");
+    return {
+      bloomAnim: bloom ? getComputedStyle(bloom).animationName : "?",
+      washAnim: wash ? getComputedStyle(wash).animationName : "none",
+      washOpacity: wash ? getComputedStyle(wash).opacity : "0",
+    };
+  });
+  ok(`with reduced motion the lights stop flickering (${still.bloomAnim})`,
+     still.bloomAnim === "none", JSON.stringify(still));
+  ok(`...and the strike does not animate (${still.washAnim}, opacity ${still.washOpacity})`,
+     still.washAnim === "none" && Number(still.washOpacity) === 0, JSON.stringify(still));
+  await page.emulateMediaFeatures([{name: "prefers-reduced-motion", value: "no-preference"}]);
+
   /* AND NO MAP AT ALL WHEN NOBODY CAN BE PLACED. A server with no country file
      places everybody under "elsewhere"; an empty world with a graticule on it
      would imply the map had looked and found nothing, which is not what
-     happened. */
+     happened.
+     LAST IN THE FILE ON PURPOSE. This arm replaces the page's fetch with one
+     that answers geo_known:false and does not put it back, so the map is gone
+     for good afterwards — which is fine at the end and broke every arm after it
+     when this sat in the middle. Measured, as a null querySelector. */
   await page.evaluate(() => { window.__nogeo = true; });
   const nogeo = await page.evaluate(async () => {
     const real = window.fetch;
@@ -311,6 +510,7 @@ const HERE = {
   ok("...and says so in words instead",
      /no country file/i.test(nogeo.text),
      JSON.stringify(nogeo.text.replace(/\s+/g, " ").slice(0, 160)));
+
 
   ok("no page errors", errs.length === 0, errs.slice(0, 2).join(" | "));
 

@@ -2123,6 +2123,56 @@ tr.youare .mono{font-weight:600}
    around it is what makes a country findable at a glance; the solid centre is
    what makes it precise. */
 .heremaphalo{fill:var(--accent); opacity:.16}
+/* ---- NIGHT, AND THE LIGHTS ON IT ---------------------------------------
+   Asked for as "make it flash the night time city lights neon etc". The night
+   is REAL rather than a mood: the shaded half is where the sun is actually
+   below the horizon at the moment the page is drawn, computed from the date
+   and the hour — see hereNightPath. So a reader in daylight sees their own
+   side lit and the dots on the far side burning in the dark, which is what a
+   presence map of a round planet should look like.
+   AND THE LIGHTS ARE ONLY EVER REAL CONNECTIONS. No decorative scatter of
+   cities, however good it would look: on a page whose whole subject is how
+   many people are where, an invented light is an invented person. */
+.heremapnight{fill:#04060f; opacity:.42}
+.heremapterm{stroke:var(--accent); stroke-width:.5; fill:none; opacity:.22}
+/* THE NEON. A blurred copy under a hard core is what makes a dot read as a
+   light rather than a marker — the bloom is the light spilling, the core is the
+   filament. Both take the theme's accent, so this is neon in whatever colour
+   the page already is. */
+.heremapbloom{fill:var(--accent); filter:url(#heremapglow); opacity:.85}
+.heremapdot{fill:var(--accent-2)}
+/* A SLOW, SHALLOW FLICKER, and both adjectives are deliberate: city lights seen
+   from orbit shimmer, they do not blink, and anything faster than this on a
+   page-sized element starts being a strobe rather than an atmosphere. */
+@keyframes heretwinkle{0%,100%{opacity:.85}50%{opacity:.62}}
+.heremapbloom{animation:heretwinkle 3.2s ease-in-out infinite}
+/* ---- THE FLASH ----------------------------------------------------------
+   Asked for as "make it look like lightning every time somebody does anything
+   on the court. on the map, like bzzt." One strike per change, drawn over the
+   whole map rather than over the place it came from — see hereFlashHtml for why
+   the location is deliberately not used.
+   THE DOUBLE STRIKE IS THE "BZZT". A single ramp reads as a fade; bright, nearly
+   out, bright again, gone is what reads as electric. 260ms end to end.
+   RATE-CAPPED IN SCRIPT, NOT HERE, and the cap exists for a reader's safety
+   rather than for taste: three flashes a second is the threshold above which
+   flashing content is a seizure risk, so HEREFLASH_MIN holds this to well under
+   half of that however busy the site gets. */
+@keyframes hereflashwash{0%{opacity:0}8%{opacity:.30}22%{opacity:.05}
+  34%{opacity:.22}100%{opacity:0}}
+@keyframes hereflashbolt{0%{opacity:0}5%{opacity:.95}24%{opacity:.10}
+  36%{opacity:.75}100%{opacity:0}}
+.hereflashwash{fill:var(--accent); opacity:0;
+  animation:hereflashwash 260ms ease-out 1}
+.hereflashbolt{fill:none; stroke:var(--accent-2); stroke-width:1.1;
+  stroke-linejoin:round; opacity:0; filter:url(#heremapglow);
+  animation:hereflashbolt 260ms ease-out 1}
+/* AND NONE OF IT FOR A READER WHO HAS ASKED FOR NO MOTION. The whole feature is
+   motion, so this is not a softened version — the flicker stops and the strike
+   never draws. The page still says who is here; it just stops moving. */
+@media (prefers-reduced-motion: reduce){
+  .heremapbloom{animation:none}
+  .hereflashwash,.hereflashbolt{animation:none; opacity:0}
+}
 .mcmt-d{fill:var(--muted); opacity:.62}
 /* THE ELLIPSIS IS TEXT, NOT A CIRCLE, and white rather than the dots' muted
    grey — asked for that way, and right: a circle in this figure means one
@@ -19427,38 +19477,148 @@ function hereXY(lat, lon){
   return [(lon + 180) / 360 * HEREMAP_W,
           (HEREMAP_TOP - lat) / (HEREMAP_TOP - HEREMAP_BOT) * HEREMAP_H];
 }
-function hereMapHtml(d){
+/* WHERE THE SUN IS, WHICH IS WHAT MAKES THE NIGHT SIDE REAL.
+   Plate carree, so the terminator is a single curve across the picture: for
+   each longitude the latitude at which the sun sits exactly on the horizon.
+     tan(lat) = -cos(lon - sublon) / tan(declination)
+   The declination is the standard day-of-year approximation and the subsolar
+   longitude is just the clock — 0 degrees at noon UTC, fifteen degrees an hour
+   westward. Good to a degree or so, which on a 720-unit map is two pixels and
+   far better than this needs.
+   THE FILLED REGION IS THE DARK ONE, and which edge it closes along depends on
+   the season: with the sun north of the equator the north pole is lit and the
+   night reaches the bottom of the map, and the other way round in December.
+   Closing along the wrong edge fills the lit half instead, which looks
+   plausible in June and inverts in January — the reason the season is read from
+   the declination's sign rather than assumed. */
+const HEREMAP_TERMSTEP = 3;
+function hereNightPath(when){
+  const t = when || new Date();
+  const jan1 = Date.UTC(t.getUTCFullYear(), 0, 1);
+  const doy = (Date.UTC(t.getUTCFullYear(), t.getUTCMonth(), t.getUTCDate())
+               - jan1) / 86400000 + 1;
+  const decl = -23.44 * Math.cos(2 * Math.PI * (doy + 10) / 365.24);
+  const utch = t.getUTCHours() + t.getUTCMinutes() / 60 + t.getUTCSeconds() / 3600;
+  const sunLon = (12 - utch) * 15;
+  const td = Math.tan(decl * Math.PI / 180);
+  const pts = [];
+  for(let lon = -180; lon <= 180; lon += HEREMAP_TERMSTEP){
+    const c = Math.cos((lon - sunLon) * Math.PI / 180);
+    /* AT THE EQUINOXES tan(declination) IS ZERO and the terminator is a pair of
+       meridians — the poles are both on it. The division gives an infinity,
+       atan turns that into the right ninety degrees, and the only case needing
+       a hand is the genuine 0/0 at the poles of that expression. */
+    let lat = Math.atan(-c / td) * 180 / Math.PI;
+    if(!isFinite(lat)) lat = c > 0 ? -90 : 90;
+    const xy = hereXY(lat, lon);
+    // Kept a little outside the box rather than clamped to it: the svg clips,
+    // and clamping would draw a false straight coastline along the edge.
+    pts.push([xy[0], Math.max(-60, Math.min(HEREMAP_H + 60, xy[1]))]);
+  }
+  const edge = decl > 0 ? HEREMAP_H + 60 : -60;
+  return "M" + pts.map(q=>`${q[0].toFixed(1)} ${q[1].toFixed(1)}`).join("L")
+    + `L${HEREMAP_W} ${edge}L0 ${edge}Z`;
+}
+function hereTermPath(when){
+  // The same curve, unfilled, so the edge of the night reads as an edge.
+  const d = hereNightPath(when);
+  return d.slice(0, d.lastIndexOf("L" + HEREMAP_W + " "));
+}
+
+/* THE STRIKE. One per change the service reports, and it says nothing about the
+   change.
+   IT IS NOT DRAWN WHERE THE EVENT CAME FROM, and that is the whole design
+   rather than an omission. A bolt landing on a country is a public statement
+   joining one action to one location, at a resolution the rest of this page
+   spends a floor of two connections avoiding — on a quiet site it would be a
+   live feed of which country each individual message came from. So the service
+   publishes a number with no location on it, this draws across the whole map,
+   and neither end of the wire has the option of being more specific.
+   THE GEOMETRY IS RANDOM PER STRIKE, so two in a row do not look like a loop. */
+function hereBoltPath(){
+  let x = 30 + Math.random() * (HEREMAP_W - 60), y = 0;
+  let d = `M${x.toFixed(0)} 0`;
+  while(y < HEREMAP_H){
+    y += 18 + Math.random() * 26;
+    x += (Math.random() - 0.5) * 78;
+    x = Math.max(3, Math.min(HEREMAP_W - 3, x));
+    d += `L${x.toFixed(0)} ${Math.min(HEREMAP_H, y).toFixed(0)}`;
+  }
+  return d;
+}
+function hereFlashHtml(){
+  const bolts = 1 + (Math.random() < 0.45 ? 1 : 0);
+  let out = `<rect class="hereflashwash" x="0" y="0"`
+    + ` width="${HEREMAP_W}" height="${HEREMAP_H}"/>`;
+  for(let i = 0; i < bolts; i++){
+    out += `<path class="hereflashbolt" d="${hereBoltPath()}"/>`;
+  }
+  return out;
+}
+
+/* THE LIGHTS THEMSELVES, split out of the shell so a change can repaint them
+   without the coastline being parsed again. That is not a micro-optimisation at
+   this rate: the land is seventeen kilobytes of path data and the flash fires on
+   every message the site sees, so re-rendering the whole map per event would
+   mean re-parsing all of it several times a second. */
+function hereDotsHtml(d){
   const rows = (Array.isArray(d.by_country)? d.by_country : [])
     .filter(r=>/^[A-Za-z]{2}$/.test(String(r.cc||"")) && Number(r.n||0) > 0);
   const most = Math.max(1, ...rows.map(r=>Number(r.n||0)));
-  /* SQUARE ROOT, so a dot's AREA carries the count rather than its width. Twice
-     the people should look twice as big, and a radius doubled looks four times
-     as big. The floor of 3 is what keeps the smallest country visible at all. */
-  const dots = rows.map(r=>{
+  /* SQUARE ROOT, so a light's AREA carries the count rather than its width.
+     Twice the people should look twice as big, and a radius doubled looks four
+     times as big. The floor of 3 is what keeps the smallest country visible.
+     THREE CIRCLES PER COUNTRY: the wash that makes it findable, the bloom that
+     makes it a light, and the hard core that says exactly where it is. */
+  return rows.map(r=>{
     const cc = String(r.cc||"").toUpperCase();
     const at = hereAt(cc);
-    /* NO POSITION, NO DOT — and the row below still counts it. A country code
+    /* NO POSITION, NO LIGHT — and the row below still counts it. A country code
        this table has never heard of (the geo databases emit a few that are not
        ISO countries at all) must not become a dot at 0,0 in the Atlantic. */
     if(!at) return "";
     const n = Number(r.n||0);
-    const [x, y] = hereXY(at[0], at[1]);
+    const xy = hereXY(at[0], at[1]);
+    const x = xy[0].toFixed(1), y = xy[1].toFixed(1);
     const rad = 3 + 6.5 * Math.sqrt(n / most);
     const t = safeInline(cc) + " · " + fmtN(n);
     return `<g><title>${t}</title>`
-      + `<circle class="heremaphalo" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${(rad*2.5).toFixed(1)}"/>`
-      + `<circle class="heremapdot" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="${rad.toFixed(1)}"/></g>`;
+      + `<circle class="heremaphalo" cx="${x}" cy="${y}" r="${(rad*2.5).toFixed(1)}"/>`
+      + `<circle class="heremapbloom" cx="${x}" cy="${y}" r="${(rad*0.9).toFixed(1)}"/>`
+      + `<circle class="heremapdot" cx="${x}" cy="${y}" r="${(rad*0.55).toFixed(1)}"/></g>`;
   }).join("");
+}
+function hereMapHtml(d){
+  // ONE DEFINITION OF A LIGHT, in hereDotsHtml. This used to build them here
+  // too, which meant two copies of the geometry the moment the shell and the
+  // repaint stopped being the same code path.
+  const dots = hereDotsHtml(d);
   const grid = [56,112,168,224].map(y=>`<path d="M0 ${y} H${HEREMAP_W}"/>`).join("")
     + [120,240,360,480,600].map(x=>`<path d="M${x} 0 V${HEREMAP_H}"/>`).join("");
+  /* THE GLOW IS ONE FILTER USED BY EVERY LIGHT AND EVERY BOLT. A filter region
+     has to be given room to spill or the bloom is cut square at the shape's own
+     box, which looks like a bug and is the usual way this is got wrong. */
+  const defs = `<defs><filter id="heremapglow" x="-250%" y="-250%"`
+    + ` width="600%" height="600%">`
+    + `<feGaussianBlur stdDeviation="2.4" result="b"/>`
+    + `<feMerge><feMergeNode in="b"/><feMergeNode in="b"/>`
+    + `<feMergeNode in="SourceGraphic"/></feMerge></filter></defs>`;
   /* ARIA-HIDDEN, DELIBERATELY. The table underneath is the same numbers in a
      form a screen reader can actually read out; announcing a silhouette twice
      would be worse than announcing it once. The <title>s stay because they are
      what a pointer shows. */
   return `<svg class="heremap" viewBox="0 0 ${HEREMAP_W} ${HEREMAP_H}" aria-hidden="true">`
+    + defs
     + `<g class="heremapgrid">${grid}</g>`
     + `<path class="heremapland" d="${HERE_LAND}"/>`
-    + dots + `</svg>`;
+    + `<path class="heremapnight" d="${hereNightPath()}"/>`
+    + `<path class="heremapterm" d="${hereTermPath()}"/>`
+    // THE TWO LIVE LAYERS, empty here and filled by the poll. Named groups
+    // rather than positions, so a later change to the stack cannot silently
+    // start repainting the coastline.
+    + `<g class="heremapdots">${dots}</g>`
+    + `<g class="heremapflash"></g>`
+    + `</svg>`;
 }
 function hereRowsHtml(d){
   const rows = Array.isArray(d.by_country)? d.by_country : [];
@@ -19480,6 +19640,19 @@ function hereRowsHtml(d){
         <td class="herecell"></td><td class="tnum">${fmtN(other)}</td></tr>` : "")
     + `</tbody></table>`;
 }
+/* HOW LONG THE PRESENCE POLL HOLDS, and how often the night is redrawn.
+   THE POLL IS A LONG ONE now, which is what makes the strike land as the thing
+   happens rather than up to an interval later. HERE_MS is kept as the fallback
+   for a service too old to know the `wait` parameter: it answers at once, and
+   this becomes the interval it always was. */
+const HERE_WAIT = 20;
+const HERE_NIGHT_MS = 120000;
+/* AT MOST ONE STRIKE THIS OFTEN. A SAFETY LIMIT, NOT A STYLE CHOICE: flashing
+   content above about three flashes a second is a seizure risk, and a busy court
+   could otherwise drive one strike per message. 900ms holds this near one a
+   second even when every poll returns a change, and a reader who has asked for
+   reduced motion gets none at all — see the media query in the stylesheet. */
+const HEREFLASH_MIN = 900;
 on(/^\/here$/, async ()=>{
   const head = crumbs([{label:"Directory",href:"#/"},{label:"Who is here"}])
     + `<h1 class="page-h">Who is here</h1>`;
@@ -19492,17 +19665,41 @@ on(/^\/here$/, async ()=>{
   }
   main.innerHTML = head + `<div class="dim" style="margin-top:16px">Reading…</div>`;
   const seq0 = renderSeq;
+  const prose = `<div class="prose" style="margin-top:16px"><p>Where the people
+     with a chat open are reading from, right now. A country is named only once
+     at least two connections are in it — otherwise it would say where one
+     particular person is — and everything else is counted with no location on
+     it at all. Nothing here is joined to a name or to anything anybody
+     said.</p><p class="small muted">The dark half is where the sun is below the
+     horizon just now, and the map flashes when anything happens in any
+     court.</p></div>`;
+  const nogeo = `<p class="small muted">This server has no country file loaded,
+     so nobody can be placed and every connection is counted under
+     “elsewhere”.</p>`;
+  let events = -1, shell = false, lastFlash = 0, nightAt = 0;
+  /* HOW LONG THE LAST REQUEST TOOK, which is how this tells a service that
+     held the connection from one that answered at once — an older build that
+     has never heard of `wait`. There is no version handshake and there should
+     not be one: the timing is the answer. */
+  let held = 0, moved = false;
   const draw = async ()=>{
     if(renderSeq !== seq0) return false;
     let d = null;
     try{
-      const r = await fetch(base + "/api/chat/here", {cache:"no-store"});
+      /* SINCE AND WAIT, so the service can hold the request until something
+         happens. An older service ignores both and answers at once, which is
+         why the interval below is still here. */
+      const q = events >= 0 ? `?since=${events}&wait=${HERE_WAIT}` : "";
+      const t0 = Date.now();
+      const r = await fetch(base + "/api/chat/here" + q, {cache:"no-store"});
+      held = Date.now() - t0;
       if(r.ok) d = await r.json();
     }catch(_){}
     if(renderSeq !== seq0) return false;
     if(!d){
       main.innerHTML = head + `<div class="notice refuse" style="margin-top:16px">
         <span class="g">✕</span> The chat service did not answer.</div>`;
+      shell = false;
       return true;
     }
     /* THE NETWORK AND ROOM COUNTS ARE NOT SHOWN HERE, though the service does
@@ -19510,24 +19707,72 @@ on(/^\/here$/, async ()=>{
        learns nothing from "nine networks", and a page that mentions counting
        networks at all reads as more watching than is actually going on. This
        page answers one question — where are the people — and stops. */
-    main.innerHTML = head
-      + `<div class="prose" style="margin-top:16px"><p>Where the people with a
-         chat open are reading from, right now. A country is named only once at
-         least two connections are in it — otherwise it would say where one
-         particular person is — and everything else is counted with no location
-         on it at all. Nothing here is joined to a name or to anything anybody
-         said.</p></div>`
-      + (d.geo_known? hereMapHtml(d) : "")
-      + hereRowsHtml(d)
-      + (d.geo_known? "" : `<p class="small muted">This server has no country
-         file loaded, so nobody can be placed and every connection is counted
-         under “elsewhere”.</p>`);
+    moved = events >= 0 && Number(d.events || 0) !== events;
+    events = Number(d.events || 0);
+    /* THE SHELL IS BUILT ONCE. Re-running innerHTML on every change would
+       re-parse seventeen kilobytes of coastline per message and restart the
+       flicker on every light; after the first draw only the lights, the rows
+       and the strike are touched. */
+    if(!shell){
+      main.innerHTML = head + prose
+        + (d.geo_known? hereMapHtml(d) : "")
+        + hereRowsHtml(d)
+        + (d.geo_known? "" : nogeo);
+      shell = true;
+      nightAt = Date.now();
+      return true;
+    }
+    const svg = main.querySelector("svg.heremap");
+    if(!svg){
+      // The payload stopped being placeable, or never was: fall back to a full
+      // redraw rather than trying to patch a map that is not there.
+      shell = false;
+      return await draw();
+    }
+    svg.querySelector(".heremapdots").innerHTML = hereDotsHtml(d);
+    const tbl = main.querySelector("table.herelist");
+    const rowsHtml = hereRowsHtml(d);
+    if(tbl) tbl.outerHTML = rowsHtml;
+    if(moved){
+      const now = Date.now();
+      if(now - lastFlash >= HEREFLASH_MIN){
+        lastFlash = now;
+        /* REPLACING THE GROUP'S CONTENT IS WHAT RESTARTS THE ANIMATION. A CSS
+           animation runs once when its element is created, so a fresh rect and
+           a fresh bolt strike by existing — no class juggling, and no way for
+           two strikes to overlap into a longer, brighter one. */
+        svg.querySelector(".heremapflash").innerHTML = hereFlashHtml();
+      }
+    }
+    if(Date.now() - nightAt > HERE_NIGHT_MS){
+      nightAt = Date.now();
+      const night = svg.querySelector(".heremapnight");
+      const term = svg.querySelector(".heremapterm");
+      if(night) night.setAttribute("d", hereNightPath());
+      if(term) term.setAttribute("d", hereTermPath());
+    }
     return true;
   };
   if(!await draw()) return;
-  const tick = setInterval(async ()=>{
-    if(renderSeq !== seq0 || !(await draw())) clearInterval(tick);
-  }, HERE_MS);
+  /* A LOOP RATHER THAN AN INTERVAL, because the request now holds: with
+     setInterval a twenty-second poll and a five-second timer would pile up
+     several requests per reader. This waits for each answer before asking
+     again, so there is exactly one in flight. */
+  (async ()=>{
+    while(renderSeq === seq0){
+      if(!await draw()) return;
+      if(renderSeq !== seq0) return;
+      /* PACED BY WHAT THE SERVICE ACTUALLY DID. If it held the request, it
+         understands `wait` and asking again straight away is right — that is
+         the long poll working, and the only gap is the round trip. If it came
+         back at once with nothing new it is an older service, and this falls
+         back to HERE_MS, the interval this page had before the poll could hold
+         at all. Without that branch a deployment mid-upgrade would poll every
+         400ms, twelve times faster than it ever did. */
+      const quiet = held < 1000 && !moved;
+      await new Promise(r=>setTimeout(r, quiet? HERE_MS : 400));
+    }
+  })();
 });
 
 /* ---- diagnostics ---------------------------------------------------------
