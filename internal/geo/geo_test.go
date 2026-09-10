@@ -1,6 +1,8 @@
 package geo
 
 import (
+	"compress/gzip"
+	"math"
 	"net/netip"
 	"os"
 	"path/filepath"
@@ -378,5 +380,341 @@ func TestPrefixToSpanCoversBothEnds(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+// ---- the coarse grid ------------------------------------------------------
+
+// EVERY CELL IS ABOUT THE SAME SIZE, WHEREVER IT IS, which is the whole reason
+// the grid is bands-scaled-by-cosine rather than a plain 5-degree lattice.
+//
+// THE LATTICE IS THE BUG THIS CATCHES. Five degrees of longitude is 556km at the
+// equator, 278km at 60N and 24km at 87.5N — so a lattice would quietly hand a
+// reader in Norway four times less protection than one in Kenya, and a reader in
+// Svalbard twenty times less, while the code claimed one number. Asserted as a
+// floor and a ceiling on the east-west width of every band's cell.
+func TestEveryCellIsAboutTheSameSizeWhereverItIs(t *testing.T) {
+	const kmPerDeg = 111.32
+	minW, maxW := 1e9, 0.0
+	for band := 0; band < geoCellBands(); band++ {
+		mid := -90 + 5.0*float64(band) + 2.5
+		// The cell at the prime meridian in this band, and how wide it is on the
+		// ground rather than in degrees.
+		c := CellOf(mid, 0.5)
+		if c == 0 {
+			t.Fatalf("band %d (lat %.1f) produced no cell", band, mid)
+		}
+		_, lonC, ok := CellCentre(c)
+		if !ok {
+			t.Fatalf("cell %d has no centre", c)
+		}
+		// Width in degrees is twice the distance from the centre to the edge,
+		// which is recovered by walking east until the cell changes.
+		step := 0.01
+		east := lonC
+		for east < lonC+200 {
+			if CellOf(mid, east+step) != c {
+				break
+			}
+			east += step
+		}
+		wDeg := 2 * (east - lonC)
+		wKm := wDeg * kmPerDeg * mathCos(mid)
+		if wKm < minW {
+			minW = wKm
+		}
+		if wKm > maxW {
+			maxW = wKm
+		}
+	}
+	// 556km is the design figure. The rounding of cells-per-band spreads it, and
+	// the polar bands collapse to one cell that is wider than tall — which is
+	// coarser, never finer, and coarser is the safe direction.
+	if minW < 300 {
+		t.Errorf("some cell is only %.0fkm wide east-west; the grid has become a "+
+			"lattice and high latitudes are under-protected", minW)
+	}
+	if maxW > 45000 {
+		t.Errorf("some cell is %.0fkm wide, which is not a cell", maxW)
+	}
+}
+
+// A COORDINATE LANDS IN A CELL THAT CONTAINS IT. Round-tripping through the
+// centre must not move a point into a different cell.
+func TestACoordinateLandsInACellThatContainsIt(t *testing.T) {
+	for _, p := range []struct {
+		lat, lon float64
+		what     string
+	}{
+		{37.77, -122.42, "San Francisco"},
+		{51.51, -0.13, "London"},
+		{-33.87, 151.21, "Sydney"},
+		{1.35, 103.82, "Singapore"},
+		{64.14, -21.94, "Reykjavik"},
+		{-54.8, -68.3, "Ushuaia"},
+		{35.68, 139.69, "Tokyo"},
+	} {
+		c := CellOf(p.lat, p.lon)
+		if c == 0 {
+			t.Fatalf("%s produced no cell", p.what)
+		}
+		lat, lon, ok := CellCentre(c)
+		if !ok {
+			t.Fatalf("%s: cell %d has no centre", p.what, c)
+		}
+		if CellOf(lat, lon) != c {
+			t.Errorf("%s: the centre of cell %d is in a different cell", p.what, c)
+		}
+		// Within half a band vertically, always; horizontally within half the
+		// band's own cell width, which the equal-area test bounds.
+		if d := lat - p.lat; d > 2.5 || d < -2.5 {
+			t.Errorf("%s: centre latitude %.2f is %.2f from %.2f", p.what, lat, d, p.lat)
+		}
+	}
+}
+
+// THE VENDOR'S UNPLACED ROWS ARE NOT THE GULF OF GUINEA. DB-IP writes 0,0 for
+// rows it has no position for, including the span at the very front of the file,
+// and treating that as a coordinate puts readers in the ocean off Ghana — which
+// is both wrong and the classic signature of this exact mistake.
+func TestZeroZeroIsAbsentNotTheGulfOfGuinea(t *testing.T) {
+	if c := CellOf(0, 0); c != 0 {
+		t.Errorf("0,0 must be absent, got cell %d", c)
+	}
+	// ...but a real coordinate near it still resolves.
+	if c := CellOf(0.6, 0.6); c == 0 {
+		t.Error("a genuine coordinate near the origin must still place")
+	}
+	for _, bad := range [][2]float64{{91, 0}, {-91, 0}, {0, 181}, {0, -181}} {
+		if c := CellOf(bad[0], bad[1]); c != 0 {
+			t.Errorf("%v is off the globe and must not place, got %d", bad, c)
+		}
+	}
+	if _, _, ok := CellCentre(0); ok {
+		t.Error("cell 0 must have no centre")
+	}
+	if _, _, ok := CellCentre(uint16(CellCount()) + 1); ok {
+		t.Error("a cell past the end must have no centre")
+	}
+}
+
+// mathCos and geoCellBands keep the test from importing math and from reaching
+// into the package's unexported band table.
+func mathCos(deg float64) float64 { return math.Cos(deg * math.Pi / 180) }
+func geoCellBands() int           { return CellBands }
+
+// ---- the city loader ------------------------------------------------------
+
+func writeTmp(t *testing.T, body string) string {
+	t.Helper()
+	p := filepath.Join(t.TempDir(), "city.csv")
+	if err := os.WriteFile(p, []byte(body), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+// COALESCING MUST NOT CHANGE A SINGLE ANSWER. It exists to make the file fit —
+// 3.6M v4 spans down to 1.7M, measured — and the whole risk of it is that a
+// merged run answers for addresses it should not, or stops answering for ones it
+// should. So every address in every row is asked, and the span count is asserted
+// to have actually dropped, because a merge that silently did nothing would pass
+// the first half of this test.
+func TestCoalescingChangesNoAnswer(t *testing.T) {
+	// Three adjacent rows in one city, then a neighbour in the same cell, then a
+	// row far away. Rows 1-4 must become one span; row 5 stays its own.
+	p := writeTmp(t, `1.0.0.0,1.0.0.255,EU,DE,Berlin,Berlin,52.52,13.40
+1.0.1.0,1.0.1.255,EU,DE,Berlin,Berlin,52.52,13.40
+1.0.2.0,1.0.2.255,EU,DE,Berlin,"Berlin, Mitte",52.53,13.41
+1.0.3.0,1.0.3.255,EU,DE,Brandenburg,Potsdam,52.40,13.06
+9.9.9.0,9.9.9.255,AS,JP,Tokyo,Tokyo,35.68,139.69
+`)
+	tb, err := LoadCity(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tb.Len() != 2 {
+		t.Fatalf("four adjacent rows in one cell plus one far away is 2 spans, got %d", tb.Len())
+	}
+	berlin := CellOf(52.52, 13.40)
+	tokyo := CellOf(35.68, 139.69)
+	if berlin == 0 || tokyo == 0 || berlin == tokyo {
+		t.Fatalf("the fixture needs two distinct cells, got %d and %d", berlin, tokyo)
+	}
+	for _, probe := range []struct {
+		ip   string
+		cc   string
+		cell uint16
+	}{
+		{"1.0.0.0", "DE", berlin}, {"1.0.0.255", "DE", berlin},
+		{"1.0.1.7", "DE", berlin}, {"1.0.2.200", "DE", berlin},
+		{"1.0.3.0", "DE", berlin}, {"1.0.3.255", "DE", berlin},
+		{"9.9.9.9", "JP", tokyo},
+	} {
+		a := netip.MustParseAddr(probe.ip)
+		if got := tb.Country(a); got != probe.cc {
+			t.Errorf("%s: country %q, want %q", probe.ip, got, probe.cc)
+		}
+		if got := tb.Cell(a); got != probe.cell {
+			t.Errorf("%s: cell %d, want %d", probe.ip, got, probe.cell)
+		}
+	}
+	// And nothing outside the rows answers.
+	for _, ip := range []string{"1.0.4.0", "9.9.8.255", "2.2.2.2"} {
+		if got := tb.Cell(netip.MustParseAddr(ip)); got != 0 {
+			t.Errorf("%s is in no row but placed in cell %d", ip, got)
+		}
+	}
+}
+
+// A GAP BREAKS A RUN, because the space between two spans is address range the
+// file says nothing about. Merging across it would invent a location for
+// addresses the vendor never placed — the one way coalescing could become a lie
+// rather than a saving.
+func TestAGapBreaksARunRatherThanBeingClaimed(t *testing.T) {
+	p := writeTmp(t, `1.0.0.0,1.0.0.255,EU,DE,Berlin,Berlin,52.52,13.40
+1.0.2.0,1.0.2.255,EU,DE,Berlin,Berlin,52.52,13.40
+`)
+	tb, err := LoadCity(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tb.Len() != 2 {
+		t.Fatalf("a gap must leave two spans, got %d", tb.Len())
+	}
+	if got := tb.Cell(netip.MustParseAddr("1.0.1.128")); got != 0 {
+		t.Errorf("the gap was claimed for cell %d", got)
+	}
+}
+
+// THE CITY NAME IS GONE, and this is the privacy property the whole design rests
+// on rather than a detail. Two different cities that share a cell must be
+// indistinguishable, and no method on the table may return either name.
+func TestTheCityNameIsNotRecoverable(t *testing.T) {
+	// Two real cities about 40km apart, which the grid puts in one cell.
+	p := writeTmp(t, `1.0.0.0,1.0.0.255,EU,NL,Noord-Holland,Amsterdam,52.37,4.90
+2.0.0.0,2.0.0.255,EU,NL,Utrecht,Utrecht,52.09,5.12
+`)
+	tb, err := LoadCity(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := netip.MustParseAddr("1.0.0.1")
+	b := netip.MustParseAddr("2.0.0.1")
+	if tb.Cell(a) == 0 || tb.Cell(b) == 0 {
+		t.Fatal("both cities should place")
+	}
+	if tb.Cell(a) != tb.Cell(b) {
+		t.Skip("Amsterdam and Utrecht fell in different cells; the point below " +
+			"still holds but this fixture cannot show it")
+	}
+	// Same cell, so the table cannot tell a reader in one from a reader in the
+	// other — which is exactly what a ~550km cell is for.
+	if lat, lon, _ := CellCentre(tb.Cell(a)); lat == 52.37 || lon == 4.90 {
+		t.Error("the published position is the city's own coordinate, not the cell's centre")
+	}
+}
+
+// A COUNTRY-ONLY FILE PLACES NOTHING, AND SAYS SO. The deploy falls back to the
+// country file when the city one cannot be fetched, and the service has to be
+// able to tell "nobody is here" from "this build cannot place anybody" — the
+// healthy-looks-like-broken trap GeoKnown already exists for.
+func TestACountryOnlyFileHasNoCellsAndAdmitsIt(t *testing.T) {
+	p := writeTmp(t, "1.0.0.0,1.0.0.255,DE\n2.0.0.0,2.0.0.255,JP\n")
+	tb, err := LoadRanges(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tb.HasCells() || tb.Cells() != 0 {
+		t.Errorf("a country file must place nothing: HasCells=%v Cells=%d",
+			tb.HasCells(), tb.Cells())
+	}
+	if got := tb.Cell(netip.MustParseAddr("1.0.0.1")); got != 0 {
+		t.Errorf("a country file placed an address in cell %d", got)
+	}
+	if got := tb.Country(netip.MustParseAddr("1.0.0.1")); got != "DE" {
+		t.Errorf("...while still naming the country, got %q", got)
+	}
+	// And the city loader's own table does claim cells.
+	p2 := writeTmp(t, "1.0.0.0,1.0.0.255,EU,DE,Berlin,Berlin,52.52,13.40\n")
+	tb2, err := LoadCity(p2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !tb2.HasCells() || tb2.Cells() != 1 {
+		t.Errorf("a city file must place: HasCells=%v Cells=%d", tb2.HasCells(), tb2.Cells())
+	}
+}
+
+// A ROW WITH NO COORDINATE STILL NAMES ITS COUNTRY. DB-IP writes 0,0 for the
+// handful it cannot place (14 of them in the real file, measured), and losing
+// the country as well would be worse than losing the position.
+func TestARowWithNoCoordinateKeepsItsCountry(t *testing.T) {
+	p := writeTmp(t, "1.0.0.0,1.0.0.255,EU,DE,,,0,0\n")
+	tb, err := LoadCity(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a := netip.MustParseAddr("1.0.0.1")
+	if got := tb.Country(a); got != "DE" {
+		t.Errorf("country %q, want DE", got)
+	}
+	if got := tb.Cell(a); got != 0 {
+		t.Errorf("an unplaced row must not place, got cell %d", got)
+	}
+	if tb.HasCells() {
+		t.Error("a file of unplaced rows must not claim it can place")
+	}
+}
+
+// LOAD PICKS THE PARSER BY LOOKING, and reads a gzipped file without being told.
+// Both halves matter operationally: the deploy stores whichever file it managed
+// to fetch, gzipped, and the service must not need a flag that can disagree with
+// what is actually on disk.
+func TestLoadSniffsFormatAndCompression(t *testing.T) {
+	city := "1.0.0.0,1.0.0.255,EU,DE,Berlin,Berlin,52.52,13.40\n"
+	country := "1.0.0.0,1.0.0.255,DE\n"
+	gz := func(body string) string {
+		p := filepath.Join(t.TempDir(), "geo.csv.gz")
+		f, err := os.Create(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		w := gzip.NewWriter(f)
+		if _, err := w.Write([]byte(body)); err != nil {
+			t.Fatal(err)
+		}
+		w.Close()
+		f.Close()
+		return p
+	}
+	a := netip.MustParseAddr("1.0.0.1")
+	for _, c := range []struct {
+		what  string
+		path  string
+		cells bool
+	}{
+		{"a plain city file", writeTmp(t, city), true},
+		{"a gzipped city file", gz(city), true},
+		{"a plain country file", writeTmp(t, country), false},
+		{"a gzipped country file", gz(country), false},
+	} {
+		tb, err := Load(c.path)
+		if err != nil {
+			t.Fatalf("%s: %v", c.what, err)
+		}
+		if got := tb.Country(a); got != "DE" {
+			t.Errorf("%s: country %q, want DE", c.what, got)
+		}
+		if got := tb.HasCells(); got != c.cells {
+			t.Errorf("%s: HasCells=%v, want %v", c.what, got, c.cells)
+		}
+		/* THE CITY FILE'S THIRD FIELD IS A CONTINENT, NOT A COUNTRY, which is the
+		   trap in sniffing: LoadRanges reads field three as the country, so a
+		   city file sent through it would give every German address "EU" — a
+		   two-letter string that passes the country-code check and is wrong. */
+		if c.cells && tb.Country(a) == "EU" {
+			t.Errorf("%s: the continent was read as the country", c.what)
+		}
 	}
 }

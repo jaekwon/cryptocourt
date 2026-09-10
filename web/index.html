@@ -19470,10 +19470,14 @@ on(/^\/params$/, async ()=>{
    looking at it; the country tally counts placed connections. A total here would
    visibly disagree with the number they clicked, so the rows are the answer and
    the panel keeps the count.
-   NOTHING PERSONAL IS AVAILABLE TO SHOW: a country is named only once at least
-   two connections are in it, everything else is one number with no location on
-   it at all, and nothing joins a country to a name, a message or a room. The
-   floor lives in the service — see hereFloor — so this page cannot lower it. */
+   WHAT IS AND IS NOT SHOWN, and the first half of this changed. Every country
+   with a connection in it is named now, down to one — asked for as "i want
+   everyone to see the same thing", which a floor that hides the only reader in
+   a country cannot be. So a lone reader's country IS public, and the prose on
+   the page was rewritten to say that rather than promise the opposite.
+   What still holds: nothing joins a country to a name, a message or a room, and
+   these are held connections rather than people. The floor lives in the service
+   — see hereFloor — so this page can neither lower it nor raise it back. */
 const HERE_MS = 5000;
 function hereFlag(cc){
   /* THE FLAG IS DERIVED, NOT A TABLE. Two ASCII letters offset into the regional
@@ -19601,7 +19605,44 @@ function hereFlashHtml(){
    this rate: the land is seventeen kilobytes of path data and the flash fires on
    every message the site sees, so re-rendering the whole map per event would
    mean re-parsing all of it several times a second. */
+/* ONE LIGHT PER PLACE, AND "PLACE" IS AS COARSE AS THE SERVICE WILL SAY.
+   ASKED FOR AS "US isn't enough, don't we have more position information from
+   the ip?" — and there is: the service now reads a city-level file and reports a
+   coarse grid cell per connection instead of only a country. So a populous
+   country draws several lights spread across it rather than one in the middle.
+   THE WIRE CARRIES COORDINATES ALREADY, so there is no lookup here and no grid
+   arithmetic: the service resolved the cell, took its CENTRE, and sent that.
+   Which is also why this page cannot draw anybody more precisely than the
+   service chose to — it has nothing finer to draw with.
+   COUNTRIES REMAIN THE FALLBACK, not the legacy path. A deployment whose city
+   file could not be fetched serves the country file instead, reports
+   cells_known:false, and this draws exactly what it drew before. */
+function hereCellDotsHtml(cells){
+  const most = Math.max(1, ...cells.map(c=>Number(c.n||0)));
+  return cells.map(c=>{
+    const n = Number(c.n||0);
+    const lat = Number(c.lat), lon = Number(c.lon);
+    if(!isFinite(lat) || !isFinite(lon)) return "";
+    const xy = hereXY(lat, lon);
+    const x = xy[0].toFixed(1), y = xy[1].toFixed(1);
+    const rad = 3 + 6.5 * Math.sqrt(n / most);
+    /* NO NAME IN THE HOVER, because there is no name to give. A cell is about
+       550km across and the service deliberately never sent what is in it — so
+       the tooltip is the count, and inventing a nearest-city label for it would
+       undo the whole reason the position is a cell. */
+    const t = fmtN(n) + (n === 1 ? " connection" : " connections");
+    return `<g><title>${t}</title>`
+      + `<circle class="heremaphalo" cx="${x}" cy="${y}" r="${(rad*2.5).toFixed(1)}"/>`
+      + `<circle class="heremapbloom" cx="${x}" cy="${y}" r="${(rad*0.9).toFixed(1)}"/>`
+      + `<circle class="heremapdot" cx="${x}" cy="${y}" r="${(rad*0.55).toFixed(1)}"/></g>`;
+  }).join("");
+}
 function hereDotsHtml(d){
+  // CELLS WHEN THERE ARE ANY, because they are strictly finer than the country
+  // rows and drawing both would put two lights on the same people.
+  const cells = (Array.isArray(d.by_cell)? d.by_cell : [])
+    .filter(c=>Number(c.n||0) > 0);
+  if(cells.length) return hereCellDotsHtml(cells);
   const rows = (Array.isArray(d.by_country)? d.by_country : [])
     .filter(r=>/^[A-Za-z]{2}$/.test(String(r.cc||"")) && Number(r.n||0) > 0);
   const most = Math.max(1, ...rows.map(r=>Number(r.n||0)));
@@ -19706,16 +19747,27 @@ on(/^\/here$/, async ()=>{
   main.innerHTML = head + `<div class="dim" style="margin-top:16px">Reading…</div>`;
   const seq0 = renderSeq;
   const prose = `<div class="prose" style="margin-top:16px"><p>Where the people
-     with a chat open are reading from, right now. A country is named only once
-     at least two connections are in it — otherwise it would say where one
-     particular person is — and everything else is counted with no location on
-     it at all. Nothing here is joined to a name or to anything anybody
-     said.</p><p class="small muted">The dark half is where the sun is below the
+     with a chat open are reading from, right now. Every country with anybody in
+     it is named, down to a single connection — so if you are the only person
+     reading from yours, this map says so. What it never says is who: nothing
+     here is joined to a name, to a message, or to a room, and connections are
+     counted rather than people.</p><p>Each light is placed to about 550km — a
+     square of the grid this page divides the world into, drawn at the square's
+     centre rather than at anybody's position. No city and no region is ever
+     named, and nothing here can be resolved finer than that square, because
+     nothing finer is sent.</p><p class="small muted">The dark half is where the sun is below the
      horizon just now, and the map flashes when anything happens in any
      court.</p></div>`;
   const nogeo = `<p class="small muted">This server has no country file loaded,
      so nobody can be placed and every connection is counted under
      “elsewhere”.</p>`;
+  /* AND THE MIDDLE CASE, which is the one that would otherwise look like a bug:
+     a deployment whose city file could not be fetched still names countries and
+     still draws a map, one light per country. Saying so is what distinguishes it
+     from a grid that has stopped working. */
+  const nocells = `<p class="small muted">This server has a country file but not
+     a city one, so each light is a whole country rather than a square of the
+     grid.</p>`;
   let events = -1, shell = false, lastFlash = 0, nightAt = 0;
   /* HOW LONG THE LAST REQUEST TOOK, which is how this tells a service that
      held the connection from one that answered at once — an older build that
@@ -19757,7 +19809,8 @@ on(/^\/here$/, async ()=>{
       main.innerHTML = head + prose
         + (d.geo_known? hereMapHtml(d) : "")
         + hereRowsHtml(d)
-        + (d.geo_known? "" : nogeo);
+        + (d.geo_known? "" : nogeo)
+        + (d.geo_known && d.cells_known === false ? nocells : "");
       shell = true;
       nightAt = Date.now();
       return true;

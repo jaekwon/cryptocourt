@@ -490,6 +490,40 @@ func (s *Server) countryOf(r *http.Request, addr netip.Addr) string {
 	return ""
 }
 
+// geoCells is the optional half of a geo table: one loaded from a city file can
+// also place an address in a coarse grid cell.
+//
+// A SECOND INTERFACE RATHER THAN A BIGGER Geo, so that everything which already
+// satisfies Geo still does — geo.Null, the test stubs, and above all a
+// deployment that fell back to the country file, which is the case this must not
+// break. A table that cannot place answers 0 and the presence page publishes no
+// cells, which is the same shape as having no geo at all.
+type geoCells interface {
+	Cell(netip.Addr) uint16
+}
+
+// cellOf is the coarse cell a connection is in, or 0 when this build cannot say.
+//
+// NO HEADER PATH, unlike countryOf. A proxy that tells us the country is a
+// contract worth honouring; there is no equivalent header for a grid cell of our
+// own devising, and inventing one would mean trusting an upstream to compute a
+// number whose whole purpose is to be coarse.
+func (s *Server) cellOf(addr netip.Addr) uint16 {
+	g, ok := s.Geo.(geoCells)
+	if !ok || g == nil {
+		return 0
+	}
+	return g.Cell(addr)
+}
+
+// CellsKnown reports whether this build can place a connection more precisely
+// than its country. Published, for the same reason GeoKnown is: "nobody is here"
+// and "this server cannot place anybody" are the same empty map otherwise.
+func (s *Server) CellsKnown() bool {
+	g, ok := s.Geo.(geoCells)
+	return ok && g != nil
+}
+
 func (s *Server) messages(w http.ResponseWriter, r *http.Request) {
 	if s.cors(w, r) {
 		return
@@ -629,7 +663,8 @@ func (s *Server) get(w http.ResponseWriter, r *http.Request, chain, court, ipHas
 			   not going to hold does not pay for a lookup nobody reads. The
 			   country is a bisection of a 717,000-row table — cheap, but a poll
 			   that answers immediately has no business doing it. */
-			who := holder{cc: s.countryOf(r, addr), net: netHash, room: pulseKey(chain, court)}
+			who := holder{cc: s.countryOf(r, addr), net: netHash,
+				room: pulseKey(chain, court), cell: s.cellOf(addr)}
 			hungUp := func() bool {
 				s.hold.enter(who)
 				defer s.hold.leave(who)

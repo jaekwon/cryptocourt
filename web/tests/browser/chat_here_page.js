@@ -300,6 +300,75 @@ const HERE = {
   ok("an unplaceable or empty country code draws no dot",
      odd.dots === 1 && odd.titles.join() === "US · 2", JSON.stringify(odd));
 
+  /* ---- CELLS, WHICH ARE FINER THAN A COUNTRY AND STILL NAME NOTHING --------
+     Asked for as "US isn't enough, don't we have more position information from
+     the ip?" — so the service reads a city-level file and reports a coarse grid
+     cell per connection. The page draws those instead of one dot per country.
+     THE COUNTRY PATH IS THE FALLBACK, so both are exercised: a deployment whose
+     city file could not be fetched must still draw the map it drew before. */
+  const cellPath = await page.evaluate(() => {
+    const mk = (d) => {
+      const host = document.createElement("div");
+      host.innerHTML = hereMapHtml(d);
+      document.body.appendChild(host);
+      const svg = host.querySelector("svg");
+      const dots = [...host.querySelectorAll("circle.heremapdot")];
+      const r = {
+        n: dots.length,
+        titles: [...host.querySelectorAll("title")].map(t => t.textContent),
+        at: dots.map(c => [+c.getAttribute("cx"), +c.getAttribute("cy")]),
+      };
+      host.remove();
+      return r;
+    };
+    const cells = {
+      by_country: [{cc: "US", n: 9}], elsewhere: 0, geo_known: true,
+      cells_known: true,
+      by_cell: [{lat: 37.5, lon: -122.5, n: 5}, {lat: 42.5, lon: -72.5, n: 3},
+                {lat: 52.5, lon: 12.5, n: 2}],
+    };
+    return {
+      cells: mk(cells),
+      // Same payload with the cells removed: the country fallback.
+      country: mk({by_country: [{cc: "US", n: 9}], elsewhere: 0,
+                   geo_known: true, cells_known: false}),
+      // Where 37.5,-122.5 must land, worked out from the projection rather than
+      // read off the render: x = (-122.5+180)/360*720, y = (84-37.5)/140*280.
+      want: [(-122.5 + 180) / 360 * 720, (84 - 37.5) / 140 * 280],
+    };
+  });
+  ok(`three cells draw three lights (${cellPath.cells.n})`,
+     cellPath.cells.n === 3, JSON.stringify(cellPath.cells));
+  /* AND THE COUNTRY ROW BESIDE THEM DRAWS NOTHING. Cells are strictly finer, so
+     drawing both would put two lights on the same people — and the US dot would
+     sit in Kansas next to the two real ones. */
+  ok("...and the country row alongside them is not drawn as well",
+     cellPath.cells.n === 3, JSON.stringify(cellPath.cells.at));
+  /* THE HOVER NAMES NO PLACE, which is the privacy property of this breakdown:
+     a cell is ~550km across, the service never sent what is inside it, and a
+     nearest-city label invented here would undo the whole point. */
+  ok(`...labelled with a count and no place (${JSON.stringify(cellPath.cells.titles)})`,
+     cellPath.cells.titles.length === 3
+     && cellPath.cells.titles.every(t => /^\d+ connections?$/.test(t)),
+     JSON.stringify(cellPath.cells.titles));
+  ok("...and no two-letter country code anywhere in them",
+     cellPath.cells.titles.every(t => !/[A-Z]{2}/.test(t)),
+     JSON.stringify(cellPath.cells.titles));
+  /* AT THE COORDINATE THE SERVICE SENT, through the same projection the land
+     uses. A cell drawn through a different transform than the coastline would
+     put every light in the sea, consistently, and look deliberate. */
+  ok(`...at the position sent (${cellPath.cells.at[0]} vs ${cellPath.want.map(v=>+v.toFixed(1))})`,
+     Math.abs(cellPath.cells.at[0][0] - cellPath.want[0]) < 1.5
+     && Math.abs(cellPath.cells.at[0][1] - cellPath.want[1]) < 1.5,
+     JSON.stringify({got: cellPath.cells.at[0], want: cellPath.want}));
+  /* AND WITHOUT CELLS IT IS THE OLD MAP EXACTLY. This is the arm that keeps a
+     country-file deployment working rather than showing an empty world. */
+  ok(`a service that cannot place draws one light per country (${cellPath.country.n})`,
+     cellPath.country.n === 1, JSON.stringify(cellPath.country));
+  ok("...still labelled with the country and its count",
+     /^[A-Z]{2} · \d+$/.test(cellPath.country.titles[0] || ""),
+     JSON.stringify(cellPath.country.titles));
+
   /* ---- THE NIGHT SIDE, CHECKED AGAINST THE SKY RATHER THAN AGAINST ITSELF ---
      Asked for as "the night time city lights". The shaded half is where the sun
      is really below the horizon, so the honest way to test it is with facts

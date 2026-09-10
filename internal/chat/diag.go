@@ -12,6 +12,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/jaekwon/kourt/internal/geo"
 )
 
 // WHAT A DIAGNOSTICS PAGE MAY SAY, and the list is short on purpose.
@@ -130,17 +132,63 @@ type countryCount struct {
 
 // hereFloor is how many connections a country needs before it is named.
 //
-// TWO, AND THE CHOICE IS THE WHOLE PRIVACY ARGUMENT. At one, a country with a
-// single reader in it is a public statement that one particular person is in
-// that country, and on a quiet site that is often the only reader there. At two,
-// the smallest thing the page can say is "two connections are in Norway", which
-// places neither of them and still shows the operator where the room is.
+// ONE, WHICH IS THE OWNER'S CALL AND A REAL TRADE. It was two, and the argument
+// for two is still true: at one, a country with a single reader in it is a
+// public statement that one particular person is in that country, and on a
+// quiet site that is often the only reader there. At two the smallest thing the
+// page could say was "two connections are in Norway", which places neither.
 //
-// It is not anonymity in any formal sense and is not claimed as such: two tabs
-// belonging to one person clear the floor, and a country with two readers is a
-// small set. It is the floor at which the page stops reporting individuals, and
-// the honest description of it is a reticence, not a guarantee.
-const hereFloor = 2
+// It was changed on the instruction "i want everyone to see the same thing",
+// after the alternative was put and declined — the reader's own country sent
+// only to that reader, which would have shown each person their own position
+// and nobody else's. The point of this page is now that everyone sees the same
+// map, and a map that hides the only reader in a country is not that.
+//
+// SO THE RETICENCE IS GONE AND THE PAGE SAYS SO. What is still true: nothing
+// joins a country to a name, a message, or a room, and the count is of held
+// connections rather than of people. What is no longer true is that a lone
+// reader is unplaced — see the prose on the page, which was corrected with
+// this line rather than left promising it.
+const hereFloor = 1
+
+// cellCount is one cell's dot: where to draw it and how many are in it.
+type cellCount struct {
+	Lat float64 `json:"lat"`
+	Lon float64 `json:"lon"`
+	N   int     `json:"n"`
+}
+
+// hereCells applies the floor to the cell tally and turns what survives into
+// coordinates. Sorted by count then position, so the page does not reshuffle
+// between two polls that saw the same room.
+//
+// NO ELSEWHERE OF ITS OWN. A connection that cannot be placed, or whose cell is
+// under the floor, is already counted in the country table's elsewhere; a second
+// number for the same people would invite adding them up. The map showing fewer
+// than the table is the honest consequence of the map being the finer view.
+func hereCells(byCell map[uint16]int) []cellCount {
+	out := make([]cellCount, 0, len(byCell))
+	for cell, n := range byCell {
+		if n < hereFloor {
+			continue
+		}
+		lat, lon, ok := geo.CellCentre(cell)
+		if !ok {
+			continue
+		}
+		out = append(out, cellCount{Lat: lat, Lon: lon, N: n})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].N != out[j].N {
+			return out[i].N > out[j].N
+		}
+		if out[i].Lat != out[j].Lat {
+			return out[i].Lat > out[j].Lat
+		}
+		return out[i].Lon < out[j].Lon
+	})
+	return out
+}
 
 // hereRows turns the live tally into the published list plus the elsewhere
 // count, applying the floor. Sorted by count descending, then by code, so the
@@ -648,6 +696,14 @@ type holdGauge struct {
 	// byRoom is connections per room, keyed by pulseKey. Only its size is
 	// published, for the same reason.
 	byRoom map[string]*keyState
+
+	// byCell is connections per coarse grid cell — the map's own tally.
+	//
+	// KEYED BY CELL, NOT BY COORDINATE, which is the point: the finest thing
+	// this process holds about where a reader is, is which ~550km square they
+	// are in. It goes through exactly the same window and the same floor as
+	// byCC, so a cell is named on the same terms a country is.
+	byCell map[uint16]*keyState
 }
 
 // holder is what a held connection has in common with others. Not a person and
@@ -658,6 +714,10 @@ type holdGauge struct {
 // poll updates a tally rather than adding a second one.
 type holder struct {
 	cc, net, room string
+	// cell is the coarse grid cell, 0 when this build cannot place the address.
+	// A NUMBER, NOT A NAME: see internal/geo/cell.go for why the coordinate it
+	// came from is not kept anywhere, including here.
+	cell uint16
 }
 
 func (g *holdGauge) tick() time.Time {
@@ -682,6 +742,9 @@ func (g *holdGauge) enter(h holder) {
 		g.byNet = map[string]*keyState{}
 		g.byRoom = map[string]*keyState{}
 	}
+	if g.byCell == nil {
+		g.byCell = map[uint16]*keyState{}
+	}
 	t := g.tick()
 	bump(g.byCC, h.cc, t)
 	if h.net != "" {
@@ -689,6 +752,10 @@ func (g *holdGauge) enter(h holder) {
 	}
 	if h.room != "" {
 		bump(g.byRoom, h.room, t)
+	}
+	// Cell 0 is "could not place", which is not a place and must not become one.
+	if h.cell != 0 {
+		bump(g.byCell, h.cell, t)
 	}
 }
 
@@ -699,6 +766,9 @@ func (g *holdGauge) leave(h holder) {
 	drop(g.byCC, h.cc)
 	drop(g.byNet, h.net)
 	drop(g.byRoom, h.room)
+	if h.cell != 0 {
+		drop(g.byCell, h.cell)
+	}
 }
 
 // bump records one more in-flight poll for a key, and re-stamps the peak when
@@ -711,7 +781,7 @@ func (g *holdGauge) leave(h holder) {
 // key that still has something in flight and that is what actually keeps a
 // steady poller in the room. The `>=` is kept for saying plainly what a bump
 // means, not because anything depends on it.
-func bump(m map[string]*keyState, k string, t time.Time) {
+func bump[K comparable](m map[K]*keyState, k K, t time.Time) {
 	s := m[k]
 	if s == nil {
 		s = &keyState{}
@@ -728,7 +798,7 @@ func bump(m map[string]*keyState, k string, t time.Time) {
 // that is the window's job, in present() — but it never lets live go negative,
 // because a leave without a matching enter would otherwise poison the tally for
 // the life of the process.
-func drop(m map[string]*keyState, k string) {
+func drop[K comparable](m map[K]*keyState, k K) {
 	if m == nil {
 		return
 	}
@@ -751,17 +821,26 @@ func (s *keyState) present(t time.Time) int {
 // so the maps stay the size of the room without needing a timer.
 func (g *holdGauge) sweep(t time.Time) {
 	for _, m := range []map[string]*keyState{g.byCC, g.byNet, g.byRoom} {
-		for k, s := range m {
-			if t.Sub(s.peakAt) <= holdLinger {
-				continue
-			}
-			if s.live == 0 {
-				delete(m, k)
-				continue
-			}
-			s.peak = s.live
-			s.peakAt = t
+		sweepMap(m, t)
+	}
+	sweepMap(g.byCell, t)
+}
+
+// sweepMap is sweep for one tally. Split out only because byCell is keyed by a
+// number and the other three by a string; the rule is identical and must stay
+// that way — a cell that expired on different terms from a country would make
+// the map and the table disagree about who is in the room.
+func sweepMap[K comparable](m map[K]*keyState, t time.Time) {
+	for k, s := range m {
+		if t.Sub(s.peakAt) <= holdLinger {
+			continue
 		}
+		if s.live == 0 {
+			delete(m, k)
+			continue
+		}
+		s.peak = s.live
+		s.peakAt = t
 	}
 }
 
@@ -769,6 +848,14 @@ func (g *holdGauge) sweep(t time.Time) {
 // reference: the caller marshals JSON, and a map still being written to while
 // encoding is a data race and a torn payload.
 func (g *holdGauge) snapshot() (byCC map[string]int, nets, rooms int) {
+	byCC, nets, rooms, _ = g.snapshotAll()
+	return byCC, nets, rooms
+}
+
+// snapshotAll is snapshot plus the cell tally. Two entry points rather than one
+// with a discarded return, because every existing caller wants three things and
+// only the presence page wants the fourth.
+func (g *holdGauge) snapshotAll() (byCC map[string]int, nets, rooms int, byCell map[uint16]int) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	t := g.tick()
@@ -786,7 +873,13 @@ func (g *holdGauge) snapshot() (byCC map[string]int, nets, rooms int) {
 	// peak reset to a live count above zero. The loop was guarding a state that
 	// cannot occur, which is worse than no guard — it invites the reader to
 	// believe in it.
-	return byCC, len(g.byNet), len(g.byRoom)
+	byCell = make(map[uint16]int, len(g.byCell))
+	for k, v := range g.byCell {
+		if n := v.present(t); n > 0 {
+			byCell[k] = n
+		}
+	}
+	return byCC, len(g.byNet), len(g.byRoom), byCell
 }
 
 // presentTotal is every held connection the window can see, country known or
@@ -841,6 +934,26 @@ type herePayload struct {
 	// the healthy-looks-like-broken trap the bot's Failures field exists for.
 	GeoKnown bool `json:"geo_known"`
 
+	// ByCell is where the map draws its dots: one row per coarse grid cell that
+	// has at least hereFloor connections in it, at the CENTRE of the cell.
+	//
+	// COORDINATES, NOT A CELL NUMBER AND NOT A PLACE NAME. The page needs a
+	// position to draw and nothing else, so the grid arithmetic stays on this
+	// side and the wire carries the answer. There is no city here, no region,
+	// and no way back from the number to either — see internal/geo/cell.go.
+	//
+	// THE SAME FLOOR AS A COUNTRY, and that is a judgement worth stating: a cell
+	// is ~550km on a side, which is coarser than a good many countries, so
+	// naming one on the same terms is not a relaxation of hereFloor. What it
+	// buys is a map with several dots across a populous country instead of one
+	// dot in the middle of it.
+	ByCell []cellCount `json:"by_cell"`
+
+	// CellsKnown distinguishes "nobody cleared the floor in any cell" from "this
+	// build has only a country file and cannot place anybody" — the same
+	// healthy-looks-like-broken distinction GeoKnown exists for, one level down.
+	CellsKnown bool `json:"cells_known"`
+
 	// Events is the change sequence number — see pulse.changes. The page shows
 	// a flash when it moves, so a reader can see the site is alive.
 	//
@@ -892,10 +1005,11 @@ func (s *Server) herePresence(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-	byCC, nets, rooms := s.hold.snapshot()
+	byCC, nets, rooms, byCell := s.hold.snapshotAll()
 	out := herePayload{Networks: nets, Rooms: rooms, GeoKnown: s.Geo != nil,
-		Events: s.pulse().changeCount()}
+		CellsKnown: s.CellsKnown(), Events: s.pulse().changeCount()}
 	out.ByCountry, out.Elsewhere = hereRows(byCC)
+	out.ByCell = hereCells(byCell)
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, out)
 }
