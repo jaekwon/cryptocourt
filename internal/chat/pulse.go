@@ -1,6 +1,9 @@
 package chat
 
-import "sync"
+import (
+	"sync"
+	"sync/atomic"
+)
 
 // A CHANGE SIGNAL, so a reader does not have to ask again to find out that
 // nothing happened.
@@ -57,6 +60,26 @@ type pulse struct {
 	// nothing narrower. It costs a post one extra close and costs readers
 	// nothing: no reader selects on it.
 	any chan struct{}
+
+	// changes counts how many times anything has happened anywhere since this
+	// process started.
+	//
+	// A SEQUENCE NUMBER, NOT A STATISTIC. It exists so a reader watching the
+	// presence page can tell "something happened" from "your poll timed out"
+	// without being told WHAT happened — the number is the only thing published,
+	// and one increment carries no court, no name, no location and no content.
+	// Two events arriving inside one poll are one increment of two, which the
+	// page reads as "at least one thing happened"; nothing is lost that this
+	// page is entitled to know.
+	//
+	// AN ATOMIC BESIDE THE LOCK, not a field inside it, so a reader can compare
+	// against it without waiting on a post. The bump happens under the lock
+	// because its callers already hold it; the read must not need it.
+	//
+	// IT RESETS ON RESTART, and that is fine and deliberate: a client comparing
+	// against a stale higher number sees a mismatch and treats it as a change,
+	// which is exactly right — the process it was talking to is gone.
+	changes atomic.Int64
 }
 
 func newPulse() *pulse {
@@ -75,9 +98,13 @@ func (p *pulse) watchAny() <-chan struct{} {
 
 // bumpAny closes and replaces the observer channel. Callers hold the lock.
 func (p *pulse) bumpAny() {
+	p.changes.Add(1)
 	close(p.any)
 	p.any = make(chan struct{})
 }
+
+// changeCount is the sequence number a client compares against. See changes.
+func (p *pulse) changeCount() int64 { return p.changes.Load() }
 
 // watch hands back the two channels a waiter selects on. TAKEN BEFORE THE
 // CALLER LOOKS AT THE STORE, always: a post landing between the look and the

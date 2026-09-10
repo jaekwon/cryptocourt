@@ -840,6 +840,15 @@ type herePayload struct {
 	// has no country file at all", which are the same empty list otherwise —
 	// the healthy-looks-like-broken trap the bot's Failures field exists for.
 	GeoKnown bool `json:"geo_known"`
+
+	// Events is the change sequence number — see pulse.changes. The page shows
+	// a flash when it moves, so a reader can see the site is alive.
+	//
+	// A NUMBER AND NOTHING ELSE, which is what makes it publishable here. It
+	// says how many things have happened, never what or where or by whom, and
+	// it cannot be joined to the country tally beside it: the tally is a census
+	// of held connections and this is a count of events, with no key in common.
+	Events int64 `json:"events"`
 }
 
 // herePresence answers it. GET only, and never cached: it is a live count.
@@ -855,8 +864,37 @@ func (s *Server) herePresence(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, http.StatusMethodNotAllowed, "GET only")
 		return
 	}
+	/* HOLDING OPEN UNTIL SOMETHING HAPPENS, so the page can show a change as it
+	   lands rather than up to one interval later. Same shape as the messages
+	   poll: `since` is what the client last saw, `wait` is how long it will
+	   hold, both optional — a client that sends neither is answered at once,
+	   which is what keeps this safe to deploy in either order.
+
+	   NOT COUNTED IN THE GAUGE, and this is the one thing that would quietly
+	   undo the number it is reporting. The tally means "people with a chat
+	   open"; somebody reading THIS page has no chat open, and entering them
+	   here would make the presence figure include its own audience — a page
+	   that reports a bigger room the longer you look at it. The messages
+	   handler enters the gauge; this one deliberately never does. */
+	since, _ := strconv.ParseInt(r.URL.Query().Get("since"), 10, 64)
+	if wait := waitFor(r.URL.Query().Get("wait")); wait > 0 {
+		// Watched BEFORE the count is re-read, for the reason in pulse.watch: a
+		// change landing between the two would close a channel nobody held.
+		ch := s.pulse().watchAny()
+		if since == s.pulse().changeCount() {
+			timer := time.NewTimer(wait)
+			defer timer.Stop()
+			select {
+			case <-ch:
+			case <-r.Context().Done():
+				return // the client hung up; there is nobody to answer
+			case <-timer.C:
+			}
+		}
+	}
 	byCC, nets, rooms := s.hold.snapshot()
-	out := herePayload{Networks: nets, Rooms: rooms, GeoKnown: s.Geo != nil}
+	out := herePayload{Networks: nets, Rooms: rooms, GeoKnown: s.Geo != nil,
+		Events: s.pulse().changeCount()}
 	out.ByCountry, out.Elsewhere = hereRows(byCC)
 	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, out)

@@ -1141,3 +1141,170 @@ func TestGeoKnownSaysWhetherThereIsAFileAtAll(t *testing.T) {
 		t.Errorf("a file is loaded, so geo_known must be true: %v", d["geo_known"])
 	}
 }
+
+// ---- the change signal, which is what makes the map flash ------------------
+
+// hereOf reads the presence payload through the handler, with whatever query
+// the caller wants. Through the handler rather than the struct, because the
+// long poll is part of what is being tested.
+func hereOf(t *testing.T, srv *Server, query string) map[string]any {
+	t.Helper()
+	rec := do(t, srv, httptest.NewRequest(http.MethodGet, "/api/chat/here"+query, nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("here returned %d: %s", rec.Code, rec.Body.String())
+	}
+	var out map[string]any
+	if err := json.Unmarshal(rec.Body.Bytes(), &out); err != nil {
+		t.Fatalf("here is not JSON: %v", err)
+	}
+	return out
+}
+
+// EVERY CHANGE MOVES THE NUMBER, and nothing else about the change is published.
+func TestHerePublishesAChangeCountAndNothingAboutTheChange(t *testing.T) {
+	srv, _, _ := newServer(t)
+	was, _ := hereOf(t, srv, "")["events"].(float64)
+	/* THROUGH THE HANDLER, NOT THE STORE, and that distinction is the whole
+	   reliability of this feature. Store.Post does not fire the pulse — the HTTP
+	   handler does, right after it, and so does the bot after its own reply. A
+	   first version of this test wrote straight to the store and measured a
+	   counter that never moved, which is the same gap that once left the site's
+	   answerer deaf to every message. Posting the way a reader does is the only
+	   version of this test worth having. */
+	if rec := do(t, srv, postReq(t, "/api/chat/dev/orem", "alice",
+		"something happened in here")); rec.Code != 200 {
+		t.Fatalf("post: %d %s", rec.Code, rec.Body)
+	}
+	now, _ := hereOf(t, srv, "")["events"].(float64)
+	if now <= was {
+		t.Fatalf("a post must move the change count: %v then %v", was, now)
+	}
+	/* AND THE PAYLOAD STILL SAYS NOTHING ELSE. The body is checked as raw text
+	   because a leak could be anywhere in it: the court that changed, the
+	   address that changed it, and what was said are all things the flash must
+	   not carry. */
+	rec := do(t, srv, httptest.NewRequest(http.MethodGet, "/api/chat/here", nil))
+	body := rec.Body.String()
+	for _, forbidden := range []string{"orem", "alice", "something happened"} {
+		if strings.Contains(body, forbidden) {
+			t.Fatalf("the presence payload named %q: %s", forbidden, body)
+		}
+	}
+}
+
+// A POLL THAT ALREADY KNOWS THE NUMBER WAITS; ONE THAT DOES NOT IS ANSWERED AT
+// ONCE. Both halves, because a long poll that never waits is an interval with
+// extra steps, and one that never returns early is a bug nobody sees until the
+// page stops updating.
+func TestHereLongPollWaitsOnlyWhenThereIsNothingNew(t *testing.T) {
+	// The clock is needed because this test posts twice and the abuse limit is
+	// one message per address every two seconds — a real limit, so the test
+	// moves time rather than asking to be exempted from it.
+	srv, _, clock := newServer(t)
+	/* SOMETHING HAS TO HAVE HAPPENED FIRST. A first version of this asked for
+	   `since=0` on a fresh server and expected an immediate answer — but a fresh
+	   server's count IS zero, so the client was up to date and holding was
+	   correct. The test was wrong, not the handler. */
+	if rec := do(t, srv, postReq(t, "/api/chat/dev/orem", "alice",
+		"so the count is not zero")); rec.Code != 200 {
+		t.Fatalf("post: %d %s", rec.Code, rec.Body)
+	}
+	at := hereOf(t, srv, "")["events"].(float64)
+	if at <= 0 {
+		t.Fatalf("the count should have moved before this test begins, got %v", at)
+	}
+
+	// BEHIND THE COUNT: answered immediately, no waiting.
+	done := make(chan time.Duration, 1)
+	go func() {
+		t0 := time.Now()
+		hereOf(t, srv, "?since=0&wait=20")
+		done <- time.Since(t0)
+	}()
+	select {
+	case d := <-done:
+		if d > 3*time.Second {
+			t.Fatalf("a client behind the count should not wait, took %s", d)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("a client behind the count waited instead of being answered")
+	}
+
+	// UP TO DATE: holds, and a post releases it. The release is what proves the
+	// wait is on the change signal rather than on a timer.
+	rel := make(chan float64, 1)
+	go func() {
+		rel <- hereOf(t, srv, fmt.Sprintf("?since=%d&wait=20", int64(at)))["events"].(float64)
+	}()
+	select {
+	case <-rel:
+		t.Fatal("a client that is up to date must hold, not answer at once")
+	case <-time.After(300 * time.Millisecond):
+	}
+	*clock = clock.Add(3 * time.Second)
+	if rec := do(t, srv, postReq(t, "/api/chat/dev/orem", "bob",
+		"and this releases the waiter")); rec.Code != 200 {
+		t.Fatalf("post: %d %s", rec.Code, rec.Body)
+	}
+	select {
+	case got := <-rel:
+		if got <= at {
+			t.Fatalf("the released poll reported a stale count: %v after %v", got, at)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("a post did not release the presence poll")
+	}
+
+	/* AND A CLIENT AHEAD OF THE COUNT IS ANSWERED AT ONCE, which is the restart
+	   case rather than a curiosity: the counter resets when the process does, so
+	   a page that has been open across a restart is holding a number higher than
+	   anything the new process will produce. Treating "not equal" as "something
+	   changed" is what stops that page from hanging for a full wait on every
+	   poll, forever. */
+	ahead := make(chan time.Duration, 1)
+	go func() {
+		t0 := time.Now()
+		hereOf(t, srv, "?since=999999&wait=20")
+		ahead <- time.Since(t0)
+	}()
+	select {
+	case d := <-ahead:
+		if d > 3*time.Second {
+			t.Fatalf("a client ahead of the count should not wait, took %s", d)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("a client ahead of the count hung; a restart would hang every open page")
+	}
+}
+
+// AND READING THIS PAGE DOES NOT MAKE THE ROOM LOOK BUSIER.
+//
+// THE ONE MISTAKE THAT WOULD UNDO THE NUMBER. The tally means "people with a
+// chat open". Somebody reading the presence page has no chat open, so if this
+// handler entered the gauge the way the messages handler does, the figure would
+// count its own audience — a page reporting a bigger room the longer you look at
+// it, and worse, two readers of THIS page in one country would be enough to name
+// that country on a site where nobody is chatting at all.
+func TestReadingThePresencePageIsNotPresence(t *testing.T) {
+	srv, _, _ := newServer(t)
+	held := make(chan struct{})
+	go func() {
+		defer close(held)
+		at := srv.pulse().changeCount()
+		hereOf(t, srv, fmt.Sprintf("?since=%d&wait=2", at))
+	}()
+	// While that poll is parked, the gauge must show nobody.
+	time.Sleep(400 * time.Millisecond)
+	if n := srv.hold.now.Load(); n != 0 {
+		t.Fatalf("a presence reader was counted as a held chat connection: %d", n)
+	}
+	if total := srv.hold.presentTotal(); total != 0 {
+		t.Fatalf("a presence reader reached the windowed tally: %d", total)
+	}
+	byCC, nets, rooms := srv.hold.snapshot()
+	if len(byCC) != 0 || nets != 0 || rooms != 0 {
+		t.Fatalf("a presence reader reached the tallies: %v, %d nets, %d rooms",
+			byCC, nets, rooms)
+	}
+	<-held
+}
