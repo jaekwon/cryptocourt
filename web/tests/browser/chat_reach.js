@@ -537,6 +537,94 @@ const HEIGHTS = [1000, 900, 800, 760, 700, 620];
        before !== after, "the grip swallowed the button's click");
   }
 
+  /* ── THE SEAM MUST NOT COVER THE LINKS ──────────────────────────────────
+     REPORTED, with a screenshot: "sometimes the left sidebar other nav items
+     like Realm Parameters shows under the CHAT RESET EXPAND bar", and in the
+     image "? How it works" was clipped mid-glyph by the bar's top edge while
+     "Realm parameters" showed below it.
+     THE CAUSE WAS position:sticky INSIDE A SCROLLER. .rail.chatsized makes the
+     nav scrollable, the seam was the nav's last child pinned at bottom:0, and
+     so it floated over whichever links landed in the bottom strip — at full
+     expansion the nav was a 44px window behind a 42px bar. It is now a SIBLING
+     of the nav, which cannot overlap it at all.
+     GEOMETRY, AND NOT HIT-TESTING, and both wrong versions are worth recording
+     because the file's other arm above uses hit-testing correctly.
+       elementFromPoint answers "what is on TOP here". Over the old sticky bar
+     the answer was always the bar itself — opaque, z-index:2 — so an arm built
+     on it PASSED against the very page the screenshot was taken from. It cannot
+     see what is underneath, and underneath is the whole bug.
+       A raw rect overlap fails the other way: a link scrolled out of the nav
+     still reports its unclipped rect, which lands in the bar's band and reads
+     as an overlap no reader can see. That version reported three false
+     overlaps on the FIXED page.
+       What is correct is each link's rect CLIPPED TO THE NAV'S OWN BOX — the
+     nav clips its overflow, so that intersection is what is really painted —
+     tested against the bar's band. Measured: the reported pair on the old page,
+     nothing on the new one. */
+  {
+    const grip = await page.$('#railchathead');
+    const gb = await grip.boundingBox();
+    const gx = Math.round(gb.x + gb.width / 2), gy = Math.round(gb.y + gb.height / 2);
+    const covering = () => page.evaluate(() => {
+      const g = document.getElementById('railchathead').getBoundingClientRect();
+      const nav = document.querySelector('.rail .nav');
+      const nb = nav.getBoundingClientRect();
+      return [...nav.children]
+        .filter(e => e.id !== 'railchathead')
+        .map(e => {
+          const r = e.getBoundingClientRect();
+          // what of this row is actually painted, the nav having clipped it
+          const top = Math.max(r.top, nb.top), bottom = Math.min(r.bottom, nb.bottom);
+          return {t: (e.textContent || e.tagName).trim().slice(0, 24),
+                  under: bottom > top + 0.5 && bottom > g.top + 0.5 && top < g.bottom - 0.5};
+        })
+        .filter(e => e.under).map(e => e.t);
+    });
+    await page.mouse.move(gx, gy); await page.mouse.down();
+    // At three sizes, because the bug showed different links at each: the
+    // ceiling, a middling size, and the floor, which is where a reader who
+    // drags down ends up and where the reported pair appeared.
+    for (const [label, dy] of [["a middling size", -150], ["the ceiling", -900], ["the floor", 400]]) {
+      await page.mouse.move(gx, gy + dy, {steps: 8});
+      const c = await covering();
+      ok(`no nav item is painted under the seam at ${label}`, c.length === 0, c.join(", "));
+    }
+    /* AND THE LOG STAYS WHERE THE READER PUT IT once the size has stopped
+       moving. REPORTED as "it ends up shifting the chat content up higher while
+       the CHAT RESET EXPAND bar stays still... it's super weird": setSize
+       re-pinned the log to its bottom on every pointermove, including the ones
+       past a clamp that changed nothing, so the content lurched while the bar
+       was frozen. MEASURED at the floor — --chath stayed 319px for every sample
+       and the log's scrollTop went 0 -> 213.
+       THE SCROLL IS MOVED FIRST, ON PURPOSE. At the bottom already, a re-pin is
+       indistinguishable from leaving it alone, so the reader's own scroll is
+       what makes the two outcomes different. */
+    const at = () => page.evaluate(() => ({
+      chath: document.querySelector('.rail').style.getPropertyValue('--chath'),
+      top: Math.round(document.querySelector('#railchat .chatlog').scrollTop),
+    }));
+    /* THE CLAMP IS REACHED AND PROVEN FIRST, which the first version of this arm
+       got wrong: it sampled at +400, where the size was still 415px and still
+       shrinking, so the log re-pinned for the honest reason and the arm failed
+       against a correct fix. Two moves past the floor with the same --chath is
+       what says the drag has actually stopped mattering. */
+    await page.mouse.move(gx, gy + 1200, {steps: 10});
+    const clamped = await at();
+    await page.mouse.move(gx, gy + 1300, {steps: 4});
+    const still = await at();
+    ok(`the drag reaches a clamp and stops there (${clamped.chath})`,
+       still.chath === clamped.chath,
+       JSON.stringify({clamped, still}) + " — the arms below would prove nothing");
+    await page.evaluate(() => { document.querySelector('#railchat .chatlog').scrollTop = 0; });
+    await page.mouse.move(gx, gy + 1700, {steps: 10});
+    const later = await at();
+    await page.mouse.up();
+    ok(`dragging further past the clamp moves nothing (${clamped.chath})`,
+       later.chath === clamped.chath, JSON.stringify({clamped, later}));
+    ok("...and does not yank the log back to the bottom",
+       later.top === 0, JSON.stringify({expected: 0, got: later.top}));
+  }
+
   ok("no page errors", errs.length === 0, errs.slice(0, 2).join(" | "));
 
   await browser.close();
