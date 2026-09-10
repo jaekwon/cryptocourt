@@ -512,6 +512,37 @@ const HERE = {
      JSON.stringify(nogeo.text.replace(/\s+/g, " ").slice(0, 160)));
 
 
+  /* ---- AND THERE IS SOMEWHERE TO SAY IT ------------------------------------
+     Reported as "while i can see the globe, the chat disappeared". railChatFor
+     only matched /c/ and /raw/ routes, so every other page tore the rail's chat
+     down — right for /about and /me, which are not rooms, and wrong here: this
+     page prints how many people have a chat open and gave a reader no way to
+     say anything to any of them.
+     THE META COURT IS THE HOST, because it is the one room that belongs to no
+     single subject, which is what a page about the site itself needs.
+     ASSERTED AS THE COURT, not merely as "a panel is visible": mounting the
+     wrong court's room here would look identical and read the wrong transcript. */
+  await page.goto(PAGE + '#/here', {waitUntil: 'domcontentloaded'});
+  await new Promise(r => setTimeout(r, 3500));
+  const railed = await page.evaluate(() => {
+    const rc = document.getElementById('railchat');
+    return {court: typeof RAILCHATSLUG !== 'undefined' ? RAILCHATSLUG : '(no RAILCHATSLUG)',
+            visible: !!(rc && !rc.hidden),
+            composer: !!(rc && rc.querySelector('.chatinput'))};
+  });
+  ok("the globe carries the meta court's chat", railed.court === 'meta', JSON.stringify(railed));
+  ok("...and it is a panel a reader can type into",
+     railed.visible && railed.composer, JSON.stringify(railed));
+  /* AND NOWHERE ELSE GAINED ONE. The change is a single route, and a regex that
+     grew to match /me or the directory would put a room on pages that are not
+     one. */
+  for (const r of ['/about', '/me', '/']) {
+    await page.goto(PAGE + '#' + r, {waitUntil: 'domcontentloaded'});
+    await new Promise(z => setTimeout(z, 2200));
+    const off = await page.evaluate(() => typeof RAILCHATSLUG !== 'undefined' ? RAILCHATSLUG : '?');
+    ok(`...and ${r} still has no chat`, off === null, 'court=' + String(off));
+  }
+
   ok("no page errors", errs.length === 0, errs.slice(0, 2).join(" | "));
 
   console.log(fail ? `\n${fail} FAILURES` : "\nALL PASS");

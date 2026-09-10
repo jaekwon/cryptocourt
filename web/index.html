@@ -7385,7 +7385,13 @@ function railChatFor(hash){
   const rh = document.getElementById("railchathead");
   if(!rc) return;
   const m = /^\/(?:c|raw)\/([a-z0-9-]+)/.exec(hash || "");
-  const slug = m ? m[1] : null;
+  /* AND THE GLOBE TALKS IN THE META COURT. Every route that is not a court's
+     tore the chat down, which is right for most of them — /about and /me are
+     not places with a room. The globe is: it is a page about who is here, and
+     it printed "8 here" beside a rail with no way to say anything to any of
+     them. The meta court is the one room that belongs to no single subject,
+     which makes it the right host for a page that is about the site itself. */
+  const slug = m ? m[1] : (/^\/here(?:$|[/?])/.test(hash || "") ? META_SLUG : null);
   if(slug === RAILCHATSLUG) return;
   if(CHATSTOP){ CHATSTOP(); CHATSTOP = null; }
   RAILCHATSLUG = slug;
