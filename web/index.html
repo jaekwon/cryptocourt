@@ -7553,8 +7553,15 @@ async function buildClip(){
   const [cs, d, note] = await Promise.all([courtStats(slug).catch(()=>null),
                                            id == null ? Promise.resolve(null) : claimDetail(slug, id),
                                            sourceNote()]);
-  const [ser, tl] = (id == null) ? [null, null] : await Promise.all([
-    claimStakeSeries(slug, id, d).catch(()=>null), claimTimeline(slug, id, d).catch(()=>null)]);
+  /* THE TIMELINE FIRST, because the series has to be asked for at the height it
+     carries — see claimStakeSeries. These used to run together, which is why
+     this ran on the node's height and drew nothing. Sequential costs one round
+     trip of latency and NOT one extra request, which is the trade worth making
+     for a card that otherwise has no chart on it. */
+  const tl = (id == null) ? null : await claimTimeline(slug, id, d).catch(()=>null);
+  const ser = (id == null) ? null
+    : await claimStakeSeries(slug, id, d, seriesHeightOf(tl, await chainHeight().catch(()=>null)))
+        .catch(()=>null);
   const bg = getComputedStyle(document.body).backgroundColor.match(/^rgb\((\d+)/);
   const isDark = bg && parseInt(bg[1], 10) < 128;
   const url = shareIsPublic() ? shareURLBase() + "#/c/" + slug + (id == null ? "" : "/" + id) : null;
@@ -16447,11 +16454,28 @@ async function claimTimeline(slug,id,d){
    handed sparkSvg() a Promise. "pts.map is not a function", on the court page,
    in both modes. Two declarations of one name in a 5,000-line single file is
    invisible to the eye; check-web-dupes.py now fails on it. */
-async function claimStakeSeries(slug,id,d){
+/* THE SERIES IS INDEXED BY THE REALM'S HEIGHT, NOT THE NODE'S, and asking on the
+   wrong axis is why the embed and the card had no chart.
+   MEASURED on kourt.xyz/#/c/covid/22: chainHeight() answers 84 — correctly, the
+   node's latest_block_height really is 84 — while the claim's own timeline puts
+   this instant at 704,880. Asked at 84 the realm returns ONE point, near
+   genesis; asked at 704,880 it returns ten. One point is below embedSpark's
+   two-point floor, so the embed printed "no recorded path for this claim yet"
+   about a claim carrying 16 GNOT a side, and the clip said the same.
+   THE CLAIM PAGE HAD ALREADY LEARNED THIS and left the note — "seriesH, not
+   nowH: it is already the realm's height for this instant" — but it fixed it at
+   its own call site, so the two OTHER readers of this function kept the bug.
+   That is what the optional height is for: the callers that hold a timeline
+   pass its height, and chainHeight() stays the fallback for the ones that do
+   not. */
+async function claimStakeSeries(slug,id,d,atH){
   if(!isLive()) return mergeStakeSeries(parseStakeSeries(d&&d.seriesH), parseStakeSeries(d&&d.seriesD), NOW);
-  const nowH = await chainHeight();
-  return nowH==null? null : fetchStakeSeries(slug,id,nowH);
+  const h = atH != null ? atH : await chainHeight();
+  return h==null? null : fetchStakeSeries(slug,id,h);
 }
+// The height the series must be read at: the realm's own for this instant, and
+// the node's only when there is no timeline to ask.
+const seriesHeightOf = (tl, nowH) => (tl && tl.now && tl.now.h != null) ? tl.now.h : nowH;
 async function fetchStakeSeries(slug,id,nowHeight){
   const [hh,dd] = await Promise.all([
     one(`ClaimSeries(${gstr(slug)},${id},${gstr("hourly")})`).catch(()=>null),
@@ -19201,9 +19225,14 @@ async function embedClaimView(slug, idS){
   // claimDetail carries the timeline only in demo mode, so this used to be
   // parseTimeline(d.timeline) — which meant a LIVE embed had no dates at all,
   // neither on the chart nor on "filed". One helper, both modes.
-  const [ser, tl] = d ? await Promise.all([claimStakeSeries(slug, id, d).catch(()=>null),
-                                           claimTimeline(slug, id, d).catch(()=>null)])
-                      : [null, null];
+  /* THE TIMELINE FIRST, then the series at the height it carries. Together they
+     read the node's height instead of the realm's, and an embed of a live claim
+     showed "no recorded path" while the claim page drew ten points from the
+     same realm — see claimStakeSeries. */
+  const tl = d ? await claimTimeline(slug, id, d).catch(()=>null) : null;
+  const ser = d ? await claimStakeSeries(slug, id, d,
+                        seriesHeightOf(tl, await chainHeight().catch(()=>null))).catch(()=>null)
+                : null;
   if(!d){
     main.innerHTML = `<div class="emb"><p class="estat">No claim ${esc(slug)}/${esc(idS)} on this source.</p>
       ${esrc(note)}
