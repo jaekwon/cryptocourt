@@ -128,6 +128,11 @@ rendertext:
 web-constants:
 	python3 scripts/check-web-constants.py
 	python3 scripts/check-media-hosts.py
+	# check-media-hosts proves the CSP's CONTENTS agree with the realm and the
+	# composer. This one proves nginx ever SENDS it: a location that declares an
+	# add_header of its own drops every inherited one, which had left the
+	# document with no policy while the JSON API carried it.
+	python3 scripts/check-nginx-headers.py
 	python3 scripts/make-demo-exhibit.py --check
 
 # Every crossing entrypoint refuses a stale realm frame. No test can assert this
