@@ -1617,8 +1617,11 @@ print("\ncheck-web-dupes")
 # "pts.map is not a function" — because the LAST declaration silently wins in
 # the overlay's one flat scope.
 control("a second declaration of an existing name", WEBPAGE,
-        "async function claimStakeSeries(slug,id,d){",
-        "async function claimSeries(slug,id,d){",
+        # THE SIGNATURE MOVED UNDER THIS PLANT. It gained an `atH` parameter and
+        # the anchor did not, so it matched nothing and the arm was running the
+        # guard against an unmodified tree — check-control-anchors caught it.
+        "async function claimStakeSeries(slug,id,d,atH){",
+        "async function claimSeries(slug,id,d,atH){",
         "declared more than",
         argv=["python3", DUPES])
 # ACROSS THE FILE BOUNDARY, which this guard could not see until it read both

@@ -1627,17 +1627,53 @@ ok("controls present", ["mt-titles","mt-ids","mz-in","mz-out","mz-fit","mz-slide
   /* PAST THE CAP AN ELLIPSIS SAYS SO, rather than the figure growing. Asked for
      as "'...' in white font not encircled" — not a circle, because a circle in
      this figure means one thread and "more than these" is not one thread.
-     IT ALSO APPEARS WHEN THERE ARE REPLIES the figure cannot place. The map reads
-     two numbers per claim, rows and threads; which reply belongs to which thread
-     is not among them, and drawing one under a particular thread would invent the
-     one thing this figure was rewritten to stop inventing. */
+     AND ONLY PAST THE CAP, which reverses what this block used to require. It
+     asserted that replies also produced an ellipsis, on the reasoning that the
+     map cannot know which reply sits under which thread and so must stand for
+     them somehow. REPORTED against the live map: "#24 has two comments in 1
+     thread (that's what the alt text says also) but the visual doesn't match".
+     It did not, and the ambiguity is the reason — in a row of thread-circles an
+     ellipsis reads as MORE THREADS, so a claim with one fully-drawn thread
+     appeared to be hiding some. Measured: covid-24 drew 1 circle plus an
+     ellipsis for 1 thread, and covid-22 drew all 5 of its threads plus an
+     ellipsis. The old clause fired whenever any thread had a reply, so the
+     figure trailed off on nearly every claim with a conversation on it.
+     THE REPLY COUNT BELONGS IN THE HOVER TITLE, which already carries it. */
   ok("more threads than fit are condensed into an ellipsis",
      /class="mcmt-x"/.test(commentClusterSvg(40, 9))
      && /\u2026/.test(commentClusterSvg(40, 9)));
-  ok("...and so are replies, which cannot be placed under a thread",
-     /class="mcmt-x"/.test(commentClusterSvg(4, 2)));
+  /* THE REPORTED CASE, PINNED AS ITSELF. Two comments in one thread is one
+     circle and nothing else: the figure must not claim there is more to see
+     when it has drawn every thread the claim has. */
+  ok("...but replies inside a shown thread do not, which was the bug",
+     !/mcmt-x/.test(commentClusterSvg(2, 1))
+     && dots(commentClusterSvg(2, 1)) === 1, commentClusterSvg(2, 1).slice(0, 120));
+  /* AND THE OTHER MEASURED CASE: every thread drawn, so nothing is hidden, even
+     though there are more comments than circles. */
+  ok("...nor when all five threads fit but carry replies between them",
+     !/mcmt-x/.test(commentClusterSvg(7, 5))
+     && dots(commentClusterSvg(7, 5)) === 5, commentClusterSvg(7, 5).slice(0, 120));
   ok("...while a claim whose every comment is its own thread needs none",
      !/mcmt-x/.test(commentClusterSvg(3, 3)));
+  /* AND THE CAP IS STILL THE LINE. One thread past it and the ellipsis comes
+     back — the arm that would fail if the fix above had simply deleted the
+     ellipsis rather than narrowing what it means.
+     THE CAP IS DERIVED, NOT IMPORTED. CMT_MAX_THREADS is outside this file's
+     source slice, and hardcoding 5 here would be a second copy of it that could
+     drift; asking the function how many circles it will ever draw is the same
+     fact read from behaviour. */
+  {
+    const cap = dots(commentClusterSvg(999, 999));
+    ok(`...and one thread past the cap of ${cap} brings it back`,
+       /mcmt-x/.test(commentClusterSvg(cap + 1, cap + 1))
+       && dots(commentClusterSvg(cap + 1, cap + 1)) === cap,
+       commentClusterSvg(cap + 1, cap + 1).slice(0, 120));
+    /* ...AND EXACTLY AT THE CAP IT DOES NOT, which is the boundary the two arms
+       share. Off by one either way fails one of them. */
+    ok(`...while exactly ${cap} threads, all drawn, needs none`,
+       !/mcmt-x/.test(commentClusterSvg(cap, cap)),
+       commentClusterSvg(cap, cap).slice(0, 120));
+  }
   /* THE THREE DOTS TOGETHER ARE ONE CIRCLE WIDE, which is the size asked for.
      Checked as ink, not as em: "…" draws 0.561 of its em in the page's own sans
      (measureText, 56.1px at 100px), and the first version assumed 0.9 and came
