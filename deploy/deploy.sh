@@ -394,7 +394,11 @@ say "country file"
   # Refreshed when older than 25 days, so a monthly file is never more than a
   # few weeks stale and a daily deploy does not re-download it.
   if [ -s \"\$GEO\" ] && [ -z \"\$(find \"\$GEO\" -mtime +25 2>/dev/null)\" ]; then
-    echo \"    have \$(wc -l < \"\$GEO\" | tr -d ' ') rows, fetched \$(date -r \"\$GEO\" +%Y-%m-%d)\"
+    # SIZE, NOT ROWS. The file is gzipped now, so wc -l counts newline BYTES in
+    # compressed data — it reported "have 332933 rows" for a file with 7,748,998
+    # of them. Decompressing 658MB to print one number every deploy is not worth
+    # it, and a number that is wrong is worse than one that is coarse.
+    echo \"    have \$(du -h \"\$GEO\" | cut -f1), fetched \$(date -r \"\$GEO\" +%Y-%m-%d)\"
     exit 0
   fi
   # ROOM FOR THE CITY FILE? It needs 82MB for itself and headroom for the
