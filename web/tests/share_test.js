@@ -483,6 +483,38 @@ ok("the clip is handed the note, the address, the series and the timeline",
    src.includes('drawClip(slug, id, d, cs ? cs.name : slug, isDark ? "dark" : "light", note, url, ser, tl)'));
 
 // --- link previews, and the promise not to fake one ------------------------
+/* THE TAGLINE MUST AGREE WITH ITSELF, IN FOUR PLACES.
+   MEASURED DRIFT, which is why this exists: the link-preview card in
+   scripts/make-og-card.js drew "Let Truth be told." while <title>, og:title and
+   twitter:title all still said "the ledger of record". Anyone who pasted a link
+   saw one tagline in the picture and a different one in the text beside it, and
+   nothing in the suite objected — the arm below only asked whether the tags
+   EXISTED.
+   THE CARD IS THE SOURCE OF TRUTH here, because it is the artefact a reader
+   actually looks at, and it is a generated PNG whose text cannot be checked by
+   reading the page. So the card's own words are read out of the generator and
+   the three head tags are required to carry them. */
+{
+  const cardSrc = fs.readFileSync(require("path").join(__dirname, "..", "..",
+    "scripts", "make-og-card.js"), "utf8");
+  const said = (cardSrc.match(/<p>([^<]+)<\/p>/) || [])[1] || "";
+  const tag = said.replace(/\.\s*$/, "").trim();
+  ok(`the card states a tagline ("${tag}")`, tag.length > 3, JSON.stringify(said));
+  for (const [what, re] of [
+    ["<title>", /<title>([^<]+)<\/title>/],
+    ["og:title", /property="og:title" content="([^"]+)"/],
+    ["twitter:title", /name="twitter:title" content="([^"]+)"/],
+  ]) {
+    const got = (src.match(re) || [])[1] || "";
+    ok(`...and ${what} carries it, not some earlier one — ${JSON.stringify(got)}`,
+       got.includes(tag), JSON.stringify({got, tag}));
+  }
+  /* AND THE ONE IT REPLACED IS GONE FROM THE SHIPPED PAGE. Named explicitly
+     rather than checked as "not stale", because a general test for staleness is
+     not a thing that can be written. */
+  ok("...and the page no longer says the tagline it replaced",
+     !/ledger of record/i.test(src), "the old tagline is still in index.html");
+}
 ok("site-level og tags exist", src.includes('property="og:title"') && src.includes('property="og:description"'));
 // A large-image card, because there is now an image worth showing: the site's
 // own drawing, which is true of every URL here in a way a claim picture is not.

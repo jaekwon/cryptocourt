@@ -84,7 +84,7 @@ ExecStart=/opt/kourt/kourtchat \
     --archive-rpc https://rpc.kourt.xyz \
     --behind-proxy \
     --trusted-proxy 127.0.0.1/32,::1/128 \
-    --geo-ranges /var/lib/kourt/geo/dbip-country.csv \
+    --geo-ranges /var/lib/kourt/geo/dbip.csv.gz \
     --bot \
     --bot-gap 10s
 

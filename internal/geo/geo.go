@@ -29,7 +29,9 @@
 package geo
 
 import (
+	"bufio"
 	"bytes"
+	"compress/gzip"
 	"encoding/csv"
 	"errors"
 	"fmt"
@@ -38,6 +40,7 @@ import (
 	"os"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -76,16 +79,27 @@ type Table struct {
 	// enough (251 in the real file) that a uint16 is never in danger.
 	ccs []string
 	idx map[string]uint16 // load time only, so a code is stored once
+
+	// cells counts spans that carry a grid cell, so HasCells can answer without
+	// walking eight million of them.
+	cells int
 }
 
+// A CELL COSTS NOTHING HERE, which is worth saying because the comment above is
+// about bytes. span4 was 4+4+2 and padded to 12 by alignment; the cell fills the
+// padding, so a table that can place a connection within ~550km is the same
+// resident size as one that can only name its country. See cell.go for why the
+// coordinate itself is not kept.
 type span4 struct {
 	lo, hi uint32
 	cc     uint16
+	cell   uint16
 }
 
 type span6 struct {
 	lo, hi [16]byte
 	cc     uint16
+	cell   uint16
 }
 
 func (t *Table) Country(a netip.Addr) string {
@@ -144,6 +158,13 @@ func (t *Table) intern(cc string) (uint16, bool) {
 // add files one span, whichever family it belongs to. lo and hi must be the same
 // family and in order; callers that cannot promise that are rejected here.
 func (t *Table) add(lo, hi netip.Addr, cc string) bool {
+	return t.addCell(lo, hi, cc, 0)
+}
+
+// addCell is add with a grid cell attached. Zero means the file had no usable
+// coordinate for the row, which every country-only file is by definition — so a
+// table loaded from one answers Cell with 0 everywhere and HasCells is false.
+func (t *Table) addCell(lo, hi netip.Addr, cc string, cell uint16) bool {
 	lo, hi = lo.Unmap(), hi.Unmap()
 	if lo.Is4() != hi.Is4() || hi.Less(lo) {
 		return false
@@ -152,13 +173,57 @@ func (t *Table) add(lo, hi netip.Addr, cc string) bool {
 	if !ok {
 		return false
 	}
+	if cell != 0 {
+		t.cells++
+	}
 	if lo.Is4() {
-		t.v4 = append(t.v4, span4{lo: be32(lo.As4()), hi: be32(hi.As4()), cc: i})
+		t.v4 = append(t.v4, span4{lo: be32(lo.As4()), hi: be32(hi.As4()), cc: i, cell: cell})
 	} else {
-		t.v6 = append(t.v6, span6{lo: lo.As16(), hi: hi.As16(), cc: i})
+		t.v6 = append(t.v6, span6{lo: lo.As16(), hi: hi.As16(), cc: i, cell: cell})
 	}
 	return true
 }
+
+// Cell is the coarse grid cell an address falls in, or 0 when this table cannot
+// place it — a country-only file, or a row the vendor had no coordinate for.
+//
+// SAME BISECTION AS Country, deliberately not merged with it. A caller that
+// wants both pays for two searches, and that caller is the presence gauge, which
+// does one lookup per long poll rather than one per request.
+func (t *Table) Cell(a netip.Addr) uint16 {
+	a = a.Unmap()
+	if a.Is4() {
+		v := be32(a.As4())
+		i := sort.Search(len(t.v4), func(i int) bool { return t.v4[i].lo > v })
+		if i == 0 {
+			return 0
+		}
+		if e := t.v4[i-1]; v <= e.hi {
+			return e.cell
+		}
+		return 0
+	}
+	b := a.As16()
+	i := sort.Search(len(t.v6), func(i int) bool { return bytes.Compare(t.v6[i].lo[:], b[:]) > 0 })
+	if i == 0 {
+		return 0
+	}
+	if e := t.v6[i-1]; bytes.Compare(b[:], e.hi[:]) <= 0 {
+		return e.cell
+	}
+	return 0
+}
+
+// HasCells reports whether this table can place anything at all. The service
+// asks so it can publish cells or fall back to countries, rather than shipping a
+// map with nothing on it and no way to tell that apart from an empty room —
+// which is the healthy-looks-like-broken trap GeoKnown already exists for.
+func (t *Table) HasCells() bool { return t.cells > 0 }
+
+// Cells reports how many spans carry one, for the same reason Countries exists:
+// a file that loaded eight million rows and placed none of them parsed wrong in
+// a way Len cannot see.
+func (t *Table) Cells() int { return t.cells }
 
 // sortSpans puts both families in ascending order of start, which is what
 // Country's bisection requires. Called once per load, never per lookup.
@@ -260,8 +325,11 @@ func LoadRanges(path string) (*Table, error) {
 		return nil, fmt.Errorf("geo: ranges: %w", err)
 	}
 	defer f.Close()
+	return loadRangesFrom(f)
+}
 
-	r := csv.NewReader(f)
+func loadRangesFrom(in io.Reader) (*Table, error) {
+	r := csv.NewReader(in)
 	r.FieldsPerRecord = -1
 	r.ReuseRecord = true // 717k rows; one record buffer rather than 717k
 	t := &Table{}
@@ -400,4 +468,162 @@ func indexOf(row []string, name string) int {
 		}
 	}
 	return -1
+}
+
+// LoadCity reads DB-IP's city-lite CSV: first address, last address, continent,
+// country, region, city, latitude, longitude. Same span shape as LoadRanges,
+// four more columns.
+//
+// WHAT IT KEEPS AND WHAT IT THROWS AWAY. The country and a grid cell. The city
+// name and the region name are read and dropped on the floor, and the
+// coordinate is turned into a cell and dropped too — see cell.go. Nothing in
+// this table can answer "which city", because nothing in it knows.
+//
+// COALESCED AS IT GOES, and this is what makes the file usable at all rather
+// than an optimisation. MEASURED: the city file is 7,748,993 v4 spans against
+// the country file's 717,000, and at 12 bytes a span that is a hundred megabytes
+// on a box the deploy notes has 1.1GB free with a chain node already on it.
+// Adjacent spans that resolve to the same country AND the same cell are
+// indistinguishable to every question this table can be asked, so they are
+// stored once.
+//
+// ONLY WHEN THEY TOUCH. A gap between two spans is address space the file says
+// nothing about, and merging across it would claim a location for addresses the
+// vendor did not place. So the merge requires hi+1 == next lo.
+//
+// THE ROWS MUST ARRIVE IN ORDER for the merge to catch anything, and DB-IP's do.
+// If they ever stop, this degrades to storing every row — slower and fatter, not
+// wrong — and Len will say so.
+func LoadCity(path string) (*Table, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("geo: city: %w", err)
+	}
+	defer f.Close()
+	return loadCityFrom(f)
+}
+
+func loadCityFrom(in io.Reader) (*Table, error) {
+	r := csv.NewReader(in)
+	r.FieldsPerRecord = -1
+	r.ReuseRecord = true
+
+	t := &Table{}
+	// The run being accumulated: nothing until the first parsable row.
+	var haveRun bool
+	var runLo, runHi netip.Addr
+	var runCC string
+	var runCell uint16
+
+	flush := func() {
+		if haveRun {
+			t.addCell(runLo, runHi, runCC, runCell)
+			haveRun = false
+		}
+	}
+	for {
+		rec, err := r.Read()
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		if len(rec) < 8 {
+			continue
+		}
+		lo, err1 := netip.ParseAddr(strings.TrimSpace(strings.Trim(rec[0], "\ufeff")))
+		hi, err2 := netip.ParseAddr(strings.TrimSpace(rec[1]))
+		if err1 != nil || err2 != nil {
+			continue
+		}
+		cc := strings.ToUpper(strings.TrimSpace(rec[3]))
+		if !ccRe.MatchString(cc) || cc == "ZZ" {
+			continue
+		}
+		// THE LAST TWO FIELDS, NOT FIELDS 7 AND 8. A city name is quoted and may
+		// carry a comma — "Washington, D.C." — and csv gives it back as one
+		// field, so the coordinate is at the end rather than at a fixed index
+		// only when nothing upstream has re-quoted it. Counting from the end is
+		// right either way.
+		lat, e1 := strconv.ParseFloat(strings.TrimSpace(rec[len(rec)-2]), 64)
+		lon, e2 := strconv.ParseFloat(strings.TrimSpace(rec[len(rec)-1]), 64)
+		cell := uint16(0)
+		if e1 == nil && e2 == nil {
+			cell = CellOf(lat, lon)
+		}
+
+		if haveRun && runCC == cc && runCell == cell && nextTo(runHi, lo) {
+			runHi = hi
+			continue
+		}
+		flush()
+		haveRun, runLo, runHi, runCC, runCell = true, lo, hi, cc, cell
+	}
+	flush()
+
+	t.sortSpans()
+	if t.Len() == 0 {
+		return nil, errors.New("geo: the city file parsed to zero spans")
+	}
+	return t, nil
+}
+
+// nextTo reports whether b is the very next address after a, which is the only
+// case two spans may be merged in. Same family only: the v4 and v6 halves of
+// this table are separate and a run must never straddle them.
+func nextTo(a, b netip.Addr) bool {
+	a, b = a.Unmap(), b.Unmap()
+	if a.Is4() != b.Is4() {
+		return false
+	}
+	return a.Next() == b
+}
+
+// Load opens a geo file and picks the parser for it, decompressing on the way
+// if it is gzipped.
+//
+// SNIFFED RATHER THAN FLAGGED, because the alternative is an operator flag that
+// can disagree with the file on disk — and the failure then is a table that
+// parsed to nothing while the flag insisted it was fine. The shape is
+// unambiguous: DB-IP's country rows are three fields and its city rows are
+// eight, so the first parsable line decides.
+//
+// GZIPPED IS THE NORMAL CASE FOR THE CITY FILE. It is 82MB compressed and 658MB
+// expanded, measured, and expanding it onto a box whose free space the deploy
+// notes as 1.1GB is a bad trade for three seconds of load time. So it is kept as
+// downloaded and read through a decompressor.
+func Load(path string) (*Table, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("geo: %w", err)
+	}
+	defer f.Close()
+
+	var src io.Reader = bufio.NewReaderSize(f, 1<<20)
+	// The gzip magic, checked by peeking rather than by trusting the extension:
+	// the file is named by whoever downloaded it.
+	br := src.(*bufio.Reader)
+	if head, err := br.Peek(2); err == nil && head[0] == 0x1f && head[1] == 0x8b {
+		zr, err := gzip.NewReader(br)
+		if err != nil {
+			return nil, fmt.Errorf("geo: gzip: %w", err)
+		}
+		defer zr.Close()
+		src = bufio.NewReaderSize(zr, 1<<20)
+	}
+
+	// The first non-empty line decides the format. Read it, then put it back in
+	// front of the stream so the parser sees the whole file.
+	sniff := src.(*bufio.Reader)
+	first, err := sniff.ReadString('\n')
+	if err != nil && err != io.EOF {
+		return nil, fmt.Errorf("geo: %w", err)
+	}
+	city := strings.Count(first, ",") >= 7
+	all := io.MultiReader(strings.NewReader(first), sniff)
+	if city {
+		return loadCityFrom(all)
+	}
+	return loadRangesFrom(all)
 }

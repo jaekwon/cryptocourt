@@ -12,6 +12,8 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/jaekwon/kourt/internal/geo"
 )
 
 func diagOf(t *testing.T, srv *Server) map[string]any {
@@ -1323,4 +1325,180 @@ func TestReadingThePresencePageIsNotPresence(t *testing.T) {
 			byCC, nets, rooms)
 	}
 	<-held
+}
+
+// ---- the map's cells ------------------------------------------------------
+
+// cellGeo is a geo table that places one address in one cell and names its
+// country, which is the whole surface the presence page uses.
+type cellGeo struct {
+	cc   string
+	cell map[string]uint16
+}
+
+func (g cellGeo) Country(netip.Addr) string { return g.cc }
+func (g cellGeo) Cell(a netip.Addr) uint16  { return g.cell[a.String()] }
+
+// THE PAYLOAD IS AN ALLOWLIST HERE TOO, for the reason /diag's is: this page is
+// public, its whole value is what it refuses to say, and a field added later
+// must fail a test and be argued for rather than shipping because it was handy.
+func TestHerePublishesCellsAndNothingElse(t *testing.T) {
+	srv, _, _ := newServer(t)
+	out := hereOf(t, srv, "")
+	allowed := map[string]bool{
+		"by_country": true, "elsewhere": true, "networks": true, "rooms": true,
+		"geo_known": true, "events": true,
+		// THE MAP'S OWN TWO. by_cell is a position, which the rule above by_country
+		// carves out for a count-per-country; the carve-out here is a count per
+		// ~550km cell, at the cell's centre, with no name attached and the same
+		// floor a country gets. cells_known says whether this build can place at
+		// all, which is the healthy-looks-like-broken distinction.
+		"by_cell": true, "cells_known": true,
+	}
+	for k := range out {
+		if !allowed[k] {
+			t.Errorf("the presence payload published an unlisted field %q — argue "+
+				"for it in diag.go before adding it here", k)
+		}
+	}
+	// A cell row carries three things and no fourth.
+	if rows, ok := out["by_cell"].([]any); ok {
+		for _, r := range rows {
+			m, _ := r.(map[string]any)
+			for k := range m {
+				if k != "lat" && k != "lon" && k != "n" {
+					t.Errorf("a cell row published %q; a dot needs a position and a count", k)
+				}
+			}
+		}
+	}
+}
+
+// A CELL IS NAMED ON THE SAME TERMS A COUNTRY IS, whatever those terms are.
+//
+// WRITTEN AGAINST hereFloor RATHER THAN AGAINST 2, and the first version of this
+// test asserted 2 and failed — correctly. The floor was lowered to one on the
+// instruction "i want everyone to see the same thing", with the alternative
+// (each reader shown their own country and nobody else's) put and declined. A
+// test that pinned 2 would have been asserting a policy the owner had already
+// reversed, so what is pinned instead is that the map and the table apply the
+// SAME floor: a lone reader appearing in one and not the other is precisely the
+// asymmetry that instruction rejected.
+//
+// AND WITH THE FLOOR AT ONE, THE CELL IS THE PROTECTION. That is the whole
+// reason this breakdown is a ~550km square with no name on it rather than a
+// city: visibility is no longer traded against precision, it is traded against
+// resolution, and the resolution is fixed by the grid instead of by how many
+// people happen to be online.
+func TestACellIsNamedOnTheSameTermsAsACountry(t *testing.T) {
+	oslo := geo.CellOf(59.91, 10.75)
+	if oslo == 0 {
+		t.Fatal("the fixture needs a real cell")
+	}
+	// Exactly at the floor: named. One under it: not.
+	if rows := hereCells(map[uint16]int{oslo: hereFloor}); len(rows) != 1 {
+		t.Errorf("a cell at the floor of %d must be named, got %v", hereFloor, rows)
+	}
+	if hereFloor > 1 {
+		if rows := hereCells(map[uint16]int{oslo: hereFloor - 1}); len(rows) != 0 {
+			t.Errorf("a cell under the floor must not be named, got %v", rows)
+		}
+	}
+	// The same floor the country table uses, read from the same constant by the
+	// same comparison — so the two cannot drift apart.
+	byCC, _ := hereRows(map[string]int{"NO": hereFloor})
+	if len(byCC) != 1 {
+		t.Errorf("the country table disagrees about the floor: %v", byCC)
+	}
+
+	/* AND THE DOT IS AT THE CELL'S CENTRE, NOT AT THE READER. This is the
+	   assertion that matters at any floor: a dot drawn on the connection's own
+	   coordinate would publish the position the cell exists to withhold, and
+	   with a floor of one it would do so for a single identifiable person. */
+	rows := hereCells(map[uint16]int{oslo: 2})
+	if len(rows) != 1 {
+		t.Fatalf("expected one cell, got %v", rows)
+	}
+	lat, lon, _ := geo.CellCentre(oslo)
+	if rows[0].Lat != lat || rows[0].Lon != lon {
+		t.Errorf("the dot is at %v,%v; the cell's centre is %v,%v",
+			rows[0].Lat, rows[0].Lon, lat, lon)
+	}
+	if rows[0].Lat == 59.91 && rows[0].Lon == 10.75 {
+		t.Error("the dot is drawn at the reader's own coordinate")
+	}
+	/* ...AND IT IS FAR ENOUGH AWAY TO MEAN SOMETHING. Oslo sits inside its cell,
+	   so the centre is tens to hundreds of kilometres off — which is the number
+	   this design offers in place of the floor it no longer has. */
+	if d := (lat-59.91)*(lat-59.91) + (lon-10.75)*(lon-10.75); d < 0.01 {
+		t.Errorf("the cell centre is only %.3f degrees from the reader", d)
+	}
+}
+
+// CELL 0 IS NOT A PLACE. It means the address could not be placed — a
+// country-only file, or one of the handful of rows the vendor has no coordinate
+// for — and it must never become a dot in the Gulf of Guinea.
+func TestAnUnplaceableConnectionIsNotADot(t *testing.T) {
+	if rows := hereCells(map[uint16]int{0: 9}); len(rows) != 0 {
+		t.Errorf("cell 0 became %v", rows)
+	}
+	var g holdGauge
+	g.enter(holder{cc: "US", net: "n1", room: "r1", cell: 0})
+	_, _, _, byCell := g.snapshotAll()
+	if len(byCell) != 0 {
+		t.Errorf("an unplaceable connection reached the cell tally: %v", byCell)
+	}
+	// ...while still being counted as present and as in its country.
+	byCC, _, _, _ := g.snapshotAll()
+	if byCC["US"] != 1 {
+		t.Errorf("it must still count in its country, got %v", byCC)
+	}
+}
+
+// A COUNTRY-ONLY BUILD SAYS SO RATHER THAN LOOKING EMPTY. The deploy falls back
+// to the country file when the city one cannot be fetched, and a map with no
+// dots has to be distinguishable from a map that cannot draw any.
+func TestACountryOnlyBuildAdmitsItCannotPlace(t *testing.T) {
+	srv, _, _ := newServer(t)
+	srv.Geo = stubGeo{cc: "US"} // Country only: no Cell method
+	if srv.CellsKnown() {
+		t.Error("a country-only geo must not claim it can place")
+	}
+	if out := hereOf(t, srv, ""); out["cells_known"] != false {
+		t.Errorf("cells_known should be false, got %v", out["cells_known"])
+	}
+	if srv.cellOf(netip.MustParseAddr("1.2.3.4")) != 0 {
+		t.Error("a country-only geo placed an address")
+	}
+	// And with a placing geo it says the opposite.
+	srv.Geo = cellGeo{cc: "NO", cell: map[string]uint16{"1.2.3.4": 7}}
+	if !srv.CellsKnown() {
+		t.Error("a placing geo must say it can place")
+	}
+	if got := srv.cellOf(netip.MustParseAddr("1.2.3.4")); got != 7 {
+		t.Errorf("cellOf returned %d, want 7", got)
+	}
+}
+
+// AND THE CELL GOES THROUGH THE SAME WINDOW A COUNTRY DOES. If it did not, the
+// map and the table would disagree about who is in the room — the map blinking
+// while the table held steady, or the reverse.
+func TestACellRidesTheSameWindowAsACountry(t *testing.T) {
+	var g holdGauge
+	base := time.Now()
+	at := base
+	g.clock = func() time.Time { return at }
+	h := holder{cc: "SE", net: "n1", room: "r1", cell: 900}
+	g.enter(h)
+	g.leave(h)
+	at = at.Add(5 * time.Second)
+	byCC, _, _, byCell := g.snapshotAll()
+	if byCC["SE"] != 1 || byCell[900] != 1 {
+		t.Fatalf("between polls both must hold: %v / %v", byCC, byCell)
+	}
+	at = at.Add(holdLinger + time.Second)
+	byCC, _, _, byCell = g.snapshotAll()
+	if len(byCC) != 0 || len(byCell) != 0 {
+		t.Fatalf("past the window both must empty: %v / %v", byCC, byCell)
+	}
 }

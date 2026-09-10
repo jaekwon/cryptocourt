@@ -288,14 +288,26 @@ func main() {
 			lg.Printf("geo: %d spans, %d countries (maxmind)", tab.Len(), tab.Countries())
 		}
 	case *geoRanges != "":
-		if tab, err := geo.LoadRanges(*geoRanges); err != nil {
+		// geo.Load RATHER THAN LoadRanges, so the same flag takes either of
+		// DB-IP's files: the country one, or the city one whose coordinates
+		// become the presence map's coarse cells. Sniffed from the file's own
+		// shape rather than from a second flag that could disagree with it.
+		if tab, err := geo.Load(*geoRanges); err != nil {
 			lg.Printf("no flags: %v", err)
 		} else {
 			srv.Geo = tab
 			// THE COUNTRY COUNT IS THE USEFUL HALF OF THIS LINE. A file that
 			// parsed to a million spans and three countries loaded wrong in a way
 			// the span count cannot show.
-			lg.Printf("geo: %d spans, %d countries (ranges)", tab.Len(), tab.Countries())
+			//
+			// AND WHETHER IT CAN PLACE, because a country file and a city file
+			// are the same flag and the same log line otherwise — and the
+			// difference is whether the map has dots on it.
+			placed := "country only"
+			if tab.HasCells() {
+				placed = fmt.Sprintf("%d placed in cells", tab.Cells())
+			}
+			lg.Printf("geo: %d spans, %d countries, %s", tab.Len(), tab.Countries(), placed)
 		}
 	}
 

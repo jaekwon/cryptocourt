@@ -346,9 +346,25 @@ echo "    index.html  sha ${LOCAL_SHA:0:16}…  $(wc -c < "$STAMPED" | tr -d ' '
 echo "    chat.js     sha ${CHAT_SHA:0:16}…  $(wc -c < web/chat.js | tr -d ' ') bytes"
 
 # ------------------------------------------------------------- the country file
-# Fetched ON THE BOX rather than shipped from here: it is 4.5MB, it is refreshed
-# monthly upstream, and it has nothing to do with the code being deployed. Kept
-# in $STATEDIR/geo because it is data, not a binary.
+# Fetched ON THE BOX rather than shipped from here: it is refreshed monthly
+# upstream and has nothing to do with the code being deployed. Kept in
+# $STATEDIR/geo because it is data, not a binary.
+#
+# THE CITY FILE FIRST, THE COUNTRY FILE AS THE FALLBACK. The presence map places
+# a reader in a coarse ~550km cell rather than naming only their country, and
+# the coordinates for that come from db-ip's city-lite file. kourtchat sniffs
+# which of the two it has been given — see geo.Load — so this step's only job is
+# to land the better one when it can and the older one when it cannot.
+#
+# STORED GZIPPED, AND THAT IS NOT tidiness. MEASURED: city-lite is 82MB
+# compressed and 658MB expanded. Expanding it onto a box this file elsewhere
+# notes as having 1.1GB free, to save three seconds of startup, is a bad trade —
+# so it is kept as downloaded and read through a decompressor.
+#
+# AND THE DISK IS CHECKED BEFORE THE DOWNLOAD, because the failure this avoids
+# is not a missing map. It is a full disk on a live box, which takes the chain
+# node and the chat database with it. If there is not comfortable room the step
+# asks for the country file instead and says so.
 #
 # NOTHING HERE MAY FAIL THE DEPLOY. Flags are decoration and kourtchat already
 # logs and carries on with no file at all, so every step below is best-effort:
@@ -363,7 +379,10 @@ echo "    chat.js     sha ${CHAT_SHA:0:16}…  $(wc -c < web/chat.js | tr -d ' '
 say "country file"
 "${SSH[@]}" "$HOST" "
   set -u
-  GEO=$STATEDIR/geo/dbip-country.csv
+  GEO=$STATEDIR/geo/dbip.csv.gz
+  # ANY OLDER FILE IS REMOVED once a new one lands, so the two formats cannot
+  # both sit there with kourtchat pointed at whichever the flag happens to name.
+  OLDGEO=$STATEDIR/geo/dbip-country.csv
   # ITS OWN DIRECTORY, RATHER THAN THE ONE THE PREPARE STEP MAKES. This step runs
   # BEFORE that one, so relying on it meant mv had nowhere to write: the download
   # succeeded, all 717,170 rows were verified, and the move failed with 'no such
@@ -378,35 +397,57 @@ say "country file"
     echo \"    have \$(wc -l < \"\$GEO\" | tr -d ' ') rows, fetched \$(date -r \"\$GEO\" +%Y-%m-%d)\"
     exit 0
   fi
+  # ROOM FOR THE CITY FILE? It needs 82MB for itself and headroom for the
+  # verification pass, which streams rather than expanding. 400MB free is the
+  # line: comfortably more than needed, and far enough from zero that a deploy
+  # never brings the box down for a decoration.
+  free=\$(df -Pk \"\$(dirname \"\$GEO\")\" 2>/dev/null | awk 'NR==2{print \$4}')
+  kinds=\"city country\"
+  if [ -n \"\$free\" ] && [ \"\$free\" -lt 409600 ]; then
+    kinds=\"country\"
+    echo \"    only \$((free/1024))MB free; asking for the country file only\"
+  fi
   # THIS MONTH, THEN LAST. A new month's file is not published on the first, and
   # asking only for the current one would leave a box with no file for days.
+  for kind in \$kinds; do
   for m in \$(date +%Y-%m) \$(date -d '15 days ago' +%Y-%m 2>/dev/null || date -v-15d +%Y-%m); do
-    url=\"https://download.db-ip.com/free/dbip-country-lite-\$m.csv.gz\"
-    if curl -fsS --max-time 180 -o /tmp/dbip.csv.gz \"\$url\" 2>/dev/null &&
-       gzip -dc /tmp/dbip.csv.gz > /tmp/dbip.csv 2>/dev/null; then
-      rows=\$(wc -l < /tmp/dbip.csv | tr -d ' ')
-      first=\$(head -1 /tmp/dbip.csv)
+    url=\"https://download.db-ip.com/free/dbip-\$kind-lite-\$m.csv.gz\"
+    if curl -fsS --max-time 900 -o /tmp/dbip.csv.gz \"\$url\" 2>/dev/null; then
+      # STREAMED, NOT EXPANDED. The checks below need the row count and the
+      # first line; both come out of a pipe, so 658MB never touches the disk.
+      rows=\$(gzip -dc /tmp/dbip.csv.gz 2>/dev/null | wc -l | tr -d ' ')
+      first=\$(gzip -dc /tmp/dbip.csv.gz 2>/dev/null | head -1)
       case \"\$first\" in
         [0-9]*) ;;
-        *) echo \"    refused \$m: first row is not an address (\$first)\"; continue ;;
+        *) echo \"    refused \$kind \$m: first row is not an address (\$first)\"; continue ;;
       esac
       if [ \"\$rows\" -lt 100000 ]; then
-        echo \"    refused \$m: only \$rows rows\"; continue
+        echo \"    refused \$kind \$m: only \$rows rows\"; continue
+      fi
+      # AND THE CITY FILE MUST ACTUALLY CARRY COORDINATES. A truncated or
+      # substituted file with three fields would load as a country file and the
+      # map would quietly lose its cells while every line here read as success.
+      if [ \"\$kind\" = city ]; then
+        cols=\$(echo \"\$first\" | awk -F, '{print NF}')
+        if [ \"\$cols\" -lt 8 ]; then
+          echo \"    refused city \$m: \$cols fields, not the city format\"; continue
+        fi
       fi
       # REPORTED ONLY IF IT LANDED. This said 'fetched 2026-09, 717170 rows' on a
       # deploy where the move had just failed and the file did not exist — every
       # number in that line was true and the sentence was not. A step that
       # announces a success it did not have is worse than one that fails loudly.
-      if mv /tmp/dbip.csv \"\$GEO\"; then
+      if mv /tmp/dbip.csv.gz \"\$GEO\"; then
         chown kourt:kourt \"\$GEO\"
-        echo \"    fetched \$m, \$rows rows\"
-        rm -f /tmp/dbip.csv.gz
+        rm -f \"\$OLDGEO\"
+        echo \"    fetched \$kind \$m, \$rows rows\"
         exit 0
       fi
-      echo \"    fetched \$m but could not place it at \$GEO\"
+      echo \"    fetched \$kind \$m but could not place it at \$GEO\"
     fi
   done
-  rm -f /tmp/dbip.csv.gz /tmp/dbip.csv
+  done
+  rm -f /tmp/dbip.csv.gz
   echo \"    could not fetch one; the site runs without flags\"
 " || echo "    (skipped)"
 
