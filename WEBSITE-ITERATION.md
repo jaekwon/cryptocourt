@@ -82,6 +82,11 @@ full final coherence read all returned zero findings). Cron d6b47efa deleted.**
   browser available — flag for owner manual pass at the end).
 - F7 title fix: keep "the ledger of record" tagline (record framing,
   §7.4-safe), fix the name only.
+  **SUPERSEDED.** The tagline is now "Let Truth be told" — the words the
+  link-preview card had been carrying all along while the page title still said
+  ledger of record. The two quotations of the old tagline in this file are left
+  as quotations: they record what the title WAS, and rewriting them would make
+  this log claim a decision nobody made.
 - F8 README.md line 3 path typo (r/kourt/courtv2 → r/kourt/kourtv2).
 
 ## Plan (priority order)

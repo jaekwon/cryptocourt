@@ -403,7 +403,14 @@ const HERE = {
     const after = {
       children: flash().children.length,
       wash: flash().querySelectorAll("rect.hereflashwash").length,
-      bolts: flash().querySelectorAll("path.hereflashbolt").length,
+      /* WHAT ELSE IS IN THERE, counted by tag rather than by the class of the
+         thing that used to be. check-web-selectors refuses a browser check that
+         queries a class the overlay does not ship — rightly, because a
+         deliberate absence-assertion and a stale typo look identical from the
+         outside — and "hereflashbolt" is now in neither shipped file. Counting
+         non-rect children is the stronger test anyway: it catches ANY drawn
+         thing sneaking back in, not only the zigzag that did. */
+      others: [...flash().children].filter(e => e.tagName.toLowerCase() !== "rect").length,
       // THE SHELL MUST NOT HAVE BEEN REBUILT. Same node, not merely same shape.
       sameLand: svg().querySelector("path.heremapland") === land,
     };
@@ -411,8 +418,15 @@ const HERE = {
   });
   ok(`a change strikes the map (${strike.children} elements)`,
      strike.children > 0, JSON.stringify(strike));
-  ok("...as a wash over the whole map plus at least one bolt",
-     strike.wash === 1 && strike.bolts >= 1, JSON.stringify(strike));
+  /* A WASH AND NOTHING ELSE. This arm used to require "at least one bolt" —
+     a randomly-walked zigzag under a glow filter, which was asked for as
+     lightning and reported back as "the lightning looks cartoonish". There is
+     no version of that drawing that is not a cartoon, so it is gone, and the
+     arm now holds the map to the absence: a stroked path reappearing here is
+     the cartoon coming back. */
+  ok("...as a wash over the whole map, and nothing drawn over it",
+     strike.wash === 1 && strike.children === 1 && strike.others === 0,
+     JSON.stringify(strike));
   /* AND THE COASTLINE WAS NOT REDRAWN. The land is seventeen kilobytes of path
      data and this fires on every message the site sees; a full innerHTML per
      strike would re-parse all of it several times a second and restart every
@@ -432,14 +446,24 @@ const HERE = {
      often the map actually lit up. */
   const capped = await page.evaluate(async () => {
     const flash = () => document.querySelector("main svg.heremap .heremapflash");
-    let last = flash().innerHTML, strikes = 0;
+    /* NODE IDENTITY, NOT THE MARKUP STRING. This compared innerHTML, and it
+       only ever worked because the bolt was RANDOM: hereBoltPath walked a fresh
+       zigzag per strike, so consecutive strikes always differed as text. With
+       the bolt gone the wash is one fixed rect, every strike is byte-identical,
+       and the comparison scored twenty changes as zero strikes — measured, when
+       the cartoon was removed. The feature was fine; the detector was leaning on
+       a randomness that was never the thing under test.
+       Replacing the group's content builds a NEW rect each time, which is the
+       signal that actually means "it struck again" — and it is the same test
+       the coastline arm above already makes. */
+    let last = flash().firstElementChild, strikes = 0;
     const t0 = Date.now();
     // A change every 150ms for three seconds — twenty of them, against a cap
     // that should let through three or four.
     const feed = setInterval(() => { window.__ev = (window.__ev || 0) + 1; }, 150);
     while (Date.now() - t0 < 3000) {
       await new Promise(r => setTimeout(r, 50));
-      const now = flash().innerHTML;
+      const now = flash().firstElementChild;
       if (now !== last) { strikes++; last = now; }
     }
     clearInterval(feed);
@@ -511,6 +535,37 @@ const HERE = {
      /no country file/i.test(nogeo.text),
      JSON.stringify(nogeo.text.replace(/\s+/g, " ").slice(0, 160)));
 
+
+  /* ---- AND THERE IS SOMEWHERE TO SAY IT ------------------------------------
+     Reported as "while i can see the globe, the chat disappeared". railChatFor
+     only matched /c/ and /raw/ routes, so every other page tore the rail's chat
+     down — right for /about and /me, which are not rooms, and wrong here: this
+     page prints how many people have a chat open and gave a reader no way to
+     say anything to any of them.
+     THE META COURT IS THE HOST, because it is the one room that belongs to no
+     single subject, which is what a page about the site itself needs.
+     ASSERTED AS THE COURT, not merely as "a panel is visible": mounting the
+     wrong court's room here would look identical and read the wrong transcript. */
+  await page.goto(PAGE + '#/here', {waitUntil: 'domcontentloaded'});
+  await new Promise(r => setTimeout(r, 3500));
+  const railed = await page.evaluate(() => {
+    const rc = document.getElementById('railchat');
+    return {court: typeof RAILCHATSLUG !== 'undefined' ? RAILCHATSLUG : '(no RAILCHATSLUG)',
+            visible: !!(rc && !rc.hidden),
+            composer: !!(rc && rc.querySelector('.chatinput'))};
+  });
+  ok("the globe carries the meta court's chat", railed.court === 'meta', JSON.stringify(railed));
+  ok("...and it is a panel a reader can type into",
+     railed.visible && railed.composer, JSON.stringify(railed));
+  /* AND NOWHERE ELSE GAINED ONE. The change is a single route, and a regex that
+     grew to match /me or the directory would put a room on pages that are not
+     one. */
+  for (const r of ['/about', '/me', '/']) {
+    await page.goto(PAGE + '#' + r, {waitUntil: 'domcontentloaded'});
+    await new Promise(z => setTimeout(z, 2200));
+    const off = await page.evaluate(() => typeof RAILCHATSLUG !== 'undefined' ? RAILCHATSLUG : '?');
+    ok(`...and ${r} still has no chat`, off === null, 'court=' + String(off));
+  }
 
   ok("no page errors", errs.length === 0, errs.slice(0, 2).join(" | "));
 

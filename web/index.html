@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Kourt — the ledger of record</title>
+<title>Kourt — Let Truth be told</title>
 <meta name="description" content="A court of record for factual claims. Anyone may state a claim; stake decides which claims get answered; the answer and its route are kept on-chain.">
 <!-- Link previews, and the honest limit of them.
      These are SITE-level and deliberately so. A crawler fetching a URL is served
@@ -25,14 +25,14 @@
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="Kourt">
 <meta property="og:url" content="https://kourt.xyz/">
-<meta property="og:title" content="Kourt — the ledger of record">
+<meta property="og:title" content="Kourt — Let Truth be told">
 <meta property="og:description" content="A court of record for factual claims. Stake decides which claims get answered; the answer and its route are kept on-chain.">
 <meta property="og:image" content="https://kourt.xyz/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:alt" content="The court's claim map: filings and folders wired to the court that holds them, over the word Kourt.">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="Kourt — the ledger of record">
+<meta name="twitter:title" content="Kourt — Let Truth be told">
 <meta name="twitter:description" content="A court of record for factual claims. Stake decides which claims get answered; the answer and its route are kept on-chain.">
 <meta name="twitter:image" content="https://kourt.xyz/og.png">
 <meta name="twitter:image:alt" content="The court's claim map: filings and folders wired to the court that holds them, over the word Kourt.">
@@ -2147,31 +2147,32 @@ tr.youare .mono{font-weight:600}
 @keyframes heretwinkle{0%,100%{opacity:.85}50%{opacity:.62}}
 .heremapbloom{animation:heretwinkle 3.2s ease-in-out infinite}
 /* ---- THE FLASH ----------------------------------------------------------
-   Asked for as "make it look like lightning every time somebody does anything
-   on the court. on the map, like bzzt." One strike per change, drawn over the
-   whole map rather than over the place it came from — see hereFlashHtml for why
-   the location is deliberately not used.
-   THE DOUBLE STRIKE IS THE "BZZT". A single ramp reads as a fade; bright, nearly
-   out, bright again, gone is what reads as electric. 260ms end to end.
+   Asked for as "make it look like lightning ... like bzzt", and built that way:
+   a drawn zigzag bolt across the map, one or two of them, at random, under a
+   glow filter. Reported back as "the lightning looks cartoonish, it stays
+   flashed for too long".
+   BOTH OF WHICH IT WAS. A stroked zigzag with a glow is a cartoon lightning
+   bolt — there is no version of that drawing that is not — so it is gone, and
+   what is left is the wash alone. And the double strike was the length: 260ms
+   of bright, nearly out, bright again reads as two events, so the eye scores it
+   at roughly twice its duration. One ramp now, 150ms, which is a blink rather
+   than a flicker.
+   STILL OVER THE WHOLE MAP rather than over the place it came from, and that is
+   a privacy guarantee rather than a shortcut — see the Events field in
+   internal/chat/diag.go, which publishes a count and deliberately no location.
    RATE-CAPPED IN SCRIPT, NOT HERE, and the cap exists for a reader's safety
    rather than for taste: three flashes a second is the threshold above which
    flashing content is a seizure risk, so HEREFLASH_MIN holds this to well under
    half of that however busy the site gets. */
-@keyframes hereflashwash{0%{opacity:0}8%{opacity:.30}22%{opacity:.05}
-  34%{opacity:.22}100%{opacity:0}}
-@keyframes hereflashbolt{0%{opacity:0}5%{opacity:.95}24%{opacity:.10}
-  36%{opacity:.75}100%{opacity:0}}
+@keyframes hereflashwash{0%{opacity:0}14%{opacity:.20}100%{opacity:0}}
 .hereflashwash{fill:var(--accent); opacity:0;
-  animation:hereflashwash 260ms ease-out 1}
-.hereflashbolt{fill:none; stroke:var(--accent-2); stroke-width:1.1;
-  stroke-linejoin:round; opacity:0; filter:url(#heremapglow);
-  animation:hereflashbolt 260ms ease-out 1}
+  animation:hereflashwash 150ms ease-out 1}
 /* AND NONE OF IT FOR A READER WHO HAS ASKED FOR NO MOTION. The whole feature is
    motion, so this is not a softened version — the flicker stops and the strike
    never draws. The page still says who is here; it just stops moving. */
 @media (prefers-reduced-motion: reduce){
   .heremapbloom{animation:none}
-  .hereflashwash,.hereflashbolt{animation:none; opacity:0}
+  .hereflashwash{animation:none; opacity:0}
 }
 .mcmt-d{fill:var(--muted); opacity:.62}
 /* THE ELLIPSIS IS TEXT, NOT A CIRCLE, and white rather than the dots' muted
@@ -7385,7 +7386,13 @@ function railChatFor(hash){
   const rh = document.getElementById("railchathead");
   if(!rc) return;
   const m = /^\/(?:c|raw)\/([a-z0-9-]+)/.exec(hash || "");
-  const slug = m ? m[1] : null;
+  /* AND THE GLOBE TALKS IN THE META COURT. Every route that is not a court's
+     tore the chat down, which is right for most of them — /about and /me are
+     not places with a room. The globe is: it is a page about who is here, and
+     it printed "8 here" beside a rail with no way to say anything to any of
+     them. The meta court is the one room that belongs to no single subject,
+     which makes it the right host for a page that is about the site itself. */
+  const slug = m ? m[1] : (/^\/here(?:$|[/?])/.test(hash || "") ? META_SLUG : null);
   if(slug === RAILCHATSLUG) return;
   if(CHATSTOP){ CHATSTOP(); CHATSTOP = null; }
   RAILCHATSLUG = slug;
@@ -19580,25 +19587,13 @@ function hereTermPath(when){
    publishes a number with no location on it, this draws across the whole map,
    and neither end of the wire has the option of being more specific.
    THE GEOMETRY IS RANDOM PER STRIKE, so two in a row do not look like a loop. */
-function hereBoltPath(){
-  let x = 30 + Math.random() * (HEREMAP_W - 60), y = 0;
-  let d = `M${x.toFixed(0)} 0`;
-  while(y < HEREMAP_H){
-    y += 18 + Math.random() * 26;
-    x += (Math.random() - 0.5) * 78;
-    x = Math.max(3, Math.min(HEREMAP_W - 3, x));
-    d += `L${x.toFixed(0)} ${Math.min(HEREMAP_H, y).toFixed(0)}`;
-  }
-  return d;
-}
+// THE WASH IS THE WHOLE FLASH NOW. The bolt it used to draw with it was a
+// randomly-walked zigzag under a glow filter, which is a cartoon lightning bolt
+// by construction — and hereBoltPath went with it rather than being left
+// unreferenced for somebody to wonder about.
 function hereFlashHtml(){
-  const bolts = 1 + (Math.random() < 0.45 ? 1 : 0);
-  let out = `<rect class="hereflashwash" x="0" y="0"`
+  return `<rect class="hereflashwash" x="0" y="0"`
     + ` width="${HEREMAP_W}" height="${HEREMAP_H}"/>`;
-  for(let i = 0; i < bolts; i++){
-    out += `<path class="hereflashbolt" d="${hereBoltPath()}"/>`;
-  }
-  return out;
 }
 
 /* THE LIGHTS THEMSELVES, split out of the shell so a change can repaint them

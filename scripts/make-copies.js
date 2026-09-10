@@ -153,34 +153,112 @@ ${o.emb.replace(/<\/div>\s*$/, `<span class="cc-stamp">${esc(asOf)}</span></div>
 `;
 }
 
+/* EVERY CLAIM, ASKED OF THE SITE ITSELF. listCourts() and listClaims() are the
+   page's own readers, so enumeration happens in the browser this already drives
+   rather than by lifting them into node — the same reason the chart is lifted
+   from a rendered page instead of reimplemented. Named targets still win, which
+   is what makes a single copy cheap to remake by hand. */
+async function enumerate(page) {
+  await page.goto(`${SITE}/#/`, {waitUntil: "domcontentloaded"});
+  for (let i = 0; i < 30; i++) {
+    if (await page.evaluate(() => typeof listCourts === "function")) break;
+    await new Promise(r => setTimeout(r, 400));
+  }
+  return page.evaluate(async () => {
+    const out = [];
+    const courts = await listCourts().catch(() => []);
+    for (const c of courts) {
+      const slug = c.slug || c.courtSlug || c;
+      if (!slug) continue;
+      const claims = await listClaims(slug).catch(() => []);
+      for (const cl of claims) if (cl && cl.id != null) out.push(slug + "/" + cl.id);
+    }
+    return out;
+  });
+}
+
 (async () => {
   const args = process.argv.slice(2).filter(a => !a.startsWith("--"));
-  const want = args.length ? args : ["covid/22"];
-  const browser = await puppeteer.launch({headless: "new", args: ["--no-sandbox"]});
-  const page = await browser.newPage();
-  let reads = 0;
-  page.on("request", r => { if (/\/status|abci_query/.test(r.url())) reads++; });
-  await page.setViewport({width: 420, height: 900, deviceScaleFactor: 1});
-  let wrote = 0, failed = 0;
-  for (const w of want) {
-    const [slug, idS] = w.split("/");
-    const id = parseInt(idS, 10);
-    reads = 0;
-    const c = await liftChart(page, slug, id);
-    if (!c.chart) { console.error(`make-copies: ${w} — the claim page's chart never drew`); failed++; continue; }
-    const e = await liftEmbed(page, slug, id, c.chart, c.theme);
-    if (e.err) { console.error(`make-copies: ${w} — ${e.err}`); failed++; continue; }
-    const dir = path.join(OUTDIR, slug);
-    fs.mkdirSync(dir, {recursive: true});
-    const file = path.join(dir, idS + ".html");
-    fs.writeFileSync(file, pageHtml(slug, id, {emb: e.emb, css: e.css, theme: e.theme,
-                                              icon: e.icon, stamp: c.stamp}));
-    console.log(`make-copies: web/embed/${slug}/${idS}.html — `
-      + `${Math.round(fs.statSync(file).size / 1024)}KB, `
-      + `${c.stamp.h != null ? "block " + c.stamp.h : "unstamped"}, `
-      + `${reads} chain reads to make, 0 to serve`);
-    wrote++;
+  /* ONE RUN AT A TIME. A full pass over every claim took 523 SECONDS measured
+     — 41 copies, one tab, serially — so a five-minute cron would start its
+     successor before its predecessor finished, and two runs writing the same
+     files is how a half-written copy gets served. The lock is the guarantee;
+     the concurrency below is what makes the cadence achievable at all. */
+  const LOCK = path.join(OUTDIR, ".lock");
+  fs.mkdirSync(OUTDIR, {recursive: true});
+  try {
+    fs.writeFileSync(LOCK, String(process.pid), {flag: "wx"});
+  } catch (_) {
+    const held = (() => { try { return fs.readFileSync(LOCK, "utf8").trim(); } catch (e) { return "?"; } })();
+    const age = (() => { try { return Math.round((Date.now() - fs.statSync(LOCK).mtimeMs) / 1000); } catch (e) { return -1; } })();
+    /* A LOCK OUTLIVES A CRASH, so it cannot be trusted for ever. Twenty minutes
+       is well past the slowest measured run and short enough that one killed
+       process does not stop the cron until somebody notices. */
+    if (age >= 0 && age < 1200) {
+      console.log(`make-copies: a run started ${age}s ago (pid ${held}) still holds the lock — skipping`);
+      process.exit(0);
+    }
+    console.error(`make-copies: breaking a stale lock (pid ${held}, ${age}s old)`);
+    fs.writeFileSync(LOCK, String(process.pid));
   }
+  const release = () => { try { fs.unlinkSync(LOCK); } catch (_) {} };
+  process.on("exit", release);
+
+  const browser = await puppeteer.launch({headless: "new", args: ["--no-sandbox"]});
+  const first = await browser.newPage();
+  const want = args.length ? args : await enumerate(first);
+  await first.close();
+  if (!want.length) { console.error("make-copies: nothing to copy — the directory read nothing"); await browser.close(); process.exit(1); }
+  if (!args.length) console.log(`make-copies: ${want.length} claim(s) from the directory`);
+
+  /* FOUR TABS. 523s serially is 12.7s a claim, and almost all of it is waiting
+     for a page to settle rather than anything this process computes — so the
+     work parallelises nearly linearly. Four is chosen against the node rather
+     than the CPU: the chain reads behind these pages are cached at the edge for
+     five seconds, so four tabs asking the same questions mostly hit that cache
+     instead of the chain. */
+  const LANES = Number(process.env.COPY_LANES || 4);
+  let next = 0, wrote = 0, failed = 0;
+  const lane = async () => {
+    const page = await browser.newPage();
+    let reads = 0;
+    page.on("request", r => { if (/\/status|abci_query/.test(r.url())) reads++; });
+    await page.setViewport({width: 420, height: 900, deviceScaleFactor: 1});
+    for (;;) {
+      const i = next++;
+      if (i >= want.length) break;
+      const [slug, idS] = want[i].split("/");
+      const id = parseInt(idS, 10);
+      reads = 0;
+      try {
+        const c = await liftChart(page, slug, id);
+        if (!c.chart) { console.error(`make-copies: ${want[i]} — the claim page's chart never drew`); failed++; continue; }
+        const e = await liftEmbed(page, slug, id, c.chart, c.theme);
+        if (e.err) { console.error(`make-copies: ${want[i]} — ${e.err}`); failed++; continue; }
+        const dir = path.join(OUTDIR, slug);
+        fs.mkdirSync(dir, {recursive: true});
+        /* WRITTEN ASIDE AND MOVED INTO PLACE. nginx may be serving the old copy
+           while this writes the new one, and a reader must never get half a
+           file — rename within a filesystem is atomic, a write in place is not. */
+        const file = path.join(dir, idS + ".html");
+        const tmp = file + ".new";
+        fs.writeFileSync(tmp, pageHtml(slug, id, {emb: e.emb, css: e.css, theme: e.theme,
+                                                  icon: e.icon, stamp: c.stamp}));
+        fs.renameSync(tmp, file);
+        console.log(`make-copies: web/embed/${slug}/${idS}.html — `
+          + `${Math.round(fs.statSync(file).size / 1024)}KB, `
+          + `${c.stamp.h != null ? "block " + c.stamp.h : "unstamped"}, `
+          + `${reads} chain reads to make, 0 to serve`);
+        wrote++;
+      } catch (err) {
+        console.error(`make-copies: ${want[i]} — ${String(err.message).slice(0, 120)}`);
+        failed++;
+      }
+    }
+    await page.close();
+  };
+  await Promise.all(Array.from({length: Math.min(LANES, want.length)}, lane));
   await browser.close();
+  console.log(`make-copies: ${wrote} written, ${failed} failed`);
   process.exit(failed && !wrote ? 1 : 0);
 })();
