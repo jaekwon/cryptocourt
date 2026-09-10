@@ -35,6 +35,13 @@ global.cc = (n, slug) => `${n} CC:${String(slug).toUpperCase()}`;
 global.btn = (label, func, args, cls, sub) =>
   `<button data-func="${func}" data-args='${JSON.stringify(args||{})}'>${label}</button>`
   + (sub? `<span class="sub">${sub}</span>` : "");
+/* THE RULE SENTENCE LIVES BESIDE franchiseHtml NOW, NOT INSIDE IT, because it is
+   said in two places: the Join panel a reader can come back to, and the dialog
+   that follows their first burn. Sliced in the same way and in dependency order
+   — this harness evaluates one function at a time, so a callee that is not
+   pulled in is a ReferenceError at call time rather than at parse time. */
+eval(fn("franchiseMetaName"));
+eval(fn("franchiseRule"));
 const html = eval(fn("franchiseHtml") + "; franchiseHtml");
 
 /* ---- the rule is stated whether or not anyone is connected ---------------- */
@@ -87,7 +94,12 @@ ok("every court page carries the heading", /The meta franchise/.test(anon) && /T
 const mine = html("covid", 554400000, 5105763090, true, null, "");
 ok("a pending entitlement is shown as the GNOT it came from",
    /554\.4 GNOT/.test(mine), mine.slice(mine.indexOf("fr-mine"), mine.indexOf("fr-mine") + 140));
-ok("...and says it is claimable", /claimable as meta coin/.test(mine));
+/* THE BUTTON IS WHAT SAYS IT IS CLAIMABLE. The line used to say "claimable as
+   meta coin at whatever the curve stands at when you claim" and then a control
+   labelled "Claim your meta coin" sat under it saying the same thing. The label
+   is the shorter of the two and it is the one you can press. */
+ok("...and offers it as a labelled control rather than as prose",
+   /Claim your meta coin/.test(mine) && !/claimable as/.test(mine));
 /* AND A WAY TO TAKE IT. Telling a reader what is owed and offering no control is
    the same silence one step on — the entitlement is claimed by an ordinary
    transaction and there was nowhere on the site to make it. */
@@ -95,8 +107,13 @@ ok("...and offers the transaction that takes it",
    /data-func="ClaimMetaFranchise"/.test(mine), mine.slice(mine.indexOf("<button"), 200));
 ok("...with no arguments, because the realm reads the caller off the frame",
    /data-args='\{\}'/.test(mine));
-ok("...and says what it will and will not touch",
-   /the rest of your holdings are untouched/.test(mine));
+/* AND CARRIES NO SECOND SENTENCE UNDER IT. There was a sub-line reading "mints
+   what you have accrued; the rest of your holdings are untouched" — true, and
+   a third statement of a rule the paragraph two lines above already makes. The
+   stubbed btn() renders a sub as <span class="sub">, so its absence is
+   measurable rather than a matter of reading the source. */
+ok("...with no explanatory sub-line under the button",
+   !/class="sub"/.test(mine), mine.slice(mine.indexOf("<button"), mine.indexOf("<button") + 220));
 ok("the confirmation names the claim", /ClaimMetaFranchise: "your meta claim"/.test(src));
 /* ZERO IS NOT THE SAME AS NOT CONNECTED. A connected wallet with nothing waiting
    gets told how to start; an unconnected one is told nothing about itself,
@@ -156,8 +173,16 @@ ok("...and the ones that are shown wear meta's", /CC:META/.test(holds));
    true — GNOT burned — and the sentence says what turns it into coin. */
 ok("the waiting figure is stated in the units it is kept in",
    /of burn/.test(mine) && !/of burn.{0,40}CC:META/.test(mine));
-ok("...and says the curve decides what it becomes",
-   /at whatever the curve stands at when you claim/.test(mine));
+/* AND THE PRICING IS SAID ONCE. It is the rule's job — "how much of that coin
+   the credit becomes depends on the meta court's price on the day you claim it"
+   — and the waiting line used to say it again in its own words. Two phrasings
+   of one fact read as two facts, and a reader goes looking for the difference.
+   ASSERTED AS ONCE, NOT MERELY AS PRESENT, because "present" is what let the
+   duplicate sit there through three rewordings. */
+ok("...and the panel prices the claim exactly once",
+   (mine.match(/on the day you claim/g) || []).length === 1
+   && !/curve stands at/.test(mine),
+   JSON.stringify((mine.match(/on the day you claim|curve stands at/g) || [])));
 
 /* ---- the supply, when it is known ----------------------------------------- */
 /* THE SUPPLY IS NOT REPEATED IN THE PANEL. It is the coin supply, and the stat
@@ -399,7 +424,19 @@ ok("the read is by ADDRESS, not by court — it is earned everywhere",
    && /one\(`FranchiseOf\(\$\{gstr\(addr\)\}\)`\)/.test(src));
 ok("...and the realm read it calls is the one the realm exports",
    /FranchiseOf\(/.test(src));
-ok("every court page carries the slot", /\+ franchiseSlotHtml\(slug\)/.test(src));
+/* WHERE THE SLOT IS, not merely that it exists. It used to be a section of its
+   own between the stat strip and the folders — a rule about what a burn earns
+   you elsewhere, printed above the reader had burned anything. It is inside the
+   Join panel now, which is both where the burn happens and where a reader
+   returns to claim.
+   ASSERTED AS "inside #join", because "the call exists somewhere" is what this
+   arm used to say and that stayed true through the move. Matching the panel's
+   own markup is what makes the arm able to fail. */
+const joinSrc = (src.match(/function joinPanel\(slug, s\)\{[\s\S]*?\n\}/) || [""])[0];
+ok("the Join panel is where the slot lives", /franchiseSlotHtml\(slug\)/.test(joinSrc),
+   joinSrc? "found joinPanel, no slot in it" : "could not slice joinPanel at all");
+ok("...and no second copy is left at the top of the court page",
+   !/\+ franchiseSlotHtml\(slug\)\n/.test(src));
 /* NOT GATED ON isLive(), unlike the fills around it: the rule is true of the
    sample too, and the sample is the default mode — which is where the silence
    would have been loudest, since most readers never leave it. */
@@ -410,7 +447,62 @@ ok("...and it is filled in demo mode as well as live",
    second read for a string the page is holding. */
 ok("...and handed the description the route already read",
    /async function fillFranchise\(slug, desc\)\{/.test(src)
-   && /franchiseHtml\(slug, pending, supply, hasMeta, held, desc\)/.test(src));
+   && /franchiseHtml\(slug, r\.pending, r\.supply, r\.hasMeta, r\.held, desc\)/.test(src));
+/* ---- the follow-up dialog -------------------------------------------------- */
+/* THE SAME SENTENCE IN BOTH PLACES, which is the whole reason franchiseRule was
+   pulled out of franchiseHtml. Said twice in two hand-written copies, a rule
+   this easy to paraphrase drifts — and the two readers who see them are the
+   same reader at two moments. */
+const frDlg = (src.match(/async function franchiseFollowup\(slug\)\{[\s\S]*?\n\}/) || [""])[0];
+ok("the dialog exists at all", !!frDlg);
+/* NOT PINNED TO HOW hasMeta IS SPELLED, only to the sentence coming from the
+   shared function. The dialog used to take it from a chain read's result and
+   now works it out without reading anything — which is a different second
+   argument and the same property. */
+ok("...and takes its sentence from the same franchiseRule the panel uses",
+   /franchiseRule\(slug, /.test(frDlg));
+/* AND ASKS THE CHAIN FOR NOTHING TO SAY IT. This is what made the dialog wait
+   out the seven-second settle: the sentence needs no read, only the figure
+   does. An await in here is that regression coming back. */
+ok("...without waiting on a read to do it", !/await franchiseRead\(\)/.test(frDlg));
+/* NOT ON META, where a burn earns no franchise at all: accrueFranchise skips it
+   because Buy mints there directly. Without this the dialog congratulates a
+   reader for earning something they did not. */
+ok("...and never fires on meta's own court", /slug === META_SLUG\) return;/.test(frDlg));
+/* ONCE, EVER. The panel is the copy that persists; a dialog after every burn is
+   a nag. Both exits write the flag, because a native dialog closes on Escape
+   and on the backdrop whatever the button says — and a follow-up that came back
+   because it was closed the wrong way is exactly the nag being avoided. */
+ok("...and is dismissed for good, not per-burn",
+   /store\.get\(FRANCHISE_SEEN\)\) return;/.test(frDlg)
+   && (frDlg.match(/store\.set\(FRANCHISE_SEEN,"1"\)/g) || []).length >= 2);
+/* TWO MOMENTS, AND THEY ARE DIFFERENT ON PURPOSE. Reported as "the metacoin
+   popup came up pretty slow after page refresh": the whole dialog used to sit
+   below the repaint, seven seconds after the reader pressed the button, because
+   it quoted a total that is only true once the chain holds the burn. The three
+   reads behind that total measure about 230ms against the live node — the seven
+   seconds were the whole delay.
+   SO THE SENTENCE OPENS AT THE LANDING and the FIGURE fills after the settle.
+   Both halves are asserted, because either one drifting back to the other's
+   moment is a regression: the first would be slow again, the second would quote
+   a pre-burn total. */
+ok("the dialog opens the moment the transaction lands",
+   /landed = true;\n[\s\S]{0,400}?if\(func === "Buy"\) franchiseFollowup\(args && args\.slug\);/.test(src));
+ok("...and only the figure waits for the repaint",
+   /await render\(\); window\.scrollTo\(0, y\);\n[\s\S]{0,400}?if\(func === "Buy"\) franchiseFollowupFigure\(\);/.test(src));
+/* THE FIGURE IS THE HALF THAT READS, and it re-checks the dialog is still there
+   after the read — a reader who presses Got it while three reads are in flight
+   must not be written to. */
+const frFig = (src.match(/async function franchiseFollowupFigure\(\)\{[\s\S]*?\n\}/) || [""])[0];
+ok("the figure reads the chain and the sentence does not", /await franchiseRead\(\)/.test(frFig));
+ok("...and gives up if the dialog was dismissed mid-read",
+   (frFig.match(/getElementById\("frwait"\)/g) || []).length >= 2, frFig.slice(0, 200));
+/* AND IT NAMES WHERE THE COPY LIVES. This dialog cannot be reopened once
+   dismissed, so telling the reader where the rule stays is what makes
+   dismissing it safe. */
+ok("...and points the reader back at the Join panel",
+   /Join this court/.test(frDlg));
+
 ok("the fill decides on the link from whether the court answered",
    /const hasMeta = isLive\(\)\? Number\.isFinite\(supply\) : !!demoCourt\(META_SLUG\);/.test(src));
 ok("the fill asks for all three at once — pending, supply, and what is held",

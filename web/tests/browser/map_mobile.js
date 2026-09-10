@@ -88,6 +88,171 @@ const SIZES = [
        r.map === r.mapBefore, JSON.stringify({before: r.mapBefore, after: r.map}));
   }
 
+  /* ---- ZOOM, WHICH IS THE THING A MAP IS FOR --------------------------------
+     Reported as "I can't zoom on the map view in mobile". Everything above this
+     line passed throughout: the arms here were about LAYOUT, and a map you
+     cannot zoom is the right size and still useless.
+     THE CAUSE WAS ONE LINE OF CSS MEETING ONE MISSING HANDLER. .mapwrap svg
+     carries touch-action:none — the browser runs no gesture of its own — and
+     the only zoom in the page was the wheel. A phone has no wheel.
+     AND IT WAS WORSE THAN INERT: the first of two fingers drove the
+     single-finger drag, so a pinch PANNED. Measured before the fix, a spread
+     took the viewBox from `422.15 368.22 339.69 251.56` to
+     `357.54 368.22 339.69 251.56` — x moved, width and height did not.
+     SO EVERY ARM HERE READS WIDTH, NOT THE VIEWBOX STRING. The first version of
+     that measurement compared whole strings and reported the pan as a
+     successful zoom; only width and height are zoom, and x and y are pan. */
+  const gesture = kind => page.evaluate(k => {
+    const svg = document.querySelector('.mapwrap svg');
+    if (!svg) return false;
+    const b = svg.getBoundingClientRect();
+    const cx = b.left + b.width / 2, cy = b.top + b.height / 2;
+    const send = (t, id, x, y) => svg.dispatchEvent(new PointerEvent(t, {
+      pointerId: id, pointerType: 'touch', isPrimary: id === 1, bubbles: true,
+      cancelable: true, clientX: x, clientY: y, buttons: t === 'pointerup' ? 0 : 1,
+      view: window}));
+    if (k === 'spread') {
+      send('pointerdown', 1, cx - 30, cy); send('pointerdown', 2, cx + 30, cy);
+      for (let d = 30; d <= 100; d += 10) { send('pointermove', 1, cx - d, cy); send('pointermove', 2, cx + d, cy); }
+      send('pointerup', 1, cx - 100, cy); send('pointerup', 2, cx + 100, cy);
+    } else if (k === 'squeeze') {
+      send('pointerdown', 1, cx - 100, cy); send('pointerdown', 2, cx + 100, cy);
+      for (let d = 100; d >= 30; d -= 10) { send('pointermove', 1, cx - d, cy); send('pointermove', 2, cx + d, cy); }
+      send('pointerup', 1, cx - 30, cy); send('pointerup', 2, cx + 30, cy);
+    } else {
+      send('pointerdown', 1, cx, cy);
+      for (let n = 1; n <= 8; n++) send('pointermove', 1, cx - n * 10, cy);
+      send('pointerup', 1, cx - 80, cy);
+    }
+    return true;
+  }, kind);
+  const viewBox = () => page.evaluate(() => {
+    const svg = document.querySelector('.mapwrap svg');
+    return svg ? svg.getAttribute('viewBox').split(' ').map(Number) : null;
+  });
+  const afterGesture = async kind => {
+    await page.setViewport({width: 390, height: 844});
+    await page.goto(PAGE + '#/', {waitUntil: 'networkidle0'});
+    await page.goto(PAGE + '#/c/orem/map', {waitUntil: 'networkidle0'});
+    await new Promise(z => setTimeout(z, 1300));
+    const a = await viewBox();
+    if (!a) return null;
+    await gesture(kind);
+    await new Promise(z => setTimeout(z, 400));
+    const b = await viewBox();
+    return {w0: +a[2].toFixed(1), w1: +b[2].toFixed(1), x0: +a[0].toFixed(1), x1: +b[0].toFixed(1)};
+  };
+
+  /* AND THE CONTROLS ARE REACHABLE WITH A THUMB. They were never the reason the
+     map could not be zoomed — all three are on screen at 390px and all three
+     work — but the slider measured 140x16, and 16px is not a target. 24 is the
+     figure this file holds itself to elsewhere (SC 2.5.8); the buttons already
+     passed it at 26x33 and are asserted here so a later restyle cannot quietly
+     shrink them either. */
+  await page.setViewport({width: 390, height: 844});
+  await page.goto(PAGE + '#/', {waitUntil: 'networkidle0'});
+  await page.goto(PAGE + '#/c/orem/map', {waitUntil: 'networkidle0'});
+  await new Promise(z => setTimeout(z, 1300));
+  const targets = await page.evaluate(() => {
+    const out = {};
+    for (const id of ['mz-out', 'mz-in', 'mz-slider']) {
+      const e = document.getElementById(id);
+      const r = e && e.getBoundingClientRect();
+      out[id] = r ? {w: Math.round(r.width), h: Math.round(r.height)} : null;
+    }
+    return out;
+  });
+  for (const id of ['mz-out', 'mz-in', 'mz-slider']) {
+    const t = targets[id];
+    ok(`the ${id} control is at least 24px tall (${t ? t.h : "absent"}px)`,
+       !!t && t.h >= 24 && t.w >= 24, JSON.stringify(targets));
+  }
+
+  const spread = await afterGesture('spread');
+  ok(`two fingers spreading zoom the map IN (${spread && spread.w0} -> ${spread && spread.w1})`,
+     !!spread && spread.w1 < spread.w0 * 0.9, JSON.stringify(spread));
+  const squeeze = await afterGesture('squeeze');
+  ok(`...and squeezing zooms it OUT (${squeeze && squeeze.w0} -> ${squeeze && squeeze.w1})`,
+     !!squeeze && squeeze.w1 > squeeze.w0 * 1.1, JSON.stringify(squeeze));
+  /* ONE FINGER STILL ONLY PANS, which is the regression the pinch code could
+     cause: the two gestures share pointerdown, pointermove and pointerup, and
+     a move that both zooms and pans is unusable. */
+  const drag = await afterGesture('drag');
+  ok("one finger pans and does not zoom",
+     !!drag && drag.w0 === drag.w1 && drag.x0 !== drag.x1, JSON.stringify(drag));
+
+  /* ---- AND THE CARD CAN BE REACHED ------------------------------------------
+     Reported as "on the mobile i can zoom now but i can't scroll down to see
+     the selected info", and the phone layout's own comment says what was meant
+     to happen: "the page scrolls, which is the right behaviour on a phone: tap
+     a node, then read". Nothing scrolled.
+     TWO THINGS WERE WRONG AND THE FIRST FIX FOUND NEITHER. .mapfull is
+     position:fixed at inset:0, so the DOCUMENT's scroll cannot move it —
+     measured, window.scrollTo(0,100) took scrollY to 100 and left the card at
+     the same 634px from the top of the screen — and with overflow-y:visible the
+     holder was not a scroll container either, so its own scrollTop read back 0
+     after being set to 100. 1159px of content in an 844px box, reachable by no
+     gesture at all.
+     SO BOTH ARE ASSERTED: that the holder can scroll, and that selecting brings
+     the card into view. The second was written twice before it worked —
+     scrollIntoView({block:"nearest"}) moved nothing because the card's top edge
+     was already on screen, and window.scrollBy moved a document that the fixed
+     holder does not travel with. */
+  await page.setViewport({width: 390, height: 844});
+  await page.goto(PAGE + '#/', {waitUntil: 'networkidle0'});
+  await page.goto(PAGE + '#/c/orem/map', {waitUntil: 'networkidle0'});
+  await new Promise(z => setTimeout(z, 1300));
+  const holder = await page.evaluate(() => {
+    const f = document.querySelector('.mapfull');
+    if (!f) return null;
+    const before = f.scrollTop;
+    f.scrollBy({top: 120});
+    return {overflowY: getComputedStyle(f).overflowY, pos: getComputedStyle(f).position,
+            overflows: f.scrollHeight > f.clientHeight + 1,
+            scrollH: f.scrollHeight, clientH: f.clientHeight,
+            moved: f.scrollTop > before};
+  });
+  ok("the map holder can be scrolled to what is under the map",
+     !!holder && holder.overflows && holder.moved, JSON.stringify(holder));
+
+  /* AND A TAP DOES IT FOR THE READER, so the card does not have to be hunted
+     for. The scroll is the least that works — the overhang and no more — so a
+     reader who has already scrolled is not thrown somewhere new. */
+  await page.goto(PAGE + '#/', {waitUntil: 'networkidle0'});
+  await page.goto(PAGE + '#/c/orem/map', {waitUntil: 'networkidle0'});
+  await new Promise(z => setTimeout(z, 1300));
+  const brought = await page.evaluate(async () => {
+    const sel = document.getElementById('mapsel');
+    const see = () => { const r = sel.getBoundingClientRect();
+      const f = document.querySelector('.mapfull').getBoundingClientRect();
+      return {top: Math.round(r.top), bottom: Math.round(r.bottom),
+              fully: r.top >= f.top - 1 && r.bottom <= f.bottom + 1}; };
+    const a = document.querySelector('.mnode-a');
+    const r = a.getBoundingClientRect();
+    a.dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true, view: window,
+      clientX: r.x + r.width / 2, clientY: r.y + r.height / 2}));
+    const atOnce = see();
+    await new Promise(z => setTimeout(z, 900));
+    return {atOnce, settled: see()};
+  });
+  ok("selecting a node brings its card fully into view",
+     !!brought && brought.settled.fully, JSON.stringify(brought));
+
+  /* THE DESKTOP LAYOUT IS NOT DRAGGED INTO THIS. The declaration lives in the
+     max-width:860px block, and beside the map the card needs no scrolling — an
+     arm here so a later move out of that block is noticed. */
+  await page.setViewport({width: 1440, height: 900});
+  await page.goto(PAGE + '#/', {waitUntil: 'networkidle0'});
+  await page.goto(PAGE + '#/c/orem/map', {waitUntil: 'networkidle0'});
+  await new Promise(z => setTimeout(z, 1300));
+  const desk = await page.evaluate(() => {
+    const f = document.querySelector('.mapfull');
+    return {overflowY: getComputedStyle(f).overflowY,
+            overflows: f.scrollHeight > f.clientHeight + 1};
+  });
+  ok("the desktop map holder still needs no scrolling",
+     desk.overflowY === 'visible' && !desk.overflows, JSON.stringify(desk));
+
   ok("no page errors", errs.length === 0, errs.slice(0, 2).join(" | "));
 
   console.log(fail ? `\n${fail} FAILURES` : "\nALL PASS");

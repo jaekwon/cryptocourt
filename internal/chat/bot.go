@@ -1093,6 +1093,10 @@ func (b *Bot) say(ctx context.Context, c botCandidate, line string) error {
 		Moniker: ClerkName, Body: line,
 		Country: ClerkCountry,
 		IPHash:  botIPHash,
+		// This line is required verbatim, so the cross-court duplicate rule
+		// cannot apply to it — it would eventually refuse the clerk for saying
+		// the one thing it must say word for word. See store.go's guard.
+		Fixed: true,
 	})
 	if err != nil {
 		b.logf("chat bot: fixed line refused in %s/%s: %v", c.chain, c.court, err)
@@ -1135,6 +1139,25 @@ func botGreeting(body string) bool {
 	s = strings.TrimPrefix(s, "is there ")
 	s = strings.TrimPrefix(s, "is ")
 	s = strings.ReplaceAll(s, "anybody", "anyone")
+	/* AND A GREETING MAY ADDRESS THE ROOM, which is the same argument one more
+	   time. MEASURED: "hi all" in a quiet probe room got nothing, and the log
+	   was empty — both filters refused it, so it dropped silently exactly as
+	   "is anybody here" once did. Enumerating {hi, hello, hey, yo, ...} x {all,
+	   everyone, folks, ...} is the literal-list mistake the block above exists
+	   to avoid, so the ADDRESS is stripped and the family collapses onto the
+	   entries already here.
+	   SAFE FOR THE SAME REASON as the leading "is": the 24-character bound has
+	   already run, and whatever is left must still equal a greeting exactly.
+	   "hi everyone, is the docket down?" is 32 characters and never reaches
+	   here — a pinned negative in bot_test.go says so. */
+	for _, a := range []string{
+		" all", " everyone", " everybody", " folks", " guys", " y'all", " yall",
+	} {
+		if cut := strings.TrimSuffix(s, a); cut != s {
+			s = cut
+			break
+		}
+	}
 	for _, g := range []string{
 		"hi", "hii", "hey", "heya", "hello", "hallo", "yo", "sup", "gm",
 		"good morning", "good evening", "good afternoon", "greetings",
@@ -1262,7 +1285,9 @@ state lives in a realm on that chain.
 STAKING HERE IS NO-LOSS, and this is the one thing readers assume wrongly. A
 staker on the side that loses withdraws their stake IN FULL — one times what
 they put in. Winners are paid in newly minted court coin, weighted by conviction
-(stake multiplied by the time it was held) and by an adjudicated quality tier.
+(stake multiplied by the time it was held) and by the claim's own size measured
+against what a claim in that court is typically worth. Nothing weights a winner
+by how right they were: everyone on the winning side won.
 Nobody is paid out of the other side's stake and no value moves between the two
 sides at all. Real money (GNOT) enters once, when buying a court's coin, and is
 burned; it never leaves. What a staker stakes is always THE COURT'S OWN COIN and
@@ -1274,6 +1299,13 @@ A BUY IS A CALL, NOT A TRANSFER. The payment rides with the Buy button on the
 court's own page — not on a claim's — and is signed in the reader's wallet. A
 bare coin transfer to the realm buys nothing and cannot be sent back, so point a
 reader at that button, never at moving coin to an address by hand.
+
+THE BELL IS A CHAT SOUND AND NOTHING MORE. A message carrying "!?" or "?!", or
+one ending in "!", rings a bell for anyone who has it switched on; the bell
+button in the chat panel silences it and remembers that. It watches nothing
+else: there is no alert for a claim settling, no alert for somebody staking, and
+no per-claim notification setting anywhere on this site. Say what it does and
+stop there.
 
 BUYING AND STAKING ARE TWO STEPS, IN THAT ORDER, and never one. First buy the
 court's coin, then stake coin you already hold. A claim's YES and NO buttons

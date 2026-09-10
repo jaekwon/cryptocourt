@@ -1639,6 +1639,54 @@ control("a script block the scan cannot find", WEBPAGE,
         "no <script> block to scan",
         argv=["python3", DUPES])
 
+print("\ncheck-bell-version")
+# THE GUARD EXISTS BECAUSE THE BELL WAS FIXED TWICE AND NEITHER FIX ARRIVED.
+# web/bell.mp3 is served with no cache-control, and chat.js fetches it with
+# {cache:"force-cache"}, which tells a browser not even to revalidate — so a
+# recut recording under an unchanged URL never reaches anyone who already heard
+# the old one. "The bell rings twice" was reported once when it was true and
+# again when the server held a single strike and readers heard two.
+# So the URL carries the file's digest, and check-bell-version recomputes that
+# digest from the shipped bytes and refuses a mismatch.
+#
+# NEITHER ARM NAMES THE DIGEST, deliberately. Writing today's hash here would
+# make these arms fail the next time the bell legitimately changes, which is a
+# control that cries wolf — and a control that cries wolf gets deleted.
+control("the URL keeps a digest the file no longer has", CHATJS,
+        "?v=", "?v=0",
+        "and the shipped file is",
+        argv=["python3", "scripts/check-bell-version.py"])
+# And the shape the bug actually shipped as: no version at all, which is not a
+# mismatch and has to be caught by a different branch. The tail of the old line
+# is left as a comment so the plant is still valid JavaScript — a plant that
+# breaks the parser tests the parser.
+control("no version on the URL at all", CHATJS,
+        'const CHATBELLSRC = "bell.mp3?v=', 'const CHATBELLSRC = "bell.mp3"; // ',
+        "under a versioned URL",
+        argv=["python3", "scripts/check-bell-version.py"])
+
+print("\ncheck-bell-strike")
+# A GUARD ON A BINARY CANNOT BE ARMED BY EDITING WHAT IT READS. Planting a text
+# find/replace into an mp3 is not a defect, it is a corrupt file, and every
+# detector would object to it for the wrong reason. So the guard manufactures
+# its own defect — the clip overlaid on a delayed copy of itself, which is
+# exactly a second strike landing on a decaying tail — and both arms below move
+# the one threshold that decides, in opposite directions.
+# THE FIRST IS THE ONE THAT MATTERS. A detector that has stopped detecting
+# reports every bell healthy for ever, and that is the failure mode every guard
+# in scripts/ is capable of; the guard's own positive control is what closes it,
+# and this proves the control is load-bearing rather than decorative.
+control("a detector blind to a doubled strike", "scripts/check-bell-strike.py",
+        "RISE_MAX = 1.27", "RISE_MAX = 99.0",
+        "does not fire on a doubled strike",
+        argv=["python3", "scripts/check-bell-strike.py"])
+# And the other branch: the measurement of the SHIPPED file is live, not a
+# constant that happens to sit above whatever is there.
+control("a bell whose envelope climbs", "scripts/check-bell-strike.py",
+        "RISE_MAX = 1.27", "RISE_MAX = 1.05",
+        "envelope RISES",
+        argv=["python3", "scripts/check-bell-strike.py"])
+
 print("\ncheck-web-constants")
 # WEEK is not decoration: the overlay passes it INTO realm reads — TrailingOI and
 # TrailingYes both take it as the trailing window — so a drift from periodBlocks

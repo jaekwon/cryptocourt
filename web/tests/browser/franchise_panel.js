@@ -78,6 +78,78 @@ const {PAGE, demoPage} = require('./harness');
   for (const [what, t] of [["a court page", onCourt], ["meta's own page", onMeta]])
     ok(`${what} never says buy`, !/\bbuy|\bpurchas/i.test(t), t.slice(0, 90));
 
+  /* WHERE THE PANEL SITS, as containment rather than as a source regex. The
+     section moved out of the court page's top strip and into the Join panel,
+     which is both where the burn happens and where a reader returns to claim —
+     and "the element exists somewhere on the page" stayed true across that
+     move, so only the containment can fail. */
+  await page.goto(PAGE + '#/c/orem', {waitUntil: 'domcontentloaded'});
+  await new Promise(r => setTimeout(r, 2500));
+  const placed = await page.evaluate(() => {
+    const f = document.getElementById("franchise");
+    if (!f) return "no #franchise at all";
+    const join = f.closest("#join");
+    return join ? "in #join" : "outside #join, under " +
+      (f.parentElement ? (f.parentElement.id || f.parentElement.className || "?") : "nothing");
+  });
+  ok("the franchise section is inside the Join panel", placed === "in #join", placed);
+
+  /* THE FOLLOW-UP DIALOG, DRIVEN DIRECTLY. It normally opens on the far side of
+     a real burn's seven-second settle, which a browser check cannot reach
+     without a wallet — but everything that can go wrong with it is in the
+     dialog itself: whether it opens, whether it says the rule, and whether it
+     stays dismissed. So it is called the way the buy hook calls it. */
+  const dlg = await page.evaluate(async () => {
+    try { localStorage.removeItem("cc.franchise"); } catch (e) {}
+    if (typeof franchiseFollowup !== "function") return {err: "NO franchiseFollowup IN THE PAGE"};
+    await franchiseFollowup("orem");
+    const d = document.getElementById("frdlg");
+    return {open: !!(d && d.open), text: d ? d.textContent.replace(/\s+/g, " ") : ""};
+  });
+  ok("a burn's follow-up opens a dialog", !!(dlg && dlg.open), dlg && dlg.err || JSON.stringify(dlg));
+  ok("...carrying the same rule the panel states",
+     /also earns you the meta court's coin/.test((dlg && dlg.text) || ""),
+     ((dlg && dlg.text) || "").slice(0, 120));
+  /* AND IT NAMES THE PANEL, because this dialog cannot be reopened once
+     dismissed. Telling the reader where the rule stays is what makes dismissing
+     it safe rather than a loss. */
+  ok("...and says where to find it again",
+     /Join this court/.test((dlg && dlg.text) || ""));
+
+  /* THE FIGURE IS A SECOND STAGE, and the slot must not show as an empty row
+     while it is missing. "The metacoin popup came up pretty slow after page
+     refresh" was the dialog waiting out the burn's seven-second settle so it
+     could quote a total; it opens immediately now and the number arrives when
+     the chain has it. With no wallet connected there is no number to arrive,
+     which is the case this arm covers: the slot stays hidden rather than
+     rendering a blank line where a figure belongs. */
+  const slot = await page.evaluate(async () => {
+    const at_open = (() => { const e = document.getElementById("frwait");
+      return e ? (e.hidden ? "present, hidden" : "present, SHOWING") : "absent"; })();
+    if (typeof franchiseFollowupFigure !== "function") return {err: "NO franchiseFollowupFigure"};
+    await franchiseFollowupFigure();
+    const e = document.getElementById("frwait");
+    return {at_open, after: e ? (e.hidden ? "still hidden" : "showing: " + e.textContent) : "absent"};
+  });
+  ok("the dialog carries an empty slot for the figure", slot.at_open === "present, hidden",
+     slot.err || JSON.stringify(slot));
+  ok("...and with nothing to report it stays hidden, not blank",
+     slot.after === "still hidden", JSON.stringify(slot));
+
+  const after = await page.evaluate(async () => {
+    const d = document.getElementById("frdlg");
+    const btn = d && d.querySelector("[data-frdismiss]");
+    if (btn) btn.click();
+    const flag = (() => { try { return localStorage.getItem("cc.franchise"); } catch (e) { return null; } })();
+    const gone = !document.getElementById("frdlg");
+    // A SECOND BURN MUST NOT BRING IT BACK: the panel is the copy that persists.
+    await franchiseFollowup("orem");
+    return {flag, gone, again: !!document.getElementById("frdlg")};
+  });
+  ok("dismissing it closes and removes it", !!(after && after.gone), JSON.stringify(after));
+  ok("...and remembers, so a second burn does not bring it back",
+     after && after.flag === "1" && after.again === false, JSON.stringify(after));
+
   /* THE POSITIONS PAGE: what is waiting, for the address being viewed. This is
      where "how much do I have" is actually asked. */
   await page.goto(PAGE + '#/me', {waitUntil: 'domcontentloaded'});

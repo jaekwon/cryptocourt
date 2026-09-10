@@ -24,20 +24,49 @@ const {PAGE, demoPage} = require('./harness');
   const ok = (m, c, d) => { if (!c) { fail++; console.log("FAIL: " + m + (d ? "  " + d : "")); } else console.log("ok: " + m); };
 
   // Counting stub, installed before any script runs.
+  //
+  // IT RECORDS GAIN AS WELL AS STARTS, because "how loud" is a question the
+  // counting stub could not answer at all: a ring at a quarter weight and a ring
+  // at full weight start exactly the same oscillators. __gains keeps every gain
+  // node's gain object in creation order, and the bell's own output gain is the
+  // FIRST one it makes, which is what makes __gains[0] the weight of the ring.
   await page.evaluateOnNewDocument(() => {
     window.__rings = 0;
+    window.__gains = [];
     class FakeOsc {
       constructor() { this.frequency = {value: 0}; this.type = ""; }
       connect() {} start() { window.__rings++; } stop() {}
     }
     class FakeGain {
-      constructor() { this.gain = {setValueAtTime() {}, exponentialRampToValueAtTime() {}}; }
+      constructor() {
+        this.gain = {value: 1, setValueAtTime() {}, exponentialRampToValueAtTime() {}};
+        window.__gains.push(this.gain);
+      }
       connect() {}
     }
+    // The strike's noise burst, so the synthesis runs to its end rather than
+    // throwing part-way through and being swallowed. Nothing here counts as a
+    // ring: only oscillators do, which is what keeps the mode arithmetic below
+    // measuring modes.
+    class FakeSrc {
+      constructor() { this.buffer = null; }
+      connect() {} start() {} stop() {}
+    }
     window.AudioContext = class {
-      constructor() { this.state = "running"; this.currentTime = 0; this.destination = {}; }
+      constructor() {
+        this.state = "running"; this.currentTime = 0;
+        this.destination = {}; this.sampleRate = 48000;
+      }
       createOscillator() { return new FakeOsc(); }
       createGain() { return new FakeGain(); }
+      createBufferSource() { return new FakeSrc(); }
+      createBuffer(ch, n) {
+        const d = new Float32Array(Math.max(1, n | 0));
+        return {getChannelData: () => d};
+      }
+      createBiquadFilter() {
+        return {type: "", frequency: {value: 0}, Q: {value: 0}, connect() {}};
+      }
       resume() {}
     };
   });
@@ -87,6 +116,28 @@ const {PAGE, demoPage} = require('./harness');
   });
   ok(`with no recording reachable it still rings, synthesised (${fell} oscillators)`,
      fell > 0, "the bell went silent instead of falling back");
+
+  /* THE WEIGHT OF A FULL RING, measured once and used as the reference for every
+     comparison below. Taken from the bell's own output gain rather than assumed
+     to be CHATBELLVOL, so a change to the synthesis does not quietly turn the
+     quieter-than arms into a comparison against a stale number. */
+  const fullVol = await page.evaluate(async () => {
+    window.__gains.length = 0;
+    chatBell();
+    await new Promise(r => setTimeout(r, 50));
+    return window.__gains.length ? window.__gains[0].value : null;
+  });
+  ok(`a full ring has a measurable weight (${fullVol})`,
+     typeof fullVol === "number" && fullVol > 0, String(fullVol));
+
+  /* THE MUTE TOLL'S SHARE, named in the source so this file compares against the
+     published intention rather than a number copied out of it. Guarded on both
+     sides: at 1 there is nothing to test, and at 0 the "quieter" arm below would
+     be satisfied by a switch that fell silent. */
+  const offScale = await page.evaluate(() =>
+    typeof CHATBELLOFFVOL === "number" ? CHATBELLOFFVOL : null);
+  ok(`the mute toll has a published share of a full ring (${offScale})`,
+     typeof offScale === "number" && offScale > 0 && offScale < 1, String(offScale));
 
   /* AND THE SYNTHESIS IS A BELL RATHER THAN A CHORD. Two properties do that, and
      both are readable from the mode table: the spectrum is INHARMONIC — the
@@ -196,9 +247,13 @@ const {PAGE, demoPage} = require('./harness');
   ok("...and still named in words for a screen reader",
      !!(bell && /bell/i.test(bell.aria || "")), JSON.stringify(bell && bell.aria));
 
+  await page.evaluate(() => { window.__rings = 0; window.__gains.length = 0; });
   await page.click('.chatbell');
-  await new Promise(r => setTimeout(r, 200));
+  await new Promise(r => setTimeout(r, 400));
   const off = await page.evaluate(() => ({
+    rang: window.__rings,
+    // the weight of the toll THIS CLICK produced, read through the real handler
+    vol: window.__gains.length ? window.__gains[0].value : null,
     pressed: document.querySelector('.chatbell').getAttribute('aria-pressed'),
     stored: (() => { try { return localStorage.getItem("kourt.chat.bell"); } catch (e) { return "?"; } })(),
     on: chatBellOn(),
@@ -211,6 +266,31 @@ const {PAGE, demoPage} = require('./harness');
   }));
   ok("clicking it silences the bell", off.pressed === "false" && off.on === false,
      JSON.stringify(off));
+  /* AND THAT CLICK SOUNDED. It used to ring only on the way ON, so a reader
+     whose bell was already on — which is the default — had to click TWICE to
+     hear anything, and reported exactly that. A bell you press should sound.
+     Muting rings once as the cost of it: you hear what you are switching off. */
+  ok(`...and pressing it sounds, even on the way off (${off.rang})`,
+     off.rang > 0, JSON.stringify(off));
+  /* ...BUT QUIETLY. Asked for as "when the bell turns off it should be more
+     quiet", and the complaint is exact: a full-weight three-second toll is the
+     wrong answer to "make this stop". Three arms, because "quieter" alone is
+     satisfied by silence and by a rounding error alike — it must be strictly
+     below a full ring, audibly so, and still there.
+     READ THROUGH THE CLICK, not by calling chatBell(CHATBELLOFFVOL) here. The
+     handler choosing the weight is the half that would break: a test that picks
+     the scale itself passes whether the button uses it or not. */
+  ok(`...at a lower weight than a full ring (${off.vol} against ${fullVol})`,
+     typeof off.vol === "number" && off.vol < fullVol, JSON.stringify(off));
+  ok(`...by the published fraction, not by a nudge (want ${fullVol * offScale})`,
+     typeof off.vol === "number" &&
+       Math.abs(off.vol - fullVol * offScale) < fullVol * 0.01,
+     JSON.stringify({got: off.vol, want: fullVol * offScale, offScale}));
+  /* AND NOT SILENCE, which is the failure this replaces rather than repeats: a
+     switch that makes no sound on the way off reads as a switch that did not
+     register, and that was reported as "I have to click it twice". */
+  ok(`...and is still audible rather than muted (${off.vol})`,
+     typeof off.vol === "number" && off.vol > 0, JSON.stringify(off));
   /* AND THE GLYPH ITSELF CHANGES, which is the whole reason a glyph can replace
      the word: a bell with a stroke through it means off, and nothing else has to
      say so. The stroke is COUNTED rather than looked for by shape — one more
@@ -228,13 +308,53 @@ const {PAGE, demoPage} = require('./harness');
      the gesture that unblocks audio in a fresh tab, so it is the one moment the
      reader can be shown what they just enabled. */
   const back = await page.evaluate(async () => {
-    window.__rings = 0;
+    window.__rings = 0; window.__gains.length = 0;
     document.querySelector('.chatbell').click();
     await new Promise(r => setTimeout(r, 400));
-    return {rings: window.__rings, on: chatBellOn()};
+    return {
+      rings: window.__rings, on: chatBellOn(),
+      vol: window.__gains.length ? window.__gains[0].value : null,
+    };
   });
   ok("switching it back on rings once so the reader hears it",
      back.on === true && back.rings > 0, JSON.stringify(back));
+  /* ...AT FULL WEIGHT, which is the other half of the quieter mute: the softer
+     toll belongs to the way OFF only. Enabling a bell is the one moment a
+     preview is both wanted and possible, and a preview quieter than the bell it
+     previews would misrepresent it. */
+  ok(`...at a full ring's weight, not the mute's (${back.vol} against ${fullVol})`,
+     typeof back.vol === "number" && Math.abs(back.vol - fullVol) < fullVol * 0.01,
+     JSON.stringify(back));
+
+  /* AND THE RECORDING OBEYS THE SAME SCALE, which nothing above can show: this
+     check runs on file://, the fetch cannot succeed, and so every ring measured
+     so far came out of the SYNTHESIS. A quieter mute that is quieter only in the
+     fallback would come out at full weight for every reader whose bell.mp3
+     loaded — that is to say, almost all of them.
+     So the decoded buffer is planted directly. chatBellBuf is a top-level let,
+     which lives in the global lexical scope and is reachable by name; the
+     assignment is undone afterwards so the arms after this one still measure the
+     fallback they were written against. */
+  const rec = await page.evaluate(async () => {
+    const read = async (v) => {
+      window.__gains.length = 0;
+      chatBell(v);
+      await new Promise(r => setTimeout(r, 50));
+      return window.__gains.length ? window.__gains[0].value : null;
+    };
+    let planted = false;
+    try { chatBellBuf = {duration: 3}; planted = true; } catch (e) {}
+    const full = await read(undefined), quiet = await read(CHATBELLOFFVOL);
+    try { chatBellBuf = null; } catch (e) {}
+    return {planted, full, quiet};
+  });
+  ok("a decoded recording can be planted, so this arm measures the recording path",
+     rec.planted === true, JSON.stringify(rec));
+  ok(`...and it plays a full ring at full weight (${rec.full})`,
+     rec.full === 1, JSON.stringify(rec));
+  ok(`...and the mute toll quieter, by the same fraction (${rec.quiet})`,
+     typeof rec.quiet === "number" && Math.abs(rec.quiet - offScale) < 0.001,
+     JSON.stringify({got: rec.quiet, want: offScale}));
 
   /* ---- the three conditions, read from the source ------------------------
      See the header: reproducing an arrival needs a live service. These assert

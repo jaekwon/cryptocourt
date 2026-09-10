@@ -279,15 +279,47 @@ const CHATBELLVOL = 0.11;
 //
 // A SEPARATE FILE RATHER THAN A DATA URI, so the page stays the size it is: this
 // is fetched once, on the first ring, and cached by the browser thereafter.
-const CHATBELLSRC = "bell.mp3";
+// THE QUERY IS THE FILE'S OWN FINGERPRINT, and it is what makes force-cache
+// below safe rather than a trap.
+//
+// REPORTED TWICE AS "the bell rings twice". The first time it was true — the
+// clip had caught the swing back — and the second time the file on the server
+// was already a single strike while readers went on hearing the old one.
+// bell.mp3 is served with NO cache-control at all, so a browser caches it
+// heuristically, and force-cache tells it not even to revalidate. A corrected
+// recording under an unchanged URL therefore never arrives.
+//
+// So the URL changes when the bytes do. check-bell-version recomputes this
+// digest from web/bell.mp3 and refuses a mismatch, which is the only way this
+// stays true — a version somebody has to remember to bump is a version that
+// is wrong the first time it matters.
+const CHATBELLSRC = "bell.mp3?v=70e7f52579c1";
 
 let chatBellCtx = null, chatBellBuf = null, chatBellFetching = false, chatBellGone = false;
 
+// CHATBELLOFFVOL is the mute toll's share of a full ring.
+//
+// PRESSING IT STILL SOUNDS — you should hear what you are switching off, and
+// that is why the mute rings at all. But at full weight the confirmation was
+// louder than anything it confirms, and a reader silencing a bell is by
+// definition asking for less noise, not for one more toll at full volume. A
+// quarter is about twelve decibels down: plainly the same bell, plainly quieter.
+//
+// NOT SILENCE, deliberately. A switch that makes no sound on the way off is
+// indistinguishable from a switch that did not register, which is the older bug
+// this whole path exists to avoid — it was reported as "I have to click it
+// twice".
+const CHATBELLOFFVOL = 0.25;
+
 // chatBellPlay sounds a decoded recording through a gain node.
-function chatBellPlay(ctx, buf) {
+//
+// vol scales the whole ring and defaults to a full one. It is threaded rather
+// than read from a global because the two callers want different weights at the
+// same moment in the same tab.
+function chatBellPlay(ctx, buf, vol) {
   const src = ctx.createBufferSource(), g = ctx.createGain();
   src.buffer = buf;
-  g.gain.value = 1;
+  g.gain.value = (vol === undefined ? 1 : vol);
   src.connect(g);
   g.connect(ctx.destination);
   src.start(ctx.currentTime);
@@ -303,15 +335,22 @@ function chatBellPlay(ctx, buf) {
 // EVERY AUDIO FAILURE IS SILENT, deliberately. A browser that blocks audio until
 // the reader has interacted with the page is the NORMAL case, not an error: the
 // first ring in a fresh tab may simply not sound, and the second will.
-function chatBell() {
+//
+// vol scales it, and BOTH PATHS HONOUR IT. A quieter ring that is quiet only
+// while the recording is cached would come out at full weight on the first press
+// in a fresh tab, on a flaky connection, and on any deploy that forgets
+// bell.mp3 — which is to say exactly when a reader is most likely to be
+// reaching for the switch.
+function chatBell(vol) {
+  const v = (vol === undefined ? 1 : vol);
   try {
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
     if (!chatBellCtx) chatBellCtx = new AC();
     const ctx = chatBellCtx;
     if (ctx.state === "suspended" && ctx.resume) ctx.resume();
-    if (chatBellBuf) { chatBellPlay(ctx, chatBellBuf); return; }
-    if (chatBellGone) { chatBellModal(ctx); return; }
+    if (chatBellBuf) { chatBellPlay(ctx, chatBellBuf, v); return; }
+    if (chatBellGone) { chatBellModal(ctx, v); return; }
     if (!chatBellFetching) {
       chatBellFetching = true;
       // FETCHED ON FIRST USE, not at mount: a reader who never hears a bell
@@ -324,24 +363,26 @@ function chatBell() {
           const p = ctx.decodeAudioData(b, ok, no);
           if (p && p.then) p.then(ok, no);
         }))
-        .then(buf => { chatBellBuf = buf; chatBellPlay(ctx, buf); })
-        .catch(() => { chatBellGone = true; chatBellModal(ctx); });
+        .then(buf => { chatBellBuf = buf; chatBellPlay(ctx, buf, v); })
+        .catch(() => { chatBellGone = true; chatBellModal(ctx, v); });
       return;
     }
     // A ring while the first fetch is still in flight: synthesise this one.
-    chatBellModal(ctx);
+    chatBellModal(ctx, v);
   } catch (e) { /* blocked, unsupported, or no output device: say nothing */ }
 }
 
 // chatBellModal is the synthesised bell — the fallback, and a curiosity in its
 // own right. See CHATBELLMODES for why it is built the way it is.
-function chatBellModal(ctx) {
+function chatBellModal(ctx, vol) {
   try {
     if (!ctx) return;
     const t = ctx.currentTime;
 
+    // ONE output gain for the whole bell, which is what makes vol a single
+    // multiply rather than a change to every mode in the table.
     const out = ctx.createGain();
-    out.gain.value = CHATBELLVOL;
+    out.gain.value = CHATBELLVOL * (vol === undefined ? 1 : vol);
     out.connect(ctx.destination);
 
     for (const [ratio, gain, decay, split] of CHATBELLMODES) {
@@ -1295,12 +1336,22 @@ function mountChat(el, opts) {
     };
     paintBell();
     bellEl.addEventListener("click", () => {
-      const off = chatBellOn();
-      try { window.localStorage.setItem(CHATBELLKEY, off ? "0" : "1"); } catch (e) {}
+      const wasOn = chatBellOn();
+      try { window.localStorage.setItem(CHATBELLKEY, wasOn ? "0" : "1"); } catch (e) {}
       paintBell();
-      // Ring once on the way ON, which is also the click that unblocks audio in
-      // a fresh tab — so the reader hears what they have just switched on.
-      if (off === false) chatBell();
+      /* EVERY CLICK RINGS, not only the ones that switch it on.
+         It rang on the way ON only, which is correct and was reported as "I have
+         to click it twice": the bell STARTS on, so a reader's first click mutes
+         it silently and only the second is audible. A bell you press should
+         sound — that is what a bell is — and the click is also the gesture that
+         unblocks audio in a fresh tab, so it is the one moment a preview is both
+         wanted and possible.
+         MUTING RINGS ONCE TOO, so you hear what you are switching off — but
+         QUIETLY, at CHATBELLOFFVOL. A full-weight toll as the answer to "make
+         this stop" is the wrong answer, and was reported as one. Softer, not
+         silent: silence on the way off is what made the switch feel unresponsive
+         in the first place. */
+      chatBell(wasOn ? CHATBELLOFFVOL : 1);
     });
   }
 

@@ -30,12 +30,12 @@
 <meta property="og:image" content="https://kourt.xyz/og.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="An empty stone seat of judgment, over the word Kourt.">
+<meta property="og:image:alt" content="The court's claim map: filings and folders wired to the court that holds them, over the word Kourt.">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Kourt — the ledger of record">
 <meta name="twitter:description" content="A court of record for factual claims. Stake decides which claims get answered; the answer and its route are kept on-chain.">
 <meta name="twitter:image" content="https://kourt.xyz/og.png">
-<meta name="twitter:image:alt" content="An empty stone seat of judgment, over the word Kourt.">
+<meta name="twitter:image:alt" content="The court's claim map: filings and folders wired to the court that holds them, over the word Kourt.">
 <!-- THE CHAIN IS A SECOND ORIGIN, and the first read cannot start until DNS, TCP
      and TLS to it are up. Measured on kourt.xyz: the page is interactive at
      560ms and the first query leaves at 548ms — the handshake is on the critical
@@ -2060,7 +2060,13 @@ p.sub{font-size:13.5px; color:var(--ink-2); max-width:54ch; margin-top:6px}
 .mapctl{display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin:10px 0}
 .mapctl .pill{cursor:pointer; font:inherit}
 .mapctl .pill[aria-pressed="true"]{background:var(--accent-wash); color:var(--accent-2); border-color:var(--accent)}
-.mapctl input[type=range]{accent-color:var(--accent); width:140px}
+/* 24px OF HEIGHT, NOT 16. Measured on a 390px viewport while chasing "I
+   can't zoom on the map view in mobile": the slider rendered 140x16, and 16
+   is not a thumb. The - and + beside it were already 26x33 and fine; this
+   was the one zoom control that failed the 24px this file holds itself to
+   elsewhere (SC 2.5.8). The track is styled by the platform, so the height
+   is set on the input and the thumb grows with it. */
+.mapctl input[type=range]{accent-color:var(--accent); width:140px; height:24px}
 .mlegend{display:flex; gap:14px; flex-wrap:wrap; margin-top:10px; font-size:12px; color:var(--ink-2); align-items:center}
 .mlegend span{display:inline-flex; gap:6px; align-items:center}
 /* `hidden` on a legend key would do NOTHING without this: the rule above is a
@@ -2353,6 +2359,21 @@ tr.youare .mono{font-weight:600}
      applied to a box the map was not filling. MEASURED both ways. */
   .mapwrap{height:62vh}
   .mapsel{max-height:none; overflow-y:visible}
+  /* AND THE HOLDER HAS TO BE ABLE TO SCROLL, which is the whole of "i can't
+     scroll down to see the selected info".
+     .mapfull is position:fixed at inset:0, so the DOCUMENT's scroll cannot move
+     it — measured: window.scrollTo(0,100) took scrollY to 100 and left the card
+     at exactly the same 634px from the top of the screen. And with overflow-y
+     visible the holder is not a scroll container either, so its own scrollTop
+     does nothing: setting it to 100 read back 0. Content past the fold was
+     therefore reachable by no gesture at all.
+     MEASURED ON A 390x844 VIEWPORT: 1159px of content in an 844px box, the card
+     running from y=634 to y=862. Flipping this one declaration makes the same
+     scrollTop assignment take and moves the card to 534.
+     THE ROWS ABOVE ARE WHAT MAKE THIS SAFE. `auto auto` with align-items:start
+     lets the card take its content instead of dividing a fixed height with the
+     map, so there is something to scroll TO rather than a squashed box. */
+  .mapfull{overflow-y:auto}
 }
 .mapsel-h{display:flex; align-items:center; gap:8px; margin-bottom:6px}
 .mapsel-h .mono{font-weight:600}
@@ -6547,6 +6568,11 @@ async function adenaSign(func, args, el){
         }
       }
       landed = true;
+      /* THE FOLLOW-UP OPENS HERE, NOT AFTER THE SETTLE. It used to sit below the
+         repaint seven seconds down, which is what "came up pretty slow" was.
+         The sentence it carries needs nothing from the chain; only the figure
+         does, and that fills in from the timeout below. */
+      if(func === "Buy") franchiseFollowup(args && args.slug);
       /* A COUNTDOWN, NOT A BARE SPINNER. Seven seconds of a spinning button says
          "working"; it does not say for how long, and an unbounded spinner is what
          a stalled page looks like. Counting down says the wait is expected and
@@ -6585,6 +6611,10 @@ async function adenaSign(func, args, el){
            through to the whole-route render rather than leaving stale figures. */
         if(TX_REWARD.has(func) && await refreshClaimRewards()) return;
         const y = window.scrollY; await render(); window.scrollTo(0, y);
+        /* AND THE FIGURE THE DIALOG LEFT BLANK, now that the chain has the
+           burn. After the repaint, so the panel it points at is already on
+           screen behind it. */
+        if(func === "Buy") franchiseFollowupFigure();
       }, 7000);
     }
     else if(res.code===4000){ note("Rejected in the wallet."); }
@@ -12829,9 +12859,21 @@ function joinPanel(slug, s){
      Filled after the paint, because it needs the chain and the panel must not
      wait on it. Hidden until it has an answer: a row reading "—" where a balance
      should be is worse than no row. */
+  /* THE META FRANCHISE SITS UNDER THE BURN, not at the top of the court page.
+     It was a section of its own between the stat strip and the folders, which
+     put a rule about what a burn earns you ELSEWHERE above the reader had done
+     anything — and a reader who has not burned yet has no use for it, while the
+     one who just did had scrolled past it.
+     HERE IT IS THE ANSWER TO THE PANEL IT SITS IN: this is where the burn
+     happens, so this is where "and it also earns you meta" belongs, and it is
+     also where a reader comes BACK to when they want to claim. The dialog after
+     a first burn says it once at the moment it becomes true; this is the copy
+     that stays. Both take their sentence from franchiseRule, so they cannot
+     drift apart. */
   return `<div class="panel" id="join" tabindex="-1"><h2>Join this court</h2>
         <div class="kv oneline" id="joinheld" hidden><div class="k">You have</div><div class="v tnum" id="joinheldv"></div></div>
         ${body}
+        ${franchiseSlotHtml(slug)}
        </div>`;   /* the worst-case paragraph moved into #help-buy too */
 }
 /* One read, and it says nothing rather than guessing when it fails: a wrong
@@ -13061,6 +13103,45 @@ function statTile(k, v, sub, spark){
 function franchiseSlotHtml(slug){
   return `<section id="franchise" class="franchise" data-slug="${esc(slug)}"></section>`;
 }
+/* THE NAME IS A LINK ONLY WHERE THERE IS SOMETHING TO OPEN — the same rule the
+   page applies to a claim reference, and for the same reason. The offline sample
+   has no meta court, so a link there dead-ends on "No court by that slug";
+   route_crawl found it the first time this shipped. The SENTENCE is true either
+   way and is said either way; only the anchor is conditional. */
+function franchiseMetaName(hasMeta){
+  return hasMeta ? `<a href="#/c/${esc(META_SLUG)}">meta court</a>` : "meta court";
+}
+/* THE RULE, IN ONE PLACE, BECAUSE IT IS NOW SAID IN TWO. It is in the Join
+   panel, where a reader can come back to it, and in the dialog that follows
+   their first burn — and a rule this easy to state slightly differently is
+   exactly the kind that drifts once it is written twice.
+   THE REGISTER IS BURN AND RECEIVE, NEVER BUY — the owner's call, and
+   vocab_receive.js holds the rendered page to it: GNOT goes one way to a
+   keyless address and coin comes back, so "buy" would carry a seller, a price
+   and a way out at that price, and there is none of the three. This copy said
+   "buying", "purchase" and "buy into" in its first draft and the check caught
+   all three on the rendered page.
+   ON META'S OWN PAGE THE CHAIN SAYS THIS, NOT THE SITE. The rule is meta's court
+   DESCRIPTION now — written to the realm with SetCourtDesc — and the court page
+   already renders a description in its lead. Printing it again would be the site
+   restating a chain fact three inches below the chain's own words. The fallback
+   is kept for a deployment whose moderators never wrote one, so the sentence is
+   skipped only when the chain HAS one. */
+function franchiseRule(slug, hasMeta, onChainDesc){
+  const meta = slug === META_SLUG;
+  const metaName = franchiseMetaName(hasMeta);
+  const chainSays = meta && typeof onChainDesc === "string" && onChainDesc.trim() !== "";
+  return meta
+    ? (chainSays ? ""
+       : `This court's coin is not received for GNOT — it is <b>earned</b>. Every GNOT `
+         + `burned for any other court's coin is credited here to whoever burned it; how `
+         + `much of this coin that credit becomes depends on this court's price on the `
+         + `day they claim it.`)
+    : `Burning GNOT for this court's coin also earns you the ${metaName}'s coin: the `
+      + `same GNOT credited again there, on top of the coin you receive here. How much `
+      + `of that coin the credit becomes depends on the ${metaName}'s price on the day `
+      + `you claim it.`;
+}
 function franchiseHtml(slug, pending, supply, hasMeta, held, onChainDesc){
   const meta = slug === META_SLUG;
   /* THE NAME IS A LINK ONLY WHERE THERE IS SOMETHING TO OPEN — the same rule the
@@ -13068,8 +13149,7 @@ function franchiseHtml(slug, pending, supply, hasMeta, held, onChainDesc){
      sample has no meta court, so a link there dead-ends on "No court by that
      slug"; route_crawl found it the first time this shipped. The SENTENCE is
      true either way and is said either way; only the anchor is conditional. */
-  const metaName = hasMeta
-    ? `<a href="#/c/${esc(META_SLUG)}">meta court</a>` : "meta court";
+  const metaName = franchiseMetaName(hasMeta);
   /* THE REGISTER IS BURN AND RECEIVE, NEVER BUY — the owner's call, and
      vocab_receive.js holds the rendered page to it: GNOT goes one way to a
      keyless address and coin comes back, so "buy" would carry a seller, a price
@@ -13087,17 +13167,7 @@ function franchiseHtml(slug, pending, supply, hasMeta, held, onChainDesc){
      ON ANY OTHER COURT THE SENTENCE STAYS, and it is not a duplicate there: it
      is about what burning HERE earns you SOMEWHERE ELSE, which is not that
      court's description and is not on its page in any other form. */
-  const chainSays = meta && typeof onChainDesc === "string" && onChainDesc.trim() !== "";
-  const rule = meta
-    ? (chainSays ? ""
-       : `This court's coin is not received for GNOT — it is <b>earned</b>. Every GNOT `
-         + `burned for any other court's coin is credited here to whoever burned it; how `
-         + `much of this coin that credit becomes depends on this court's price on the `
-         + `day they claim it.`)
-    : `Burning GNOT for this court's coin also earns you the ${metaName}'s coin: the `
-      + `same GNOT credited again there, on top of the coin you receive here. How much `
-      + `of that coin the credit becomes depends on the ${metaName}'s price on the day `
-      + `you claim it.`;
+  const rule = franchiseRule(slug, hasMeta, onChainDesc);
   /* NOTHING IS MINTED UNTIL IT IS ASKED FOR, and that is the whole reason meta
      can read as empty. Said plainly, because "supply 0" next to a live
      entitlement is the exact thing that misleads. */
@@ -13133,11 +13203,23 @@ function franchiseHtml(slug, pending, supply, hasMeta, held, onChainDesc){
          claimed by an ordinary transaction and there was nowhere on the site to
          make it. No arguments — ClaimMetaFranchise reads the caller off the
          crossing frame and mints whatever that address has accrued. */
+      /* THE FIGURE AND THE BUTTON, AND NOTHING ELSE. This said the entitlement
+         was "claimable as meta coin at whatever the curve stands at when you
+         claim", and carried a second sentence under the button about what the
+         transaction would and would not touch — three sentences for a reader
+         who has already been told the rule two lines above, in the paragraph
+         that begins "Burning". Both of the removed clauses were that same rule
+         said again in different words, which is worse than saying it once: two
+         phrasings of one fact read as two facts, and the reader goes looking
+         for the difference.
+         THE RULE KEEPS THE PRICING. "How much of that coin the credit becomes
+         depends on the meta court's price on the day you claim it" is the
+         sentence that carries it, it is directly above, and it is now the only
+         place the panel says it. What is left here is the part only this line
+         can say: how much, in the units the entitlement is actually kept in. */
       ? `<p class="fr-mine"><span class="fr-k">yours, waiting</span> `
-        + `<b class="tnum">${gnotAmt(pending)}</b> of burn — claimable as `
-        + `${esc(META_SLUG)} coin at whatever the curve stands at when you claim.</p>`
-        + btn("Claim your meta coin", "ClaimMetaFranchise", {}, "",
-              "mints what you have accrued; the rest of your holdings are untouched")
+        + `<b class="tnum">${gnotAmt(pending)}</b> of burn</p>`
+        + btn("Claim your meta coin", "ClaimMetaFranchise", {}, "")
       : `<p class="fr-mine muted">You have nothing waiting here yet — burn for any `
         + `court's coin and it starts accruing.</p>`;
   /* NOTHING AT ALL WHEN THERE IS NOTHING TO SAY. On meta's own page with the
@@ -13146,7 +13228,10 @@ function franchiseHtml(slug, pending, supply, hasMeta, held, onChainDesc){
      body, which reads as a section that failed to load rather than one with
      nothing to report. A heading is not content. */
   if(!rule && !heldLine && !have && !mine) return "";
-  return `<h2 class="sec-h">The meta franchise</h2>`
+  /* h3, NOT h2. The panel this now sits inside opens with "Join this court",
+     so a second h2 under it would claim to be its sibling rather than its
+     part — and a screen reader reads that outline out loud. */
+  return `<h3 class="sec-h">The meta franchise</h3>`
     /* "THIS COURT'S SUPPLY" WAS WRONG ON EVERY PAGE BUT ONE. The panel sits on
        covid's page and the supply it is talking about is META's, so "this
        court" named the wrong one — read live on kourt.xyz and fixed there. On
@@ -13162,23 +13247,113 @@ function franchiseHtml(slug, pending, supply, hasMeta, held, onChainDesc){
     + have
     + mine;
 }
+/* THE THREE READS, ONCE, because the panel and the follow-up dialog both want
+   them and a second copy of this Promise.all is a second chance to read a
+   different set of figures than the panel is showing. */
+async function franchiseRead(){
+  const [pending, supply, held] = await Promise.all([
+    CFG.addr? franchiseOf(CFG.addr) : Promise.resolve(null),
+    isLive()? one(`CoinSupply(${gstr(META_SLUG)})`).catch(()=>null)
+            : Promise.resolve((demoCourt(META_SLUG)||{}).supply),
+    // What this reader already holds there — the "have" half of the question.
+    CFG.addr? balanceOf(META_SLUG, CFG.addr).catch(()=>null) : Promise.resolve(null),
+  ]);
+  /* THE COURT HAS TO BE THERE FOR THE NAME TO BE A LINK. Live: the supply read
+     answering at all is the proof. Demo: the sample either carries the court
+     or it does not. */
+  const hasMeta = isLive()? Number.isFinite(supply) : !!demoCourt(META_SLUG);
+  return {pending, supply, held, hasMeta};
+}
 async function fillFranchise(slug, desc){
   const slot = document.getElementById("franchise");
   if(!slot) return;
   try{
-    const [pending, supply, held] = await Promise.all([
-      CFG.addr? franchiseOf(CFG.addr) : Promise.resolve(null),
-      isLive()? one(`CoinSupply(${gstr(META_SLUG)})`).catch(()=>null)
-              : Promise.resolve((demoCourt(META_SLUG)||{}).supply),
-      // What this reader already holds there — the "have" half of the question.
-      CFG.addr? balanceOf(META_SLUG, CFG.addr).catch(()=>null) : Promise.resolve(null),
-    ]);
-    /* THE COURT HAS TO BE THERE FOR THE NAME TO BE A LINK. Live: the supply read
-       answering at all is the proof. Demo: the sample either carries the court
-       or it does not. */
-    const hasMeta = isLive()? Number.isFinite(supply) : !!demoCourt(META_SLUG);
-    slot.innerHTML = franchiseHtml(slug, pending, supply, hasMeta, held, desc);
+    const r = await franchiseRead();
+    slot.innerHTML = franchiseHtml(slug, r.pending, r.supply, r.hasMeta, r.held, desc);
   }catch(_){ /* an unread franchise leaves the rest of the court page intact */ }
+}
+/* THE FOLLOW-UP, ONCE, AT THE MOMENT IT BECOMES TRUE.
+   The rule is in the Join panel for anyone who goes looking, and that is the
+   copy that stays — but a reader who has just burned GNOT for the first time
+   has earned something on a court they have never opened, and nothing told
+   them at the moment it happened. This does, once, and then never again.
+   AFTER THE REPAINT, NOT AT THE SIGNATURE. It runs from the same 7-second
+   settle the button already waits out, so the figure it quotes is the chain's
+   answer AFTER this burn rather than the one from before it. Quoting a pending
+   total that does not yet include what the reader just did would be worse than
+   saying nothing.
+   DISMISSED FOR GOOD, in the reader's browser, the same way the intro note is.
+   A follow-up that returns after every burn is a nag, and the panel is the
+   thing that is meant to persist.
+   NOT ON META ITSELF, where a burn earns no franchise — accrueFranchise skips
+   it because Buy mints there directly — so the dialog would be telling a
+   reader they had earned something they had not. */
+const FRANCHISE_SEEN = "cc.franchise";
+async function franchiseFollowup(slug){
+  if(!slug || slug === META_SLUG) return;
+  if(store.get(FRANCHISE_SEEN)) return;
+  /* THE RULE NEEDS NO CHAIN READ, and waiting for one is what made this slow.
+     hasMeta only decides whether the court's name is a link: live, the meta
+     court exists from init, and in the sample it either carries the court or it
+     does not — both answers are already in hand. */
+  const hasMeta = isLive() || !!demoCourt(META_SLUG);
+  const rule = franchiseRule(slug, hasMeta, "");
+  if(!rule) return;
+  /* THE FIGURE ARRIVES LATER, AND THAT IS THE POINT. Reported as "the metacoin
+     popup came up pretty slow after page refresh": the dialog used to wait out
+     the same seven-second settle the button waits out, because it quoted a
+     total that is only true once the chain has the burn. Measured against the
+     live node, the three reads behind that total cost about 230ms all together
+     — the seven seconds were the whole of the delay.
+     So the explanation opens now, at the moment the reader acted, and the
+     number fills into this slot when it becomes true. Empty and hidden until
+     then: a row reading "—" where a figure belongs is worse than no row, the
+     same rule the Join panel's held-balance row already follows. */
+  const waiting = `<p id="frwait" hidden></p>`;
+  const dlg = document.createElement("dialog");
+  dlg.className = "helper";
+  dlg.id = "frdlg";
+  dlg.innerHTML = `<div class="hd"><h3>You also earned meta coin</h3></div>`
+    + `<div class="bd"><p>${rule}</p>${waiting}`
+    /* WHERE TO FIND IT AGAIN, because a dialog a reader dismisses is a dialog
+       they cannot get back, and this one is dismissed for good. Naming the
+       panel is what makes dismissing it safe. */
+    + `<p class="small muted">This stays under <b>Join this court</b> on any `
+    + `court page, with the button to claim it.</p>`
+    + `<div class="actions" style="margin-top:12px">`
+    + `<button type="button" class="btn" data-frdismiss>Got it</button>`
+    + (hasMeta? ` <a class="small" href="#/c/${esc(META_SLUG)}">Open the meta court →</a>` : "")
+    + `</div></div>`;
+  document.body.appendChild(dlg);
+  const close = ()=>{ store.set(FRANCHISE_SEEN,"1"); try{ dlg.close(); }catch(_){} dlg.remove(); };
+  dlg.addEventListener("click", ev => { if(ev.target.closest("[data-frdismiss]")) close(); });
+  /* ESCAPE AND THE BACKDROP COUNT AS DISMISSAL TOO. A native dialog closes on
+     Escape whatever this listener says, and a dialog that came back because it
+     was closed the wrong way is the nag this is written to avoid. */
+  dlg.addEventListener("close", ()=>{ store.set(FRANCHISE_SEEN,"1"); dlg.remove(); });
+  dlg.showModal();
+}
+/* THE OTHER HALF OF THE FOLLOW-UP: the figure, once the chain has the burn that
+   opened the dialog. Called from the same seven-second settle the button waits
+   out, so what it quotes includes the transaction just made rather than the
+   total from before it.
+   DOES NOTHING IF THE DIALOG IS GONE, which is the common case — a reader reads
+   one sentence and presses Got it long before this fires. Checked again AFTER
+   the read, because the dismissal can land while it is in flight. */
+async function franchiseFollowupFigure(){
+  if(!document.getElementById("frwait")) return;
+  let r;
+  try{ r = await franchiseRead(); }catch(_){ return; }
+  const slot = document.getElementById("frwait");
+  if(!slot) return;
+  if(r.pending == null || !(r.pending > 0)) return;
+  /* IN THE UNITS THE ENTITLEMENT IS KEPT IN. It banks GNOT BURNED; what that
+     becomes depends on where meta's curve stands when it is claimed, and the
+     realm exposes no quote to read instead. The same choice the panel makes,
+     for the same reason. */
+  slot.innerHTML = `You now have <b class="tnum">${gnotAmt(r.pending)}</b> of `
+    + `burn waiting as ${esc(META_SLUG)} coin, claimable whenever you like.`;
+  slot.hidden = false;
 }
 function courtStatsHtml(slug, s){
   const burnSer = parseSeries(s.burnHist);
@@ -13394,7 +13569,6 @@ function courtBody(slug, s, claims, pager, chainF, allRows, pagerBot, stripQ, pe
      The pager stays with the docket: it pages claims, not folders. */
   return `<div class="cols"><div id="qscope">`
     + courtStatsHtml(slug, s)
-    + franchiseSlotHtml(slug)
     + foldersSec
     + searchHead
     + qBarHtml("title, set or #id", idleCap)
@@ -14066,8 +14240,51 @@ function mountMap(slug, data, focusId, focusPath){
     setZ(z*Math.pow(MAPK.wheelRate, -ev.deltaY), toWorld(ev));
   }, {passive:false});
   let drag=null, dragged=false;
+  /* PINCH, BECAUSE NOTHING ELSE WAS GOING TO DO IT. Reported as "I can't zoom on
+     the map view in mobile", and the cause is one line of CSS meeting one
+     missing handler: .mapwrap svg carries touch-action:none, which tells the
+     browser to run no touch gesture of its own, and the only zoom in here was
+     the wheel. A phone has no wheel.
+     WORSE THAN NOTHING, MEASURED. Two fingers did not simply fail to zoom —
+     the first of them drove the single-finger drag, so a pinch PANNED. On a
+     synthetic spread the viewBox went from `422.15 368.22 339.69 251.56` to
+     `357.54 368.22 339.69 251.56`: x moved, width and height did not. (The
+     first version of that measurement compared the whole viewBox string and
+     reported the pan as a successful zoom. Only width and height are zoom.)
+     THE BUTTONS WERE NOT THE ANSWER. -, + and the slider are all on screen on
+     a 390px viewport and all work, but they measure 26x33 and the slider is
+     16px tall, and a reader who reaches for a map reaches with two fingers.
+     INCREMENTAL, NOT ANCHORED TO THE START. Each move scales by the ratio to
+     the PREVIOUS spread rather than the initial one, so the zoom cannot drift
+     against a midpoint that is itself moving, and two fingers travelling
+     together still pan the map through the same anchor arithmetic setZ already
+     does for the wheel. */
+  const touches = new Map();          // pointerId -> {x,y}, touch only
+  let pinch = null;                   // {d} the spread at the previous move
+  const twoUp = () => [...touches.values()].slice(0, 2);
+  const spread = () => { const [a,b] = twoUp(); return Math.hypot(a.x-b.x, a.y-b.y); };
+  const midpoint = () => { const [a,b] = twoUp();
+    return {clientX:(a.x+b.x)/2, clientY:(a.y+b.y)/2}; };
+  const dropTouch = id => {
+    touches.delete(id);
+    /* A PINCH THAT LOSES A FINGER DOES NOT BECOME A DRAG. drag is left null so
+       the remaining finger has to lift and press again — otherwise the map
+       lurches from a drag origin recorded two gestures ago. */
+    if(touches.size < 2){ pinch = null; drag = null; }
+  };
   box.addEventListener("pointerdown", ev=>{
     const el=svgEl(); if(!el) return;
+    if(ev.pointerType === "touch"){
+      touches.set(ev.pointerId, {x:ev.clientX, y:ev.clientY});
+      if(touches.size === 2){
+        pinch = {d: spread()};
+        // The drag has to go, and its capture with it: a captured first finger
+        // keeps sending pointermove to the box while the second is ignored.
+        if(drag){ try{ box.releasePointerCapture(drag.pid); }catch(_){} }
+        drag = null; dragged = true;   // and this gesture is not a tap
+        return;
+      }
+    }
     let inv=null; try{ const m=el.getScreenCTM(); inv=m&&m.inverse(); }catch(_){}
     if(!inv) return;
     // NO capture yet: capturing on pointerdown retargets the compat click to
@@ -14077,6 +14294,15 @@ function mountMap(slug, data, focusId, focusPath){
     drag={x:ev.clientX, y:ev.clientY, cx0:cx, cy0:cy, inv, live:false, pid:ev.pointerId};
   });
   box.addEventListener("pointermove", ev=>{
+    if(ev.pointerType === "touch" && touches.has(ev.pointerId))
+      touches.set(ev.pointerId, {x:ev.clientX, y:ev.clientY});
+    if(pinch && touches.size >= 2){
+      const d = spread();
+      if(d > 0 && pinch.d > 0) setZ(z * (d / pinch.d), toWorld(midpoint()));
+      pinch.d = d;
+      dragged = true;
+      return;                          // never both zoom and pan on one move
+    }
     if(!drag) return;
     if(!(ev.buttons&1)){ drag=null; return; } // the press ended outside the box
     if(!drag.live){
@@ -14088,8 +14314,8 @@ function mountMap(slug, data, focusId, focusPath){
     const b=new DOMPoint(ev.clientX,ev.clientY).matrixTransform(drag.inv);
     cx=drag.cx0-(b.x-a.x); cy=drag.cy0-(b.y-a.y); schedule();
   });
-  box.addEventListener("pointerup", ()=>{ drag=null; });
-  box.addEventListener("pointercancel", ()=>{ drag=null; });
+  box.addEventListener("pointerup", ev=>{ dropTouch(ev.pointerId); drag=null; });
+  box.addEventListener("pointercancel", ev=>{ dropTouch(ev.pointerId); drag=null; });
   /* WHAT A CLICK LIGHTS: the node, the edges that touch it, and what is at the
      far end of those edges. ONE RULE FOR ALL THREE KINDS OF NODE, which is the
      whole point of rewriting this — the three used to disagree, and the
@@ -14285,6 +14511,50 @@ function mountMap(slug, data, focusId, focusPath){
     else panel.innerHTML = mapFolderCard(L.folders[selFold], data, slug);
     const x = document.getElementById("msel-x");
     if(x) x.addEventListener("click", ()=>{ select(null); });
+    /* AND THE CARD IS BROUGHT TO THE READER. Reported as "on the mobile i can
+       zoom now but i can't scroll down to see the selected info", and the phone
+       layout's own comment says what was supposed to happen: "the page scrolls,
+       which is the right behaviour on a phone: tap a node, then read".
+       IT COULD NOT BE READ BECAUSE IT COULD NOT BE REACHED. The map carries
+       touch-action:none so it answers no swipe of the browser's, and at 62vh it
+       owns most of the screen — measured on a 390x844 viewport, y=100 to 621 —
+       so a swipe up almost anywhere lands on the map and pans it instead of
+       scrolling the page. The card sat at y=634 running to 862, past the bottom
+       of an 844 viewport, and further past it on a real phone once the browser's
+       own chrome takes its share.
+       NO BREAKPOINT IS NAMED HERE, deliberately: the condition is not "is this a
+       phone" but "is the card off screen", which is false on the desktop layout
+       because there the card sits BESIDE the map and is already in view. One
+       test, no second copy of the 860px the stylesheet owns.
+       IT SCROLLS THE HOLDER, NOT THE WINDOW, and that was the second thing this
+       got wrong. .mapfull is fixed at inset:0, so window.scrollBy moves the
+       document underneath a container that does not move with it: the first
+       version reported scrollY going 0 -> 18 while the card sat at 634 before
+       and after. The element that scrolls is the nearest ancestor that actually
+       can, which is found rather than named.
+       AND scrollIntoView WAS THE FIRST THING IT GOT WRONG. block:"nearest" did
+       nothing at all — instrumented, it fired on #mapsel at top 634, bottom 862
+       against 844 and moved nothing, because "nearest" asks whether the closest
+       edge is in view and the card's TOP was. "end" would move, and would also
+       yank a card that is already fully visible.
+       SO THE AMOUNT IS COMPUTED: exactly the overhang, never more than brings
+       the card's top to the top of the box. A reader who has scrolled somewhere
+       is not thrown to a new position by a tap. */
+    const scroller = (()=>{
+      for(let e=panel.parentElement; e; e=e.parentElement){
+        if(e.scrollHeight > e.clientHeight + 1
+           && /auto|scroll/.test(getComputedStyle(e).overflowY)) return e;
+      }
+      return null;
+    })();
+    if(scroller){
+      const box = scroller.getBoundingClientRect();
+      const r = panel.getBoundingClientRect();
+      const over = r.bottom - box.bottom;
+      const by = over > 0 ? Math.min(over, Math.max(0, r.top - box.top))
+               : r.top < box.top ? r.top - box.top : 0;
+      if(by !== 0) scroller.scrollBy({top:by, behavior:"smooth"});
+    }
     // A claim named on a folder card selects it, so the map is browsable in
     // place: folder, its claims, then the claim's own card and its page.
     panel.querySelectorAll(".mapsel-c").forEach(b=>

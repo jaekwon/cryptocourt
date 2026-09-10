@@ -3,6 +3,7 @@ package chat
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -122,6 +123,43 @@ func TestBotGreetingCoversEveryPresenceSpelling(t *testing.T) {
 	} {
 		if botGreeting(s) {
 			t.Errorf("not a greeting, it asks something: %q", s)
+		}
+	}
+}
+
+// A GREETING MAY ADDRESS THE ROOM, and the third instance of one bug.
+//
+// MEASURED IN A PROBE ROOM: "hi all" got no reply in 33 seconds, the room held
+// the row, the service had not restarted, and journalctl held no "chat bot"
+// line for the window at all — which the loop's own key reads as both local
+// filters refusing it. botGreeting compares for EQUALITY after normalising, and
+// nothing stripped the address, so a person saying hi to the room dropped
+// silently. Precisely the shape of the "is anybody here" report.
+//
+// STRIPPED, NOT ENUMERATED, for the reason the function argues at length: the
+// cross product of nine greetings and seven addresses is sixty-three literals
+// and the next report would be the one spelling nobody listed. Each row below
+// is a spelling a person actually types; the negatives are the ones that must
+// still fall through, including a bare address with no greeting on it.
+func TestAGreetingMayAddressTheRoom(t *testing.T) {
+	for _, s := range []string{
+		"hi all", "hi All", "hello everyone", "hey folks", "sup guys",
+		"hi everybody", "yo all", "good morning all", "hey y'all", "hi yall",
+		"hello all!", " hey folks ",
+	} {
+		if !botGreeting(s) {
+			t.Errorf("a greeting that addresses the room is still a greeting: %q", s)
+		}
+	}
+	// AND STRIPPING THE ADDRESS MUST NOT MANUFACTURE ONE. The residue has to be
+	// a greeting on its own — an address by itself is not a hello, and a
+	// sentence that merely ends in one is not either.
+	for _, s := range []string{
+		"all", "everyone", "folks", "guys",
+		"what is cc all", "who are you all", "is the docket down folks",
+	} {
+		if botGreeting(s) {
+			t.Errorf("not a greeting once the address comes off: %q", s)
 		}
 	}
 }
@@ -1387,6 +1425,68 @@ func TestTheClerkSaysWhoItIsWithoutAskingAModel(t *testing.T) {
 }
 
 /*
+AND IT KEEPS SAYING IT, ROOM AFTER ROOM. Measured on the live site rather than
+
+	imagined — an identity probe went unanswered and the journal named the cause:
+
+	  chat bot: fixed line refused in kourt-1/zz-probe-1788980459: the same
+	  message was just posted in several courts; post something different, or wait
+
+	The clerk's line is required VERBATIM, it posts under one ip_hash, and the
+	cross-court duplicate rule counts distinct courts inside DupWindow — so the
+	line accumulates rooms until DupCourts and then stops being deliverable, and
+	the reader sees nothing at all. say() marks these rows Fixed to sit outside
+	that rule; store_test's exemption test covers the rule's half, and this one
+	covers say()'s half, which is the half that goes silent if it is dropped.
+*/
+func TestTheClerkStillSaysItsLineAfterSayingItInOtherRooms(t *testing.T) {
+	s, clock := newStore(t)
+	ctx := context.Background()
+	m := &fakeModel{reply: "SHOULD NOT BE USED", in: 999, out: 999}
+	b := newBot(t, s, m)
+	*clock = clock.Add(time.Hour)
+
+	// The line has already gone out in exactly enough other rooms to trip it.
+	for i := 0; i < DupCourts; i++ {
+		court := fmt.Sprintf("earlier-%d", i)
+		if _, err := s.Post(ctx, PostInput{Chain: "dev", Court: court,
+			Moniker: ClerkName, Body: botClerkLine,
+			IPHash: botIPHash, Fixed: true}); err != nil {
+			t.Fatalf("seeding %s: %v", court, err)
+		}
+		*clock = clock.Add(MinInterval)
+	}
+	/* AND THE RULE IS ARMED RIGHT NOW, proven instead of assumed: the same words
+	   from the same ip_hash without the flag must be refused at this instant. If
+	   a constant or the window moved, this fails here rather than handing the
+	   assertion below a pass it did not earn. */
+	if _, err := post(t, s, "armed", botIPHash, botClerkLine); !errors.Is(err, ErrDuplicate) {
+		t.Fatalf("the duplicate rule is not armed after %d rooms, got %v — "+
+			"this fixture would pass whether say() marks its rows or not",
+			DupCourts, err)
+	}
+	*clock = clock.Add(MinInterval)
+
+	if _, err := post(t, s, "orem", "ip-asks", "who are you"); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.once(ctx); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.Recent(ctx, "dev", "orem", 0, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("the clerk went silent in a new room after saying its required "+
+			"line in %d others; the room holds %d rows", DupCourts, len(got))
+	}
+	if got[1].Moniker != ClerkName || got[1].Body != botClerkLine {
+		t.Errorf("expected the required line verbatim, got %+v", got[1])
+	}
+}
+
+/*
 AND A NAME-WEARER WHO GETS THROUGH IS CALLED OUT. The handler refuses the
 
 	name, so this branch is for the two cases it cannot cover: a row that
@@ -1784,6 +1884,113 @@ func TestTheSystemPromptSeparatesBuyingFromStaking(t *testing.T) {
 	} {
 		if strings.Contains(strings.ToLower(p), wrong) {
 			t.Errorf("the prompt describes staking as a purchase: %q", wrong)
+		}
+	}
+}
+
+/*
+AND THE PROMPT MUST SAY WHAT THE BELL IS, because a reader asked and got three
+features that do not exist.
+
+	MEASURED IN COVID, id 558, answering "does the bell work for newcomers?":
+	"The bell is a notification feature that alerts you when a claim you're
+	watching settles or when someone stakes on your side — it works the same way
+	for everyone, new or not. Check the claim's detail page to see if you ca[n]".
+	Every specific in that sentence is invented. There is no claim-watch, no
+	settle alert, no stake alert, and no notification control on a claim page.
+	WHAT THE BELL ACTUALLY IS, from the code that ships it: CHATBELLRE matches
+	"!?" or "?!" anywhere, or a "!" at the end (closing quotes and brackets
+	allowed after), and rings a sound in the chat panel. The toggle is the
+	.chatbell button, whose own aria-label reads "Ring a bell when somebody posts
+	!?", persisted under the key "kourt.chat.bell". Grepping HEAD's chat.js for
+	settle, watch or stake finds a comment, a demo fixture and a polling remark —
+	no feature.
+	THE PROMPT HAD NEVER HEARD OF IT. The bell shipped the same day, and a
+	feature the prompt does not describe is a feature the model will describe
+	anyway. That is the fifth instance of one pattern today, and the worst: the
+	others were wrong about a mechanism the reader could still find, while this
+	one sends them looking for a control that was never built.
+	ASSERTED ON THE PROMPT for the reason the tests above give. Deliberately
+	coarse about WHOSE messages ring — that detail changed twice in an afternoon,
+	and a test pinned to it would break on the next tweak without anything being
+	wrong.
+*/
+func TestTheSystemPromptSaysWhatTheBellIs(t *testing.T) {
+	p := strings.Join(strings.Fields(botSystem), " ")
+	for _, phrase := range []string{
+		"THE BELL IS A CHAT SOUND AND NOTHING MORE", // the rule
+		"rings a bell for anyone who has it switched on",
+		"bell button in the chat panel silences it", // where the control is
+		"no alert for a claim settling",             // and the two inventions
+		"no alert for somebody staking",
+		"no per-claim notification setting",
+	} {
+		if !strings.Contains(p, phrase) {
+			t.Errorf("the system prompt must say what the bell is, missing %q", phrase)
+		}
+	}
+	// AND IT MUST NOT INVENT THE FEATURES THE LIVE REPLY INVENTED. All five are
+	// lifted from id 558.
+	for _, wrong := range []string{
+		"claim you're watching",
+		"when a claim settles",
+		"stakes on your side",
+		"claim's detail page",
+		"notification feature",
+	} {
+		if strings.Contains(strings.ToLower(p), strings.ToLower(wrong)) {
+			t.Errorf("the prompt invents a notification the site does not have: %q", wrong)
+		}
+	}
+}
+
+/*
+AND THE PROMPT MUST NAME THE WEIGHTING THE REALM ACTUALLY USES, because the one
+it named had been deleted from the realm.
+
+	MEASURED IN A PROBE ROOM: asked how staking works, the clerk closed with
+	"newly minted court coin on top of it, weighted by how long you held it and
+	how right you were". The first half is conviction and correct. The second is
+	an invention, and it came from the prompt: the payout paragraph said winners
+	are weighted "by an adjudicated quality tier", so the model glossed an
+	adjudicated tier as a judgement of the staker.
+	THE ADJUDICATED TIER IS GONE. openrewards.gno says so in as many words —
+	"THE MULTIPLIER IS THE CLAIM'S OWN SIZE now, not a voted band (tier.gno). It
+	was mustMul(cs.tier, midGross) with tier in {0,1,2}" — and the replacement is
+	tierBpsFor, which computes xBarFrozen × tierParBps / tierRef and clamps it,
+	where tierRefAt is documented as "the claim size that earns exactly 1×,
+	resolved at the answer and then frozen" against "THE COURT'S OWN TYPICAL
+	CLAIM". Live in the reward path at openrewards.gno:437, not just in comments.
+	SO IT IS MECHANICAL, NOT A VERDICT ON THE STAKER: a claim of average size for
+	its court earns par by construction, and within the winning side what varies
+	is stake × time and the claim's size — never how right anyone was, since
+	everyone on the winning side won.
+	ASSERTED ON THE PROMPT for the reason the tests above give. This one is the
+	first divergence found between the prompt and a realm that moved underneath
+	it, rather than a gap the prompt never filled.
+*/
+func TestTheSystemPromptNamesTheRealWeighting(t *testing.T) {
+	p := strings.Join(strings.Fields(botSystem), " ")
+	for _, phrase := range []string{
+		"conviction",                            // the first weight, unchanged
+		"claim's own size measured against",     // the second, as the realm computes it
+		"typically worth",                       // and what it is measured against
+		"Nothing weights a winner by how right", // said as an instruction
+	} {
+		if !strings.Contains(p, phrase) {
+			t.Errorf("the system prompt must name the real weighting, missing %q", phrase)
+		}
+	}
+	// AND IT MUST NOT NAME THE DELETED ONE, nor the gloss it produced.
+	for _, wrong := range []string{
+		"adjudicated quality tier",
+		"quality tier",
+		"how right you were",
+		"weighted by how right",
+		"voted band",
+	} {
+		if strings.Contains(strings.ToLower(p), strings.ToLower(wrong)) {
+			t.Errorf("the prompt names a weighting the realm no longer has: %q", wrong)
 		}
 	}
 }
