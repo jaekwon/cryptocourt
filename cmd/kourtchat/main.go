@@ -25,6 +25,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"runtime/debug"
 	"strings"
 	"time"
 
@@ -309,6 +310,19 @@ func main() {
 			}
 			lg.Printf("geo: %d spans, %d countries, %s", tab.Len(), tab.Countries(), placed)
 		}
+	}
+	// GIVE BACK WHAT PARSING THE FILE COST, and this is worth a line of code
+	// rather than being left to the collector's own schedule.
+	//
+	// MEASURED on the real city file: the table itself is 97MB, but reading
+	// 658MB of decompressed CSV through it leaves the heap at 188MB and the
+	// process holding 333MB from the operating system — on a box with about a
+	// gigabyte available and a chain node beside it. One FreeOSMemory returns
+	// 227MB of that immediately. It is a startup cost paid once, so the usual
+	// argument against forcing a collection does not apply: there is nothing
+	// else running yet to be paused.
+	if srv.Geo != nil {
+		debug.FreeOSMemory()
 	}
 
 	h, err := store.Health(context.Background())

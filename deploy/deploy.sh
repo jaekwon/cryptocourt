@@ -585,7 +585,22 @@ say "verifying"
   # backslash never needs escaping through two layers of quoting.
   addr=\$(sed -n 's/.*--addr[[:space:]][[:space:]]*\([^ ]*\).*/\1/p' /etc/systemd/system/kourtchat.service | head -1)
   addr=\${addr:-127.0.0.1:8788}
-  out=\$(curl -fsS \"http://\$addr/api/chat/health\") || { echo 'chat health check FAILED'; exit 1; }
+  # WAITED FOR RATHER THAN ASKED ONCE. The service now reads a 3.5M-span geo
+  # file at startup and takes about ten seconds on this box to begin listening —
+  # MEASURED, on the deploy that introduced it: the unit was healthy, the health
+  # check ran immediately, got nothing, and reported a failure that had not
+  # happened. A readiness check that fires before the thing can be ready is a
+  # check that reports on its own timing.
+  #
+  # THIRTY SECONDS, AND IT STILL FAILS AT THE END. The point is to stop a slow
+  # start reading as a broken one, not to stop reporting a broken one.
+  out=""
+  for i in \$(seq 1 30); do
+    out=\$(curl -fsS --max-time 3 \"http://\$addr/api/chat/health\" 2>/dev/null) && break
+    sleep 1
+  done
+  [ -n \"\$out\" ] || { echo \"chat health check FAILED (30s at \$addr)\"; exit 1; }
+  [ \"\$i\" -gt 1 ] && echo \"    ready after \${i}s\"
   echo \"    chat  \$addr  \$(echo \"\$out\" | head -c 120)\"
 "
 
