@@ -8692,11 +8692,27 @@ function commentClusterSvg(count, threadCount){
      — a flat row of unconnected circles claims no structure at all. */
   const threads = Math.max(1, Math.min(rows, Math.floor(threadCount) || rows));
   const shown = Math.min(CMT_MAX_THREADS, threads);
-  /* AN ELLIPSIS WHEN THERE IS MORE THAN THE CIRCLES SAY, and that is both cases:
-     threads past the cap, and replies that cannot be placed under any particular
-     thread. Asked for as "'...' in white font not encircled" — not a circle,
-     because a circle here means one thread and this is not one thread. */
-  const more = threads > shown || rows > threads;
+  /* AN ELLIPSIS ONLY WHEN THREADS ARE HIDDEN, and this used to also fire for
+     replies — `|| rows > threads` — which was wrong and was reported: "#24 has
+     two comments in 1 thread (that's what the alt text says also) but the visual
+     doesn't match".
+     WHY IT WAS WRONG. The reasoning written here was that the map reads two
+     numbers, rows and threads, and cannot know which reply sits under which
+     thread — so the ellipsis stood for the replies it could not place. Coherent,
+     and it produced a figure that misreads: in a ROW OF THREAD-CIRCLES an
+     ellipsis reads as more circles of the same kind, meaning more THREADS. A
+     reader cannot tell the two senses apart, so #24 drew one circle for its one
+     thread and then trailed off as though threads were hidden. Nothing was.
+     MEASURED ON THE LIVE MAP: covid-24 "2 comments in 1 thread" drew 1 circle
+     plus an ellipsis, and covid-22 "7 comments in 5 threads" drew 5 circles —
+     every thread it has — plus an ellipsis. The clause fires whenever ANY thread
+     has a reply, which is the ordinary case, so the figure was trailing off on
+     almost every claim that had a conversation on it.
+     WHERE THE REPLY COUNT LIVES NOW: the hover title, which already says "2
+     comments in 1 thread" and is the right place for a number. The figure
+     encodes threads — one circle, one thread — and says nothing it cannot say
+     unambiguously. */
+  const more = threads > shown;
 
   /* A ROW, NOT A FAN. Circles hang side by side under the claim because that is
      what they are: siblings, each reaching the claim directly and nothing else.
