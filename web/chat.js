@@ -956,7 +956,7 @@ const CHATCSS = `
    that can show a constellation through the box you type into. A hairline above
    and below the log says where the scrolling region is, which is the one fact
    the old panel never stated. */
-.chatpanel{margin:.4rem 0 0;border:1px solid rgba(128,128,128,.28);border-radius:10px;
+.chatpanel{margin:0;border:1px solid rgba(128,128,128,.28);border-radius:10px;
   overflow:hidden;font-size:.92em}
 /* PADDING, NOT MARGIN, FOR EVERY BAND. A margin between two opaque bands is a
    gap the panel's base shows through, which is harmless here only because the
