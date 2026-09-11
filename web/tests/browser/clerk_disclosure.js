@@ -83,43 +83,29 @@ const {PAGE, demoPage} = require('./harness');
     ok("...and does not claim it " + what, !re.test(t), JSON.stringify(t.slice(0, 120)));
   }
 
-  // ---- the route from the chat notice --------------------------------------
+  /* THE PANEL NO LONGER POINTS HERE, AND THAT IS THE CHANGE, NOT A BREAKAGE.
+     Everything below this line used to be about the route from the chat notice:
+     that the notice carried a link, that the link was the phrase "the clerk is a
+     model" itself, that it was underlined and no quieter than the sentence around
+     it, and -- the arm the original defect would have failed -- that clicking it
+     actually landed on a rendered #/about. The notice was removed from the panel
+     on the owner's instruction as too wordy, so there is no link left to click.
+     WHAT IS LEFT IS THE PAGE, AND IT IS UNCHANGED. Every claim above still holds
+     and is still measured: what the clerk is, what it refuses, that it can be
+     wrong and can be pushed around, and that none of it is worded as a guarantee.
+     A reader reaches it from the site's own navigation now rather than from
+     inside the room. If a pointer is ever put back in the panel, the arms that
+     checked it are in this file's history. */
   await page.goto(PAGE + '#/c/orem/chat', {waitUntil: 'domcontentloaded'});
   await new Promise(r => setTimeout(r, 1400));
-
-  const link = await page.evaluate(() => {
-    const a = document.querySelector('.chatwarn a');
-    if (!a) return null;
-    const r = a.getBoundingClientRect();
-    const cs = getComputedStyle(a);
-    return {text: (a.textContent || '').trim(), href: a.getAttribute('href'),
-            onScreen: r.width > 2 && r.height > 2,
-            underlined: /underline/.test(cs.textDecorationLine),
-            // it must not read as quieter than the warning it sits inside
-            weight: cs.fontWeight, opacity: +cs.opacity};
-  });
-  ok("the chat notice carries a link", !!link, JSON.stringify(link));
-  ok(`...which is the phrase itself ("${link && link.text}")`,
-     !!(link && /clerk is a model/i.test(link.text)), JSON.stringify(link));
-  ok("...pointing at the about page", !!(link && link.href === '#/about'), JSON.stringify(link));
-  ok("...visible and underlined, since colour cannot say it is clickable here",
-     !!(link && link.onScreen && link.underlined), JSON.stringify(link));
-  ok(`...and no quieter than the warning around it (weight ${link && link.weight})`,
-     !!(link && +link.weight >= 600 && link.opacity >= 0.95), JSON.stringify(link));
-
-  /* THE CLICK. This is the arm the original defect would have failed: a notice
-     that says "the clerk is a model" and goes nowhere. */
-  await page.click('.chatwarn a');
-  await new Promise(r => setTimeout(r, 900));
-  const landed = await page.evaluate(() => ({
-    hash: location.hash,
-    clerkHeading: [...document.querySelectorAll('h2')]
-      .some(e => /clerk/i.test(e.textContent || '')),
+  const panelNotice = await page.evaluate(() => ({
+    warn: !!document.querySelector('.chatwarn'),
+    anyAboutLink: !!document.querySelector('#chatview a[href="#/about"]'),
   }));
-  ok(`clicking it goes to the about page (${landed.hash})`,
-     landed.hash === '#/about', JSON.stringify(landed));
-  ok("...and the clerk section is there when you arrive", landed.clerkHeading,
-     JSON.stringify(landed));
+  ok("the panel carries no notice, as asked", panelNotice.warn === false,
+     JSON.stringify(panelNotice));
+  ok("...and so no link into the disclosure from inside the room",
+     panelNotice.anyAboutLink === false, JSON.stringify(panelNotice));
 
   ok("the page threw nothing while doing all that", errs.length === 0, errs.join(" | "));
   await browser.close();

@@ -724,39 +724,15 @@ function chatPanelHtml(slug, moniker, note, heading) {
     + '<div class="chathead">'
     +   (heading === false ? ""
         : "<b>Chat</b> <span class=\"chatslug\">" + chatEsc(slug) + "</span>")
-    /* THE WARNING, AND THE BUTTON THAT PUTS IT AWAY.
-       It is the panel's one anti-scam affordance, so it is loud rather than
-       decorative — §6 measured what a plausible name is worth to a lure — and it
-       is dismissable, because a standing notice a reader has read ten times
-       stops being read at all and takes the space the transcript needs.
-       THE BUTTON IS INSIDE THE SPAN so one `hidden` removes both, and it carries
-       an aria-label because "×" alone tells a screen reader nothing about what
-       is being dismissed. */
-    /* AND THE CLERK IS NAMED IN IT, because it is the one voice in the room a
-       reader is invited to trust: its name is reserved, the handler refuses a
-       human who tries to wear it, and it flies its own flag. It is also a model,
-       it can be wrong, and a reader CAN push it around — measured on the live
-       site, a message repeating the prompt's own instruction sentence made it
-       emit a word of the reader's choosing. The channels are split now so that
-       exact attack fails, and the honest line is still that this is a model
-       rather than an oracle: the mitigation is a defence, not a guarantee.
-       IN THE SAME SENTENCE AS THE REST, not a second notice. Two dismissable
-       warnings stacked on a 230px rail is how both stop being read, and this is
-       the same class of caution as the two beside it. */
-    /* AND THE PHRASE ITSELF IS THE LINK, which costs no words. The notice said
-       the clerk is a model and pointed nowhere — half a disclosure, because a
-       reader who wanted to know what they were talking to had no page to go to.
-       #/about now carries a section on it. Making "the clerk is a model" the
-       anchor rather than appending "read more" keeps the notice the length it
-       already is, on a rail 230px wide where every added clause is a clause
-       somebody stops reading. */
-    +   '<span class="chatwarn">names are unverified &mdash; nobody here is staff,'
-    +     " and nobody can move funds for you. "
-    +     '<a class="chatwarna" href="#/about">the clerk is a model</a>'
-    +     ": it can be wrong or be misled, so check anything that matters"
-    +     '<button class="chatwarnx" type="button"'
-    +       ' aria-label="dismiss this warning">&times;</button></span>'
-    +   '<span class="chatdemo" hidden></span>'
+    /* NOTHING STANDS IN THE HEAD NOW. It carried a dismissable notice -- names
+       are unverified, nobody is staff, the clerk is a model -- which was removed
+       on the owner's instruction as too wordy. The head itself stays for the rule
+       it draws: that line is what says where the scrolling region begins, and it
+       is the only thing left saying it now the log's own foot rule is gone.
+       AND THE DISCLOSURE IT POINTED AT IS STILL THERE. "The clerk is a model" was
+       the anchor to #/about, which carries the section on what the clerk is, what
+       it refuses, and that a reader can push it around. That page is unchanged and
+       still checked; what is gone is the pointer to it from inside the panel. */
     +   '<button class="chatbell" type="button" aria-pressed="true"'
     +     ' aria-label="Ring a bell when somebody posts !?"'
     +     ' title="Ring a bell when somebody posts !? — click to silence it">'
@@ -1008,7 +984,7 @@ const CHATCSS = `
    bands meet, and one inset (.7rem) holds for the head, the log and the
    composer so the rows line up down a single edge. */
 .chathead{display:flex;align-items:baseline;gap:.5rem;flex-wrap:wrap;margin-bottom:0;
-  padding:.3rem 1.7rem .3rem .2rem;border-bottom:1px solid rgba(128,128,128,.28)}
+  padding:.3rem 1.7rem .3rem .2rem}
 .chatslug{opacity:.6}
 /* THE WARNING IS THE ONE THING IN THIS HEAD THAT IS NOT DECORATION, and it read
    as decoration: .85em at 60% opacity, dimmer than the court slug beside it. A
@@ -1018,22 +994,6 @@ const CHATCSS = `
    purpose — it has no access to the page's tokens and must not grow a copy of
    them — and the page it is embedded in has four themes. Opacity and weight are
    the two levers that cannot fight any of them. */
-/* A NOTICE THAT BELONGS TO THE SKY IT SITS ON. It had no ground of its own, so
-   with one continuous starfield behind the panel it read as text loose on the
-   field. The colour is drawn from the same family as everything else in the
-   column -- the rail's surface violet, lifted and a little more saturated so it
-   separates from the head's scrim without becoming a yellow-and-black hazard
-   strip, which is the wrong register for a room stating something true rather
-   than stopping you.
-   INSET AND ROUNDED, so it reads as a card laid on the sky rather than as one
-   more full-width band of the panel. It is the only radius left in here now the
-   frame is gone, which is what makes it read as a distinct object. */
-.chatwarn{opacity:1;font-size:.88em;font-weight:600;
-  background:linear-gradient(180deg,rgba(58,42,116,.62),rgba(38,28,80,.62));
-  border:1px solid rgba(150,134,224,.24);
-  border-radius:7px;
-  padding:.3rem .55rem;
-  box-shadow:0 1px 0 rgba(0,0,0,.25)}
 /* The bell switch. The glyph itself carries the state — a bell, or a bell with a
    stroke through it — so nothing here needs to underline the point; off is only
    dimmed so the two read as one control in two positions. */
@@ -1045,42 +1005,21 @@ const CHATCSS = `
 .chatbellicn{width:1em; height:1em; display:block}
 .chatbell:hover{opacity:1}
 .chatbell[aria-pressed="false"]{opacity:.45}
-/* AND THE DISMISS, WHICH HAS TO BE HITTABLE. Padding rather than a bigger glyph,
-   so the × stays the size of the sentence it ends while the target is bigger
-   than the mark — the same lesson the name button in this file learned the hard
-   way, twice: a label that cannot be hit is a control that does not exist.
-   THE TARGET IS STATED, NOT DERIVED. The first version set .1rem of side padding
-   and rendered 11x12px while the comment beside it claimed 20; raising the
-   padding to .3rem gave 17x22, still a pixel short of what the check asked for.
-   Padding plus a glyph's advance width is not a size anybody can predict — a
-   min-width says the thing the comment means, and the browser check measures the
-   rendered box rather than trusting either of us. */
-/* THE LINK INSIDE THE WARNING inherits everything and only adds the underline.
-   .chatwarn is opacity 1 and weight 600 by measurement — it is the panel's one
-   anti-scam affordance — and a link that reset either would read as less urgent
-   than the sentence it sits in. The underline is what says it is clickable at
-   all, since colour cannot: the panel is embedded in a page with four themes and
-   has no access to its tokens. */
-.chatwarna{color:inherit;font:inherit;font-weight:inherit;text-decoration:underline}
-.chatwarna:hover,.chatwarna:focus{text-decoration-thickness:2px}
-.chatwarnx{background:none;border:0;color:inherit;font:inherit;font-weight:400;
-  cursor:pointer;opacity:.55;padding:.2rem;margin-left:.15rem;line-height:1;
-  min-width:1.25rem;min-height:1.25rem;
-  display:inline-flex;align-items:center;justify-content:center}
-.chatwarnx:hover,.chatwarnx:focus{opacity:1}
 /* max-height, not height: outside the rail this is still a panel on a page and
    must not grow without bound. Inside it, the rail's own flexing wins. */
-/* HORIZONTAL INSET ONLY. The rows carry their own .15rem and their own hairline,
-   so vertical padding here would be a second helping of both — and on a 560px
+/* HORIZONTAL INSET ONLY. The rows carry their own .15rem, so vertical padding
+   here would be a second helping of it — and on a 560px
    window the log is 67px, which is two messages, and every 10px of it is a
    fraction of a message that is no longer on screen. */
 .chatlog{list-style:none;margin:0;padding:0 .2rem;max-height:15rem;overflow-y:auto;
   flex:1 1 auto;min-height:0}
-/* AND THE LAST ROW DROPS ITS OWN. It was here because the log carried a hairline
-   of its own and the two read as one thick line where they met; the log's is gone
-   now, and this still earns its place -- a row-separator under the final row is a
-   line under nothing, sitting directly above the composer. */
-.chatlog .chatmsg:last-child{border-bottom:0}
+/* THE ROWS HAVE NO SEPARATORS AND SO THERE IS NOTHING TO EXCEPT. A rule under
+   every message was here from when the log was a 15rem box in the rail and the
+   rows needed telling apart; on a full-height panel over a starfield it read as a
+   ruled ledger drawn across the sky, and was reported that way. The gap between
+   rows does the separating now. This once carried a :last-child exemption to stop
+   the final row's rule doubling with the log's own -- both are gone, and keeping
+   the exemption would be a rule about a rule that no longer exists. */
 /* height:0 IS WHAT MAKES THE RAIL'S FLOOR MEAN THE CONTROLS — and it is scoped
    to the rail, which the first cut was not.
    The rail floors this panel at min-content so the composer can never be
@@ -1095,8 +1034,7 @@ const CHATCSS = `
    log yields — 127px at 1000, 27px at 900, 0 by 800 — and everywhere else it
    is sized by its messages exactly as before. */
 .railchat.chatpanel .chatlog{height:0}
-.chatmsg{display:flex;gap:.5rem;align-items:baseline;padding:.15rem 0;
-  border-bottom:1px solid rgba(128,128,128,.12)}
+.chatmsg{display:flex;gap:.5rem;align-items:baseline;padding:.15rem 0}
 /* WHO SAID IT AND WHAT THEY SAID ARE ONE RUN OF PROSE, NOT TWO COLUMNS.
    The name was its own flex column, so a message that wrapped kept to the body
    column and every line after the first began under an indent as wide as the
@@ -1202,7 +1140,6 @@ const CHATCSS = `
    rule keeps sitting on the boundary it marks. */
 .chatstate{margin:0 .2rem;padding:.35rem .5rem;border-radius:4px;
   background:rgba(128,128,128,.15)}
-.chatdemo{display:block;margin-top:.25rem;font-size:.85em;font-weight:600}
 /* THE COMPOSER MUST NOT SHRINK, and this is the whole bug behind four failed
    fixes. In the rail the panel is a flex COLUMN (index.html's .railchat), and
    its rule for every direct child of .railchat sets min-height:0 there, which
@@ -1362,7 +1299,7 @@ const CHATCSS = `
    are declared on the rail, and chat.js mounts a panel outside it, so the var
    would resolve to nothing here. Alpha is a little above the black it replaces --
    a lighter colour needs more of itself to sit as deep. */
-.chathead,.chatform,.chatnote{background-color:rgba(22,18,46,.45)}
+.chatform,.chatnote{background-color:rgba(22,18,46,.45)}
 .chatpanel{
   /* THE SKY IS ON THE PANEL, NOT ON THE LOG. It was on the log so that the head
      and the composer kept an opaque base -- "nothing that can show a
@@ -1401,8 +1338,8 @@ const CHATCSS = `
      anything that only reads the source. */
   background-color:#0a0a14;
   background-image:
-    linear-gradient(to bottom, rgba(10,10,20,0) 0, rgba(10,10,20,0) 45vh,
-                    #130f26 78vh, #181333 100vh),
+    linear-gradient(to bottom, rgba(10,10,20,0) 0, rgba(10,10,20,0) 25vh,
+                    #130f26 55vh, #181333 100vh),
     url("sky.svg");
   background-size:100vw 100vh,cover;
   background-position:left top,center top;
@@ -1492,32 +1429,6 @@ function mountChat(el, opts) {
    * already there to edit, which is what makes it a rename rather than a blank.
    * The submit path still treats a literal "anon" as no choice at all — see the
    * note there about storing a default the reader never made. */
-  /* THE WARNING'S DISMISSAL, REMEMBERED PER BROWSER.
-     WHY IT IS REMEMBERED AT ALL: the notice sits above a transcript that gets
-     zero pixels in a short rail, so a reader who has read it once is paying for
-     it with the only thing they came for. Dismissing it for this browser is the
-     smallest thing that helps.
-     WHY IT IS NOT REMEMBERED SERVER-SIDE: nothing here has sessions, and the one
-     identifier available is a hashed address — writing a reader's preference
-     against that would turn an anti-abuse key into a profile. localStorage is
-     the reader's own machine, which is where a reader's preference belongs.
-     GUARDED, like every other lookup in this file: a panel rendered by an older
-     shell has no button, and the mount must keep working rather than throw on
-     line one. Storage is guarded too — Safari in private browsing throws on
-     read, and a warning that cannot be dismissed is a better failure than a
-     chat that will not mount. */
-  const warnEl = el.querySelector(".chatwarn");
-  const WARNKEY = "kourt.chat.warnoff";
-  if (warnEl) {
-    let off = false;
-    try { off = window.localStorage.getItem(WARNKEY) === "1"; } catch (e) {}
-    warnEl.hidden = off;
-    const x = warnEl.querySelector(".chatwarnx");
-    if (x) x.addEventListener("click", () => {
-      warnEl.hidden = true;
-      try { window.localStorage.setItem(WARNKEY, "1"); } catch (e) {}
-    });
-  }
 
   const bellEl = el.querySelector(".chatbell");
   if (bellEl) {
@@ -1725,31 +1636,16 @@ function mountChat(el, opts) {
        broken. A small honest number for a sample room. */
     showHere(3);
 
-    // SAY THAT THE THREAD IS INVENTED — not merely that chat is unconfigured.
-    //
-    // This branch is reached when no API base is configured, which is at least as likely to
-    // be a deployment that lost its base URL as a deliberate demo. It was never silent: the
-    // panel already mounts with "Chat is not configured for this page." in .chatnote. But
-    // that names the CAUSE and not the consequence, and the difference matters — a reader
-    // who sees four plausible messages with names, flags and ages, plus a line saying chat
-    // is not configured, can reasonably conclude they cannot POST, rather than that
-    // everything above them is fabricated.
-    //
-    // Three things were wrong with relying on it, none of them the absence of any text:
-    // .chatnote is the least prominent slot in the panel, it sits BELOW the composer and so
-    // after the fiction rather than before it, and it is transient — the submit handler
-    // below overwrites it, as does every validation message.
-    //
-    // chat-demo.html does say so in its own prose, which is part of why this went unnoticed.
-    // The PANEL is the part that gets embedded in a court page, so it has to carry the
-    // notice itself: in the head, beside the standing "names are unverified" warning, above
-    // the log rather than below it, and never overwritten.
-    const fiction = el.querySelector(".chatdemo");
-    if (fiction) {
-      fiction.textContent = "Sample conversation \u2014 this panel is not connected to a"
-        + " server, and every message below is invented.";
-      fiction.hidden = false;
-    }
+    /* NO NOTICE THAT THE THREAD IS INVENTED, BY DECISION. This branch is reached
+       when no API base is configured -- a deliberate demo, or a deployment that
+       lost its base URL -- and the panel then shows four plausible messages with
+       names, flags and ages that are not real. It used to say so, in the head,
+       above the log. Removed on the owner's instruction: the demo is a local
+       development view, and "this is only useful for me and i don't need to know
+       this because it's localhost". .chatnote still carries "Chat is not
+       configured for this page.", which names the cause rather than the
+       consequence. If this panel is ever embedded somewhere a stranger can read
+       it, that distinction is the thing to revisit. */
 
     formEl.addEventListener("submit", ev => {
       ev.preventDefault();
