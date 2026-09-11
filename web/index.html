@@ -1119,6 +1119,33 @@ a.card:hover{border-color:var(--line-2)}
    of the page. Scoped to .roomfill, which is only ever the chat view, so no
    other page loses its spacing. */
 #main.roomfill{display:flex; flex-direction:column; padding-bottom:0}
+/* THE ROW HAS TO BE DEFINITE OR NONE OF THE ABOVE BINDS. body is a grid of
+   `auto 1fr` with min-height:100vh, and a 1fr row under a MIN height stretches to
+   its content -- so on a busy room #main grew to 1852px, the log grew with it
+   instead of scrolling, and the whole page scrolled the court's heading off the
+   top. Measured on kourt.xyz: document 1852 against a 950 viewport, .chatlog 1528
+   tall with scrollHeight 1528, which is a log that never scrolled at all.
+   Locking body to the viewport makes the 1fr row definite, and the flex chain
+   below it -- panel flex:1 1 auto, log min-height:0 -- then has a remainder to
+   divide, so the log becomes the one thing that scrolls and the heading stays.
+   A CLASS RATHER THAN :has(), for the same reason .roomfill is one: render()
+   already toggles that class at exactly the two moments this needs, and :has()
+   appears nowhere else in this file.
+   NOT BELOW 821px. The stacked layout under that width deliberately scrolls --
+   the reader has to get past the rail to reach the room at all -- and
+   overflow:hidden on the body would strand them above it. */
+@media(min-width:821px){
+  /* minmax(0,1fr), NOT 1fr. A 1fr track's automatic minimum is its CONTENT, so
+     locking the body to 950px did nothing on its own: the rows still computed to
+     0px 2087px and #main overflowed the box it was supposed to be bounded by.
+     Measured that way -- body 950, #main 2087 -- which is the whole reason this
+     needs two declarations rather than the obvious one. min-height:0 on #main is
+     the same rule for the grid ITEM: its automatic minimum is its content too,
+     and a track that may shrink is no use to an item that may not. */
+  body.roomlock{height:100dvh; min-height:0; overflow:hidden;
+    grid-template-rows:auto minmax(0,1fr)}
+  body.roomlock #main{min-height:0}
+}
 /* AND IT REACHES RIGHT, HERE ONLY. The rule above bleeds left and says why it
    does not bleed right: "the right edge is where the page's measure ends". True
    on every other page -- but on this one the chat panel underneath bleeds BOTH
@@ -1148,7 +1175,9 @@ a.card:hover{border-color:var(--line-2)}
      the lead measured at 226 plus a 24px foot. With the foot gone and the gaps
      above it closed the constant was 48px short, and the panel stopped before
      the bottom of the page — the arithmetic had moved out from under it.
-     main is a grid row with a DEFINITE height and .roomfill is already a flex
+     main is a grid row with a definite height -- but only because body.roomlock
+     makes it one; see that rule, and note this comment asserted it before
+     anything did -- and .roomfill is already a flex
      column, so flex:1 1 auto with min-height:0 fills exactly what is left,
      whatever is above it and however the heading wraps. It also cannot overflow
      the page: the remainder is what it is, so the composer stays reachable by
@@ -7686,6 +7715,7 @@ async function render(){
      flex column with a 24px foot, which is how a class that is only ever added
      turns into a bug on the page after it. */
   main.classList.remove("roomfill");
+  document.body.classList.remove("roomlock");
   const raw = location.hash.replace(/^#/,"") || "/";
   const qx = raw.indexOf("?");
   const hash = qx<0? raw : raw.slice(0,qx);
@@ -14473,6 +14503,7 @@ on(/^\/c\/([a-z0-9-]+)\/chat$/, async (slug)=>{
      `#main:has(#chatview)` would, and :has() appears nowhere else in this file,
      so the class is the cheaper of the two dependencies. */
   main.classList.add("roomfill");
+  document.body.classList.add("roomlock");
   if(seq0 !== renderSeq) return;
   const host = document.getElementById("chatview");
   if(!host) return;

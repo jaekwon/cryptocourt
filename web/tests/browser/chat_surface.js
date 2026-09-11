@@ -65,7 +65,13 @@ const ok = (n, c, d) => {
   const m = await page.evaluate(() => {
     const q = s => document.querySelector("#chatview " + s);
     const cs = e => getComputedStyle(e);
-    const plated = e => /base64/.test(cs(e).backgroundImage);
+    /* A SKY IS A SKY WHATEVER IT IS DELIVERED AS. This tested for "base64" alone,
+       which described the rail's inline plate and nothing else -- so when the
+       panel's sky became a file, sky.svg, every arm below went on answering about
+       a plate that was no longer there. Four of them PASSED while the property
+       they guard had inverted, which is the failure mode a proxy has and a direct
+       question does not. */
+    const plated = e => /base64|sky\.svg/.test(cs(e).backgroundImage);
     const box = e => e.getBoundingClientRect();
     const panel = document.getElementById("chatview");
 
@@ -96,6 +102,18 @@ const ok = (n, c, d) => {
       skyBehindHead: skyBehind(head),
       skyBehindForm: skyBehind(form),
       skyBehindInput: skyBehind(input),
+      /* AND WHETHER THE FIELD STOPS IT. Once the sky is on the panel, "is there
+         sky behind this" is true of everything in the panel and can no longer
+         tell the field apart -- so the question becomes whether the field paints
+         a ground of its own opaque enough to hide what is under it. That is the
+         property the original arm was really guarding. */
+      inputOwnAlpha: (() => {
+        const c = cs(input).backgroundColor;
+        const m = c.match(/rgba?\(([^)]+)\)/);
+        if (!m) return 0;
+        const p = m[1].split(",").map(Number);
+        return p.length < 4 ? 1 : p[3];
+      })(),
       skyBehindNote: skyBehind(note),
 
       /* 2. THE BANDS MEET THE LOG WITH NO SEAM EITHER SIDE OF IT.
@@ -106,7 +124,11 @@ const ok = (n, c, d) => {
          what the two hairlines are drawn on. */
       headToLog: Math.round(box(log).top - box(head).bottom),
       logToNext: (() => {
-        const vis = [...panel.children].filter(e => box(e).height > 0);
+        const inFlow = e => {
+          const pos = getComputedStyle(e).position;
+          return pos !== "absolute" && pos !== "fixed";
+        };
+        const vis = [...panel.children].filter(e => box(e).height > 0 && inFlow(e));
         const i = vis.indexOf(log);
         return i >= 0 && i + 1 < vis.length
           ? Math.round(box(vis[i + 1]).top - box(log).bottom) : null;
@@ -116,7 +138,11 @@ const ok = (n, c, d) => {
          reintroduced anywhere in the stack shows up here rather than in whichever
          single pair the arms happened to name. */
       worstSeam: (() => {
-        const vis = [...panel.children].filter(e => box(e).height > 0);
+        const inFlow = e => {
+          const pos = getComputedStyle(e).position;
+          return pos !== "absolute" && pos !== "fixed";
+        };
+        const vis = [...panel.children].filter(e => box(e).height > 0 && inFlow(e));
         let worst = 0;
         for (let i = 1; i < vis.length; i++) {
           const g = Math.abs(box(vis[i]).top - box(vis[i - 1]).bottom);
@@ -146,14 +172,29 @@ const ok = (n, c, d) => {
     };
   });
 
-  ok("the transcript carries the sky", m.logHasSky === true);
-  /* THE PANEL MUST NOT, and this is the arm that fails if somebody moves the
-     plate back up one level to get the head and composer tinted by it again. */
-  ok("...and the panel itself does not", m.panelHasSky === false);
-  ok("no sky behind the warning", m.skyBehindHead === false);
-  ok("no sky behind the composer", m.skyBehindForm === false);
-  ok("no stars behind the box you type into", m.skyBehindInput === false);
-  ok("no sky behind the note", m.skyBehindNote === false);
+  /* THE SKY IS ON THE PANEL NOW, AND THAT IS THE REQUEST, NOT A REGRESSION.
+     These arms used to say the opposite -- sky on the log, none on the panel, and
+     specifically none behind the box you type into. That was the right shape
+     while the panel needed an opaque base; it was asked to change, in these
+     words: "i can't see any space background from the top or bottom of the
+     chat". The picture had no way to reach the head and the composer while it was
+     painted on the one row between them. So it moved up a level, the log went
+     transparent, and one continuous sky runs from the notice to the composer.
+     WHAT PROTECTS THE TEXT IS NO LONGER ITS ABSENCE. The head, the composer and
+     the note carry a scrim of their own -- rgba(22,18,46,.45), the rail's surface
+     colour -- and the sky behind them is under a veil that caps it well below the
+     ink. Those are the arms below; the two that follow here only fix where the
+     picture lives. */
+  ok("the panel carries the sky", m.panelHasSky === true);
+  ok("...and the log does not paint a second one", m.logHasSky === false);
+  ok("the sky reaches the warning", m.skyBehindHead === true);
+  ok("...and the composer", m.skyBehindForm === true);
+  ok("...and the note", m.skyBehindNote === true);
+  /* AND STILL NOT INSIDE THE FIELD ITSELF. The input keeps its own background, so
+     what you are typing is never read against a starfield -- which was the actual
+     complaint behind the original arm, and survives the inversion above. */
+  ok(`but the box you type into paints its own ground (alpha ${m.inputOwnAlpha})`,
+     m.inputOwnAlpha >= 0.6, JSON.stringify({inputOwnAlpha: m.inputOwnAlpha}));
   /* AND THE ARM THAT USED TO SIT HERE IS GONE ON PURPOSE. It read "the panel's
      base is opaque, which is what the bands are painted on" — true when written
      and false a day later, when the base became a tenth of white so the chat's
@@ -169,9 +210,25 @@ const ok = (n, c, d) => {
   ok("...and every band in the column tiles", m.worstSeam === 0);
 
   ok("a rule states where the scroll starts", m.headRule >= 1);
-  ok("...and where it ends", m.logRule >= 1);
+  /* AND NOTHING STATES WHERE IT ENDS, WHICH IS DELIBERATE. The log carried a
+     border-bottom so the scrolling region was ruled at both ends; it was reported
+     as "just above the chat field there is a horizontal line between that and
+     chat text. remove it" and taken out. The head's rule stays -- the arm above
+     -- because the top of the scroll still wants stating, and the composer's own
+     edge states the bottom well enough. Asserting the rule back would be
+     asserting a design that was rejected. */
+  ok("...and nothing rules its foot, which was asked for", m.logRule === 0,
+     `logRule=${m.logRule}`);
 
-  ok("the room has edges all round", m.panelBorder >= 1 && m.panelRadius >= 4);
+  /* NO CARD. This asked for a 1px border and a >=4px radius on the reasoning that
+     "the room has edges all round". It has no edges now, on purpose: the panel
+     bleeds past main's gutters to both window edges, where a rounded corner has
+     nothing to be a corner of, and the frame was removed in those words --
+     "remove the rounded borders around the chat box". What still matters is that
+     it not go halfway, carrying one and not the other. */
+  ok("the room has no card frame, which was asked for",
+     m.panelBorder === 0 && m.panelRadius === 0,
+     `border=${m.panelBorder} radius=${m.panelRadius}`);
   /* AND NO LEFTOVER OFFSET. padding-top on the panel was the visible half of
      "strange how the chat has padding around it": a rule across the top, space
      under it, and no edge anywhere else for either to belong to. */
@@ -200,7 +257,13 @@ const ok = (n, c, d) => {
     st.textContent = "something the panel had to say";
     const panel = document.getElementById("chatview");
     const box = e => e.getBoundingClientRect();
-    const vis = [...panel.children].filter(e => box(e).height > 0);
+    // Same exclusion as the walk above, and for the same reason: the count is
+    // position:absolute and tiles with nothing.
+    const inFlow = e => {
+      const pos = getComputedStyle(e).position;
+      return pos !== "absolute" && pos !== "fixed";
+    };
+    const vis = [...panel.children].filter(e => box(e).height > 0 && inFlow(e));
     if (!vis.includes(st)) return null;
     let worst = 0;
     for (let i = 1; i < vis.length; i++) {
@@ -255,13 +318,18 @@ const ok = (n, c, d) => {
       railOverflow: Math.round(bx(document.querySelector(".rail")).height
         - document.documentElement.clientHeight),
       composerOnScreen: bx(form).bottom <= document.documentElement.clientHeight + 1,
+      // the gutter the room bleeds through, read from main rather than hardcoded:
+      // it is a clamp(), so it is 44px here and something else on another window.
+      gutter: mc.paddingRight,
     };
   });
   ok("main is told it is holding a room", fill.roomfill === true);
   ok("the room is not capped narrower than the page", fill.cap === "none");
-  ok("...so its right edge is the measure's right edge", fill.gapRight === 0,
-     JSON.stringify(fill));
-  ok("...and its left edge is too", fill.gapLeft === 0, JSON.stringify(fill));
+  const bleed = Math.round(parseFloat(fill.gutter));
+  ok(`...so its right edge clears the measure by the gutter (${fill.gapRight} vs ${-bleed})`,
+     fill.gapRight === -bleed, JSON.stringify(fill));
+  ok(`...and its left edge by the same (${fill.gapLeft})`,
+     fill.gapLeft === fill.gapRight, JSON.stringify(fill));
   /* THE GAP BELOW IS THE FOOT, WHICH IS NOT THE SAME AS "SMALL". main's foot is
      90px for an article that ends and 24 for a room whose bottom edge is the
      composer; tying the arm to the computed padding rather than to 24 means the

@@ -1222,7 +1222,7 @@ const CHATCSS = `
    colour tokens and must not grow a copy of them.
    NO BACKTICKS IN HERE -- the whole block is one template literal, and a stray
    pair closes it early. That is what broke every page, not just the chat. */
-.chatmoniker,.chatinput{background:transparent;color:inherit;font:inherit;
+.chatmoniker,.chatinput{background:rgba(14,11,32,.72);color:inherit;font:inherit;
   border:1px solid rgba(128,128,128,.35);border-radius:4px;padding:.3rem .4rem}
 .chatmoniker:focus,.chatinput:focus{outline:none;border-color:rgba(128,128,128,.7)}
 .chatmoniker::placeholder,.chatinput::placeholder{color:inherit;opacity:.4}
