@@ -1018,7 +1018,22 @@ const CHATCSS = `
    purpose — it has no access to the page's tokens and must not grow a copy of
    them — and the page it is embedded in has four themes. Opacity and weight are
    the two levers that cannot fight any of them. */
-.chatwarn{opacity:1;font-size:.88em;font-weight:600}
+/* A NOTICE THAT BELONGS TO THE SKY IT SITS ON. It had no ground of its own, so
+   with one continuous starfield behind the panel it read as text loose on the
+   field. The colour is drawn from the same family as everything else in the
+   column -- the rail's surface violet, lifted and a little more saturated so it
+   separates from the head's scrim without becoming a yellow-and-black hazard
+   strip, which is the wrong register for a room stating something true rather
+   than stopping you.
+   INSET AND ROUNDED, so it reads as a card laid on the sky rather than as one
+   more full-width band of the panel. It is the only radius left in here now the
+   frame is gone, which is what makes it read as a distinct object. */
+.chatwarn{opacity:1;font-size:.88em;font-weight:600;
+  background:linear-gradient(180deg,rgba(58,42,116,.62),rgba(38,28,80,.62));
+  border:1px solid rgba(150,134,224,.24);
+  border-radius:7px;
+  padding:.3rem .55rem;
+  box-shadow:0 1px 0 rgba(0,0,0,.25)}
 /* The bell switch. The glyph itself carries the state — a bell, or a bell with a
    stroke through it — so nothing here needs to underline the point; off is only
    dimmed so the two read as one control in two positions. */
