@@ -350,279 +350,138 @@ const HEIGHTS = [1000, 900, 800, 760, 700, 620];
        JSON.stringify(m));
   }
 
-  /* ---- dragging the seam --------------------------------------------------
-     The toggle above is one click and two sizes. This is the continuous one:
-     grab the Chat heading and pull it up. Asked for as "slide the chat box up
-     to make it bigger so I can read it".
-     WHY THE HEADING AND NOT A STRIP IN THE PANEL: railChatFor replaces
-     .railchat's innerHTML on every mount, so a handle inside it is destroyed
-     the first time a reader opens another court — it would vanish exactly when
-     it was working. The heading is nav's last child, survives remounts, and is
-     already the line being dragged.
-     MEASURED BY BREAKING IT: removing the pointerdown handler fails the grow
-     and persist arms; dropping the localStorage write fails only persistence;
-     removing the floor lets a downward drag swallow the composer, which the
-     send-is-hittable arm catches; and letting the grip swallow the button's
-     click fails the last arm here. */
+  /* ---- THE SEAM IS NOT A CONTROL ANY MORE ---------------------------------
+     THERE WAS A DRAG HANDLE, and roughly two hundred lines here proved it
+     worked: a dotted grip drawn at rest, a keyboard separator, a clamp at each
+     end, a reset that appeared only once a size was set, and a check that no
+     nav item painted under it. All of it passed. It is gone anyway.
+     WHY, in the owner's words: "when i drag it down lower past 'Realm
+     parameters' ... instead of the top of the chat getting dragged downward, the
+     chat div drags upward from the bottom", and then "the whole ...... drag
+     thing is confusing" and "it's hard to even explain how to fix issues with
+     it". That last sentence is the one that settled it. Three fixes had already
+     landed against this control — a jump on first grab, a re-pin at the clamp, a
+     sticky handle scrolling out of its own scroller — and a fourth symptom was
+     still arriving. A control whose failures cannot be described is not a
+     control anybody can reason about.
+     WHAT REPLACED IT IS NOT A CONTROL AT ALL. The log has a floor and the links
+     yield by scrolling, so the panel is usable without anybody arranging it.
+     MEASURED, and this is why the handle had felt necessary: before the floor,
+     the log was 0px tall at 1440 wide on every desktop height tested — 900, 800
+     and 700 — because the nav's links take 333px and the panel's own controls
+     take the rest. The drag was not a convenience on top of a working layout, it
+     WAS the layout. At 700 the original could not even reach the composer.
+     SO THESE ARMS MEASURE THE FLOOR AND THE ABSENCE OF THE HANDLE, and the
+     expand toggle keeps its own section above — one button, two states, which is
+     the whole of the sizing story now. */
   {
+    /* NO AFFORDANCE LEFT, checked as the four things that made the row look
+       draggable. Any one of them surviving is a row that still invites a pull
+       and no longer answers one. */
     await page.setViewport({width: 1280, height: 900});
-    /* FROM A KNOWN STATE. The section above leaves the rail EXPANDED, and this
-       one inherited it: the log was already 528px, the drag set 473, and the
-       arm read a shrink. The bug it reported was in the fixture, not the
-       feature — though chasing it did surface a real jump, fixed in the page. */
     await page.goto(PAGE + '#/c/orem', {waitUntil: 'domcontentloaded'});
     await new Promise(r => setTimeout(r, 1000));
-    // ON THE LIVE DOCUMENT, not before the goto: clearing storage first acts on
-    // the OUTGOING page, and the rail came back expanded anyway. The classes are
-    // reset directly so this does not depend on how the flag is persisted.
-    await page.evaluate(() => {
-      try { localStorage.removeItem("cc.chatbig"); localStorage.removeItem("cc.chath"); } catch (e) {}
-      const rail = document.querySelector('.rail');
-      rail.classList.remove('chatbig', 'chatsized');
-      rail.style.removeProperty('--chath');
-      const b = document.getElementById('chatbig');
-      if (b) { b.textContent = "expand"; b.setAttribute("aria-expanded", "false"); }
-    });
-    await new Promise(r => setTimeout(r, 250));
-    const size = () => page.evaluate(() => {
-      const rc = document.getElementById('railchat');
-      const log = document.querySelector('#railchat .chatlog');
+    const seam = await page.evaluate(() => {
       const g = document.getElementById('railchathead');
-      const rail = document.querySelector('.rail');
-      const send = document.querySelector('.chatsend');
-      const h = e => e ? Math.round(e.getBoundingClientRect().height) : 0;
-      let at = "none";
-      if (send) { const r = send.getBoundingClientRect();
-        const t = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
-        at = t && typeof t.className === "string" ? t.className : (t ? t.tagName : "none"); }
-      return {panel: h(rc), log: h(log), send: at,
-              sized: rail.classList.contains('chatsized'),
-              role: g ? g.getAttribute('role') : null,
-              tab: g ? g.getAttribute('tabindex') : null};
+      if (!g) return null;
+      const before = getComputedStyle(g, '::before');
+      return {
+        cursor: getComputedStyle(g).cursor,
+        touch: getComputedStyle(g).touchAction,
+        role: g.getAttribute('role'),
+        tab: g.getAttribute('tabindex'),
+        dots: before.borderTopStyle,
+        dotsWidth: Math.round(parseFloat(before.width) || 0),
+        reset: !!document.getElementById('chatauto'),
+        title: g.getAttribute('title') || '',
+      };
     });
-    const grabAt = () => page.evaluate(() => {
-      const r = document.getElementById('railchathead').getBoundingClientRect();
-      return {x: Math.round(r.x + r.width / 2), y: Math.round(r.y + r.height / 2)};
-    });
-    const drag = async (dy) => {
-      const at = await grabAt();
-      await page.mouse.move(at.x, at.y);
-      await page.mouse.down();
-      await page.mouse.move(at.x, at.y - dy, {steps: 10});
-      await page.mouse.up();
-      await new Promise(r => setTimeout(r, 250));
-    };
-
-    /* THE SEAM SAYS IT IS DRAGGABLE BEFORE IT IS TOUCHED. It was drawn only on
-       hover, which asks the reader to already suspect the line is a handle. A
-       grip at rest is the difference between a control and a secret. */
-    const grip = () => page.evaluate(() => {
-      const cs = getComputedStyle(document.getElementById('railchathead'), '::before');
-      return {rest: +cs.opacity, w: Math.round(parseFloat(cs.width) || 0)};
-    });
-    const gr = await grip();
-    ok(`the seam carries a visible grip at rest (opacity ${gr.rest}, ${gr.w}px)`,
-       gr.rest >= 0.3 && gr.w > 10, JSON.stringify(gr));
-
-    const a0 = await size();
-    ok(`the seam is a separator a keyboard can reach (role=${a0.role} tabindex=${a0.tab})`,
-       a0.role === "separator" && a0.tab === "0", JSON.stringify(a0));
-
-    await drag(200);
-    const a1 = await size();
-    ok(`dragging the seam up grows the log (${a0.log}px -> ${a1.log}px)`,
-       a1.log >= a0.log + 120, `panel ${a0.panel} -> ${a1.panel}`);
-    ok("...and the panel is now a set size rather than a leftover", a1.sized === true);
-    /* AND THE HANDLE IS STILL THERE TO GRAB A SECOND TIME. Setting a size makes
-       the nav scrollable so it can yield height, and the handle is nav's LAST
-       child — so without pinning, the first thing to scroll out of sight is the
-       control that resizes and resets. Measured before the fix: the heading's
-       rect still read y=417 while the panel painted at 383, because the heading
-       had been clipped out of the scrolled nav, leaving a size the reader could
-       not change and no visible way back.
-       HIT-TESTED, NOT MEASURED. The rect survives the clipping; only asking what
-       is actually at that point catches it. */
-    const grabbable = await page.evaluate(() => {
-      const g = document.getElementById('railchathead');
-      const r = g.getBoundingClientRect();
-      const el = document.elementFromPoint(Math.round(r.x + r.width / 2),
-                                           Math.round(r.y + r.height / 2));
-      return !!(el && el.closest('#railchathead'));
-    });
-    ok("...and the handle can still be grabbed after resizing once", grabbable,
-       "the seam scrolled out of the nav and something else took the point");
-
-    /* IT SURVIVES THE DOCUMENT. A size that resets on the next page is not a
-       setting, and the panel is rebuilt on every court a reader opens. */
-    await page.reload({waitUntil: 'domcontentloaded'});
-    await new Promise(r => setTimeout(r, 1300));
-    const a2 = await size();
-    ok(`...and survives a reload (${a2.log}px log)`,
-       Math.abs(a2.log - a1.log) <= 8, `expected about ${a1.log}, got ${a2.log}`);
-
-    /* THE KEYBOARD MOVES IT TOO. A separator only a mouse can operate is a
-       control half the readers do not have. */
-    await page.evaluate(() => document.getElementById('railchathead').focus());
-    await page.keyboard.press('ArrowUp');
-    await new Promise(r => setTimeout(r, 200));
-    const a3 = await size();
-    ok(`ArrowUp grows it from the keyboard (${a2.log}px -> ${a3.log}px)`,
-       a3.log > a2.log, `no change from ${a2.log}`);
-
-    /* AND THE FLOOR HOLDS. Dragging the other way must not swallow the box the
-       reader types into — a chat you cannot use is not a smaller chat.
-       DRAGGED TO A SMALL POSITIVE SIZE, NOT A HUGE NEGATIVE ONE. The first
-       version pulled down 600px, which asks for a NEGATIVE height; CSS rejects
-       a negative length, the declaration is dropped, and the panel keeps
-       whatever it had. Measured: with the floor deleted that arm still passed,
-       so it was testing the CSS parser rather than the clamp. Landing just
-       above zero is what actually reaches the floor.
-       AND EVEN THEN THE CLAMP IS NOT WHAT HOLDS IT. .railchat.chatpanel carries
-       min-height:min-content, which pins the panel to its own controls whatever
-       --chath says — measured, deleting the JS clamp entirely leaves this arm
-       green. So this asserts the PROPERTY, which is real and worth holding, and
-       not the line of code above it; the clamp is belt-and-braces that keeps a
-       nonsense value out of storage, and no arm here can tell it apart. */
-    await drag(-(a3.panel - 40));
-    const a4 = await size();
-    ok(`dragging it all the way down keeps the composer usable (${a4.panel}px panel)`,
-       /\bchatsend\b/.test(a4.send), `send reached ${a4.send}`);
-
-    /* THE WAY BACK IS VISIBLE, AND ONLY WHEN THERE IS ONE.
-       Double-click resets too and shipped as the only undo, which was reported
-       straight back as "it's hard to undo, not intuitive" — correctly: an
-       affordance nobody can see is not an affordance. A labelled control sits in
-       the row the reader is already looking at, beside the button they used to
-       get here, and is absent until a size has been set so it is not one more
-       thing to ignore on a rail this narrow. */
-    {
-      const seen = () => page.evaluate(() => {
-        const a = document.getElementById('chatauto');
-        const r = a ? a.getBoundingClientRect() : null;
-        return {on: !!(r && r.width > 2 && r.height > 2),
-                box: r ? Math.round(r.width) + "x" + Math.round(r.height) : "none",
-                label: a ? (a.textContent || "").trim() : null};
-      });
-      // Put a size back on: the arms above ended by dragging down to the floor,
-      // which is still a set size, so this is already true — asserted rather
-      // than assumed, because it is the precondition for the next two.
-      const now = await seen();
-      ok(`with a size set, a way back is offered (${now.label}, ${now.box})`,
-         now.on === true, JSON.stringify(now));
-      await page.click('#chatauto');
-      await new Promise(r => setTimeout(r, 250));
-      const off = await size();
-      ok("...one click gives the height back to the layout", off.sized === false);
-      ok("...and the control goes away with the thing it undoes",
-         (await seen()).on === false, JSON.stringify(await seen()));
-    }
-
-    /* DOUBLE-CLICK STILL WORKS, for a reader who found it. Kept because it costs
-       nothing, not because it counts as the undo. */
-    await drag(120);
-    const at = await grabAt();
-    await page.mouse.click(at.x, at.y, {clickCount: 2});
-    await new Promise(r => setTimeout(r, 250));
-    ok("double-clicking the seam returns the panel to automatic",
-       (await size()).sized === false);
-
-    /* AND THE BUTTON IN THAT ROW STILL TAKES ITS OWN CLICKS. The handle covers
-       the heading the expand button sits in, so a grip that swallowed the
-       pointer would silently disable it. */
-    const before = await page.evaluate(() => document.getElementById('chatbig').textContent.trim());
-    await page.click('#chatbig');
-    await new Promise(r => setTimeout(r, 300));
-    const after = await page.evaluate(() => document.getElementById('chatbig').textContent.trim());
-    ok(`the expand button still works inside the handle (${before} -> ${after})`,
-       before !== after, "the grip swallowed the button's click");
+    ok("the chat heading is a heading, not a resize handle",
+       seam && seam.cursor !== 'ns-resize' && seam.touch !== 'none', JSON.stringify(seam));
+    ok("...with no separator role or tab stop on it",
+       seam && !seam.role && seam.tab === null, JSON.stringify(seam));
+    ok(`...and no grip drawn above it (${seam && seam.dots}, ${seam && seam.dotsWidth}px)`,
+       seam && (seam.dots === 'none' || seam.dotsWidth === 0), JSON.stringify(seam));
+    ok("...and nothing telling the reader to drag it",
+       seam && !/drag/i.test(seam.title), JSON.stringify(seam && seam.title));
+    /* AND NO RESET, because there is nothing to reset from. It existed only to
+       undo a drag, and a control that undoes a control nobody can perform is one
+       more thing in a 230px column to ignore. */
+    ok("...and no reset button beside it", seam && seam.reset === false,
+       JSON.stringify(seam));
   }
 
-  /* ── THE SEAM MUST NOT COVER THE LINKS ──────────────────────────────────
-     REPORTED, with a screenshot: "sometimes the left sidebar other nav items
-     like Realm Parameters shows under the CHAT RESET EXPAND bar", and in the
-     image "? How it works" was clipped mid-glyph by the bar's top edge while
-     "Realm parameters" showed below it.
-     THE CAUSE WAS position:sticky INSIDE A SCROLLER. .rail.chatsized makes the
-     nav scrollable, the seam was the nav's last child pinned at bottom:0, and
-     so it floated over whichever links landed in the bottom strip — at full
-     expansion the nav was a 44px window behind a 42px bar. It is now a SIBLING
-     of the nav, which cannot overlap it at all.
-     GEOMETRY, AND NOT HIT-TESTING, and both wrong versions are worth recording
-     because the file's other arm above uses hit-testing correctly.
-       elementFromPoint answers "what is on TOP here". Over the old sticky bar
-     the answer was always the bar itself — opaque, z-index:2 — so an arm built
-     on it PASSED against the very page the screenshot was taken from. It cannot
-     see what is underneath, and underneath is the whole bug.
-       A raw rect overlap fails the other way: a link scrolled out of the nav
-     still reports its unclipped rect, which lands in the bar's band and reads
-     as an overlap no reader can see. That version reported three false
-     overlaps on the FIXED page.
-       What is correct is each link's rect CLIPPED TO THE NAV'S OWN BOX — the
-     nav clips its overflow, so that intersection is what is really painted —
-     tested against the bar's band. Measured: the reported pair on the old page,
-     nothing on the new one. */
   {
-    const grip = await page.$('#railchathead');
-    const gb = await grip.boundingBox();
-    const gx = Math.round(gb.x + gb.width / 2), gy = Math.round(gb.y + gb.height / 2);
-    const covering = () => page.evaluate(() => {
-      const g = document.getElementById('railchathead').getBoundingClientRect();
-      const nav = document.querySelector('.rail .nav');
-      const nb = nav.getBoundingClientRect();
-      return [...nav.children]
-        .filter(e => e.id !== 'railchathead')
-        .map(e => {
-          const r = e.getBoundingClientRect();
-          // what of this row is actually painted, the nav having clipped it
-          const top = Math.max(r.top, nb.top), bottom = Math.min(r.bottom, nb.bottom);
-          return {t: (e.textContent || e.tagName).trim().slice(0, 24),
-                  under: bottom > top + 0.5 && bottom > g.top + 0.5 && top < g.bottom - 0.5};
-        })
-        .filter(e => e.under).map(e => e.t);
-    });
-    await page.mouse.move(gx, gy); await page.mouse.down();
-    // At three sizes, because the bug showed different links at each: the
-    // ceiling, a middling size, and the floor, which is where a reader who
-    // drags down ends up and where the reported pair appeared.
-    for (const [label, dy] of [["a middling size", -150], ["the ceiling", -900], ["the floor", 400]]) {
-      await page.mouse.move(gx, gy + dy, {steps: 8});
-      const c = await covering();
-      ok(`no nav item is painted under the seam at ${label}`, c.length === 0, c.join(", "));
+    /* THE FLOOR, AT EVERY HEIGHT THE RAIL IS LIKELY TO HAVE. This is the arm
+       that would have failed before the change, at every one of these sizes,
+       with log = 0.
+       AND THE COMPOSER WITH IT, which is the harder half: giving the log a
+       floor by pushing the panel past the bottom of the rail would satisfy the
+       first check and leave nobody able to type. The original layout did exactly
+       that at 700 — measured, composer off screen — so both are asserted
+       together at each size rather than once at a convenient one. */
+    for (const h of [1000, 900, 800, 700]) {
+      await page.setViewport({width: 1280, height: h});
+      await page.goto(PAGE + '#/c/orem', {waitUntil: 'domcontentloaded'});
+      // A HASH CHANGE IS NOT A RELOAD: the expanded class survives one, so the
+      // state is cleared and the document reloaded before measuring. Measured as
+      // alternating rows of nonsense when this was left out.
+      await page.evaluate(() => {
+        try { localStorage.removeItem("cc.chatbig"); } catch (e) {}
+      });
+      await page.reload({waitUntil: 'networkidle0'});
+      await new Promise(r => setTimeout(r, 900));
+      const m = await page.evaluate(() => {
+        const q = s => document.querySelector(s);
+        const box = s => { const e = q(s); return e ? e.getBoundingClientRect() : null; };
+        const log = box('#railchat .chatlog'), form = box('#railchat .chatform');
+        const nav = q('.rail .nav');
+        return {
+          log: log ? Math.round(log.height) : 0,
+          composer: !!(form && form.height > 0 && form.bottom <= window.innerHeight + 1
+                       && form.top >= -1),
+          navScrolls: nav ? nav.scrollHeight > nav.clientHeight + 2 : false,
+          nav: nav ? Math.round(nav.getBoundingClientRect().height) : 0,
+        };
+      });
+      ok(`at ${h}px the log has room without anybody arranging it (${m.log}px)`,
+         m.log >= 100, JSON.stringify(m));
+      ok(`...and the composer is on screen at ${h}px`, m.composer === true,
+         JSON.stringify(m));
     }
-    /* AND THE LOG STAYS WHERE THE READER PUT IT once the size has stopped
-       moving. REPORTED as "it ends up shifting the chat content up higher while
-       the CHAT RESET EXPAND bar stays still... it's super weird": setSize
-       re-pinned the log to its bottom on every pointermove, including the ones
-       past a clamp that changed nothing, so the content lurched while the bar
-       was frozen. MEASURED at the floor — --chath stayed 319px for every sample
-       and the log's scrollTop went 0 -> 213.
-       THE SCROLL IS MOVED FIRST, ON PURPOSE. At the bottom already, a re-pin is
-       indistinguishable from leaving it alone, so the reader's own scroll is
-       what makes the two outcomes different. */
-    const at = () => page.evaluate(() => ({
-      chath: document.querySelector('.rail').style.getPropertyValue('--chath'),
-      top: Math.round(document.querySelector('#railchat .chatlog').scrollTop),
-    }));
-    /* THE CLAMP IS REACHED AND PROVEN FIRST, which the first version of this arm
-       got wrong: it sampled at +400, where the size was still 415px and still
-       shrinking, so the log re-pinned for the honest reason and the arm failed
-       against a correct fix. Two moves past the floor with the same --chath is
-       what says the drag has actually stopped mattering. */
-    await page.mouse.move(gx, gy + 1200, {steps: 10});
-    const clamped = await at();
-    await page.mouse.move(gx, gy + 1300, {steps: 4});
-    const still = await at();
-    ok(`the drag reaches a clamp and stops there (${clamped.chath})`,
-       still.chath === clamped.chath,
-       JSON.stringify({clamped, still}) + " — the arms below would prove nothing");
-    await page.evaluate(() => { document.querySelector('#railchat .chatlog').scrollTop = 0; });
-    await page.mouse.move(gx, gy + 1700, {steps: 10});
-    const later = await at();
-    await page.mouse.up();
-    ok(`dragging further past the clamp moves nothing (${clamped.chath})`,
-       later.chath === clamped.chath, JSON.stringify({clamped, later}));
-    ok("...and does not yank the log back to the bottom",
-       later.top === 0, JSON.stringify({expected: 0, got: later.top}));
+  }
+
+  {
+    /* THE LINKS ARE WHAT YIELDS, and they yield by SCROLLING rather than by
+       pushing the panel down past the bottom of the rail. That is the whole
+       mechanism, and it is what keeps the composer reachable while the log has
+       a floor — so it is asserted as a property rather than left implied by the
+       two numbers above. */
+    await page.setViewport({width: 1280, height: 800});
+    await page.goto(PAGE + '#/c/orem', {waitUntil: 'domcontentloaded'});
+    await page.evaluate(() => { try { localStorage.removeItem("cc.chatbig"); } catch (e) {} });
+    await page.reload({waitUntil: 'networkidle0'});
+    await new Promise(r => setTimeout(r, 900));
+    const y = await page.evaluate(() => {
+      const nav = document.querySelector('.rail .nav');
+      const first = nav && nav.querySelector('a');
+      return {
+        overflowY: nav ? getComputedStyle(nav).overflowY : null,
+        reachable: !!(first && first.getBoundingClientRect().height > 0),
+        links: nav ? nav.querySelectorAll('a').length : 0,
+      };
+    });
+    ok(`the links scroll rather than being clipped away (${y.overflowY}, ${y.links} links)`,
+       y.overflowY === 'auto' && y.links > 3, JSON.stringify(y));
+    ok("...and the first one is still there to click", y.reachable === true,
+       JSON.stringify(y));
+    /* NOTHING IS REMEMBERED ABOUT A SIZE, which is the last trace of the old
+       control: a stale height in storage that no longer has a rule to feed. */
+    const stored = await page.evaluate(() => {
+      try { return localStorage.getItem("cc.chath"); } catch (e) { return "?"; }
+    });
+    ok("and no chat height is stored any more", stored === null || stored === "",
+       JSON.stringify(stored));
   }
 
   ok("no page errors", errs.length === 0, errs.slice(0, 2).join(" | "));

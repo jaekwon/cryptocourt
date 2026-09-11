@@ -64,8 +64,19 @@ const {PAGE, demoPage} = require('./harness');
       + "padding:0 !important; border:0 !important}";
     document.addEventListener("DOMContentLoaded", () => document.head.appendChild(st));
   });
-  await page.goto(PAGE + '#/c/orem', {waitUntil: 'networkidle0'});
-  await new Promise(z => setTimeout(z, 1200));
+  /* RELOADED, NOT NAVIGATED TO THE SAME HASH. The arm above already left the
+     browser at this exact URL, so this goto was a SAME-DOCUMENT navigation: no
+     reload, so evaluateOnNewDocument never ran and the stylesheet above was
+     never installed. The log then had whatever height the layout gave it —
+     which happened to be 0 in the rail, so the arm below passed and the fixture
+     it was supposed to be testing had never been applied.
+     FOUND WHEN THE LAYOUT GAVE THE LOG A FLOOR: clientHeight went from 0 to 120
+     and this failed, which is the correct behaviour of a check whose premise had
+     quietly stopped holding. The premise is now made to hold. */
+  await page.goto(PAGE + '#/', {waitUntil: 'domcontentloaded'});
+  await page.reload({waitUntil: 'networkidle0'});
+  await page.evaluate(() => { location.hash = "#/c/orem"; });
+  await new Promise(z => setTimeout(z, 1400));
 
   const flat = await page.evaluate(() => {
     const el = document.querySelector(".chatlog");

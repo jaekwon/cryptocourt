@@ -311,13 +311,7 @@ code,.mono{font-family:var(--mono)}
    tinted, and measured on it — 16.5:1 for --ink down to 6.2:1 for --muted at the
    sky's brightest point, against a 4.5 floor. */
 .rail{
-  /* THE CHAT PANEL'S DRAGGED HEIGHT, declared here even though only JavaScript
-     ever writes it. A var() the sheet never defines reads as a typo to anyone
-     auditing the CSS, and css_test refuses one — correctly: `auto` is also the
-     right value before a reader has dragged anything, so the rule below is
-     meaningful on its own rather than only once a script has run. */
-  --chath:auto;
-  grid-row:1/-1; border-right:1px solid var(--rule);
+    grid-row:1/-1; border-right:1px solid var(--rule);
   /* THE RAIL RE-RESOLVES ITS OWN INK, and this line is load-bearing. Overriding
      --ink below does NOT retint anything that merely INHERITS a colour: what
      inherits is body's computed rgb, resolved against :root's tokens long before
@@ -1107,69 +1101,13 @@ a.card:hover{border-color:var(--line-2)}
      rail this file has, not from arithmetic. */
   .rail.chatbig .foot{display:none}
   .rail.chatbig .brand{padding:8px 12px}
-  /* ── DRAG THE BOUNDARY, DON'T JUST TOGGLE IT ────────────────────────────
-     The expand button is one click and two sizes. This is the continuous
-     version: grab the Chat heading — which IS the seam between the links and
-     the panel — and pull it up.
-     THE HANDLE IS THE HEADING AND NOT A STRIP INSIDE THE PANEL, because
-     railChatFor() replaces .railchat's innerHTML on every mount. Anything put
-     in there is destroyed the first time a reader opens another court, and the
-     handle would vanish exactly when it was working. #railchathead is nav's
-     last child, survives every remount, and already sits on the line being
-     dragged.
-     WHEN A SIZE IS SET, THE PANEL STOPS TAKING LEFTOVERS and the NAV becomes
-     the thing that yields — it scrolls instead of pushing, which is what lets
-     the chat grow past the height the links were using. */
-  #railchathead{cursor:ns-resize; touch-action:none; user-select:none}
-  #railchathead #chatbig{cursor:pointer}
-  .rail.chatsized .railchat{flex:0 0 var(--chath)}
-  .rail.chatsized .nav{min-height:0; overflow-y:auto}
-  /* The grip: two rules, drawn on the heading itself so it reads as a seam
-     rather than as an icon somebody has to find. Only while it can be used. */
-  /* THE WAY BACK IS VISIBLE, AND ONLY WHEN THERE IS ONE. Double-click resets
-     too, and a double-click nobody can see is not an undo — reported as "it's
-     hard to undo, not intuitive". This sits in the row the reader is already
-     looking at, beside the button they used to get here, and appears only once
-     a size has been set so it is not one more control to ignore. */
-  /* PINNED TO THE SEAM ONCE A SIZE IS SET, and this is not decoration.
-     .rail.chatsized makes the nav scrollable so it can yield height, and the
-     handle is nav's LAST child — so the first thing that scrolls out of sight
-     is the control that resizes and resets. Measured: after one drag the
-     heading's rect still read y=417 while the panel's own content painted at
-     383, because the heading was clipped out of the scrolled nav. The reader is
-     then left with a size they cannot change and no visible way back, which is
-     exactly what "hard to undo" describes.
-     Sticky rather than moved out of the nav: the nav is where it belongs
-     structurally, and .rail.chatbig's rule already selects it by name from
-     inside there. The background is the rail's own, or the links scroll
-     through it. */
-  /* NO STICKY AND NO BACKGROUND OF ITS OWN. Both existed to survive being
-     inside the scrolling nav: sticky kept it from scrolling out of reach, and an
-     opaque #0a0a14 hid the links passing behind it — which matched .rail's
-     background-color but not its starfield background-image, so it read as a
-     flat band across the rail. Out of the nav, it is simply the next row. */
-  .rail.chatsized #railchathead{padding-bottom:6px}
+  /* ── THE LOG HAS A FLOOR AND THE LINKS YIELD ───────────────────────────
+     A drag handle lived here and is gone; the floor below is what replaces it. */
   #railchathead .headctl{display:flex; gap:8px; align-items:baseline}
-  #chatauto{display:none}
-  .rail.chatsized #chatauto{display:inline; background:none; border:0; padding:0;
-    cursor:pointer; font:inherit; letter-spacing:inherit; text-transform:inherit;
-    color:var(--ink-2)}
-  .rail.chatsized #chatauto:hover{color:var(--accent)}
-  /* THE GRIP IS DRAWN AT REST, and that is the whole point of it. A seam that
-     appears only once the pointer is on it answers a question nobody asked: the
-     reader has to already suspect the line is draggable before it will admit
-     that it is.
-     SHORT AND CENTRED, NOT EDGE TO EDGE. A full-width rule reads as a divider,
-     and this row is already one. A stub in the middle is the shape every
-     resizable panel uses, so it is recognised rather than learned. Faint at
-     rest and full under the pointer, so it strengthens rather than appears. */
-  #railchathead::before{content:""; position:absolute; left:50%; top:-5px;
-    width:34px; margin-left:-17px; height:0;
-    border-top:3px dotted var(--line-2); opacity:.55}
-  #railchathead{position:relative}
-  #railchathead:hover::before,#railchathead:focus-within::before,
-  .rail.chatdragging #railchathead::before{opacity:1}
-  .rail.chatdragging{cursor:ns-resize}
+  .railchat .chatlog{min-height:120px}
+  .rail .nav{min-height:0; overflow-y:auto}
+  .railchat .chatwarn{font-size:.78em; line-height:1.25}
+  .railchat .chathead{margin-bottom:.2rem}
 }
 /* The court coin's name, everywhere it is written. One hardcoded purple rather
    than a theme token: the token IS the colour, and it must read the same in
@@ -3144,10 +3082,8 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
        a sibling of both cannot overlap either, needs no sticky, and needs no
        opaque background to hide what scrolls behind it. It still survives every
        railChatFor() remount, which is why it was never put inside .railchat. -->
-  <div class="sec" id="railchathead" hidden
-       title="Drag this line to resize the chat">Chat<span class="headctl"><button
-      type="button" id="chatauto"
-      title="Give the height back to the layout">reset</button><button type="button" id="chatbig"
+  <div class="sec" id="railchathead" hidden>Chat<span class="headctl"><button
+      type="button" id="chatbig"
       aria-expanded="false"
       title="Give the chat the rail's height — the links above it fold away">expand</button></span></div>
   <div class="railchat" id="railchat" hidden></div>
@@ -20264,11 +20200,10 @@ function initControls(){
     applyBig(store.get("cc.chatbig")==="1");
     chatbig.addEventListener("click", ()=>{
       const on=!railEl.classList.contains("chatbig");
-      /* ONE AUTHORITY AT A TIME. A dragged size and the toggle are two answers
-         to the same question, and a reader who presses expand while a size is
-         set would get whichever the cascade happened to favour. Pressing the
-         button hands control back to the button. */
-      clearSize();
+      /* ONE AUTHORITY, AND NOW THERE IS ONLY ONE. This cleared a dragged height
+         first, because a dragged size and this toggle were two answers to the
+         same question and the cascade decided between them. The drag is gone;
+         this button is the whole of it. */
       applyBig(on);
       store.set("cc.chatbig", on?"1":"0");
     });
@@ -20283,115 +20218,6 @@ function initControls(){
      sliver of nav so the drag can always be undone by dragging back.
      POINTER EVENTS AND CAPTURE, so a fast drag that leaves the 230px rail
      keeps resizing instead of stopping at the edge. */
-  const grip=document.getElementById("railchathead");
-  function railChat(){ return document.getElementById("railchat"); }
-  function clearSize(){
-    if(!railEl) return;
-    railEl.classList.remove("chatsized");
-    railEl.style.removeProperty("--chath");
-    store.set("cc.chath", "");
-  }
-  function setSize(px){
-    if(!railEl) return;
-    const rc=railChat(); if(!rc) return;
-    const rail=railEl.getBoundingClientRect().height;
-    const brand=(railEl.querySelector(".brand")||{getBoundingClientRect:()=>({height:0})})
-      .getBoundingClientRect().height;
-    const foot=(railEl.querySelector(".foot")||{getBoundingClientRect:()=>({height:0})})
-      .getBoundingClientRect().height;
-    // The composer's floor: the panel's rows other than the log. Measured, so a
-    // taller composer on a narrow rail raises the floor by itself.
-    // NOT THE ONLY THING HOLDING IT, and not even the load-bearing one:
-    // .railchat.chatpanel has min-height:min-content, so the panel cannot be
-    // clipped below its controls whatever this computes. Deleting this clamp
-    // leaves the browser check green. It stays to keep a nonsense number out of
-    // localStorage, which the CSS floor does nothing about.
-    const log=rc.querySelector(".chatlog");
-    const floor=Math.max(96, Math.round(rc.getBoundingClientRect().height
-      - (log? log.getBoundingClientRect().height : 0)) + 24);
-    const ceil=Math.max(floor, Math.round(rail - brand - foot - 44));
-    const v=Math.max(floor, Math.min(ceil, Math.round(px)));
-    const had=railEl.style.getPropertyValue("--chath");
-    railEl.style.setProperty("--chath", v+"px");
-    railEl.classList.add("chatsized");
-    /* ONLY WHEN THE SIZE ACTUALLY MOVED. Keeping the newest message in view is
-       right while the panel is being resized, and wrong once the drag has hit a
-       clamp: every further pointermove recomputed the same v and re-pinned the
-       log to its bottom, so the reader saw the chat content lurch upward while
-       the bar itself sat perfectly still. MEASURED at the floor, dragging on
-       past it: --chath frozen at 319px and the grip at y=356 for every sample,
-       while the log's scrollTop went 37 -> 213 inside a window collapsed to
-       24px. Reported as "it shifts the chat content up higher while the CHAT
-       RESET EXPAND bar stays still... it's super weird". */
-    if(had !== v+"px"){
-      const lg=rc.querySelector(".chatlog"); if(lg) lg.scrollTop=lg.scrollHeight;
-    }
-    return v;
-  }
-  if(grip && railEl){
-    const saved=parseInt(store.get("cc.chath")||"", 10);
-    if(isFinite(saved) && saved>0) requestAnimationFrame(()=>setSize(saved));
-    let from=0, start=0;
-    const move=(ev)=>{
-      // Up is bigger: the panel grows by however far the pointer rose.
-      const v=setSize(start + (from - ev.clientY));
-      if(v) store.set("cc.chath", String(v));
-      ev.preventDefault();
-    };
-    const stop=(ev)=>{
-      railEl.classList.remove("chatdragging");
-      grip.releasePointerCapture && grip.releasePointerCapture(ev.pointerId);
-      grip.removeEventListener("pointermove", move);
-      grip.removeEventListener("pointerup", stop);
-      grip.removeEventListener("pointercancel", stop);
-    };
-    grip.addEventListener("pointerdown", (ev)=>{
-      // The expand button lives in this row and must keep taking its own clicks.
-      if(ev.target.closest("#chatbig,#chatauto")) return;
-      const rc=railChat(); if(!rc) return;
-      // MEASURED BEFORE THE MODE IS DROPPED, and the order is the whole point.
-      // Leaving chatbig gives the nav its height back, so reading the panel
-      // afterwards reads the COLLAPSED size — measured, an 801px panel became
-      // 273 and the drag then grew from there, which on screen is a jump
-      // downward before it follows the pointer. Take the height first, drop the
-      // mode, then pin that same height as the new set size.
-      start=rc.getBoundingClientRect().height;
-      if(railEl.classList.contains("chatbig")){
-        railEl.classList.remove("chatbig");
-        chatbig && chatbig.setAttribute("aria-expanded","false");
-        if(chatbig) chatbig.textContent="expand";
-        store.set("cc.chatbig","0");
-        setSize(start);
-      }
-      from=ev.clientY;
-      railEl.classList.add("chatdragging");
-      grip.setPointerCapture && grip.setPointerCapture(ev.pointerId);
-      grip.addEventListener("pointermove", move);
-      grip.addEventListener("pointerup", stop);
-      grip.addEventListener("pointercancel", stop);
-      ev.preventDefault();
-    });
-    // A SEPARATOR IS OPERABLE FROM THE KEYBOARD or it is a mouse-only control.
-    grip.setAttribute("role","separator");
-    grip.setAttribute("aria-orientation","horizontal");
-    grip.setAttribute("tabindex","0");
-    grip.addEventListener("keydown", (ev)=>{
-      if(ev.target.closest("#chatbig,#chatauto")) return;
-      const rc=railChat(); if(!rc) return;
-      const step = ev.key==="ArrowUp"? 24 : ev.key==="ArrowDown"? -24 : 0;
-      if(!step) return;
-      const v=setSize(rc.getBoundingClientRect().height + step);
-      if(v) store.set("cc.chath", String(v));
-      ev.preventDefault();
-    });
-    const auto=document.getElementById("chatauto");
-    if(auto) auto.addEventListener("click", (ev)=>{ ev.stopPropagation(); clearSize(); });
-    // ...and back to automatic, without hunting for the original height.
-    grip.addEventListener("dblclick", (ev)=>{
-      if(ev.target.closest("#chatbig,#chatauto")) return;
-      clearSize();
-    });
-  }
   const preset=document.getElementById("preset");
   const PRESETS={gnodev:{rpc:"http://127.0.0.1:26657",gnoweb:"http://127.0.0.1:8888",chainid:"dev"},
                  sapphire:{rpc:"https://rpc.sapphire.testnets.gno.land:443",gnoweb:"https://sapphire.testnets.gno.land",chainid:"sapphire-1"}};
