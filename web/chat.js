@@ -692,8 +692,20 @@ function chatPanelHtml(slug, moniker, note, heading) {
        THE BUTTON IS INSIDE THE SPAN so one `hidden` removes both, and it carries
        an aria-label because "×" alone tells a screen reader nothing about what
        is being dismissed. */
+    /* AND THE CLERK IS NAMED IN IT, because it is the one voice in the room a
+       reader is invited to trust: its name is reserved, the handler refuses a
+       human who tries to wear it, and it flies its own flag. It is also a model,
+       it can be wrong, and a reader CAN push it around — measured on the live
+       site, a message repeating the prompt's own instruction sentence made it
+       emit a word of the reader's choosing. The channels are split now so that
+       exact attack fails, and the honest line is still that this is a model
+       rather than an oracle: the mitigation is a defence, not a guarantee.
+       IN THE SAME SENTENCE AS THE REST, not a second notice. Two dismissable
+       warnings stacked on a 230px rail is how both stop being read, and this is
+       the same class of caution as the two beside it. */
     +   '<span class="chatwarn">names are unverified &mdash; nobody here is staff,'
-    +     " and nobody can move funds for you"
+    +     " and nobody can move funds for you. the clerk is a model:"
+    +     " it can be wrong or be misled, so check anything that matters"
     +     '<button class="chatwarnx" type="button"'
     +       ' aria-label="dismiss this warning">&times;</button></span>'
     +   '<span class="chatdemo" hidden></span>'
