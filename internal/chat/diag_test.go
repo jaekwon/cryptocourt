@@ -33,6 +33,61 @@ func diagOf(t *testing.T, srv *Server) map[string]any {
 // that keeps it from growing into an admin console with no login: the payload is
 // checked against an allowlist of KEYS, so a field added later fails here and
 // has to be argued for, rather than shipping because it was useful.
+/* THE DAY'S SPEND AGAINST THE CEILING, which is the row that explains a silence.
+
+A capped helper says NOTHING, and silence on this site already had four causes a
+reader cannot tell apart: the reply gap, the local filter, a model pass, and a
+room that refused the post. The ceiling was a fifth, and its only record was a
+line in the journal — on the page whose whole purpose is telling those apart.
+*/
+func TestDiagReportsTheDaysSpendAgainstTheCeiling(t *testing.T) {
+	srv, s, clock := newServer(t)
+	srv.BotEnabled = true
+	srv.BotCostCap = 2_000_000
+
+	// Spend from two days ago must not count against today, the same window the
+	// gate uses — one definition, so the page cannot say there is budget left
+	// while the gate refuses to spend it.
+	*clock = clock.Add(24 * time.Hour)
+	if err := s.recordBotSpend(context.Background(), "m", botKindPass, 0, 0, 900_000); err != nil {
+		t.Fatal(err)
+	}
+	*clock = clock.Add(48 * time.Hour)
+	if err := s.recordBotSpend(context.Background(), "m", botKindSpoke, 0, 0, 400_000); err != nil {
+		t.Fatal(err)
+	}
+
+	var got struct {
+		Bot struct {
+			CapMicros  int64 `json:"cap_micros"`
+			SpentToday int64 `json:"spent_today"`
+		} `json:"bot"`
+	}
+	rec := do(t, srv, httptest.NewRequest(http.MethodGet, "/api/chat/diag", nil))
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.Bot.CapMicros != 2_000_000 {
+		t.Errorf("the ceiling must be published, got %d", got.Bot.CapMicros)
+	}
+	if got.Bot.SpentToday != 400_000 {
+		t.Errorf("today's spend is 400000; the page says %d — a window that "+
+			"counted all time would say 1300000", got.Bot.SpentToday)
+	}
+
+	/* AND NO CEILING IS ALSO AN ANSWER, and the one an operator most needs: zero
+	   is the default, so a deployment that has never set a cap must SHOW that
+	   rather than showing nothing. Neither field is omitempty for this reason. */
+	srv.BotCostCap = 0
+	rec = do(t, srv, httptest.NewRequest(http.MethodGet, "/api/chat/diag", nil))
+	if !strings.Contains(rec.Body.String(), `"cap_micros":0`) {
+		t.Errorf("no ceiling must be published as zero, not omitted: %s", rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), `"spent_today":400000`) {
+		t.Errorf("the day's spend must still be published: %s", rec.Body.String())
+	}
+}
+
 func TestDiagPublishesCountsAndNothingElse(t *testing.T) {
 	srv, s, _ := newServer(t)
 	if _, err := post(t, s, "orem", "ip-a", "a message in the room"); err != nil {
@@ -72,6 +127,13 @@ func TestDiagPublishesCountsAndNothingElse(t *testing.T) {
 		"last_at": true, "in_tokens": true, "out_tokens": true, "cost_micros": true,
 		"failures": true, "last_fail_at": true, "fail_kind": true,
 		"undelivered": true,
+		/* THE DAY'S CEILING AND WHAT IS LEFT OF IT. Both are operator figures
+		   already visible to anybody who can read this endpoint, and neither says
+		   anything about a person: the cap is a flag this process was started
+		   with, and the spend is a sum over the helper's own calls. They are here
+		   because a capped helper is SILENT, and this is the page whose whole job
+		   is telling one silence from another. */
+		"cap_micros": true, "spent_today": true,
 	}
 	if bot, ok := out["bot"].(map[string]any); ok {
 		for k := range bot {

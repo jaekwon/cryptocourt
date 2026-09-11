@@ -443,6 +443,7 @@ func main() {
 		Chains:        names, Log: lg.Printf,
 	})
 	srv.BotEnabled = helper != nil
+	srv.BotCostCap = *botCap
 	switch {
 	case helper != nil:
 		go helper.Run(context.Background())

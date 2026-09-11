@@ -219,6 +219,17 @@ type botStats struct {
 	Enabled bool   `json:"enabled"`
 	Model   string `json:"model,omitempty"`
 
+	/* THE DAY'S CEILING AND WHAT IS LEFT OF IT. A capped helper is SILENT, and
+	   silence on this site already has four causes a reader cannot tell apart —
+	   the gap, the local filter, a model pass, a refused post. The cap was a
+	   fifth, and the only place it appeared was the journal.
+	   NEITHER IS omitempty. Zero cap means no ceiling at all, which is the thing
+	   an operator most needs to see, and zero spent is a real answer about today.
+	   An absent field would make both look like a page that had not been
+	   updated. */
+	CapMicros  int64 `json:"cap_micros"`
+	SpentToday int64 `json:"spent_today"`
+
 	// Replies is how many times it SPOKE. Passes is how many times it looked at
 	// something, paid for the looking, and had nothing to add.
 	//
@@ -1072,6 +1083,14 @@ func (s *Server) diag(w http.ResponseWriter, r *http.Request) {
 		out.Bot = st
 	}
 	out.Bot.Enabled = s.BotEnabled
+	out.Bot.CapMicros = s.BotCostCap
+	/* READ THROUGH THE SAME WINDOW THE GATE USES, so the two cannot disagree.
+	   A failure here is not worth an error page: the rest of the payload is still
+	   true and a missing figure reads as zero, which is the safe direction for a
+	   number whose only job is explaining a silence. */
+	if n, err := s.Store.SpendSince(ctx, utcDayStart(s.Store.Now())); err == nil {
+		out.Bot.SpentToday = n
+	}
 	// NO CACHING. A diagnostics number served from a proxy cache is a lie with a
 	// timestamp, and this is the one page whose whole value is being current.
 	w.Header().Set("Cache-Control", "no-store")

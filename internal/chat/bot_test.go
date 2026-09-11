@@ -1021,14 +1021,19 @@ func TestTheCapCountsTodayAndNotAllTime(t *testing.T) {
 	if err := s.recordBotSpend(ctx, "test-model", botKindPass, 0, 0, 50_000); err != nil {
 		t.Fatal(err)
 	}
-	// ...and now it is two days later.
-	*clock = clock.Add(48 * time.Hour)
+	/* ...AND NOW IT IS EXACTLY ONE DAY LATER, which is the distance that makes
+	   this arm sensitive. The first version advanced 48 hours, and a window
+	   shifted by one day still excluded spend that far back — so the mutation
+	   that moves the boundary by a day passed, and the "one definition of the
+	   boundary" claim had no arm at all. A day boundary deserves a fixture at the
+	   boundary. */
+	*clock = clock.Add(24 * time.Hour)
 	over, spent, err := b.overCap(ctx)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if over {
-		t.Errorf("spend from two days ago must not close today (today=%d)", spent)
+		t.Errorf("yesterday's spend must not close today (today=%d)", spent)
 	}
 	if spent != 0 {
 		t.Errorf("today's window must be empty, got %d micros", spent)

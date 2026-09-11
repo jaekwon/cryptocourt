@@ -38,6 +38,8 @@ const PAYLOAD = {
     in_tokens: 12345, out_tokens: 678, cost_micros: 15735,
     failures: 6, last_fail_at: 1757000900, fail_kind: "refused",
     undelivered: 2,
+    // A ceiling with room left in it: $0.50 of $2.00.
+    cap_micros: 2000000, spent_today: 500000,
   },
 };
 
@@ -121,6 +123,15 @@ const SECRET = "sk-ant-must-never-be-rendered-0001";
   // fractions of a cent at a time. MEASURED: this is what the page did first.
   ok("a fraction of a cent keeps enough decimals to be a spend",
      cells["Spent"] === "$0.0157", JSON.stringify(cells["Spent"]));
+
+  /* TODAY AGAINST THE CEILING, which is the row that explains a silence. A
+     capped helper says nothing, and silence here already had four causes a
+     reader cannot tell apart — the gap, the local filter, a model pass, a room
+     that refused the post. The ceiling was a fifth whose only record was the
+     journal. The row above this one is the LIFETIME figure and says nothing
+     about whether the helper can answer right now. */
+  ok(`the day's spend is shown against the ceiling (${cells["Today"]})`,
+     cells["Today"] === "$0.5000 of $2.00", JSON.stringify(cells["Today"]));
   /* ANSWERED AND PASSED ON ARE DIFFERENT ROWS, which is the defect this pair
      exists for: they were one number, and the page reported "3 replies" for an
      answerer that had never posted. A page that showed only one of them, or the

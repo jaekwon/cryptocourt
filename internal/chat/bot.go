@@ -1837,9 +1837,22 @@ func botUnsafeReply(text string, allow []string) string {
 // capToday is the start of the current UTC day, which is the window the cap
 // counts over. UTC rather than local, so a deployment that moves does not get a
 // day with two midnights or none.
-func (b *Bot) capToday() int64 {
-	t := b.now().UTC()
-	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC).Unix()
+func (b *Bot) capToday() int64 { return utcDayStart(b.now()) }
+
+/*
+utcDayStart is the cap's window, and it is ONE definition on purpose.
+
+	The gate asks "have I spent the day's budget" and the diagnostics page asks
+	"how much of it is gone" — two callers, and a boundary written twice is a
+	boundary that disagrees with itself the first time somebody adjusts one. The
+	page would then say a helper had budget left while the gate refused to spend
+	it, which is the confusing half of both answers.
+	UTC RATHER THAN LOCAL, so a deployment that moves does not get a day with two
+	midnights or none.
+*/
+func utcDayStart(t time.Time) int64 {
+	u := t.UTC()
+	return time.Date(u.Year(), u.Month(), u.Day(), 0, 0, 0, 0, time.UTC).Unix()
 }
 
 // overCap reports whether today's spend has reached the ceiling, and what it is.

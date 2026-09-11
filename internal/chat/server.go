@@ -48,6 +48,12 @@ type Server struct {
 	// distinguishable, which they were not when the page showed only a count.
 	BotEnabled bool
 
+	// BotCostCap is the helper's daily ceiling in micro-dollars, or 0 for none.
+	// Reported for the same reason BotEnabled is: so that "quiet" and "out of
+	// budget for today" are distinguishable, which they were not when the only
+	// record of a reached cap was a line in the journal.
+	BotCostCap int64
+
 	// BotKeyBootstrap is whether /api/chat/botkey will accept a key at all.
 	//
 	// TRUE BY DEFAULT, because the feature as asked for is a form on a page. An
