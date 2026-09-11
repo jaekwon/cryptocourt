@@ -101,6 +101,34 @@ func under(child, parent string) bool {
 		!strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
+/*
+capWarning reports a helper running with no ceiling on what it can spend.
+
+	A WARNING RATHER THAN A REFUSAL, and a default of zero rather than a number,
+	for the reason keyWarning gives: refusing would break every deployment
+	running this way today and the operator may have a reason. Not being able to
+	see it is the problem.
+	IT DOES THE ARITHMETIC, because "no cap" is abstract and a number is not. The
+	gap fixes the call ceiling — one reply per gap, so 86400/gap calls a day — and
+	the input price plus a measured ~2,000-token prompt turns that into a figure
+	an operator can compare against what they are willing to lose.
+*/
+func capWarning(cap int64, gap time.Duration, inPerMTok int64) string {
+	if cap > 0 || gap <= 0 {
+		return ""
+	}
+	calls := int64(24 * time.Hour / gap)
+	// ~2,000 input tokens per call, measured on the live site once the prompt
+	// carried the armour and the refusal list. Output is a rounding error beside
+	// it — 24 tokens against 2,000 — so this is deliberately the input half only,
+	// and therefore an UNDER-estimate rather than a scare.
+	worst := calls * 2000 * inPerMTok / 1_000_000
+	return fmt.Sprintf("no --bot-cost-cap: nothing bounds what it spends except "+
+		"the gap, which allows %d calls a day — on the order of %d micro-dollars "+
+		"at the configured input price, and no alert when it climbs. Set a daily "+
+		"ceiling in micro-dollars.", calls, worst)
+}
+
 // countryWarning reports a --country-header that now has no effect.
 //
 // The header is only believed from a trusted proxy. Without --behind-proxy there is no trusted
@@ -205,6 +233,18 @@ func main() {
 			"gno.land documentation, for its prompt")
 		botGap = flag.Duration("bot-gap", chat.BotMinGap,
 			"minimum time between two replies, across every room together")
+		/* THE ONLY BOUND ON WHAT THE HELPER CAN SPEND USED TO BE TIME. One reply
+		   per --bot-gap, newest wins, which at ten seconds is 8,640 calls a day
+		   — and per-call input is ~2,000 tokens now that the prompt carries the
+		   armour and the refusals, against a lifetime of $0.47 over 514 calls.
+		   Nothing read the running total and nothing alerted, so the first sign
+		   of a room grinding at it would have been the bill.
+		   ZERO BY DEFAULT, because a ceiling is a policy and the operator owns
+		   it: a default that silenced a working helper would be this flag's own
+		   worst failure. What the process does instead is SAY so at startup, the
+		   same posture as the hashing-key warning below. */
+		botCap = flag.Int64("bot-cost-cap", 0,
+			"most the chat helper may spend in a UTC day, in micro-dollars (0 = no cap)")
 		// PRICES ARE CONFIGURATION AND NOT FACTS. They are whatever the vendor
 		// charges this account today and this process cannot ask. Wrong numbers
 		// make the money column on the diagnostics page wrong and nothing else —
@@ -399,13 +439,18 @@ func main() {
 		Enabled: *bot, Model: *botModel,
 		Site: *botSite, Repo: *botRepo, ChainDocs: *botDocs,
 		MinGap: *botGap, InPerMTok: *botIn, OutPerMTok: *botOut,
-		Chains: names, Log: lg.Printf,
+		CostCapMicros: *botCap,
+		Chains:        names, Log: lg.Printf,
 	})
 	srv.BotEnabled = helper != nil
+	srv.BotCostCap = *botCap
 	switch {
 	case helper != nil:
 		go helper.Run(context.Background())
 		lg.Printf("chat bot: on, model %s, one reply per %s", *botModel, *botGap)
+		if w := capWarning(*botCap, *botGap, *botIn); w != "" {
+			lg.Printf("chat bot: %s", w)
+		}
 	case *bot && !botKeySet:
 		lg.Printf("chat bot: enabled but no key is set yet — set one at /api/chat/botkey, then restart")
 	}

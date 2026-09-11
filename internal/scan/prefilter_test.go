@@ -2,6 +2,7 @@ package scan
 
 import (
 	"fmt"
+	"github.com/jaekwon/kourt/internal/bip39"
 	"strings"
 	"testing"
 )
@@ -113,17 +114,17 @@ func TestOrdinaryTextIsNotASeedPhrase(t *testing.T) {
 // The wordlist itself must be the canonical one. init() panics on a bad CRC, so reaching this
 // test at all proves the checksum matched — what is asserted here is the shape.
 func TestTheWordlistIsTheRealOne(t *testing.T) {
-	if len(bip39Index) != 2048 {
-		t.Fatalf("BIP-39 has 2048 words, this has %d", len(bip39Index))
+	if bip39.Size != 2048 {
+		t.Fatalf("BIP-39 has 2048 words, this has %d", bip39.Size)
 	}
 	for _, w := range []string{"abandon", "ability", "zebra", "zero", "zone", "zoo"} {
-		if _, ok := bip39Index[w]; !ok {
+		if !bip39.InWordlist(w) {
 			t.Errorf("%q must be in the wordlist", w)
 		}
 	}
 	// The old subset stopped at `axis`. If it ever comes back, these fail first.
 	for _, w := range []string{"legal", "winner", "sausage", "yellow", "wrong", "canvas"} {
-		if _, ok := bip39Index[w]; !ok {
+		if !bip39.InWordlist(w) {
 			t.Errorf("%q is a BIP-39 word and must be present; a truncated list is how this "+
 				"detector went silent before", w)
 		}
@@ -132,7 +133,7 @@ func TestTheWordlistIsTheRealOne(t *testing.T) {
 	// compare bip39CRC against a hardcoded copy of itself, which could only fail if somebody
 	// edited the constant — and said nothing about the list, because init enforced a separate
 	// literal. It reads the enforced constant now.
-	if got := fmt.Sprintf("%08x", bip39CRC); got != "c1dbd296" {
+	if got := fmt.Sprintf("%08x", bip39.CRC); got != "c1dbd296" {
 		t.Errorf("the canonical english.txt CRC is c1dbd296, this enforces %s", got)
 	}
 }

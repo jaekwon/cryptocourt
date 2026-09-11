@@ -16,6 +16,8 @@ import (
 	"strings"
 	"time"
 	"unicode"
+
+	"github.com/jaekwon/kourt/internal/bip39"
 )
 
 // A HELPER IN THE ROOM, and everything below is about spending as little as
@@ -78,6 +80,19 @@ type Bot struct {
 	// Site, Repo and Chain go into the system prompt so the bot can point at real
 	// places instead of inventing them.
 	Site, Repo, ChainDocs string
+
+	/* CostCapMicros is the most the helper may spend in a UTC day, or 0 for no
+	   ceiling. Zero is the default and changes nothing, because a ceiling is a
+	   policy and the operator owns it — kourtchat warns at startup when the
+	   helper is enabled without one, the same way it warns about the hashing
+	   key, and for the same reason: refusing to run would break a deployment
+	   that may have its own arrangement, and not being able to see it is the
+	   problem. */
+	CostCapMicros int64
+
+	// capDay is the UTC day whose cap has already been logged, so a capped
+	// helper says so once rather than on every message for the rest of the day.
+	capDay int64
 
 	// NonceFn overrides the untrusted block's per-call tag. Tests set it so a
 	// prompt is comparable; production leaves it nil for crypto/rand. Same shape
@@ -330,8 +345,10 @@ type BotOptions struct {
 	Model, Site, Repo, ChainDocs string
 	MinGap                       time.Duration
 	InPerMTok, OutPerMTok        int64
-	Chains                       map[string]bool
-	Log                          func(string, ...any)
+	// CostCapMicros is the day's ceiling, or 0 for none. See Bot.CostCapMicros.
+	CostCapMicros int64
+	Chains        map[string]bool
+	Log           func(string, ...any)
 	// Facts is optional; see Bot.Facts and CourtFacts.
 	Facts CourtFacts
 }
@@ -362,7 +379,8 @@ func NewBot(store *Store, srv *Server, key string, o BotOptions) *Bot {
 		Store: store, Key: key, Model: o.Model,
 		Chains: o.Chains, MinGap: o.MinGap,
 		Site: o.Site, Repo: o.Repo, ChainDocs: o.ChainDocs,
-		InPerMTok: o.InPerMTok, OutPerMTok: o.OutPerMTok,
+		CostCapMicros: o.CostCapMicros,
+		InPerMTok:     o.InPerMTok, OutPerMTok: o.OutPerMTok,
 		Log:   o.Log,
 		Facts: o.Facts,
 		// THE TWO HOOKS, and the whole reason this function exists.
@@ -600,7 +618,10 @@ func (b *Bot) scan(ctx context.Context, chain, court string, now time.Time) (*bo
 		if m.ID > highest {
 			highest = m.ID
 		}
-		lines = append(lines, m.Moniker+": "+m.Body)
+		/* REDACTED HERE, where the body is still its own value and before it is
+		   joined to anything. Every line of the prompt's untrusted block comes
+		   through this append, so this is the one place that covers all of them. */
+		lines = append(lines, m.Moniker+": "+botRedactSecret(m.Body))
 		if mine[m.ID] {
 			continue // our own voice
 		}
@@ -643,10 +664,10 @@ func (b *Bot) scan(ctx context.Context, chain, court string, now time.Time) (*bo
 		   FIRST, ahead of every other branch: what somebody typed matters less
 		   than who they are claiming to be while typing it. */
 		case IsReservedName(m.Moniker) && m.Body != botImpersonationLine:
-			best = &botCandidate{chain: chain, court: court, body: m.Body, at: at,
+			best = &botCandidate{chain: chain, court: court, body: botRedactSecret(m.Body), at: at,
 				says: botImpersonationLine}
 		case botWorthAsking(m.Body):
-			best = &botCandidate{chain: chain, court: court, body: m.Body, at: at}
+			best = &botCandidate{chain: chain, court: court, body: botRedactSecret(m.Body), at: at}
 		/* "WHO ARE YOU" IS A QUESTION WITH ONE ANSWER, and for three readers in a
 		   row it got silence: botWorthAsking wants a site word ("bot" and
 		   "person" are not site words) and botGreeting wants a bare hello, so an
@@ -654,7 +675,7 @@ func (b *Bot) scan(ctx context.Context, chain, court string, now time.Time) (*bo
 		   AFTER botWorthAsking, so "who are you staking with?" stays a question
 		   about the site rather than being answered with a name. */
 		case botAskingWhoTheClerkIs(m.Body):
-			best = &botCandidate{chain: chain, court: court, body: m.Body, at: at,
+			best = &botCandidate{chain: chain, court: court, body: botRedactSecret(m.Body), at: at,
 				says: botClerkLine}
 		/* ADDRESSED BY NAME — see botAddressed. After the identity and site-question
 		   branches, because "clerk, how do i stake?" is both and either answer
@@ -662,7 +683,7 @@ func (b *Bot) scan(ctx context.Context, chain, court string, now time.Time) (*bo
 		   somebody starting a conversation with the clerk rather than with the
 		   room. */
 		case botAddressed(m.Body):
-			best = &botCandidate{chain: chain, court: court, body: m.Body, at: at,
+			best = &botCandidate{chain: chain, court: court, body: botRedactSecret(m.Body), at: at,
 				addressed: true}
 		/* A FOLLOW-UP TO THE CLERK'S OWN LAST MESSAGE. Both halves are required:
 		   the shape, and the fact that the clerk was the previous speaker. After
@@ -670,7 +691,7 @@ func (b *Bot) scan(ctx context.Context, chain, court string, now time.Time) (*bo
 		   clerk is better served by them; before the greeting branch, because
 		   "and?" is not a hello. */
 		case followUp:
-			best = &botCandidate{chain: chain, court: court, body: m.Body, at: at,
+			best = &botCandidate{chain: chain, court: court, body: botRedactSecret(m.Body), at: at,
 				followUp: true}
 		/* SOMEBODY SAID THANK YOU, AND SILENCE IS THE WRONG ANSWER TO IT.
 		   Reported as: "i said brilliant! ... it should respond graciously". The
@@ -685,7 +706,7 @@ func (b *Bot) scan(ctx context.Context, chain, court string, now time.Time) (*bo
 		   thanks is worse than silence. It costs no tokens, and it still waits
 		   its turn through the typing pause like any other message. */
 		case thanked:
-			best = &botCandidate{chain: chain, court: court, body: m.Body, at: at,
+			best = &botCandidate{chain: chain, court: court, body: botRedactSecret(m.Body), at: at,
 				says: botThanksLine}
 		case botGreeting(m.Body):
 			// A GREETING ONLY COUNTS IN A ROOM THAT HAD GONE QUIET, and the
@@ -698,7 +719,7 @@ func (b *Bot) scan(ctx context.Context, chain, court string, now time.Time) (*bo
 				return nil, err
 			}
 			if quiet {
-				best = &botCandidate{chain: chain, court: court, body: m.Body,
+				best = &botCandidate{chain: chain, court: court, body: botRedactSecret(m.Body),
 					at: at, greeting: true}
 			}
 		default:
@@ -1158,6 +1179,22 @@ func botAskingWhoTheClerkIs(body string) bool {
 		"what is your job", "what's your job", "whats your job",
 		"what do you do", "what are you here for", "what is your purpose",
 		"what's your purpose", "whats your purpose",
+		/* AND "WHAT DO YOU COVER" IS A THIRD QUESTION, not the same as either of
+		   the two above. The shapes so far ask WHAT the clerk is and what it is
+		   FOR; a reader who has worked both of those out then asks what it will
+		   actually answer. MEASURED against every predicate, not one: "what range
+		   of questions do you respond to?" came out false on worthAsking,
+		   addressed, whoIs and greeting alike, so it reached nothing at all — the
+		   same silence, from a different hole.
+		   THE FIXED LINE ALREADY ANSWERS IT. "I'm the clerk. Ask me anything about
+		   how this site works." is a direct reply to "what do you answer?", which
+		   makes this the cheap half of the fix: no model call, no tokens, and the
+		   one sentence that was already written for it.
+		   SINGULAR STEMS, because Contains covers the plural: "what kind of
+		   question" matches "what kinds of questions ...". */
+		"what can you help with", "what can you do", "what do you answer",
+		"what can i ask", "things can i ask", "what questions can you",
+		"what kind of question", "what sort of question", "what range of question",
 	} {
 		if strings.Contains(s, shape) {
 			return true
@@ -1381,8 +1418,11 @@ they put in. Winners are paid in newly minted court coin, weighted by conviction
 against what a claim in that court is typically worth. Nothing weights a winner
 by how right they were: everyone on the winning side won.
 Nobody is paid out of the other side's stake and no value moves between the two
-sides at all. Real money (GNOT) enters once, when buying a court's coin, and is
-burned; it never leaves. What a staker stakes is always THE COURT'S OWN COIN and
+sides at all. Real money (GNOT) is burned rather than held: it enters when
+somebody buys a court's coin, and it never leaves. Opening a NEW court can cost
+GNOT too, which is burned the same way — so a reader asking what GNOT is for
+here has two answers rather than one. Whether opening one costs anything, and
+how much, is a setting on the chain and not something for you to quote. What a staker stakes is always THE COURT'S OWN COIN and
 never GNOT — GNOT is what buys that coin, not something you can put on a claim —
 so a reader asked what to stake with has exactly one answer. If somebody asks
 whether being wrong costs them their stake, the answer is no.
@@ -1500,6 +1540,30 @@ func (b *Bot) answer(ctx context.Context, c botCandidate) error {
 	// throttle, because it is a message in a room like any other.
 	if c.says != "" {
 		return b.say(ctx, c, c.says)
+	}
+	/* THE CEILING, AND IT IS CHECKED HERE ON PURPOSE — after the fixed lines and
+	   before anything that costs. A capped helper still says who it is, still
+	   calls out an impersonator and still greets nobody at all, because none of
+	   those asks the model anything; what stops is the spending.
+	   THE ONLY BOUND UNTIL NOW WAS TIME. One reply per --bot-gap, newest wins,
+	   which is 8,640 calls a day at ten seconds — and measured, per-call input is
+	   ~2,000 tokens since the prompt gained the armour and the refusals, against
+	   a lifetime spend of $0.47 across 514 calls. Nothing read the total and
+	   nothing alerted, so the first sign of a room grinding away at it would have
+	   been a bill. */
+	if over, spent, err := b.overCap(ctx); err != nil {
+		// A ceiling that cannot be read must not silence the helper: the failure
+		// is logged and the reply proceeds, which is the same direction
+		// courtFacts takes when the chain will not answer.
+		b.logf("chat bot: cannot read today's spend, answering anyway: %v", err)
+	} else if over {
+		if day := b.capToday(); b.capDay != day {
+			b.capDay = day
+			b.logf("chat bot: daily cost cap reached (%d of %d micros); "+
+				"no more model calls today, fixed lines still answer",
+				spent, b.CostCapMicros)
+		}
+		return nil
 	}
 	/* THE TWO CHANNELS, SPLIT. Everything below that the operator says is built
 	   into `instr` and handed to the system channel; `prompt` is the untrusted
@@ -1773,6 +1837,39 @@ func botUnsafeReply(text string, allow []string) string {
 	return ""
 }
 
+// capToday is the start of the current UTC day, which is the window the cap
+// counts over. UTC rather than local, so a deployment that moves does not get a
+// day with two midnights or none.
+func (b *Bot) capToday() int64 { return utcDayStart(b.now()) }
+
+/*
+utcDayStart is the cap's window, and it is ONE definition on purpose.
+
+	The gate asks "have I spent the day's budget" and the diagnostics page asks
+	"how much of it is gone" — two callers, and a boundary written twice is a
+	boundary that disagrees with itself the first time somebody adjusts one. The
+	page would then say a helper had budget left while the gate refused to spend
+	it, which is the confusing half of both answers.
+	UTC RATHER THAN LOCAL, so a deployment that moves does not get a day with two
+	midnights or none.
+*/
+func utcDayStart(t time.Time) int64 {
+	u := t.UTC()
+	return time.Date(u.Year(), u.Month(), u.Day(), 0, 0, 0, 0, time.UTC).Unix()
+}
+
+// overCap reports whether today's spend has reached the ceiling, and what it is.
+func (b *Bot) overCap(ctx context.Context) (bool, int64, error) {
+	if b.CostCapMicros <= 0 {
+		return false, 0, nil
+	}
+	spent, err := b.Store.SpendSince(ctx, b.capToday())
+	if err != nil {
+		return false, 0, err
+	}
+	return spent >= b.CostCapMicros, spent, nil
+}
+
 // botTrim caps the reply at the room's limit and takes any leading markdown off.
 func botTrim(s string) string { return botTrimTo(s, botMaxBody) }
 
@@ -1967,6 +2064,49 @@ const (
 	// "moniker: ".
 	untrustedHere = ">> "
 )
+
+/*
+	botRedactSecret takes a recovery phrase out of a line before anybody sees it.
+
+A READER WHO PASTES A SEED PHRASE INTO A PUBLIC ROOM has already lost the funds,
+and the site cannot undo that. What it can refuse to do is make it worse, and
+until now it did two things that made it worse: the phrase went into the
+transcript that is sent to the model vendor, and it sat in the clerk's context
+where the clerk could repeat it back — in the one voice on the site whose name
+is reserved, which is the version a reader is most likely to trust and least
+likely to question.
+
+REDACTED AT THE SOURCE, which is why there is no matching check on the reply.
+The phrase never reaches the prompt, so the reply cannot echo it, and a
+reply-side check for the same thing could never fire — a guard that cannot fire
+is worse than none, because it reads as cover.
+
+THE WHOLE BODY GOES, not the matching words. Word-level surgery would leave
+"my phrase is [removed] [removed] able ..." which is still a map of the thing,
+and a line that contains a seed phrase is mostly the seed phrase.
+
+AND THE CLERK IS STILL TOLD IT HAPPENED. botSystem's instruction for this case
+is to say the phrase is public now and to move the funds; a silently emptied
+line would take that away. The marker says what was removed without being it.
+
+NOTHING IS LOGGED WHEN IT FIRES. The journal must not carry the secret, and a
+line naming the room that had one is a pointer to it for anybody reading the
+log — who could read the row itself anyway, so the line would add risk and no
+information. The redaction is silent on purpose.
+
+CHECKSUM-VALIDATED, NOT WORD-COUNTED, which is the whole reason this is safe to
+run on every message: bip39.SeedPhrase verifies the BIP-39 checksum, so twelve
+ordinary words that happen to be on the list are not a phrase. The cost is that
+a phrase with a typo, or eleven words of one, is NOT caught — the detector is
+deliberately the precise one, and half a phrase in a public room is a loss this
+cannot prevent either way.
+*/
+func botRedactSecret(body string) string {
+	if !bip39.SeedPhrase(body) {
+		return body
+	}
+	return "[a recovery phrase was posted here and has been removed]"
+}
 
 // scrubFence neutralises the fence's opening sequence in text the public typed.
 // Belt and braces over the tag: "<<<" is the only thing the fence uses, so

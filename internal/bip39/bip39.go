@@ -1,4 +1,4 @@
-package scan
+package bip39
 
 import (
 	"crypto/sha256"
@@ -20,7 +20,7 @@ import (
 // wordlist is a constant. The CRC is checked at init because a mistyped word would weaken the
 // detector silently, and c1dbd296 is the value the canonical english.txt has always had — the
 // same constant tm2/pkg/crypto/bip39 asserts.
-// bip39CRC IS THE VALUE THE CHECK READS, which it did not used to be.
+// CRC IS THE VALUE THE CHECK READS, which it did not used to be.
 //
 // This was a string constant that only a test looked at, comparing it to a hardcoded copy of
 // itself, while init compared the wordlist against its own separate `0xc1dbd296` literal. So the
@@ -29,15 +29,19 @@ import (
 // where it was. Same shape as the predicate copies §7 consolidated into `sqlInForce`, which had
 // already disagreed by the time anybody looked.
 const (
-	bip39CRC  uint32 = 0xc1dbd296
-	bip39Size        = 2048
+	// CRC and Size are exported because internal/scan asserts them: its own test
+	// pins the checksum against the canonical value, and a wordlist of the wrong
+	// LENGTH would weaken every caller silently. See the header — the value used
+	// to exist twice, and the copy that was tested was not the copy enforced.
+	CRC  uint32 = 0xc1dbd296
+	Size        = 2048
 )
 
 var bip39Index = map[string]int{}
 
 func init() {
-	if err := verifyWordlist(bip39Words, bip39CRC); err != nil {
-		panic("scan: the BIP-39 wordlist is not the canonical one: " + err.Error())
+	if err := verifyWordlist(bip39Words, CRC); err != nil {
+		panic("bip39: the wordlist is not the canonical one: " + err.Error())
 	}
 	for i, w := range strings.Fields(bip39Words) {
 		bip39Index[w] = i
@@ -51,19 +55,19 @@ func init() {
 // the CRC is verified "because a mistyped word would weaken the detector silently" — that claim
 // is now something a test can drive rather than something a reader has to take on trust.
 //
-// wantCRC is a parameter rather than a direct read of bip39CRC for the same reason: it lets a
+// wantCRC is a parameter rather than a direct read of CRC for the same reason: it lets a
 // test reach the word-count branch, which is otherwise guarded by a CRC that would have to
 // collide first. init passes the constant, so there is still exactly one enforced value.
 func verifyWordlist(words string, wantCRC uint32) error {
 	if got := crc32.ChecksumIEEE([]byte(words)); got != wantCRC {
 		return fmt.Errorf("crc32 %08x, want %08x", got, wantCRC)
 	}
-	distinct := make(map[string]bool, bip39Size)
+	distinct := make(map[string]bool, Size)
 	for _, w := range strings.Fields(words) {
 		distinct[w] = true
 	}
-	if len(distinct) != bip39Size {
-		return fmt.Errorf("%d distinct words, want %d", len(distinct), bip39Size)
+	if len(distinct) != Size {
+		return fmt.Errorf("%d distinct words, want %d", len(distinct), Size)
 	}
 	return nil
 }
@@ -2134,6 +2138,14 @@ zoo
 // the leading bits of its own SHA-256, so a list of nouns passes only by luck: one chance in 16
 // at 12 words, one in 256 at 24. Combined with needing an exact phrase length, that is a
 // deterministic rule that means what its name says.
+// InWordlist reports whether a token is one of the 2048 BIP-39 English words.
+//
+// Exported so a caller can count a RUN of wordlist words without reaching into
+// the index — internal/scan's WordlistRun wants that count for a claim that
+// looks like a phrase but fails the checksum, which is a different question from
+// SeedPhrase's.
+func InWordlist(w string) bool { _, ok := bip39Index[w]; return ok }
+
 func SeedPhrase(body string) bool {
 	fields := strings.Fields(strings.ToLower(body))
 	// Maximal runs of wordlist words, punctuation trimmed the same way WordlistRun does it so

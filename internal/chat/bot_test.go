@@ -783,6 +783,276 @@ func TestTheSystemPromptRefusesTheThingsItMustRefuse(t *testing.T) {
 	}
 }
 
+/*
+	---- A RECOVERY PHRASE NEVER REACHES THE PROMPT ---------------------------
+
+A reader who pastes a seed phrase into a public room has already lost the funds
+and the site cannot undo it. What it can refuse to do is make it worse, and it
+used to do that twice: the phrase went into the transcript sent to the model
+vendor, and it sat in the clerk's context where the clerk could repeat it back
+in the one voice on this site whose name is reserved.
+
+THE VECTORS BELOW ARE THE PUBLISHED ONES, from the BIP-39 specification itself.
+They have valid checksums, which is what makes them usable as fixtures, and they
+have held nothing for a decade, which is what makes them safe to write down.
+*/
+const (
+	seedAllAbandon = "abandon abandon abandon abandon abandon abandon " +
+		"abandon abandon abandon abandon abandon about"
+	seedLegalWinner = "legal winner thank year wave sausage worth useful " +
+		"legal winner thank yellow"
+)
+
+func TestARecoveryPhraseIsTakenOutBeforeTheModelSeesIt(t *testing.T) {
+	// IT FIRES ON A REAL PHRASE, in the shapes one actually arrives in.
+	for _, c := range []struct{ name, body string }{
+		{"pasted bare", seedAllAbandon},
+		{"a different vector, so this is not one fixture's checksum",
+			seedLegalWinner},
+		{"with a sentence around it",
+			"help! did i do something wrong? " + seedLegalWinner + " is that my key?"},
+		{"numbered, which is how a wallet displays it",
+			"1. legal 2. winner 3. thank 4. year 5. wave 6. sausage 7. worth " +
+				"8. useful 9. legal 10. winner 11. thank 12. yellow"},
+		{"comma separated", strings.ReplaceAll(seedLegalWinner, " ", ", ")},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			got := botRedactSecret(c.body)
+			if strings.Contains(got, "sausage") || strings.Contains(got, "abandon") {
+				t.Errorf("the phrase survived redaction: %q", got)
+			}
+			if !strings.Contains(got, "removed") {
+				t.Errorf("the clerk must still be told something was taken out: %q", got)
+			}
+		})
+	}
+
+	/* AND IT DOES NOT FIRE ON ANYTHING ELSE, which is the arm that matters most:
+	   a redactor that eats ordinary messages would be switched off. Checksum
+	   validation is what buys this — twelve words that happen to be on the
+	   wordlist are not a phrase unless the last one checks out. */
+	for _, ok := range []string{
+		"how do i stake on a claim?",
+		"i don't understand the no-loss rule, can someone explain?",
+		// Wordlist words, deliberately, and plenty of them. The list is ordinary
+		// English: abandon, ability, able, about, above, absent, absorb, abstract.
+		"i am able to absorb the abstract idea above about the absent ability",
+		// Twelve wordlist words in a row with a WRONG checksum: the shape of a
+		// phrase without being one. This is the case a word-counting detector
+		// would have failed and a checksum one does not.
+		"abandon abandon abandon abandon abandon abandon abandon abandon " +
+			"abandon abandon abandon abandon",
+		"",
+	} {
+		if got := botRedactSecret(ok); got != ok {
+			t.Errorf("an ordinary message was redacted: %q -> %q", ok, got)
+		}
+	}
+}
+
+// AND IT IS WIRED INTO THE PROMPT, not merely available. The predicate above is
+// the rule; this drives the real path, because a redactor nothing calls redacts
+// nothing.
+func TestTheUntrustedBlockCarriesNoRecoveryPhrase(t *testing.T) {
+	s, clock := newStore(t)
+	ctx := context.Background()
+	m := &fakeModel{reply: "That phrase is public now — move your funds.", in: 10, out: 8}
+	b := newBot(t, s, m)
+	b.NonceFn = func() string { return "TESTTAG" }
+	*clock = clock.Add(time.Hour)
+	// Posted BEFORE the question, so it is in the transcript rather than being the
+	// message under consideration — both paths into the prompt, one fixture.
+	if _, err := post(t, s, "orem", "ip-oops", seedLegalWinner); err != nil {
+		t.Fatal(err)
+	}
+	*clock = clock.Add(MinInterval)
+	if _, err := post(t, s, "orem", "ip-asks",
+		"i pasted my wallet key in the chat, what do i do?"); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.once(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if m.calls != 1 {
+		t.Fatalf("expected one call, got %d", m.calls)
+	}
+	for _, w := range []string{"sausage", "winner thank year", "yellow"} {
+		if strings.Contains(m.prompt, w) {
+			t.Errorf("the phrase reached the user turn (%q): %q", w, m.prompt)
+		}
+		if strings.Contains(m.system, w) {
+			t.Errorf("the phrase reached the system turn (%q)", w)
+		}
+	}
+	if !strings.Contains(m.prompt, "has been removed") {
+		t.Errorf("the clerk must see that something was taken out: %q", m.prompt)
+	}
+	// AND THE QUESTION STILL GOT THROUGH, so the reader is not silently ignored
+	// at the moment they most need an answer.
+	if !strings.Contains(m.prompt, "what do i do?") {
+		t.Errorf("the reader's own question must survive: %q", m.prompt)
+	}
+}
+
+/*
+	---- THE DAILY CEILING ----------------------------------------------------
+
+The only bound on what the helper could spend was TIME: one reply per --bot-gap,
+newest wins, which at ten seconds is 8,640 calls a day. Per-call input measured
+~2,000 tokens once the prompt carried the armour and the refusals, against a
+lifetime spend of $0.47 across 514 calls — so a room grinding at it would have
+cost tens of dollars a day and nothing read the total or raised anything.
+
+ZERO IS THE DEFAULT and changes nothing: a ceiling is a policy the operator
+owns, and a default that silenced a working helper would be this feature's own
+worst failure. kourtchat warns at startup instead.
+*/
+func TestTheDailyCostCapStopsTheSpendingAndNothingElse(t *testing.T) {
+	// A capped helper does not call the model...
+	s, clock := newStore(t)
+	ctx := context.Background()
+	m := &fakeModel{reply: "should not be reached", in: 500, out: 20}
+	b := newBot(t, s, m)
+	b.CostCapMicros = 1000
+	*clock = clock.Add(time.Hour)
+	// Spend recorded TODAY, at the ceiling.
+	if err := s.recordBotSpend(ctx, "test-model", botKindPass, 1000, 0, 1000); err != nil {
+		t.Fatal(err)
+	}
+	/* PAST THE GAP FIRST, and this is not housekeeping. recordBotSpend writes a
+	   bot_replies row dated now, which MinGap counts as the last reply — so
+	   without this the helper is quiet because of the GAP and m.calls is 0 for
+	   the wrong reason. Found by the under-cap test below, which failed while
+	   this one passed: the two assertions are the same number and only one of
+	   them was measuring the cap. */
+	*clock = clock.Add(BotMinGap * 2)
+	if _, err := post(t, s, "orem", "ip-a", "how do i stake on a claim?"); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.once(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if m.calls != 0 {
+		t.Errorf("a capped helper must not call the model, got %d calls", m.calls)
+	}
+	got, err := s.Recent(ctx, "dev", "orem", 0, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 {
+		t.Errorf("the room must hold only the question, got %d rows", len(got))
+	}
+
+	/* ...AND YET STILL SAYS WHO IT IS. The fixed lines cost nothing, so a cap has
+	   no business silencing them: a reader who asks the clerk what it is, or who
+	   wears its name, gets the same answer whether or not the day's budget is
+	   gone. This is the arm that makes the cap a spending limit rather than an
+	   off switch. */
+	*clock = clock.Add(BotMinGap * 2)
+	if _, err := post(t, s, "orem", "ip-b", "who are you?"); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.once(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if m.calls != 0 {
+		t.Errorf("an identity question costs no model call, capped or not: %d", m.calls)
+	}
+	got, err = s.Recent(ctx, "dev", "orem", 0, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) == 0 || got[len(got)-1].Body != botClerkLine {
+		t.Errorf("a capped helper must still say who it is, got %+v", got)
+	}
+}
+
+// AND UNDER THE CEILING NOTHING CHANGES, which is the arm that catches a cap
+// that is always on — the failure that would look like a broken helper.
+func TestUnderTheCapTheHelperAnswersNormally(t *testing.T) {
+	s, clock := newStore(t)
+	ctx := context.Background()
+	m := &fakeModel{reply: "You buy the court's coin, then stake it.", in: 500, out: 20}
+	b := newBot(t, s, m)
+	b.CostCapMicros = 1_000_000
+	*clock = clock.Add(time.Hour)
+	if err := s.recordBotSpend(ctx, "test-model", botKindPass, 1000, 0, 1000); err != nil {
+		t.Fatal(err)
+	}
+	// Past the gap: see the note in the capped test above.
+	*clock = clock.Add(BotMinGap * 2)
+	if _, err := post(t, s, "orem", "ip-a", "how do i stake on a claim?"); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.once(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if m.calls != 1 {
+		t.Fatalf("well under the cap the model must be asked, got %d calls", m.calls)
+	}
+
+	/* AND A CAP OF ZERO IS NO CAP, not an immediate one. This is the default, so
+	   an off-by-one here would silence every deployment that never set the flag. */
+	b.CostCapMicros = 0
+	over, _, err := b.overCap(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if over {
+		t.Error("zero must mean no ceiling, not a ceiling of zero")
+	}
+}
+
+// THE WINDOW IS A DAY, NOT ALL TIME. BotStats sums the whole table, which is the
+// wrong number for a ceiling: a lifetime total crosses any cap eventually and
+// then stays crossed, so the helper would go quiet for ever on the strength of a
+// year of ordinary use.
+func TestTheCapCountsTodayAndNotAllTime(t *testing.T) {
+	s, clock := newStore(t)
+	ctx := context.Background()
+	b := newBot(t, s, &fakeModel{})
+	b.CostCapMicros = 1000
+
+	/* RECORDED WHILE THE CLOCK IS YESTERDAY, which is how the store dates a row:
+	   recordBotSpend stamps created_at from the store's own clock, so moving the
+	   clock is the only thing needed to put spend in the past. Well over the
+	   ceiling, so if the window were all-time this would close today. */
+	*clock = clock.Add(24 * time.Hour)
+	if err := s.recordBotSpend(ctx, "test-model", botKindPass, 0, 0, 50_000); err != nil {
+		t.Fatal(err)
+	}
+	/* ...AND NOW IT IS EXACTLY ONE DAY LATER, which is the distance that makes
+	   this arm sensitive. The first version advanced 48 hours, and a window
+	   shifted by one day still excluded spend that far back — so the mutation
+	   that moves the boundary by a day passed, and the "one definition of the
+	   boundary" claim had no arm at all. A day boundary deserves a fixture at the
+	   boundary. */
+	*clock = clock.Add(24 * time.Hour)
+	over, spent, err := b.overCap(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if over {
+		t.Errorf("yesterday's spend must not close today (today=%d)", spent)
+	}
+	if spent != 0 {
+		t.Errorf("today's window must be empty, got %d micros", spent)
+	}
+
+	// AND TODAY'S OWN SPEND DOES close it, so the arm above is not passing
+	// because the query returns nothing whatever the date.
+	if err := s.recordBotSpend(ctx, "test-model", botKindPass, 0, 0, 1000); err != nil {
+		t.Fatal(err)
+	}
+	over, spent, err = b.overCap(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !over {
+		t.Errorf("spend from today must close the day, got spent=%d", spent)
+	}
+}
+
 func TestTheUserTurnCarriesNothingButWhatThePublicTyped(t *testing.T) {
 	for _, c := range []struct {
 		name, body, wantInSystem string
@@ -1773,6 +2043,19 @@ func TestTheClerkSaysWhoItIsWithoutAskingAModel(t *testing.T) {
 		   family. */
 		"what is your role in this?", "what do you do here?", "what is your job?",
 		"what's your role?", "whats your purpose",
+		/* THE COVERAGE FAMILY, a third question and not the same as either of the
+		   other two: the shapes above ask what the clerk IS and what it is FOR,
+		   and a reader who has both then asks what it will actually answer.
+		   MEASURED ACROSS EVERY PREDICATE, which is the part the last attempt at
+		   this got wrong: a corpus probe that only ran botWorthAsking reported "is
+		   the clerk in?" as a hole, and it is not one — botAddressed matches the
+		   name as a token anywhere, so it was handled all along. These four came
+		   out false on worthAsking, addressed, whoIs and greeting alike, so they
+		   reached nothing at all. */
+		"what range of questions do you respond to?", "what can you help with?",
+		"what do you answer?", "what kinds of things can i ask you?",
+		"what can you do?", "what questions can you handle?",
+		"what sort of questions are ok?",
 	} {
 		if !botAskingWhoTheClerkIs(q) {
 			t.Errorf("should be an identity question: %q", q)
@@ -1785,6 +2068,15 @@ func TestTheClerkSaysWhoItIsWithoutAskingAModel(t *testing.T) {
 		"who are you staking with?", "are you going to dispute it?",
 		"do you think the lab funded it?", "",
 		strings.Repeat("who are you ", 20),
+		/* AND THE COVERAGE SHAPES ARE STEMMED TIGHT, so they cannot become a
+		   redirect for the subject matter. "can i ask you" was the obvious stem
+		   for "what kinds of things can i ask you?" and was rejected for exactly
+		   this: it would have matched the first line below, where the right answer
+		   is silence rather than an invitation to ask about the site. */
+		"can i ask you why the lab leaked?",
+		"can i ask you something?",
+		"what did the study say?",
+		"what kind of evidence is there?",
 	} {
 		if botAskingWhoTheClerkIs(q) {
 			t.Errorf("should NOT be an identity question: %q", q)
@@ -2179,9 +2471,38 @@ func TestTheSystemPromptNamesTheStakingDenomination(t *testing.T) {
 	// unsafe.OriginSend to start a court and burns the whole payment. Narrowing
 	// a denomination is worth doing; inventing an exclusivity to do it with is
 	// the "do not invent" rule the prompt ends on.
-	for _, over := range []string{"buys nothing else", "only thing gnot", "gnot does nothing else"} {
+	/* THE BAN LIST WAS SPELLING-BASED AND THE PROMPT SAID IT ANOTHER WAY. Those
+	   three phrases were banned for a measured reason — courtburn.gno takes GNOT
+	   through unsafe.OriginSend to start a court and burns the whole payment — and
+	   the paragraph then asserted the same exclusivity in words none of them
+	   match: "Real money (GNOT) enters once, when buying a court's coin". One
+	   occasion, named. A reader asking what GNOT is for, or how to open a court,
+	   got the half of the answer the ban list happened not to spell. */
+	for _, over := range []string{
+		"buys nothing else", "only thing gnot", "gnot does nothing else",
+		"enters once", "gnot only enters", "the one use for gnot",
+	} {
 		if strings.Contains(strings.ToLower(p), over) {
 			t.Errorf("the prompt claims GNOT has one use; starting a court burns it too: %q", over)
+		}
+	}
+	/* AND THE SECOND USE IS STATED, not merely left unclaimed. Removing an
+	   overclaim leaves a reader no better off than before if the thing it was
+	   hiding is still absent. */
+	for _, want := range []string{"opening a new court can cost", "burned the same way"} {
+		if !strings.Contains(strings.ToLower(p), want) {
+			t.Errorf("the prompt must say opening a court can cost GNOT too: %q", want)
+		}
+	}
+	/* AND IT MUST NOT QUOTE A PRICE. CourtCreationBurn is admin-settable and zero
+	   turns the burn off entirely, so any figure here would be wrong on some
+	   deployment and on this one the day the DAO changes it. The prompt's own
+	   closing rule is "do not invent numbers"; this is the same rule applied to a
+	   number that exists but is not ours. */
+	for _, price := range []string{"2 gnot", "two gnot", "costs 2 ", "costs two "} {
+		if strings.Contains(strings.ToLower(p), price) {
+			t.Errorf("the prompt quotes a court-creation price, which is a chain "+
+				"setting that can be changed or switched off: %q", price)
 		}
 	}
 }
