@@ -1094,7 +1094,14 @@ a.card:hover{border-color:var(--line-2)}
    its grid row and the document scrolls, which is what it did before.
    THE 90px FOOT GOES TO 24. It is the page's breathing room below an article
    that ends; a room whose bottom edge IS the composer does not end. */
-#main.roomfill{display:flex; flex-direction:column; padding-bottom:24px}
+/* NOTHING AROUND THE CHAT. Measured before this: 22px above the panel (the
+   lead paragraph's 16px bottom margin plus the panel's own 6.4px top) and 26px
+   below it (this rule's 24px). Asked for as "remove all the empty spaces around
+   the chat" — so the room starts where the prose ends and finishes at the foot
+   of the page. Scoped to .roomfill, which is only ever the chat view, so no
+   other page loses its spacing. */
+#main.roomfill{display:flex; flex-direction:column; padding-bottom:0}
+#main.roomfill .lead-row{margin-bottom:0}
 #main.roomfill > *{flex:none}
 /* A CEILING AS WELL AS A REMAINDER, because "the grid already worked it out" is
    only true while the RAIL is shorter than the window — and the rail is the
@@ -1110,7 +1117,17 @@ a.card:hover{border-color:var(--line-2)}
    remainder wins and this never binds, and on a short one it is what keeps the
    composer reachable. */
 #main.roomfill #chatview.chatpanel{max-width:none; height:auto; flex:1 1 auto;
-  max-height:calc(100dvh - 250px);
+  /* THE REMAINDER, NOT A MEASURED CONSTANT. This was
+     max-height:calc(100dvh - 250px), where 250 was the crumbs, the heading and
+     the lead measured at 226 plus a 24px foot. With the foot gone and the gaps
+     above it closed the constant was 48px short, and the panel stopped before
+     the bottom of the page — the arithmetic had moved out from under it.
+     main is a grid row with a DEFINITE height and .roomfill is already a flex
+     column, so flex:1 1 auto with min-height:0 fills exactly what is left,
+     whatever is above it and however the heading wraps. It also cannot overflow
+     the page: the remainder is what it is, so the composer stays reachable by
+     construction rather than by a number somebody has to keep true. */
+  min-height:0;
   /* AND IT BLEEDS OUT OF THE PAGE'S OWN GUTTER. Reported twice as "i want the
      padding around the chat gone. wasted space." — the first fix cut the
      panel's internal inset, which was 11px and not what anybody was looking at.
@@ -2890,7 +2907,7 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
      dvh, NOT vh: a mobile URL bar that retracts changes vh and not the space
      the page actually has, and this is the one height in the file where being
      wrong by the bar's height puts the composer under it. */
-  #main.roomfill{padding-bottom:18px}
+  #main.roomfill{padding-bottom:0}
   /* max-height:none IS NOT REDUNDANT. The desktop rule caps the panel at
      100dvh-250px on the reasoning that 250 is the page above it plus the foot —
      true when the rail is beside the content, false when it is stacked on top,
