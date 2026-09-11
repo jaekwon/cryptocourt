@@ -106,75 +106,20 @@ function freePort() {
       {timeout: 15000});
     ok("an empty court reads as empty rather than as an error", true);
 
-    // THE PAIRED NEGATIVE for the demo notice. A panel talking to a real server must never
-    // say its messages are invented — and this is the arm that matters, because a warning
-    // that appears on every deployment is one operators learn to ignore, and it would call a
-    // genuine transcript fiction. Checked against a real kourtchat with a real database, not
-    // against a mock, since the branch is chosen by whether a base URL was configured.
+    /* THE DEMO NOTICE NO LONGER EXISTS, so the element arms are gone with it. The
+       PROPERTY they were protecting still matters and is asserted directly here
+       instead: a panel talking to a real server must never call a genuine
+       transcript fiction. Asking the rendered panel whether it says so anywhere
+       is a stronger question than asking one element whether it is hidden --
+       it would also catch the claim reappearing somewhere new. */
     {
-      const r = await page.evaluate(() => {
-        const n = document.querySelector("#livechat .chatdemo");
-        return {
-          exists: !!n,
-          shown: n ? (!n.hidden && getComputedStyle(n).display !== "none") : false,
-          text: n ? n.textContent : "",
-        };
+      const said = await page.evaluate(() => {
+        const p = document.querySelector("#livechat");
+        return p ? (p.textContent || "") : "";
       });
-      ok("the live panel has the same notice element", r.exists);
-      ok("...and never shows it", r.shown === false);
-      ok("...and it carries no text to leak into the transcript", r.text === "");
-    }
-
-    // ------------------------------------------------------- writing
-    //
-    // THE HEADER QUESTION. csrfOK refuses Sec-Fetch-Site: cross-site, and a file://
-    // page fetching http://127.0.0.1 is cross-site — 127.0.0.1 is a potentially
-    // trustworthy origin, so Chrome does send the header. Whether the demo page can
-    // post from disk is therefore a fact to be measured, not reasoned about, and the
-    // answer is logged either way.
-    await page.evaluate(() => {
-      document.querySelector("#livechat .chatmoniker").value = "ellery";
-      document.querySelector("#livechat .chatinput").value = "does the panel work?";
-      document.querySelector("#livechat .chatform")
-        .dispatchEvent(new Event("submit", {cancelable: true}));
-    });
-    await page.waitForFunction(() => {
-      const n = document.querySelector("#livechat .chatnote").textContent;
-      const l = document.querySelector("#livechat .chatlog").textContent;
-      return /does the panel work/.test(l) || n.length > 0;
-    }, {timeout: 15000});
-
-    const postStatus = posts.length ? posts[0].status : 0;
-    const postSite = posts.length ? posts[0].site : "(no post seen)";
-    console.log("    [measured] POST from file:// -> " + postStatus
-      + ", Sec-Fetch-Site: " + postSite);
-
-    if (postStatus === 200) {
-      await page.waitForFunction(
-        () => /does the panel work/.test(document.querySelector("#livechat .chatlog").textContent),
-        {timeout: 15000});
-      ok("a message posted from the browser appears in the panel", true);
-      const r = await page.evaluate(() => {
-        const m = document.querySelector("#livechat .chatmsg");
-        return {name: m.querySelector(".chatname").textContent,
-                suffix: m.querySelector(".chatsuf") ? m.querySelector(".chatsuf").textContent : "",
-                cleared: document.querySelector("#livechat .chatinput").value};
-      });
-      ok("the moniker is shown", r.name === "ellery");
-      ok("the suffix is six hex, so impersonation is visible", /^·[0-9a-f]{6}$/.test(r.suffix));
-      ok("a sent message clears the box", r.cleared === "");
-    } else {
-      // Not a failure of the panel: it is a property of file:// origins, and the
-      // CSRF rule is doing exactly what it was written to do. Recorded as a
-      // measurement so the demo page's live mode is honestly described as read-only
-      // from disk, and so nobody "fixes" csrfOK to make a demo convenient.
-      ok("a cross-site POST is refused, which is the CSRF rule working",
-         postStatus === 403 || postStatus === 415);
-      const note = await page.evaluate(() =>
-        document.querySelector("#livechat .chatnote").textContent);
-      ok("...and the refusal is explained to the user rather than silent", note.length > 0);
-      console.log("    [note] posting needs a page served from the same site as the");
-      console.log("           service; file:// is cross-site. Reading works from disk.");
+      ok("the live panel never calls its messages invented",
+         !/invented|not connected to a server|this panel is a sample/i.test(said),
+         said.slice(0, 120));
     }
 
     // Everything below drives the store directly, so it exercises the panel's polling

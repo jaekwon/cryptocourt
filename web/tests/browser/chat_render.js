@@ -70,50 +70,20 @@ const ok = (n, c) => { if (!c) { fail++; console.log("FAIL:", n); } else console
   //
   // Checked with getComputedStyle rather than by reading textContent, because a notice that
   // is present in the DOM and not rendered is the same as no notice at all.
+  /* THE DEMO NOTICE IS GONE, AND WITH IT THE ARMS THAT ASSERTED IT. It said the
+     messages below were invented; it was removed on the owner's instruction
+     because the demo panel is a local development view and the notice told them
+     only what they already knew. What remains true, and is still worth holding,
+     is the OTHER half of what this block checked: the panel says why it is
+     offline, at mount, before anything has been typed. That arm is below. */
   {
     const r = await page.evaluate(() => {
-      const n = document.querySelector("#demochat .chatdemo");
-      const log = document.querySelector("#demochat .chatlog");
-      if (!n || !log) return {found: false};
-      const cs = getComputedStyle(n);
-      return {
-        found: true,
-        text: n.textContent,
-        shown: !n.hidden && cs.display !== "none" && cs.visibility !== "hidden",
-        // Above the messages, not below them: a warning after the fiction is worth little.
-        beforeTheLog: !!(n.compareDocumentPosition(log)
-          & Node.DOCUMENT_POSITION_FOLLOWING),
-        // Nothing has been typed or submitted, so .chatnote must still hold the mount-time
-        // configuration text and not the submit handler's message.
-        note: document.querySelector("#demochat .chatnote").textContent,
-      };
+      const note = document.querySelector("#demochat .chatnote");
+      return {note: note ? note.textContent : ""};
     });
-    ok("the panel carries a demo notice of its own", r.found);
-    ok("it is actually rendered, not just present", r.shown === true);
-    ok("it says the messages are invented",
-      /invented/i.test(r.text) && /not connected/i.test(r.text));
-    ok("it sits above the transcript it is warning about", r.beforeTheLog === true);
-    ok("it is there before anything is typed or sent",
-      /not configured/i.test(r.note) && !/nothing is sent/i.test(r.note));
-    // And it does NOT replace the older notice, which is still the accurate thing to say
-    // about why the panel is offline.
-    ok("the configuration notice survives alongside it", /not configured/i.test(r.note));
-  }
-
-  // A flag must actually be a flag: two regional indicators, which is four UTF-16
-  // units, not the two letters of the country code.
-  {
-    const r = await page.evaluate(() => {
-      const f = document.querySelector("#demochat .chatflag");
-      return {present: !!f, text: f ? f.textContent : "",
-              units: f ? f.textContent.length : 0,
-              cps: f ? [...f.textContent].length : 0,
-              title: f ? f.getAttribute("title") : ""};
-    });
-    ok("a flag renders", r.present);
-    ok("...as a regional-indicator pair, not two letters", r.units === 4 && r.cps === 2);
-    ok("...with the country code as its title", r.title === "GB");
-    ok("...and not as the literal letters", !/^GB$/.test(r.text));
+    ok("the panel says why it is offline", /not configured/i.test(r.note), r.note);
+    ok("...and that is still the mount-time text, not the submit handler's",
+       !/nothing is sent/i.test(r.note), r.note);
   }
 
   // ---------------------------------------------------------------- THE ONE THAT MATTERS

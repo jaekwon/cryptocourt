@@ -93,7 +93,7 @@ const ok = (n, c, d) => {
     };
 
     const head = q(".chathead"), log = q(".chatlog"), form = q(".chatform"),
-          note = q(".chatnote"), warn = q(".chatwarn"), input = q(".chatinput");
+          note = q(".chatnote"), input = q(".chatinput");
     const rows = [...document.querySelectorAll("#chatview .chatlog .chatmsg")];
     return {
       // 1. the sky is behind the thing that moves, and only that
@@ -161,7 +161,6 @@ const ok = (n, c, d) => {
       panelPadTop: parseFloat(cs(panel).paddingTop),
 
       // 5. one inset down one edge: the notice and the messages start together
-      warnLeft: Math.round(box(warn).left),
       rowLeft: rows.length ? Math.round(box(rows[0]).left) : -1,
       inputBandLeft: Math.round(box(form).left + parseFloat(cs(form).paddingLeft)),
       rows: rows.length,
@@ -209,7 +208,15 @@ const ok = (n, c, d) => {
   ok("the log's edge meets what is under it", m.logToNext === 0);
   ok("...and every band in the column tiles", m.worstSeam === 0);
 
-  ok("a rule states where the scroll starts", m.headRule >= 1);
+  /* AND NO RULE INSIDE THE PANEL STATES WHERE THE SCROLL STARTS, because one
+     already does from outside it. The head drew a hairline for that job; with the
+     notice removed the head holds nothing, so its rule landed 11px below the
+     lead-row's rule and read as a doubled line -- reported from a screenshot of
+     exactly that. The lead rule is the boundary now and it runs the full width of
+     the window, which the head's never did. What this arm holds is that the panel
+     does not draw a second one. */
+  ok("the panel draws no rule of its own at the top", m.headRule === 0,
+     `headRule=${m.headRule}`);
   /* AND NOTHING STATES WHERE IT ENDS, WHICH IS DELIBERATE. The log carried a
      border-bottom so the scrolling region was ruled at both ends; it was reported
      as "just above the chat field there is a horizontal line between that and
@@ -234,8 +241,14 @@ const ok = (n, c, d) => {
      under it, and no edge anywhere else for either to belong to. */
   ok("...and no stray padding outside them", m.panelPadTop === 0);
 
-  ok("the notice, the messages and the composer share one left edge",
-     m.rows > 0 && m.warnLeft === m.rowLeft && m.rowLeft === m.inputBandLeft);
+  /* ONE LEFT EDGE, AND THE NOTICE IS NO LONGER ONE OF THE THINGS ON IT. The
+     dismissable warning was removed as too wordy, so the arm is the two bands
+     that remain: the messages and the box you type into. That is still the
+     property worth holding -- a transcript indented differently from its own
+     composer reads as two panels stacked. */
+  ok("the messages and the composer share one left edge",
+     m.rows > 0 && m.rowLeft === m.inputBandLeft,
+     `rowLeft=${m.rowLeft} inputBandLeft=${m.inputBandLeft}`);
 
   ok("the composer is inside the card", m.composerInPanel === true);
   ok("the last row drops its hairline so the log's edge is one line",
