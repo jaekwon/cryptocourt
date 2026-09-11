@@ -1110,7 +1110,19 @@ a.card:hover{border-color:var(--line-2)}
    remainder wins and this never binds, and on a short one it is what keeps the
    composer reachable. */
 #main.roomfill #chatview.chatpanel{max-width:none; height:auto; flex:1 1 auto;
-  max-height:calc(100dvh - 250px)}
+  max-height:calc(100dvh - 250px);
+  /* AND IT BLEEDS OUT OF THE PAGE'S OWN GUTTER. Reported twice as "i want the
+     padding around the chat gone. wasted space." — the first fix cut the
+     panel's internal inset, which was 11px and not what anybody was looking at.
+     The space was main's: padding:34px clamp(20px,4vw,56px) 90px, so 51px a side
+     at 1280 and the panel starting at x=334 with the rail ending at 282.
+     THE SAME EXPRESSION, NEGATED, rather than a number. main's gutter is a clamp
+     on the viewport, so a hardcoded -51px would be right at one width and wrong
+     at every other. The crumbs, the heading and the line about what this room is
+     keep the gutter; only the panel escapes it, which is what makes the chat the
+     full width of the content area without pushing the prose against the rail. */
+  margin-left:calc(-1 * clamp(20px,4vw,56px));
+  margin-right:calc(-1 * clamp(20px,4vw,56px))}
 /* AND THE FLOOR IS GUARDED ON HEIGHT, WHICH IS THE SAME LESSON A SECOND TIME.
    A bare min-height:260px here put the composer 63px under the fold on a 480px
    window — the identical failure the log's old floor caused, caught by the
