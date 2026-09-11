@@ -311,13 +311,7 @@ code,.mono{font-family:var(--mono)}
    tinted, and measured on it — 16.5:1 for --ink down to 6.2:1 for --muted at the
    sky's brightest point, against a 4.5 floor. */
 .rail{
-  /* THE CHAT PANEL'S DRAGGED HEIGHT, declared here even though only JavaScript
-     ever writes it. A var() the sheet never defines reads as a typo to anyone
-     auditing the CSS, and css_test refuses one — correctly: `auto` is also the
-     right value before a reader has dragged anything, so the rule below is
-     meaningful on its own rather than only once a script has run. */
-  --chath:auto;
-  grid-row:1/-1; border-right:1px solid var(--rule);
+    grid-row:1/-1; border-right:1px solid var(--rule);
   /* THE RAIL RE-RESOLVES ITS OWN INK, and this line is load-bearing. Overriding
      --ink below does NOT retint anything that merely INHERITS a colour: what
      inherits is body's computed rgb, resolved against :root's tokens long before
@@ -425,7 +419,14 @@ code,.mono{font-family:var(--mono)}
     color-mix(in srgb, var(--edge) 5%, transparent) 32%,
     transparent 70%);
   box-shadow:inset 2px 0 0 var(--edge)}
-.nav .sec{padding:14px 12px 5px; font-size:11px; text-transform:uppercase; letter-spacing:.09em; color:var(--muted)}
+/* #railchathead IS A SECTION HEADING LIKE THE OTHERS but no longer lives in the
+   nav — it moved out so the sticky bar could stop overlapping the links — and
+   `.nav .sec` alone left it as 15px body text with no padding. MEASURED both
+   ways: inside the nav its ink sat at x=24 (nav's 12 + this rule's 12) at 11px
+   in a 36px row; as a bare sibling, x=12 at 15px in a 23px row. It gets the
+   nav's 12px back here, so the row is pixel-identical to what it replaced. */
+.nav .sec,#railchathead{padding:14px 12px 5px; font-size:11px; text-transform:uppercase; letter-spacing:.09em; color:var(--muted)}
+#railchathead{padding-left:24px; padding-right:24px}
 /* THE TRAIL UNDER DIRECTORY (navTrail). Indented to 40px, which is not a round
    number picked by eye: the parent row is 12px of padding plus an 18px glyph
    plus the 10px gap, so a child starts exactly where the parent's LABEL starts
@@ -1049,6 +1050,7 @@ a.card:hover{border-color:var(--line-2)}
    must scroll to read, the controls win — they are what somebody came to press,
    and the messages are one route away on the court's own page. */
 .railchat.chatpanel{min-height:min-content}
+
 /* ── ONE CLICK GIVES THE CHAT THE WHOLE RAIL ────────────────────────────────
    The rule above buys the composer its floor by making the LOG yield, and in a
    short window there is nothing left to yield: measured at 1280 wide, the log
@@ -1081,7 +1083,8 @@ a.card:hover{border-color:var(--line-2)}
   #chatbig{display:inline; background:none; border:0; padding:0; cursor:pointer;
     font:inherit; letter-spacing:inherit; text-transform:inherit; color:var(--ink-2)}
   #chatbig:hover{color:var(--accent)}
-  .rail.chatbig .nav > :not(#railchathead){display:none}
+  /* The grip is no longer inside the nav, so the whole nav folds. */
+  .rail.chatbig .nav{display:none}
   .rail.chatbig .nav{padding-top:0}
   .rail.chatbig .brand .tag{display:none}
   .rail.chatbig .railchat .chatlog{max-height:none}
@@ -1098,65 +1101,53 @@ a.card:hover{border-color:var(--line-2)}
      rail this file has, not from arithmetic. */
   .rail.chatbig .foot{display:none}
   .rail.chatbig .brand{padding:8px 12px}
-  /* ── DRAG THE BOUNDARY, DON'T JUST TOGGLE IT ────────────────────────────
-     The expand button is one click and two sizes. This is the continuous
-     version: grab the Chat heading — which IS the seam between the links and
-     the panel — and pull it up.
-     THE HANDLE IS THE HEADING AND NOT A STRIP INSIDE THE PANEL, because
-     railChatFor() replaces .railchat's innerHTML on every mount. Anything put
-     in there is destroyed the first time a reader opens another court, and the
-     handle would vanish exactly when it was working. #railchathead is nav's
-     last child, survives every remount, and already sits on the line being
-     dragged.
-     WHEN A SIZE IS SET, THE PANEL STOPS TAKING LEFTOVERS and the NAV becomes
-     the thing that yields — it scrolls instead of pushing, which is what lets
-     the chat grow past the height the links were using. */
-  #railchathead{cursor:ns-resize; touch-action:none; user-select:none}
-  #railchathead #chatbig{cursor:pointer}
-  .rail.chatsized .railchat{flex:0 0 var(--chath)}
-  .rail.chatsized .nav{min-height:0; overflow-y:auto}
-  /* The grip: two rules, drawn on the heading itself so it reads as a seam
-     rather than as an icon somebody has to find. Only while it can be used. */
-  /* THE WAY BACK IS VISIBLE, AND ONLY WHEN THERE IS ONE. Double-click resets
-     too, and a double-click nobody can see is not an undo — reported as "it's
-     hard to undo, not intuitive". This sits in the row the reader is already
-     looking at, beside the button they used to get here, and appears only once
-     a size has been set so it is not one more control to ignore. */
-  /* PINNED TO THE SEAM ONCE A SIZE IS SET, and this is not decoration.
-     .rail.chatsized makes the nav scrollable so it can yield height, and the
-     handle is nav's LAST child — so the first thing that scrolls out of sight
-     is the control that resizes and resets. Measured: after one drag the
-     heading's rect still read y=417 while the panel's own content painted at
-     383, because the heading was clipped out of the scrolled nav. The reader is
-     then left with a size they cannot change and no visible way back, which is
-     exactly what "hard to undo" describes.
-     Sticky rather than moved out of the nav: the nav is where it belongs
-     structurally, and .rail.chatbig's rule already selects it by name from
-     inside there. The background is the rail's own, or the links scroll
-     through it. */
-  .rail.chatsized #railchathead{position:sticky; bottom:0; z-index:2;
-    background-color:#0a0a14; padding-bottom:6px}
+  /* ── THE LOG HAS A FLOOR AND THE LINKS YIELD ───────────────────────────
+     A DRAG HANDLE LIVED HERE. Reported as "when i drag it down lower past
+     'Realm parameters' ... instead of the top of the chat getting dragged
+     downward, the chat div drags upward from the bottom", and then "it's hard to
+     even explain how to fix issues with it" — which is what settled it, after
+     three fixes had already landed against it and a fourth symptom was still
+     arriving.
+     DELETING IT ALONE WOULD HAVE LEFT AN EMPTY PANEL. MEASURED at 1440 wide on a
+     court page before any of this: the log was 0px tall at 900, 800 AND 700 of
+     viewport height, because the links take 333px and the panel's own controls
+     take what is left. The handle was not a convenience on top of a working
+     layout — it WAS the layout.
+     THE LINKS SCROLL, which is the half that keeps the composer reachable: they
+     yield height by scrolling rather than by pushing the panel off the bottom of
+     the rail. The floor itself is below, guarded on height. */
   #railchathead .headctl{display:flex; gap:8px; align-items:baseline}
-  #chatauto{display:none}
-  .rail.chatsized #chatauto{display:inline; background:none; border:0; padding:0;
-    cursor:pointer; font:inherit; letter-spacing:inherit; text-transform:inherit;
-    color:var(--ink-2)}
-  .rail.chatsized #chatauto:hover{color:var(--accent)}
-  /* THE GRIP IS DRAWN AT REST, and that is the whole point of it. A seam that
-     appears only once the pointer is on it answers a question nobody asked: the
-     reader has to already suspect the line is draggable before it will admit
-     that it is.
-     SHORT AND CENTRED, NOT EDGE TO EDGE. A full-width rule reads as a divider,
-     and this row is already one. A stub in the middle is the shape every
-     resizable panel uses, so it is recognised rather than learned. Faint at
-     rest and full under the pointer, so it strengthens rather than appears. */
-  #railchathead::before{content:""; position:absolute; left:50%; top:-5px;
-    width:34px; margin-left:-17px; height:0;
-    border-top:3px dotted var(--line-2); opacity:.55}
-  #railchathead{position:relative}
-  #railchathead:hover::before,#railchathead:focus-within::before,
-  .rail.chatdragging #railchathead::before{opacity:1}
-  .rail.chatdragging{cursor:ns-resize}
+  .rail .nav{min-height:0; overflow-y:auto}
+  /* THE NOTICE IS LEFT AT ITS OWN SIZE, and it was not for one commit.
+     IT WAS SET SMALLER HERE — .78em against .88em — on the reasoning that at
+     165px it was taller than the messages beneath it, which was true. Then the
+     log got a floor and the reasoning stopped holding: MEASURED with the floor
+     in place, the log is 120px whether the notice is set at 12.1px or 10.8px,
+     because the floor decides the log's height now and the notice only changes
+     how tall the PANEL is — by 4px.
+     SO IT WAS BOUGHT BACK. Four pixels of panel is not worth making the
+     anti-scam sentence the smallest type on the screen; it is the one line here
+     whose whole job is to be read by somebody who has read nothing else. The
+     tighter leading went with it, having measured 1px WORSE than the font's own
+     default. */
+}
+/* THE LOG'S FLOOR, AND WHY IT IS GUARDED ON HEIGHT AS WELL AS WIDTH.
+   120px is about three short messages, and without it the log is 0px on a
+   desktop rail — measured at 1440 wide on every height from 700 to 900, because
+   the links take 333px and the panel's own controls take what is left.
+   BUT A FLOOR THAT CANNOT YIELD IS A FLOOR THAT BREAKS SOMETHING ELSE. The rail
+   spends 306px on furniture before either the links or the panel get anything:
+   96 for the mark, 36 for the Chat row, 174 for the node controls. MEASURED with
+   the floor in place: the composer fits at 560 with nothing to spare and hangs
+   3px below the fold at 540, 63px at 480. So below 560 the floor is simply not
+   applied, and the old priority returns — between a chat you can read and one
+   you can type into, the composer wins, which is the same trade
+   .railchat.chatpanel's min-content floor already makes.
+   560 IS MEASURED, NOT CHOSEN: 600, 580 and 560 all fit exactly, 540 is the
+   first that does not. A window shorter than that on a screen wider than 820 is
+   unusual, and it still gets a working composer and a scrollable rail. */
+@media (min-width:821px) and (min-height:560px){
+  .railchat .chatlog{min-height:120px}
 }
 /* The court coin's name, everywhere it is written. One hardcoded purple rather
    than a theme token: the token IS the colour, and it must read the same in
@@ -3106,9 +3097,12 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
          who most need to audit the settings are the ones who cannot see
          them. -->
     <a href="#/params" data-k="params"><span class="g">≡</span> Realm parameters</a>
-    <!-- CHAT IS A SECTION HEADING LIKE THE OTHERS, and it has to sit INSIDE the
-         nav to look like one: the rule is `.nav .sec`, so the same div as a
-         sibling of the nav got no styling at all and read as body text.
+    <!-- CHAT IS A SECTION HEADING LIKE THE OTHERS, and it used to have to sit
+         INSIDE the nav to look like one: the rule was `.nav .sec`, so the same
+         div as a sibling of the nav got no styling and read as body text — which
+         is exactly what happened when it was finally moved out, measured at 15px
+         instead of 11px. The selector now names it too, so it can live where it
+         structurally belongs. It is a sibling of the nav below.
          Per-court, so heading and panel hide together everywhere else. -->
     <!-- THE ONE CLICK THAT GIVES CHAT THE RAIL. Asked for: "make the left
          sidebar chat expandable in case your browser height is short on
@@ -3116,13 +3110,22 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
          REFERENCE". It lives in the heading because the heading is the one row
          that STAYS when everything above it folds away — a toggle inside the
          part that disappears could not bring it back. -->
-    <div class="sec" id="railchathead" hidden
-         title="Drag this line to resize the chat">Chat<span class="headctl"><button
-        type="button" id="chatauto"
-        title="Give the height back to the layout">reset</button><button type="button" id="chatbig"
-        aria-expanded="false"
-        title="Give the chat the rail's height — the links above it fold away">expand</button></span></div>
   </nav>
+  <!-- OUTSIDE THE NAV, and that is the fix rather than the layout. It used to be
+       nav's last child with position:sticky;bottom:0, so once .chatsized made the
+       nav a scroll container the bar floated over whichever links happened to land
+       in the bottom strip. MEASURED at 1280x900: "? How it works" was clipped
+       mid-glyph by its top edge and "≡ Realm parameters" showed underneath it, and
+       at full expansion the nav was a 44px window behind a 42px bar. Reported as
+       "other nav items show under the CHAT RESET EXPAND bar".
+       IT IS THE SEAM BETWEEN THE NAV AND THE PANEL, so it belongs between them:
+       a sibling of both cannot overlap either, needs no sticky, and needs no
+       opaque background to hide what scrolls behind it. It still survives every
+       railChatFor() remount, which is why it was never put inside .railchat. -->
+  <div class="sec" id="railchathead" hidden>Chat<span class="headctl"><button
+      type="button" id="chatbig"
+      aria-expanded="false"
+      title="Give the chat the rail's height — the links above it fold away">expand</button></span></div>
   <div class="railchat" id="railchat" hidden></div>
   <div class="foot">
     <div class="node">
@@ -20131,6 +20134,47 @@ on(/^\/about$/, async ()=>{
       <p>Anyone opens a <b>claim</b> — an immutable statement of fact — for a small deposit plus a fee. Both return when the claim runs its course; a claim voted junk burns both, and one that dies unanswered burns the fee (the spam price). Then anyone <b>stakes</b> coin on YES or NO. Staking is <b>no-loss</b>: your principal always returns 1×, whichever way the claim resolves.</p><p>What you earn is a reward proportional to your <b>conviction</b> — stake × time held on the winning side — drawn from newly-minted coin under a hard per-claim cap, so it rewards early, accurate belief and can't be farmed. Unstaking is free until an answer posts; the reward weight you've already earned is kept.</p>
       <h2>Answers, disputes, and flags</h2>
       <p>Once a claim has enough sustained interest, an <b>answer</b> may be posted with a bond (in seasoned courts, qualified answerers hold the first day). Posting freezes staking. Left alone, the answer settles 72 hours later.</p><p>To contest it, open a <b>dispute</b>: a token vote on <i>“overturn the answer?”</i>, sealed until it closes. Voting weight comes from the hourly snapshot taken before the vote opened — voice received mid-vote counts for nothing. A forfeited bond is <b>burned</b>, never paid to the other side, and the winner is compensated from fresh issuance — so nothing ever moves between adversaries.</p><p>Separately, a <b>flag</b> asks whether a claim carried real information; a wrong flag burns its bond, a right one is paid, and a vote that fails to settle can burn half. A verdict always shows its route — <i>undisputed</i> or <i>by vote</i>.</p>
+      <!-- THE CLERK, SAID PLAINLY. The chat panel's notice warned that the clerk
+           is a model and pointed nowhere, which is half a disclosure: a reader
+           who wants to know what they are talking to had no page to go to.
+           IT IS HERE RATHER THAN ON A ROUTE OF ITS OWN because this is the page
+           the nav already sends people to and the one the intro nudge links, and
+           a disclosure nobody navigates to is a disclosure in name only.
+           WHAT IT CLAIMS IS WHAT IS ENFORCED, and no more. The reply filter
+           really does withhold an address before posting; the instructions
+           really do live in a channel readers cannot write to. That a reader can
+           still push it around is said in the same breath, because it is true
+           and because the alternative is a promise the site cannot keep. -->
+      <h2>The clerk in the chat</h2>
+      <p>Every court has a public chat, and one voice in it is the <b>clerk</b>.
+      It is a language model with a short brief: answer questions about how this
+      site works. Its name is reserved — nobody else can post under it — and it
+      flies a plain black flag instead of a country.</p>
+      <p><b>What it will not do.</b> It takes no side on any claim, not even a
+      lean. It gives no trading, financial, legal, tax or medical advice, and it
+      will not tell you whether to stake, to unstake or to wait, or what a coin
+      will be worth. It will not help anyone attack this site, the chain, a wallet or
+      another person's account. It never asks for, repeats or acts on a seed
+      phrase or a private key. And it cannot tell you to send coin anywhere: a
+      reply naming an account, or linking off this site, is withheld before it is
+      posted — whatever the model wrote.</p>
+      <p><b>What it cannot promise.</b> It can be wrong. It can also be pushed
+      around: everything a reader types reaches it as text, and messages written
+      to look like instructions are a thing people try. Its own instructions are
+      kept in a channel no reader can write into, which is a defence and not a
+      guarantee. Nothing it says is a ruling, a verdict, or advice — for anything
+      that matters, read the court's own page on the chain, which is where every
+      figure on this site comes from.</p>
+      <!-- THE REGISTER HOLDS HERE TOO, and both halves of it caught this copy
+           on its first run. vocab_receive forbids "buy" on this page, because
+           the coin is not bought — it is received for a burn. And dispute_test
+           forbids the generic word for currency ANYWHERE in this file, comments
+           included, which is why this comment does not spell it either: calling
+           what an answer costs by that word invites precisely the reading §7.4
+           exists to refuse. The first draft of this paragraph broke both. -->
+      <p>Each answer is paid for by whoever runs the site, so it answers
+      questions about the site and passes on everything else. When it says
+      nothing, that is usually why.</p>
       <h2>This page is optional</h2>
       <p>Everything here is read from the court's own page on the chain and its public data, and every button is an ordinary chain transaction signed in your wallet. Switch the Source to a live node in the left rail to read a deployed court; the sample data lets you explore every state offline.</p>
       ${aboutTour()}
@@ -20237,11 +20281,10 @@ function initControls(){
     applyBig(store.get("cc.chatbig")==="1");
     chatbig.addEventListener("click", ()=>{
       const on=!railEl.classList.contains("chatbig");
-      /* ONE AUTHORITY AT A TIME. A dragged size and the toggle are two answers
-         to the same question, and a reader who presses expand while a size is
-         set would get whichever the cascade happened to favour. Pressing the
-         button hands control back to the button. */
-      clearSize();
+      /* ONE AUTHORITY, AND NOW THERE IS ONLY ONE. This cleared a dragged height
+         first, because a dragged size and this toggle were two answers to the
+         same question and the cascade decided between them. The drag is gone;
+         this button is the whole of it. */
       applyBig(on);
       store.set("cc.chatbig", on?"1":"0");
     });
@@ -20256,103 +20299,6 @@ function initControls(){
      sliver of nav so the drag can always be undone by dragging back.
      POINTER EVENTS AND CAPTURE, so a fast drag that leaves the 230px rail
      keeps resizing instead of stopping at the edge. */
-  const grip=document.getElementById("railchathead");
-  function railChat(){ return document.getElementById("railchat"); }
-  function clearSize(){
-    if(!railEl) return;
-    railEl.classList.remove("chatsized");
-    railEl.style.removeProperty("--chath");
-    store.set("cc.chath", "");
-  }
-  function setSize(px){
-    if(!railEl) return;
-    const rc=railChat(); if(!rc) return;
-    const rail=railEl.getBoundingClientRect().height;
-    const brand=(railEl.querySelector(".brand")||{getBoundingClientRect:()=>({height:0})})
-      .getBoundingClientRect().height;
-    const foot=(railEl.querySelector(".foot")||{getBoundingClientRect:()=>({height:0})})
-      .getBoundingClientRect().height;
-    // The composer's floor: the panel's rows other than the log. Measured, so a
-    // taller composer on a narrow rail raises the floor by itself.
-    // NOT THE ONLY THING HOLDING IT, and not even the load-bearing one:
-    // .railchat.chatpanel has min-height:min-content, so the panel cannot be
-    // clipped below its controls whatever this computes. Deleting this clamp
-    // leaves the browser check green. It stays to keep a nonsense number out of
-    // localStorage, which the CSS floor does nothing about.
-    const log=rc.querySelector(".chatlog");
-    const floor=Math.max(96, Math.round(rc.getBoundingClientRect().height
-      - (log? log.getBoundingClientRect().height : 0)) + 24);
-    const ceil=Math.max(floor, Math.round(rail - brand - foot - 44));
-    const v=Math.max(floor, Math.min(ceil, Math.round(px)));
-    railEl.style.setProperty("--chath", v+"px");
-    railEl.classList.add("chatsized");
-    const lg=rc.querySelector(".chatlog"); if(lg) lg.scrollTop=lg.scrollHeight;
-    return v;
-  }
-  if(grip && railEl){
-    const saved=parseInt(store.get("cc.chath")||"", 10);
-    if(isFinite(saved) && saved>0) requestAnimationFrame(()=>setSize(saved));
-    let from=0, start=0;
-    const move=(ev)=>{
-      // Up is bigger: the panel grows by however far the pointer rose.
-      const v=setSize(start + (from - ev.clientY));
-      if(v) store.set("cc.chath", String(v));
-      ev.preventDefault();
-    };
-    const stop=(ev)=>{
-      railEl.classList.remove("chatdragging");
-      grip.releasePointerCapture && grip.releasePointerCapture(ev.pointerId);
-      grip.removeEventListener("pointermove", move);
-      grip.removeEventListener("pointerup", stop);
-      grip.removeEventListener("pointercancel", stop);
-    };
-    grip.addEventListener("pointerdown", (ev)=>{
-      // The expand button lives in this row and must keep taking its own clicks.
-      if(ev.target.closest("#chatbig,#chatauto")) return;
-      const rc=railChat(); if(!rc) return;
-      // MEASURED BEFORE THE MODE IS DROPPED, and the order is the whole point.
-      // Leaving chatbig gives the nav its height back, so reading the panel
-      // afterwards reads the COLLAPSED size — measured, an 801px panel became
-      // 273 and the drag then grew from there, which on screen is a jump
-      // downward before it follows the pointer. Take the height first, drop the
-      // mode, then pin that same height as the new set size.
-      start=rc.getBoundingClientRect().height;
-      if(railEl.classList.contains("chatbig")){
-        railEl.classList.remove("chatbig");
-        chatbig && chatbig.setAttribute("aria-expanded","false");
-        if(chatbig) chatbig.textContent="expand";
-        store.set("cc.chatbig","0");
-        setSize(start);
-      }
-      from=ev.clientY;
-      railEl.classList.add("chatdragging");
-      grip.setPointerCapture && grip.setPointerCapture(ev.pointerId);
-      grip.addEventListener("pointermove", move);
-      grip.addEventListener("pointerup", stop);
-      grip.addEventListener("pointercancel", stop);
-      ev.preventDefault();
-    });
-    // A SEPARATOR IS OPERABLE FROM THE KEYBOARD or it is a mouse-only control.
-    grip.setAttribute("role","separator");
-    grip.setAttribute("aria-orientation","horizontal");
-    grip.setAttribute("tabindex","0");
-    grip.addEventListener("keydown", (ev)=>{
-      if(ev.target.closest("#chatbig,#chatauto")) return;
-      const rc=railChat(); if(!rc) return;
-      const step = ev.key==="ArrowUp"? 24 : ev.key==="ArrowDown"? -24 : 0;
-      if(!step) return;
-      const v=setSize(rc.getBoundingClientRect().height + step);
-      if(v) store.set("cc.chath", String(v));
-      ev.preventDefault();
-    });
-    const auto=document.getElementById("chatauto");
-    if(auto) auto.addEventListener("click", (ev)=>{ ev.stopPropagation(); clearSize(); });
-    // ...and back to automatic, without hunting for the original height.
-    grip.addEventListener("dblclick", (ev)=>{
-      if(ev.target.closest("#chatbig,#chatauto")) return;
-      clearSize();
-    });
-  }
   const preset=document.getElementById("preset");
   const PRESETS={gnodev:{rpc:"http://127.0.0.1:26657",gnoweb:"http://127.0.0.1:8888",chainid:"dev"},
                  sapphire:{rpc:"https://rpc.sapphire.testnets.gno.land:443",gnoweb:"https://sapphire.testnets.gno.land",chainid:"sapphire-1"}};

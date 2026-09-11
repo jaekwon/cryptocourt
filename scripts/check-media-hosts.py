@@ -31,6 +31,14 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 GNO = os.path.join(ROOT, "realm", "r", "kourtv2", "media.gno")
 JS = os.path.join(ROOT, "web", "media.js")
 NGINX = os.path.join(ROOT, "deploy", "nginx.conf")
+# THE POLICY MOVED OUT of nginx.conf and into its own file, because nginx makes
+# a location that declares any add_header drop every inherited one — so the
+# headers must be DECLARED at each such level, and repeating the policy string
+# four times is what put three of those copies beyond this guard, which reads
+# only the first. One file, included where it is needed. check-nginx-headers
+# holds that shape; this guard still owns the CONTENTS. The archive-route arm
+# below stays on nginx.conf, which is where routes live.
+CSPCONF = os.path.join(ROOT, "deploy", "nginx-security-headers.conf")
 
 
 def go_list(src, name):
@@ -51,6 +59,7 @@ def main():
     gno = open(GNO).read()
     js = open(JS).read()
     nginx = open(NGINX).read()
+    csp = open(CSPCONF).read()
 
     # THE DEFAULTS, not the live lists. The allowlist is an admin parameter now
     # (owner ruling, CLAIM_MEDIA §10.1), so what a running realm allows is on
@@ -78,13 +87,13 @@ def main():
     # the comment above the header, and matching that found a list with no hosts
     # in it and reported every host missing. The header is the quoted string in
     # add_header Content-Security-Policy.
-    header = re.search(r'add_header\s+Content-Security-Policy\s+"([^"]*)"', nginx)
+    header = re.search(r'add_header\s+Content-Security-Policy\s+"([^"]*)"', csp)
     if not header:
-        sys.exit("check-media-hosts: no Content-Security-Policy header in nginx.conf")
+        sys.exit("check-media-hosts: no Content-Security-Policy header in nginx-security-headers.conf")
     policy = header.group(1)
     csp = re.search(r"img-src([^;]*)", policy)
     if not csp:
-        sys.exit("check-media-hosts: no img-src directive in nginx.conf")
+        sys.exit("check-media-hosts: no img-src directive in nginx-security-headers.conf")
     served = set(re.findall(r"https://(\S+)", csp.group(1)))
     want = gno_exact | {"*" + s for s in gno_suffix}
     missing = sorted(want - served)
@@ -102,7 +111,7 @@ def main():
     msrc = re.search(r"media-src([^;]*)", policy)
     if not msrc:
         problems.append(
-            "  no media-src in nginx.conf: it falls back to default-src 'self', "
+            "  no media-src in nginx-security-headers.conf: it falls back to default-src 'self', "
             "so a video exhibit is filed and cannot be played")
     else:
         vmissing = sorted(want - set(re.findall(r"https://(\S+)", msrc.group(1))))
@@ -117,7 +126,7 @@ def main():
     # this file for a while and nothing caught it.
     if "connect-src" not in policy:
         problems.append(
-            "  no connect-src in nginx.conf: it falls back to default-src 'self' "
+            "  no connect-src in nginx-security-headers.conf: it falls back to default-src 'self' "
             "and the overlay cannot reach an RPC node on any other origin")
 
     # The archive is served from 'self'; without the route nothing answers the

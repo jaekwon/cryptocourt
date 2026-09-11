@@ -51,10 +51,32 @@ func TestKeyWarningFiresOnlyWhenTheKeyIsUnprotected(t *testing.T) {
 			secretFile: "/var/lib/kourt/../kourt/ip.key", db: "/var/lib/kourt/chat.db",
 			wantWarn: true, contains: "same directory",
 		},
+		/* A SUBDIRECTORY IS NOT THE SAME DIRECTORY, AND WARNS ANYWAY. This case
+		   asserted wantWarn:false, on the true premise that /var/lib/kourt/keys is
+		   a different directory from /var/lib/kourt. The premise is about directory
+		   identity; the rule is about backups, and tar takes subdirectories.
+		   MEASURED ON THE RUNNING SERVER, which is why this flipped:
+		     --db /var/lib/kourt/chat.db
+		     --secret-file /var/lib/kourt/secret/iphash.key
+		   0600 on both, and no warning in thirty days of journal. A copy of
+		   /var/lib/kourt carries the table and the key that reverses it, and IPv4
+		   is 2^32. CHAT.md §9 states the rule as "outside the data directory" and
+		   gives /etc/kourt/ip.key as the example, so equality was narrower than the
+		   documented sentence and the shipped setup.sh layout sat in the gap. */
 		{
-			name:       "a subdirectory is NOT the same directory",
+			name:       "a subdirectory of the data directory: a backup still takes both",
 			secretFile: "/var/lib/kourt/keys/ip.key", db: "/var/lib/kourt/chat.db",
-			wantWarn: false,
+			wantWarn: true, contains: "/var/lib/kourt",
+		},
+		{
+			name:       "the layout this deployment actually ships",
+			secretFile: "/var/lib/kourt/secret/iphash.key", db: "/var/lib/kourt/chat.db",
+			wantWarn: true, contains: "outside the data directory",
+		},
+		{
+			name:       "and the other way round: the database under the key's directory",
+			secretFile: "/etc/kourt/ip.key", db: "/etc/kourt/state/chat.db",
+			wantWarn: true, contains: "/etc/kourt",
 		},
 	} {
 		t.Run(c.name, func(t *testing.T) {

@@ -205,6 +205,7 @@ MUTATEPY = "scripts/mutate.py"
 CLOCKGNO = "realm/r/kourtv2/clock.gno"
 GOVGNO = "realm/p/governor/governor.gno"
 NGINXCONF = "deploy/nginx.conf"
+NGINXCSP = "deploy/nginx-security-headers.conf"
 SEEDEMIT = "scripts/check-seed-emitters.py"
 SCENARIO = "scripts/scenario.py"
 SELF = "scripts/selftest-checks.py"
@@ -1780,10 +1781,15 @@ control("the realm allows a host the overlay does not", MEDIAGNO,
 # carrying the same host list, and then it matched twice and the arm quietly
 # stopped testing anything. check-control-anchors caught that; the trailing
 # directive name is what makes each copy distinguishable.
-control("the page's CSP drops a host the realm still stores", NGINXCONF,
+# AND THE FILE MOVED, for the same reason one more time. The policy was repeated
+# into three locations to survive nginx's add_header inheritance rule, which took
+# these anchors from 1 match to 4 and broke both arms at once — check-control-
+# anchors caught it again. The headers now live in one included file, so each
+# anchor is unique once more, and this plants there.
+control("the page's CSP drops a host the realm still stores", NGINXCSP,
         " https://cloudflare-ipfs.com; connect-src", "; connect-src",
         "refuses to load", argv=["python3", MEDIAHOSTS])
-control("the page's media-src drops a host the realm still stores", NGINXCONF,
+control("the page's media-src drops a host the realm still stores", NGINXCSP,
         " https://cloudflare-ipfs.com; font-src", "; font-src",
         "refuses to play", argv=["python3", MEDIAHOSTS])
 # Not a host list at all, but the same guard and the same class of silent
@@ -1792,6 +1798,62 @@ control("the page's media-src drops a host the realm still stores", NGINXCONF,
 control("the archive route goes missing", NGINXCONF,
         "location /m/ {", "location /gone/ {",
         "unreachable", argv=["python3", MEDIAHOSTS])
+
+print("\ncheck-addr-shapes")
+# An address is recognised twice — the claim prefilter floors a claim that names
+# one, the clerk's reply filter refuses to POST one — and a form only one of them
+# knows is a form the other mishandles in silence.
+ADDRSHAPES = "scripts/check-addr-shapes.py"
+CHATBOT = "internal/chat/bot.go"
+control("the two address patterns drift apart", CHATBOT,
+        'botReplyGnoAddr = regexp.MustCompile(`\\bg1[0-9a-z]{38}\\b`)',
+        'botReplyGnoAddr = regexp.MustCompile(`\\bg1[0-9a-z]{39}\\b`)',
+        "no longer agree", argv=["python3", ADDRSHAPES])
+# AND THE VACUITY ARMS, which is why the guard checks each file's pattern before
+# comparing them: a pattern that catches nothing, and one that catches anything.
+control("an address pattern that matches nothing", CHATBOT,
+        'botReplyGnoAddr = regexp.MustCompile(`\\bg1[0-9a-z]{38}\\b`)',
+        'botReplyGnoAddr = regexp.MustCompile(`\\bg1zzzzzzzz[0-9a-z]{38}\\b`)',
+        "no longer matches a real address", argv=["python3", ADDRSHAPES])
+control("an address pattern loose enough to eat good answers", CHATBOT,
+        'botReplyEVMAddr = regexp.MustCompile(`0x[0-9a-fA-F]{40}\\b`)',
+        'botReplyEVMAddr = regexp.MustCompile(`0x[0-9a-fA-F]+`)',
+        "which is not an address", argv=["python3", ADDRSHAPES])
+
+print("\ncheck-nginx-headers")
+# CONTENTS AND DELIVERY ARE TWO QUESTIONS. check-media-hosts above proves the
+# policy agrees with the realm and the composer; every arm here is about whether
+# nginx ever SENDS it. Measured on the live host before any of this was written:
+# /index.html, /chat.js and /embed/ carried no Content-Security-Policy, while
+# /favicon.ico and the JSON API did — the only two locations that declare no
+# add_header of their own and therefore still inherit one.
+NGINXHEAD = "scripts/check-nginx-headers.py"
+# The include is written four times, so each anchor carries the comment line
+# above it — which is unique — rather than the directive alone.
+control("a location stops including the security headers", NGINXCONF,
+        """# script — was served with no policy at all.
+        include /etc/nginx/kourt-security-headers.conf;""",
+        "# script — was served with no policy at all.",
+        "does not include the security headers", argv=["python3", NGINXHEAD])
+control("the server block stops including them", NGINXCONF,
+        """# this. deploy/setup.sh installs it at the path below.
+    include /etc/nginx/kourt-security-headers.conf;""",
+        "# this. deploy/setup.sh installs it at the path below.",
+        "the server block does not include", argv=["python3", NGINXHEAD])
+# A CONFIG THAT INCLUDES A FILE NOTHING INSTALLS IS A SERVER THAT WILL NOT
+# START: nginx refuses a missing include outright, so this one fails loudly at
+# setup rather than degrading quietly like the header loss it replaced.
+control("setup.sh stops installing the snippet", "deploy/setup.sh",
+        "mv /tmp/kourt-security-headers.conf /etc/nginx/kourt-security-headers.conf",
+        "true # not installed",
+        "never installs it", argv=["python3", NGINXHEAD])
+# AND THE POLICY MUST HAVE ONE HOME. An inline copy in a location is how the
+# drift started, and it is what a well-meaning fix reaches for first.
+control("a policy copy comes back inline", NGINXCONF,
+        '        add_header Cache-Control "no-cache" always;\n    }\n\n    # THE OVERLAY IS THREE',
+        '        add_header Content-Security-Policy "default-src \'self\'" always;\n'
+        '        add_header Cache-Control "no-cache" always;\n    }\n\n    # THE OVERLAY IS THREE',
+        "inline at line", argv=["python3", NGINXHEAD])
 
 print("\ncheck-live-reads")
 # This one needs a running node, so its arms are the two refusals it makes

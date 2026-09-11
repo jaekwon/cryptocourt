@@ -34,6 +34,13 @@ echo "==> uploading the nginx site for $DOMAIN"
 sed "s/kourt\.xyz/$DOMAIN/g" nginx.conf > /tmp/kourt-nginx.conf
 "${SCP[@]}" /tmp/kourt-nginx.conf "$HOST:/tmp/kourt-nginx.conf"
 rm -f /tmp/kourt-nginx.conf
+# THE HEADERS ARE A SEPARATE FILE, and nginx.conf `include`s it by absolute
+# path — so it has to be installed too, or `nginx -t` fails outright. It carries
+# no domain name, hence no sed. Shipping the site config without this one would
+# be the one change that takes the server down instead of degrading, which is
+# why check-nginx-headers refuses a config whose include this script does not
+# install.
+"${SCP[@]}" nginx-security-headers.conf "$HOST:/tmp/kourt-security-headers.conf"
 
 "${SSH[@]}" "$HOST" DOMAIN="$DOMAIN" WEBROOT="$WEBROOT" APPDIR="$APPDIR" \
 	STATEDIR="$STATEDIR" 'bash -seu' <<'REMOTE'
@@ -71,6 +78,9 @@ fi
 
 echo "==> nginx"
 mv /tmp/kourt-nginx.conf /etc/nginx/sites-available/kourt
+# BEFORE the reload below, and before nginx -t: the site config includes this by
+# absolute path and nginx refuses to start without it.
+mv /tmp/kourt-security-headers.conf /etc/nginx/kourt-security-headers.conf
 ln -sf /etc/nginx/sites-available/kourt /etc/nginx/sites-enabled/kourt
 # Debian ships a default site on port 80 that would answer for this name first.
 rm -f /etc/nginx/sites-enabled/default

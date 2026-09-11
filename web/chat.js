@@ -692,8 +692,28 @@ function chatPanelHtml(slug, moniker, note, heading) {
        THE BUTTON IS INSIDE THE SPAN so one `hidden` removes both, and it carries
        an aria-label because "×" alone tells a screen reader nothing about what
        is being dismissed. */
+    /* AND THE CLERK IS NAMED IN IT, because it is the one voice in the room a
+       reader is invited to trust: its name is reserved, the handler refuses a
+       human who tries to wear it, and it flies its own flag. It is also a model,
+       it can be wrong, and a reader CAN push it around — measured on the live
+       site, a message repeating the prompt's own instruction sentence made it
+       emit a word of the reader's choosing. The channels are split now so that
+       exact attack fails, and the honest line is still that this is a model
+       rather than an oracle: the mitigation is a defence, not a guarantee.
+       IN THE SAME SENTENCE AS THE REST, not a second notice. Two dismissable
+       warnings stacked on a 230px rail is how both stop being read, and this is
+       the same class of caution as the two beside it. */
+    /* AND THE PHRASE ITSELF IS THE LINK, which costs no words. The notice said
+       the clerk is a model and pointed nowhere — half a disclosure, because a
+       reader who wanted to know what they were talking to had no page to go to.
+       #/about now carries a section on it. Making "the clerk is a model" the
+       anchor rather than appending "read more" keeps the notice the length it
+       already is, on a rail 230px wide where every added clause is a clause
+       somebody stops reading. */
     +   '<span class="chatwarn">names are unverified &mdash; nobody here is staff,'
-    +     " and nobody can move funds for you"
+    +     " and nobody can move funds for you. "
+    +     '<a class="chatwarna" href="#/about">the clerk is a model</a>'
+    +     ": it can be wrong or be misled, so check anything that matters"
     +     '<button class="chatwarnx" type="button"'
     +       ' aria-label="dismiss this warning">&times;</button></span>'
     +   '<span class="chatdemo" hidden></span>'
@@ -952,6 +972,14 @@ const CHATCSS = `
    Padding plus a glyph's advance width is not a size anybody can predict — a
    min-width says the thing the comment means, and the browser check measures the
    rendered box rather than trusting either of us. */
+/* THE LINK INSIDE THE WARNING inherits everything and only adds the underline.
+   .chatwarn is opacity 1 and weight 600 by measurement — it is the panel's one
+   anti-scam affordance — and a link that reset either would read as less urgent
+   than the sentence it sits in. The underline is what says it is clickable at
+   all, since colour cannot: the panel is embedded in a page with four themes and
+   has no access to its tokens. */
+.chatwarna{color:inherit;font:inherit;font-weight:inherit;text-decoration:underline}
+.chatwarna:hover,.chatwarna:focus{text-decoration-thickness:2px}
 .chatwarnx{background:none;border:0;color:inherit;font:inherit;font-weight:400;
   cursor:pointer;opacity:.55;padding:.2rem;margin-left:.15rem;line-height:1;
   min-width:1.25rem;min-height:1.25rem;
@@ -1192,6 +1220,31 @@ const CHATCSS = `
 .chatsend:hover{background:rgba(128,128,128,.32);border-color:rgba(128,128,128,.7)}
 .chatsend:active{transform:translateY(1px)}
 .chatsend:disabled{opacity:.4;cursor:default;transform:none}
+/* ---- THE COMPOSER ON A TOUCH SCREEN ------------------------------------
+   SIXTEEN PIXELS, AND IT IS NOT A TYPOGRAPHIC PREFERENCE. Safari on iOS zooms
+   the whole page when a text field smaller than 16px takes focus, and it does
+   not zoom back out afterwards — so tapping "say something" left the reader on
+   a magnified page they then had to pinch their way out of, every time. The
+   panel inherits the page font, which measures 13.8px, so both fields were
+   under the line. The viewport tag deliberately allows scaling, which is right
+   for a reader who needs it; this stops the browser doing it uninvited.
+   AND 44px OF TARGET, which is the other half. MEASURED at 390x844: send 60x35,
+   the name button 64x35 — usable, and under both platforms' minimum for
+   something you hit with a thumb.
+   BY WIDTH, NOT BY (pointer:coarse), which is the query that actually describes
+   the problem. MEASURED: headless Chromium reports pointer:coarse as FALSE at a
+   phone viewport, so a rule written that way cannot be exercised by any browser
+   check in this repo — an untestable guard for a defect nobody would notice
+   again until an iPhone was in hand. 820px is the breakpoint this file's page
+   already uses for the same distinction.
+   IT COSTS NO MESSAGES. Measured at 390x844: the log is 194px before and after,
+   because on a phone the panel grows into a page that scrolls rather than
+   competing with a fixed rail. Desktop is untouched — 13.8px and 35px tall,
+   checked. */
+@media (max-width:820px){
+  .chatmoniker,.chatinput{font-size:16px}
+  .chatinput,.chatmoniker,.chatnamebtn,.chatsend{min-height:44px}
+}
 .chatnote{min-height:1.2em;opacity:.7;font-size:.85em;margin-top:.25rem}
 .chatpanel{color:#e9e5f8;background-color:#0a0a14;
   /* THE PLATE IS ONE COPY, AND IT LIVES IN index.html -- see --skyplate there for

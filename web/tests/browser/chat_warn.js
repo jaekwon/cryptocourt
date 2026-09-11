@@ -93,6 +93,19 @@ const {PAGE, demoPage} = require('./harness');
   ok("...and still says both halves of it",
      /names are unverified/.test(a.text) && /nobody here is staff/.test(a.text)
      && /nobody can move funds for you/.test(a.text), JSON.stringify(a.text));
+  /* AND THE THIRD HALF, which is about the one voice in the room a reader is
+     invited to trust. The clerk's name is reserved and it flies its own flag, so
+     a caution about unverified names says nothing about it — and it is a model:
+     it can be wrong, and a reader can push it around. MEASURED on the live site
+     before the prompt's channels were split: a message repeating the prompt's
+     own instruction sentence made the clerk emit a word of the reader's
+     choosing. That attack fails now, which is a defence and not a guarantee, so
+     the line stays.
+     IN THE SAME NOTICE, deliberately: a second dismissable warning on a 230px
+     rail is how both stop being read. */
+  ok("...and that the clerk is a model which can be wrong or misled",
+     /clerk is a model/.test(a.text) && /wrong or be misled/.test(a.text)
+     && /check anything that matters/.test(a.text), JSON.stringify(a.text));
   /* BRIGHT, MEASURED AS RENDERED. Not "brighter than it was" — that is a claim
      about history no check can make — but fully opaque, which is the state it
      was not in. */

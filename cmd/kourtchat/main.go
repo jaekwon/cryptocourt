@@ -37,12 +37,27 @@ import (
 
 // keyWarning reports what is wrong with where the IP hashing key lives, or "" when nothing is.
 //
-// Two cases, and the first is the default:
+// Three cases, and the first is the default:
 //
 //	no --secret-file        the key is a row IN the database, so one file carries the hashes
 //	                        and the key that reverses them
 //	same directory as it     a backup or rsync of that directory carries both, which is the
 //	                        threat the hashing exists for
+//	under that directory     the same thing. tar and rsync take subdirectories.
+//
+// THE THIRD CASE USED TO BE SILENT, and it is the one this deployment ships. Measured on the
+// running server: --db /var/lib/kourt/chat.db --secret-file /var/lib/kourt/secret/iphash.key,
+// with 0600 on both and no warning in thirty days of journal, because /var/lib/kourt/secret is
+// not equal to /var/lib/kourt. A copy of /var/lib/kourt \u2014 the natural backup unit, and what a
+// VPS snapshot takes \u2014 carries the table and the key that reverses it. CHAT.md \u00a79 states the
+// rule as "outside the data directory" and gives /etc/kourt/ip.key as the example; equality is
+// narrower than that sentence, so the check disagreed with its own documentation and the
+// shipped layout sat in the gap.
+//
+// CONTAINMENT, NOT A PREFIX TEST, which is the trap this function already had a test for:
+// strings.HasPrefix("/var/lib/kourt-backup", "/var/lib/kourt") is true and those are unrelated
+// directories. filepath.Rel answers the real question \u2014 a path is under another when the route
+// between them does not have to climb out first.
 //
 // A warning rather than a refusal: refusing would break every deployment that is running this
 // way today, and the operator may have a reason. Being unable to see it is the problem.
@@ -61,7 +76,29 @@ func keyWarning(secretFile, db string) string {
 		return "--secret-file " + secretFile + " sits in the same directory as the database; " +
 			"a backup of that directory carries both the hashes and the key. See CHAT.md \u00a79."
 	}
+	if under(keyDir, dbDir) {
+		return "--secret-file " + secretFile + " sits under " + dbDir + ", the database's own " +
+			"directory; a backup or snapshot of that directory carries both the hashes and the " +
+			"key that reverses them. Put the key outside the data directory. See CHAT.md \u00a79."
+	}
+	if under(dbDir, keyDir) {
+		return "the database " + db + " sits under " + keyDir + ", the key's own directory; " +
+			"a backup or snapshot of that directory carries both the hashes and the key that " +
+			"reverses them. See CHAT.md \u00a79."
+	}
 	return ""
+}
+
+// under reports whether child is inside parent. Both must already be absolute and cleaned.
+func under(child, parent string) bool {
+	rel, err := filepath.Rel(parent, child)
+	if err != nil {
+		return false
+	}
+	// ".." means the route out of parent, so child is not inside it. "." is equality, which
+	// callers have already handled and which is not "under".
+	return rel != "." && rel != ".." &&
+		!strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 // countryWarning reports a --country-header that now has no effect.
