@@ -16,6 +16,8 @@ import (
 	"strings"
 	"time"
 	"unicode"
+
+	"github.com/jaekwon/kourt/internal/bip39"
 )
 
 // A HELPER IN THE ROOM, and everything below is about spending as little as
@@ -600,7 +602,10 @@ func (b *Bot) scan(ctx context.Context, chain, court string, now time.Time) (*bo
 		if m.ID > highest {
 			highest = m.ID
 		}
-		lines = append(lines, m.Moniker+": "+m.Body)
+		/* REDACTED HERE, where the body is still its own value and before it is
+		   joined to anything. Every line of the prompt's untrusted block comes
+		   through this append, so this is the one place that covers all of them. */
+		lines = append(lines, m.Moniker+": "+botRedactSecret(m.Body))
 		if mine[m.ID] {
 			continue // our own voice
 		}
@@ -643,10 +648,10 @@ func (b *Bot) scan(ctx context.Context, chain, court string, now time.Time) (*bo
 		   FIRST, ahead of every other branch: what somebody typed matters less
 		   than who they are claiming to be while typing it. */
 		case IsReservedName(m.Moniker) && m.Body != botImpersonationLine:
-			best = &botCandidate{chain: chain, court: court, body: m.Body, at: at,
+			best = &botCandidate{chain: chain, court: court, body: botRedactSecret(m.Body), at: at,
 				says: botImpersonationLine}
 		case botWorthAsking(m.Body):
-			best = &botCandidate{chain: chain, court: court, body: m.Body, at: at}
+			best = &botCandidate{chain: chain, court: court, body: botRedactSecret(m.Body), at: at}
 		/* "WHO ARE YOU" IS A QUESTION WITH ONE ANSWER, and for three readers in a
 		   row it got silence: botWorthAsking wants a site word ("bot" and
 		   "person" are not site words) and botGreeting wants a bare hello, so an
@@ -654,7 +659,7 @@ func (b *Bot) scan(ctx context.Context, chain, court string, now time.Time) (*bo
 		   AFTER botWorthAsking, so "who are you staking with?" stays a question
 		   about the site rather than being answered with a name. */
 		case botAskingWhoTheClerkIs(m.Body):
-			best = &botCandidate{chain: chain, court: court, body: m.Body, at: at,
+			best = &botCandidate{chain: chain, court: court, body: botRedactSecret(m.Body), at: at,
 				says: botClerkLine}
 		/* ADDRESSED BY NAME — see botAddressed. After the identity and site-question
 		   branches, because "clerk, how do i stake?" is both and either answer
@@ -662,7 +667,7 @@ func (b *Bot) scan(ctx context.Context, chain, court string, now time.Time) (*bo
 		   somebody starting a conversation with the clerk rather than with the
 		   room. */
 		case botAddressed(m.Body):
-			best = &botCandidate{chain: chain, court: court, body: m.Body, at: at,
+			best = &botCandidate{chain: chain, court: court, body: botRedactSecret(m.Body), at: at,
 				addressed: true}
 		/* A FOLLOW-UP TO THE CLERK'S OWN LAST MESSAGE. Both halves are required:
 		   the shape, and the fact that the clerk was the previous speaker. After
@@ -670,7 +675,7 @@ func (b *Bot) scan(ctx context.Context, chain, court string, now time.Time) (*bo
 		   clerk is better served by them; before the greeting branch, because
 		   "and?" is not a hello. */
 		case followUp:
-			best = &botCandidate{chain: chain, court: court, body: m.Body, at: at,
+			best = &botCandidate{chain: chain, court: court, body: botRedactSecret(m.Body), at: at,
 				followUp: true}
 		/* SOMEBODY SAID THANK YOU, AND SILENCE IS THE WRONG ANSWER TO IT.
 		   Reported as: "i said brilliant! ... it should respond graciously". The
@@ -685,7 +690,7 @@ func (b *Bot) scan(ctx context.Context, chain, court string, now time.Time) (*bo
 		   thanks is worse than silence. It costs no tokens, and it still waits
 		   its turn through the typing pause like any other message. */
 		case thanked:
-			best = &botCandidate{chain: chain, court: court, body: m.Body, at: at,
+			best = &botCandidate{chain: chain, court: court, body: botRedactSecret(m.Body), at: at,
 				says: botThanksLine}
 		case botGreeting(m.Body):
 			// A GREETING ONLY COUNTS IN A ROOM THAT HAD GONE QUIET, and the
@@ -698,7 +703,7 @@ func (b *Bot) scan(ctx context.Context, chain, court string, now time.Time) (*bo
 				return nil, err
 			}
 			if quiet {
-				best = &botCandidate{chain: chain, court: court, body: m.Body,
+				best = &botCandidate{chain: chain, court: court, body: botRedactSecret(m.Body),
 					at: at, greeting: true}
 			}
 		default:
@@ -1967,6 +1972,49 @@ const (
 	// "moniker: ".
 	untrustedHere = ">> "
 )
+
+/*
+	botRedactSecret takes a recovery phrase out of a line before anybody sees it.
+
+A READER WHO PASTES A SEED PHRASE INTO A PUBLIC ROOM has already lost the funds,
+and the site cannot undo that. What it can refuse to do is make it worse, and
+until now it did two things that made it worse: the phrase went into the
+transcript that is sent to the model vendor, and it sat in the clerk's context
+where the clerk could repeat it back — in the one voice on the site whose name
+is reserved, which is the version a reader is most likely to trust and least
+likely to question.
+
+REDACTED AT THE SOURCE, which is why there is no matching check on the reply.
+The phrase never reaches the prompt, so the reply cannot echo it, and a
+reply-side check for the same thing could never fire — a guard that cannot fire
+is worse than none, because it reads as cover.
+
+THE WHOLE BODY GOES, not the matching words. Word-level surgery would leave
+"my phrase is [removed] [removed] able ..." which is still a map of the thing,
+and a line that contains a seed phrase is mostly the seed phrase.
+
+AND THE CLERK IS STILL TOLD IT HAPPENED. botSystem's instruction for this case
+is to say the phrase is public now and to move the funds; a silently emptied
+line would take that away. The marker says what was removed without being it.
+
+NOTHING IS LOGGED WHEN IT FIRES. The journal must not carry the secret, and a
+line naming the room that had one is a pointer to it for anybody reading the
+log — who could read the row itself anyway, so the line would add risk and no
+information. The redaction is silent on purpose.
+
+CHECKSUM-VALIDATED, NOT WORD-COUNTED, which is the whole reason this is safe to
+run on every message: bip39.SeedPhrase verifies the BIP-39 checksum, so twelve
+ordinary words that happen to be on the list are not a phrase. The cost is that
+a phrase with a typo, or eleven words of one, is NOT caught — the detector is
+deliberately the precise one, and half a phrase in a public room is a loss this
+cannot prevent either way.
+*/
+func botRedactSecret(body string) string {
+	if !bip39.SeedPhrase(body) {
+		return body
+	}
+	return "[a recovery phrase was posted here and has been removed]"
+}
 
 // scrubFence neutralises the fence's opening sequence in text the public typed.
 // Belt and braces over the tag: "<<<" is the only thing the fence uses, so

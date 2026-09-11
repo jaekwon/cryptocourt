@@ -1,4 +1,4 @@
-package scan
+package bip39
 
 import (
 	"hash/crc32"
@@ -20,7 +20,7 @@ import (
 func TestTheWordlistCheckRejectsAWrongList(t *testing.T) {
 	// THE PAIRED POSITIVE, and the one that matters most: the list actually shipped must pass.
 	// Without it every refusal below could come from a check that rejects everything.
-	if err := verifyWordlist(bip39Words, bip39CRC); err != nil {
+	if err := verifyWordlist(bip39Words, CRC); err != nil {
 		t.Fatalf("the shipped wordlist must satisfy its own check: %v", err)
 	}
 
@@ -30,7 +30,7 @@ func TestTheWordlistCheckRejectsAWrongList(t *testing.T) {
 		if bad == bip39Words {
 			t.Fatal("the fixture did not change anything, so it proves nothing")
 		}
-		err := verifyWordlist(bad, bip39CRC)
+		err := verifyWordlist(bad, CRC)
 		if err == nil {
 			t.Fatal("a mistyped word must be refused; this is the silent weakening the " +
 				"comment in bip39.go warns about")
@@ -43,7 +43,7 @@ func TestTheWordlistCheckRejectsAWrongList(t *testing.T) {
 	t.Run("a truncated list is caught", func(t *testing.T) {
 		words := strings.Fields(bip39Words)
 		short := strings.Join(words[:136], " ") // the exact subset this detector once shipped
-		if err := verifyWordlist(short, bip39CRC); err == nil {
+		if err := verifyWordlist(short, CRC); err == nil {
 			t.Fatal("the 136-word subset is how the detector went silent before and must not " +
 				"pass its own check")
 		}
@@ -67,7 +67,7 @@ func TestTheWordlistCheckRejectsAWrongList(t *testing.T) {
 	t.Run("duplicates are counted as duplicates", func(t *testing.T) {
 		// 2048 words of which only one is distinct: the size check reads distinct words, not
 		// fields, so this is refused for the reason it should be.
-		dup := strings.TrimSpace(strings.Repeat("abandon ", bip39Size))
+		dup := strings.TrimSpace(strings.Repeat("abandon ", Size))
 		err := verifyWordlist(dup, crc32.ChecksumIEEE([]byte(dup)))
 		if err == nil {
 			t.Fatal("2048 copies of one word is not a wordlist")

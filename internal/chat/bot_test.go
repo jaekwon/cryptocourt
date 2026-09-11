@@ -783,6 +783,117 @@ func TestTheSystemPromptRefusesTheThingsItMustRefuse(t *testing.T) {
 	}
 }
 
+/*
+	---- A RECOVERY PHRASE NEVER REACHES THE PROMPT ---------------------------
+
+A reader who pastes a seed phrase into a public room has already lost the funds
+and the site cannot undo it. What it can refuse to do is make it worse, and it
+used to do that twice: the phrase went into the transcript sent to the model
+vendor, and it sat in the clerk's context where the clerk could repeat it back
+in the one voice on this site whose name is reserved.
+
+THE VECTORS BELOW ARE THE PUBLISHED ONES, from the BIP-39 specification itself.
+They have valid checksums, which is what makes them usable as fixtures, and they
+have held nothing for a decade, which is what makes them safe to write down.
+*/
+const (
+	seedAllAbandon = "abandon abandon abandon abandon abandon abandon " +
+		"abandon abandon abandon abandon abandon about"
+	seedLegalWinner = "legal winner thank year wave sausage worth useful " +
+		"legal winner thank yellow"
+)
+
+func TestARecoveryPhraseIsTakenOutBeforeTheModelSeesIt(t *testing.T) {
+	// IT FIRES ON A REAL PHRASE, in the shapes one actually arrives in.
+	for _, c := range []struct{ name, body string }{
+		{"pasted bare", seedAllAbandon},
+		{"a different vector, so this is not one fixture's checksum",
+			seedLegalWinner},
+		{"with a sentence around it",
+			"help! did i do something wrong? " + seedLegalWinner + " is that my key?"},
+		{"numbered, which is how a wallet displays it",
+			"1. legal 2. winner 3. thank 4. year 5. wave 6. sausage 7. worth " +
+				"8. useful 9. legal 10. winner 11. thank 12. yellow"},
+		{"comma separated", strings.ReplaceAll(seedLegalWinner, " ", ", ")},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			got := botRedactSecret(c.body)
+			if strings.Contains(got, "sausage") || strings.Contains(got, "abandon") {
+				t.Errorf("the phrase survived redaction: %q", got)
+			}
+			if !strings.Contains(got, "removed") {
+				t.Errorf("the clerk must still be told something was taken out: %q", got)
+			}
+		})
+	}
+
+	/* AND IT DOES NOT FIRE ON ANYTHING ELSE, which is the arm that matters most:
+	   a redactor that eats ordinary messages would be switched off. Checksum
+	   validation is what buys this — twelve words that happen to be on the
+	   wordlist are not a phrase unless the last one checks out. */
+	for _, ok := range []string{
+		"how do i stake on a claim?",
+		"i don't understand the no-loss rule, can someone explain?",
+		// Wordlist words, deliberately, and plenty of them. The list is ordinary
+		// English: abandon, ability, able, about, above, absent, absorb, abstract.
+		"i am able to absorb the abstract idea above about the absent ability",
+		// Twelve wordlist words in a row with a WRONG checksum: the shape of a
+		// phrase without being one. This is the case a word-counting detector
+		// would have failed and a checksum one does not.
+		"abandon abandon abandon abandon abandon abandon abandon abandon " +
+			"abandon abandon abandon abandon",
+		"",
+	} {
+		if got := botRedactSecret(ok); got != ok {
+			t.Errorf("an ordinary message was redacted: %q -> %q", ok, got)
+		}
+	}
+}
+
+// AND IT IS WIRED INTO THE PROMPT, not merely available. The predicate above is
+// the rule; this drives the real path, because a redactor nothing calls redacts
+// nothing.
+func TestTheUntrustedBlockCarriesNoRecoveryPhrase(t *testing.T) {
+	s, clock := newStore(t)
+	ctx := context.Background()
+	m := &fakeModel{reply: "That phrase is public now — move your funds.", in: 10, out: 8}
+	b := newBot(t, s, m)
+	b.NonceFn = func() string { return "TESTTAG" }
+	*clock = clock.Add(time.Hour)
+	// Posted BEFORE the question, so it is in the transcript rather than being the
+	// message under consideration — both paths into the prompt, one fixture.
+	if _, err := post(t, s, "orem", "ip-oops", seedLegalWinner); err != nil {
+		t.Fatal(err)
+	}
+	*clock = clock.Add(MinInterval)
+	if _, err := post(t, s, "orem", "ip-asks",
+		"i pasted my wallet key in the chat, what do i do?"); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.once(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if m.calls != 1 {
+		t.Fatalf("expected one call, got %d", m.calls)
+	}
+	for _, w := range []string{"sausage", "winner thank year", "yellow"} {
+		if strings.Contains(m.prompt, w) {
+			t.Errorf("the phrase reached the user turn (%q): %q", w, m.prompt)
+		}
+		if strings.Contains(m.system, w) {
+			t.Errorf("the phrase reached the system turn (%q)", w)
+		}
+	}
+	if !strings.Contains(m.prompt, "has been removed") {
+		t.Errorf("the clerk must see that something was taken out: %q", m.prompt)
+	}
+	// AND THE QUESTION STILL GOT THROUGH, so the reader is not silently ignored
+	// at the moment they most need an answer.
+	if !strings.Contains(m.prompt, "what do i do?") {
+		t.Errorf("the reader's own question must survive: %q", m.prompt)
+	}
+}
+
 func TestTheUserTurnCarriesNothingButWhatThePublicTyped(t *testing.T) {
 	for _, c := range []struct {
 		name, body, wantInSystem string

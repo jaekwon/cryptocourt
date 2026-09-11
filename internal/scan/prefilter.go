@@ -4,6 +4,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/jaekwon/kourt/internal/bip39"
 	"github.com/jaekwon/kourt/internal/chat"
 )
 
@@ -282,11 +283,22 @@ func Prefilter(body string) Hint {
 // earlier version of this file called it with the skeleton and therefore counted
 // nothing at all — the kind of bug that leaves a detector permanently silent while
 // looking implemented.
+// SeedPhrase is internal/bip39's, re-exported under the name this package's
+// callers and tests already use.
+//
+// THE WORDLIST MOVED OUT, and the reason is a build cycle rather than tidiness:
+// internal/chat needs the same detector to keep a reader's recovery phrase out
+// of the clerk's prompt, and this package imports chat (for Skeleton), so chat
+// could not import this one — measured, the compiler says "import cycle not
+// allowed". A 2048-word list with a published checksum is not a constant worth
+// duplicating, so it went to a third package that both can import.
+func SeedPhrase(body string) bool { return bip39.SeedPhrase(body) }
+
 func WordlistRun(body string) int {
 	best, run := 0, 0
 	for _, w := range strings.Fields(strings.ToLower(body)) {
 		w = strings.Trim(w, ".,;:!?\"'()[]")
-		if _, ok := bip39Index[w]; ok {
+		if bip39.InWordlist(w) {
 			if run++; run > best {
 				best = run
 			}
