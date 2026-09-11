@@ -20,8 +20,12 @@
 //      plate's height and is placed by a -169px offset that depends on the rail's
 //      width. Change the rail's width and Leo slides off the brand block.
 //   4. The starfield has to stop before the plate's own bottom edge does, or the
-//      edge reads as a seam across the sidebar. The scrim over it is opaque from
-//      300px; the plate ends between 296px and 370px across rail widths.
+//      edge reads as a seam across the sidebar. Both numbers moved when the rail
+//      and the chat panel were made to fade as ONE horizon: the plate was
+//      extended south to Dec -75 so it runs to about y 766, and the scrim was
+//      moved down to 45vh/78vh to follow it, because the panel begins 205px down
+//      the page and could not share a fade that had already closed by 300px. The
+//      invariant is the same one; only the two numbers are different.
 //
 // HOW 4 IS MEASURED. Not by reading CSS — by turning the RAIL's plate layer off
 // and comparing screenshot bytes strip by strip. A strip whose bytes change is a
@@ -41,8 +45,18 @@
 // 1.08:1); writing the chat reset as `.railchat .chatpanel` fails the slot arm
 // alone, for the reason just given; moving the plate offset back to the chat
 // panel's -34px fails the Leo arm (figure at y 151..259, well below the throne's
-// 22..54); pushing the scrim's opaque stop to 700px fails the no-seam arm with
-// stars at every strip down to 870.
+// 22..54); leaving the scrim open to 97vh fails the no-seam arm with stars at
+// every strip down to 780.
+//
+// AND THE NO-SEAM ARM WAS BLIND TWICE, both found by ablating it rather than by
+// reading it. It re-declared the whole background-image to hide the plate, which
+// meant it carried a hand-copied second version of the scrim -- so when the real
+// scrim moved, the copy went stale and every strip differed for a reason that had
+// nothing to do with stars. It now zeroes the plate layer's background-size
+// instead, which changes one thing and cannot drift. And its sample rows jumped
+// 660 -> 800 while the scrim closes at 741 and the plate ends at 766, so the only
+// band where a seam can appear was never looked at: the arm above passed against
+// a scrim left open past the edge. Four rows at 700/745/760/780 fixed that.
 const {PAGE, demoPage} = require('./harness');
 const crypto = require('crypto');
 
@@ -132,14 +146,21 @@ const crypto = require('crypto');
     const buf = await page.screenshot({clip: {x: 0, y, width: geo.railW, height: 18}});
     return crypto.createHash('sha1').update(buf).digest('hex');
   };
-  const YS = [40, 120, 200, 280, 320, 400, 520, 660, 800, 870];
+  const YS = [40, 120, 200, 280, 320, 400, 520, 660, 700, 745, 760, 780, 800, 870];
   const before = {};
   for (const y of YS) before[y] = await strip(y);
   await page.evaluate(() => {
     const st = document.createElement('style');
     st.id = 'noplate';
-    st.textContent = ".rail{background-image:linear-gradient(to bottom, rgba(10,10,20,0) 0,"
-      + " rgba(10,10,20,0) 150px, #130f26 300px, #181333 100%) !important}";
+    /* THE PLATE IS HIDDEN BY ITS SIZE, NOT BY RESTATING THE SCRIM. This used to
+       re-declare the whole background-image with a hand-copied gradient, which
+       meant the ablation carried a SECOND copy of the scrim — and the moment the
+       real one moved (150px/300px to 45vh/78vh, when the plate grew southward)
+       the copy went stale and every strip differed for a reason that had nothing
+       to do with stars. The check then failed while reporting the plate's edge,
+       which is the wrong defect. Zeroing the second layer's size changes exactly
+       one thing and cannot drift from the rule it is ablating. */
+    st.textContent = ".rail{background-size:100% 100%, 0 0 !important}";
     document.head.appendChild(st);
   });
   await new Promise(r => setTimeout(r, 400));
@@ -149,10 +170,17 @@ const crypto = require('crypto');
 
   ok("there are stars at the top of the rail, by the brand",
      starry.includes(40) && starry.includes(120), `starry at ${starry.join(",")}`);
-  // The plate's own bottom edge lands between 296px and 370px across rail
-  // widths; the scrim must have closed before then, or it shows as a rule.
-  ok("...and none below the fade, so the plate's edge is never a seam",
-     !starry.some(y => y >= 320), `starry at ${starry.join(",")}`);
+  /* THE INVARIANT IS UNCHANGED AND THE NUMBER IS NOT. The scrim must still close
+     before the plate's bottom edge, or the edge reads as a rule drawn across the
+     rail — but the plate is no longer 1190 units tall. It runs to Dec -75 now, so
+     at a 282px rail its edge is near y 766 instead of y 355, and the scrim was
+     moved down to 45vh/78vh to follow it. Asserting 320 after that change would
+     be asserting the old design: the stars between 320 and the fade are the
+     point of it. What still must hold is that nothing is visible once the scrim
+     has closed, which on a 950px viewport is 78vh = 741. */
+  const closed = Math.round(0.78 * 950);
+  ok(`...and none below the fade at ${closed}px, so the plate's edge is never a seam`,
+     !starry.some(y => y >= closed), `starry at ${starry.join(",")}`);
 
   // ------------------------------------------------------- Leo, near the throne
   // The constellation occupies 34.3%..54.4% of the plate, which is real sky and
