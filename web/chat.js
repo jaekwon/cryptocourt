@@ -192,6 +192,46 @@ function chatBellOn() {
   try { return window.localStorage.getItem(CHATBELLKEY) !== "0"; } catch (e) { return true; }
 }
 
+// THE ONLY WRITER OF THE BELL KEY, and it tells the page it wrote.
+// The rail row draws this same bell, so there are two displays of one fact now;
+// a second painter reading localStorage on its own schedule is how two displays
+// of one fact stop agreeing. Everything that changes the bell goes through here
+// and every display listens, so there is no path that updates one and not the
+// other. The event is fired on window rather than passed to a callback because
+// index.html cannot see into this closure and must not have to.
+const CHATBELLEVT = "kourt:bell";
+
+// THE WHOLE GESTURE, ONCE. Two bells are drawn now -- the panel's and the rail's
+// -- and "clicking one should be identical to clicking the other" is only
+// durable if there is one function to click. Flipping the state, announcing it
+// and ringing are all here; a handler that repeated any of them would be a
+// second definition of the gesture, free to drift the first time one is edited.
+// Paint is NOT here: each display repaints from the CHATBELLEVT it fires, which
+// is the same path an external toggle takes, so there is no shorter route for a
+// local click that could leave the other display behind.
+// EVERY CLICK RINGS, not only the ones that switch it on. It rang on the way ON
+// only, which is correct and was reported as "I have to click it twice": the
+// bell STARTS on, so a reader's first click mutes it silently and only the
+// second is audible. A bell you press should sound -- that is what a bell is --
+// and the click is also the gesture that unblocks audio in a fresh tab, so it is
+// the one moment a preview is both wanted and possible.
+// MUTING RINGS ONCE TOO, so you hear what you are switching off, but QUIETLY at
+// CHATBELLOFFVOL. A full-weight toll as the answer to "make this stop" is the
+// wrong answer, and was reported as one. Softer, not silent: silence on the way
+// off is what made the switch feel unresponsive in the first place.
+function chatBellToggle() {
+  const wasOn = chatBellOn();
+  chatBellSet(!wasOn);
+  chatBell(wasOn ? CHATBELLOFFVOL : 1);
+  return !wasOn;
+}
+function chatBellSet(on) {
+  try { window.localStorage.setItem(CHATBELLKEY, on ? "1" : "0"); } catch (e) {}
+  try {
+    window.dispatchEvent(new CustomEvent(CHATBELLEVT, { detail: { on: !!on } }));
+  } catch (e) {} // CustomEvent is absent in no browser that runs the rest of this
+}
+
 // THE MODES OF A TUNED CHURCH BELL: ratio to the prime, gain, decay seconds,
 // and the split between the two halves of the doublet, in hertz.
 //
@@ -956,7 +996,11 @@ const CHATCSS = `
    that can show a constellation through the box you type into. A hairline above
    and below the log says where the scrolling region is, which is the one fact
    the old panel never stated. */
-.chatpanel{margin:0;border:1px solid rgba(128,128,128,.28);border-radius:10px;
+/* NO FRAME AND NO ROUNDING. A 1px outline and a 10px radius draw a card, and
+   this panel is not a card -- it bleeds past main's gutters to both edges of the
+   page, where a rounded corner has nothing to be a corner of. position:relative
+   is here to give the bell something to pin to; see .chatbell. */
+.chatpanel{margin:0;border:0;border-radius:0;position:relative;
   overflow:hidden;font-size:.92em}
 /* PADDING, NOT MARGIN, FOR EVERY BAND. A margin between two opaque bands is a
    gap the panel's base shows through, which is harmless here only because the
@@ -964,7 +1008,7 @@ const CHATCSS = `
    bands meet, and one inset (.7rem) holds for the head, the log and the
    composer so the rows line up down a single edge. */
 .chathead{display:flex;align-items:baseline;gap:.5rem;flex-wrap:wrap;margin-bottom:0;
-  padding:.3rem .2rem;border-bottom:1px solid rgba(128,128,128,.28)}
+  padding:.3rem 1.7rem .3rem .2rem;border-bottom:1px solid rgba(128,128,128,.28)}
 .chatslug{opacity:.6}
 /* THE WARNING IS THE ONE THING IN THIS HEAD THAT IS NOT DECORATION, and it read
    as decoration: .85em at 60% opacity, dimmer than the court slug beside it. A
@@ -979,7 +1023,8 @@ const CHATCSS = `
    stroke through it — so nothing here needs to underline the point; off is only
    dimmed so the two read as one control in two positions. */
 .chatbell{background:none;border:0;color:inherit;font:inherit;font-size:1em;
-  line-height:1;cursor:pointer;opacity:.8;padding:0 .1rem;margin-left:auto}
+  line-height:1;cursor:pointer;opacity:.8;padding:.15rem .25rem;
+  position:absolute;top:.3rem;right:.3rem;z-index:2}
 /* 1em SQUARE AND ON THE TEXT BASELINE, so it sits in this row like the glyph it
    replaced rather than like an image dropped into it. */
 .chatbellicn{width:1em; height:1em; display:block}
@@ -1015,9 +1060,11 @@ const CHATCSS = `
    window the log is 67px, which is two messages, and every 10px of it is a
    fraction of a message that is no longer on screen. */
 .chatlog{list-style:none;margin:0;padding:0 .2rem;max-height:15rem;overflow-y:auto;
-  flex:1 1 auto;min-height:0;border-bottom:1px solid rgba(128,128,128,.28)}
-/* AND THE LAST ROW DROPS ITS OWN, or scrolled to the end it lands flush against
-   the log's edge and the two hairlines read as one thick one. */
+  flex:1 1 auto;min-height:0}
+/* AND THE LAST ROW DROPS ITS OWN. It was here because the log carried a hairline
+   of its own and the two read as one thick line where they met; the log's is gone
+   now, and this still earns its place -- a row-separator under the final row is a
+   line under nothing, sitting directly above the composer. */
 .chatlog .chatmsg:last-child{border-bottom:0}
 /* height:0 IS WHAT MAKES THE RAIL'S FLOOR MEAN THE CONTROLS — and it is scoped
    to the rail, which the first cut was not.
@@ -1119,8 +1166,8 @@ const CHATCSS = `
    act, so it sits at the weight of the note under the composer rather than
    competing with the transcript above it. Right-aligned so it reads as a label
    on the box it sits over. */
-.chathere{flex:0 0 auto; text-align:right; font-size:.82em; opacity:.55;
-  margin:0; padding:.25rem .7rem 0}
+.chathere{position:absolute; right:.45rem; bottom:.1rem; z-index:2;
+  text-align:right; font-size:.82em; opacity:.55; margin:0; padding:0}
 /* UNDERLINED ON HOVER AND NOT BEFORE, which is the whole affordance asked for:
    at rest it reads as the quiet fact it is, and it announces itself as clickable
    under the pointer. Inherits colour rather than taking the link colour, because
@@ -1282,7 +1329,7 @@ const CHATCSS = `
   .chatmoniker,.chatinput{font-size:16px}
   .chatinput,.chatmoniker,.chatnamebtn,.chatsend{min-height:44px}
 }
-.chatnote{min-height:1.2em;opacity:.7;font-size:.85em;margin-top:0;padding:0 .2rem .2rem}
+.chatnote{min-height:1.2em;opacity:.7;font-size:.85em;margin-top:0;padding:0 5rem .2rem .2rem}
 /* A TENTH OF WHITE, NOT AN OPAQUE BLACK BASE. Asked for as "remove that padding
    (of black color) around the chat box" and "make the background have a 10%
    alpha white screen behind the chat, so the background of chat text is grey
@@ -1293,45 +1340,59 @@ const CHATCSS = `
    the head's, which is a seam across the panel exactly where the eye follows the
    text. Putting it here means the head, the log and the composer sit on the same
    grey. */
-.chatpanel{color:#e9e5f8;background-color:rgba(255,255,255,.1)}
-.chatlog{
-  /* THE PLATE IS ONE COPY, AND IT LIVES IN index.html -- see --skyplate there for
-     where every star in it came from. It was inline here until the whole rail
-     became the sky: two consumers, one 11KB base64 blob, so the blob moved to a
-     token and both read it. The none-fallback is not decoration -- chat.js is a
-     separate file and can be mounted on a page that never defined the token, and
-     a var() with no fallback would invalidate the whole declaration and take the
-     gradient down with it.
-     AND IT IS ON THE LOG, NOT THE PANEL, which is the whole of the fix above:
-     the sky is behind the thing that scrolls, and everything pinned around it
-     gets the panel's opaque base instead. It sat on the panel while the rail
-     mounted one of these and index.html reset it away so the rail's own sky
-     showed through; the rail carries a single line now, this is the only mount
-     left, and there is nothing to reset.
-     THE OFFSET STILL CROPS THE PLATE'S TOP. -34px was measured against the
-     panel's top edge and the log's top edge is within a band of it, so the
-     constellation lands where it did. It is decoration here -- rail_sky.js
-     measures the RAIL's copy, and asserts this one is not inside it.
+.chatpanel{color:#e9e5f8;background-color:rgba(255,255,255,.05)}
+/* DEEP INDIGO, NOT BLACK. The hue is the rail's own --surface, rgb(22,18,46),
+   which is the colour this site already uses for a dark surface that is not a
+   hole in the page. Spelled as a literal rather than var(--surface): those tokens
+   are declared on the rail, and chat.js mounts a panel outside it, so the var
+   would resolve to nothing here. Alpha is a little above the black it replaces --
+   a lighter colour needs more of itself to sit as deep. */
+.chathead,.chatform,.chatnote{background-color:rgba(22,18,46,.45)}
+.chatpanel{
+  /* THE SKY IS ON THE PANEL, NOT ON THE LOG. It was on the log so that the head
+     and the composer kept an opaque base -- "nothing that can show a
+     constellation through the box you type into". Asked for the opposite: the
+     picture had no way to reach the top and bottom bands while it was painted on
+     the one row between them. One image over the whole panel also means one
+     continuous picture rather than a band of sky with grey above and below it.
+     The panel's background-color still sits under this and is now only a
+     fallback for a sky.jpg that does not load.
+     THE SKY HERE IS THE SKY NEXT DOOR. The rail draws Leo -- see --skyplate in
+     index.html -- so this is the field immediately east of it: the Coma Cluster
+     in Coma Berenices, Leo's own eastern neighbour, with NGC 4874 and NGC 4889
+     the two giant ellipticals near the centre. 2MASS Atlas mosaic, NASA
+     PIA04210, 34 arcmin square, cropped off its caption bar. NASA content is not
+     subject to copyright in the US, so no credit line is painted; the
+     acknowledgment lives here.
+     WHY GALAXIES AND NOT A NEBULA. A nebula there would be a lie: nebulae live in
+     the plane of the Milky Way, and Leo looks the other way, out through the
+     thinnest part of our own galaxy toward the north galactic pole in Coma. That
+     is exactly why the sky beside Leo is full of distant galaxies and empty of
+     gas -- so what continues off the rail's right edge is a galaxy field.
+     ITS BLACK POINT IS THE RAIL'S SKY. The image is graded so input black maps to
+     rgb(21,17,44), which is the rail's own rendered sky, and input white to a
+     lavender rather than a pure one. The two panels then share a ground instead
+     of merely being near each other in tone: measured, rail 249.9deg at 11.8%
+     lightness against this at 253deg and 11.4%. The veil's job is only the last
+     of that match, which is why it is .3 here and was .8 over a photograph that
+     had not been graded to fit.
      NO BACKTICK AND NO DOLLAR-BRACE ANYWHERE IN HERE. The whole block is one
      template literal; a stray pair closes it early and takes every page with it,
-     not just the chat. Two backticks in this very paragraph did exactly that
-     while the note above was being moved out to index.html, which is the argument
-     for keeping the warning wherever the literal is.
-     THE DARK GRADIENT UNDER THE PLATE IS GONE with the panel's opaque base: it
-     ran #0a0a14 to #181333, which is the black the request was about, and it
-     would have sat on top of the panel's grey and hidden it in the one band that
-     matters. The plate keeps the stars; the grey behind them is the panel's.
-     AND THE NOTE ABOVE WENT IN AFTER THIS COMMENT ALREADY CLOSED, on the first
-     try -- and the rewrite then spelled the closing sequence in its own prose,
-     which closed it early a second time. Neither is spellable in here. That left
-     four lines of bare prose and a stray terminator inside the rule. CSS drops
-     the whole declaration block it cannot parse, so background-image computed to
-     none and the stars simply went out -- visible in a screenshot, and invisible
-     to anything that only reads the source. */
-  background-image:var(--skyplate, none);
-  background-size:100% auto;
-  background-position:center -34px;
-  background-repeat:no-repeat}
+     not just the chat. Two backticks in this very paragraph did exactly that once.
+     AND THE CLOSING SEQUENCE OF A COMMENT IS NOT SPELLABLE IN ITS OWN PROSE --
+     doing that closed this block early twice, leaving bare prose inside the rule.
+     CSS drops a declaration block it cannot parse, so background-image computed
+     to none and the sky simply went out: visible in a screenshot, invisible to
+     anything that only reads the source. */
+  background-color:#0a0a14;
+  background-image:
+    linear-gradient(to bottom, rgba(10,10,20,0) 0, rgba(10,10,20,0) 45vh,
+                    #130f26 78vh, #181333 100vh),
+    url("sky.svg");
+  background-size:100vw 100vh,cover;
+  background-position:left top,center top;
+  background-attachment:fixed,scroll;
+  background-repeat:no-repeat,no-repeat}
 `;
 function chatStyles(doc) {
   const d = doc || (typeof document !== "undefined" ? document : null);
@@ -1453,26 +1514,11 @@ function mountChat(el, opts) {
       bellEl.innerHTML = chatBellSvg(on);
     };
     paintBell();
-    bellEl.addEventListener("click", () => {
-      const wasOn = chatBellOn();
-      try { window.localStorage.setItem(CHATBELLKEY, wasOn ? "0" : "1"); } catch (e) {}
-      paintBell();
-      /* EVERY CLICK RINGS, not only the ones that switch it on.
-         It rang on the way ON only, which is correct and was reported as "I have
-         to click it twice": the bell STARTS on, so a reader's first click mutes
-         it silently and only the second is audible. A bell you press should
-         sound — that is what a bell is — and the click is also the gesture that
-         unblocks audio in a fresh tab, so it is the one moment a preview is both
-         wanted and possible.
-         MUTING RINGS ONCE TOO, so you hear what you are switching off — but
-         QUIETLY, at CHATBELLOFFVOL. A full-weight toll as the answer to "make
-         this stop" is the wrong answer, and was reported as one. Softer, not
-         silent: silence on the way off is what made the switch feel unresponsive
-         in the first place. */
-      chatBell(wasOn ? CHATBELLOFFVOL : 1);
-    });
+    window.addEventListener(CHATBELLEVT, paintBell);
+    // THE RAIL'S BELL CALLS THIS SAME FUNCTION. Nothing about the gesture lives
+    // in the handler any more -- see chatBellToggle.
+    bellEl.addEventListener("click", () => { chatBellToggle(); });
   }
-
   const nameBtn = el.querySelector(".chatnamebtn");
   const nameShown = () => (nameEl.value.trim() || CHATDEFAULTNAME);
   const closeName = () => {

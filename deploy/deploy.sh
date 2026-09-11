@@ -518,6 +518,11 @@ fi
 # is missing — so a deploy that forgot this line degrades to a worse sound rather
 # than to silence, which is exactly why the line is easy to forget.
 "${SCP[@]}" web/bell.mp3 "$HOST:$WEBROOT/bell.mp3$NEW"
+# THE SKY BEHIND THE CHAT, and unlike the bell there is no fallback: chat.js names
+# sky.svg in a background-image, so a deploy that forgets this line gives every
+# reader a flat panel and no error anywhere to say why. Same shape as the line
+# above -- copied to a .new name here, renamed below with the rest.
+"${SCP[@]}" web/sky.svg "$HOST:$WEBROOT/sky.svg$NEW"
 # `[ ... ] && cmd` would abort the whole script under `set -e` when the test is
 # false, which is the ordinary case of a page with no card.
 if [ -n "${OGFILE:-}" ]; then
@@ -554,6 +559,8 @@ say "installing and restarting kourtchat"
     chmod 0644 $WEBROOT/chat.js
     mv $WEBROOT/media.js$NEW $WEBROOT/media.js
     mv $WEBROOT/bell.mp3$NEW $WEBROOT/bell.mp3
+    mv $WEBROOT/sky.svg$NEW $WEBROOT/sky.svg
+    chmod 0644 $WEBROOT/sky.svg
     chmod 0644 $WEBROOT/media.js
     # the link-preview card, before index.html — so the page never names a file
     # that is not there yet
