@@ -18,6 +18,22 @@ import (
 
 func TestBotWorthAskingTakesSiteQuestionsAndNothingElse(t *testing.T) {
 	yes := []string{
+		/* MEASURED IN THE LIVE COVID ROOM AND REFUSED, silently, with nothing in
+		   the journal at all — four separate readers asked about the bell and the
+		   word was not in the vocabulary. These are the reason the list was
+		   widened; the arms in the `no` list below are the reason it was also
+		   narrowed. */
+		"does the bell work for newcomers?",
+		"sound the bell?",
+		"what decides how big my reward is if my side wins?",
+		"how do i withdraw my stake?",
+		"can i sell the coin back?",
+		"what is the bond for?",
+		"how much gas does a vote cost?",
+		// A TRAILING "s", because that is how people write. The list carries the
+		// singular and this is what makes the plural work without doubling it.
+		"how many claims are in this court?",
+		"what are the folders for?",
 		"how do i stake on a claim?",
 		"What does settled YES mean?",
 		"how does voting work",
@@ -48,11 +64,34 @@ func TestBotWorthAskingTakesSiteQuestionsAndNothingElse(t *testing.T) {
 		"who really funded the lab?",             // subject matter, not the site
 		"why does nobody believe the 2021 data?", // argument
 		"what time is it in tokyo?",              // unrelated
-		"hello",                                  // greeting, handled elsewhere
-		"the map shows seven claims",             // site words, no question
-		"staking is a scam",                      // site words, no question
-		"",                                       // nothing
-		strings.Repeat("how do i stake? ", 60),   // a wall of text
+		/* THE SUBSTRING LEAK, and every one of these BOUGHT A MODEL CALL before
+		   the list was matched word by word. Measured against the live covid
+		   room, which is the room the list exists to protect:
+		     "vaccine"  contains "cc"    "accident" contains "cc"
+		     "model"    contains "mod"   "modern"   contains "mod"
+		     "asset"    contains "set"   "success"  contains "cc"
+		   Each call was spent to be told PASS, because a vaccine question is the
+		   subject matter of a claim and the clerk must not answer it. So the leak
+		   cost money to do the one thing the list is for. */
+		"is the vaccine safe?",
+		"was there an accident at the lab?",
+		"do you think the model is wrong?",
+		"how modern is this?",
+		"is that an asset?",
+		"was it a success?",
+		/* AND THE SUBJECT-MATTER VOCABULARY STAYS OUT OF THE LIST. "evidence",
+		   "study", "data", "source" and "proof" were all considered for the
+		   widening and rejected: "does the evidence show that?" in a court about
+		   virology IS the argument, and an answer to it from the site's own clerk
+		   would be taking a side. */
+		"does the evidence show that?",
+		"what does the study actually say?",
+		"is the source reliable?",
+		"hello",                                // greeting, handled elsewhere
+		"the map shows seven claims",           // site words, no question
+		"staking is a scam",                    // site words, no question
+		"",                                     // nothing
+		strings.Repeat("how do i stake? ", 60), // a wall of text
 		/* AND THE ARITHMETIC PATH MUST NOT SWALLOW AN ARGUMENT. A year range
 		   reads as digit-hyphen-digit to any such matcher, so the length bound is
 		   what keeps a sentence about the subject matter out — this is the case

@@ -765,21 +765,106 @@ func botWorthAsking(body string) bool {
 	// ...AND IT HAS TO BE ABOUT THIS PLACE. Without this the bot answers general
 	// knowledge questions in a court about virology, which is both off-topic and
 	// the most expensive thing it could choose to do.
-	for _, w := range []string{
-		"kourt", "court", "claim", "stake", "staking", "vote", "voting", "verdict",
-		"settle", "settled", "dispute", "folder", "set", "docket", "comment",
-		"gno", "gnot", "wallet", "keplr", "adena", "chain", "realm", "map",
-		"cc", "coin", "token", "moderator", "mod", "appeal", "site", "page",
-		"how it works", "sign in", "log in", "connect",
-	} {
-		if strings.Contains(s, w) {
+	if botMentionsSite(s) {
+		return true
+	}
+	return botArithmetic(s)
+}
+
+/*
+	botMentionsSite decides whether a question is about THIS PLACE.
+
+WORD BY WORD, NOT BY SUBSTRING, and that is a fix rather than a refinement. The
+list used to be tested with strings.Contains, so every short entry matched inside
+unrelated words — and MEASURED against the live covid room, the gate was exactly
+backwards in the one room it was written to protect:
+
+	is the vaccine safe?              bought a call  ("vaccine" contains "cc")
+	was there an accident at the lab? bought a call  ("accident" contains "cc")
+	do you think the model is wrong?  bought a call  ("model" contains "mod")
+	how modern is this?               bought a call  ("modern" contains "mod")
+	is that an asset?                 bought a call  ("asset" contains "set")
+	was it a success?                 bought a call  ("success" contains "cc")
+	does the bell work for newcomers? REFUSED, silently, with nothing in the log
+
+Every one of those calls is spent to be told PASS, because a vaccine question is
+the subject matter of a claim and the clerk must not answer it — so the leak cost
+money to do the thing the list exists to prevent, while the real question about a
+real feature got nothing at all.
+
+A TRAILING "s" IS TOLERATED because "claims" and "courts" are how people write,
+and the list would otherwise need both spellings of everything — it already
+carries stake/staking and vote/voting for exactly that reason.
+
+PHRASES STAY A SUBSTRING TEST. "how it works" cannot collide with anything, and
+tokenising it would mean matching "works" on its own, which is a common word.
+*/
+func botMentionsSite(s string) bool {
+	for _, p := range botSitePhrases {
+		if strings.Contains(s, p) {
 			return true
 		}
 	}
-	// ...OR BE A SUM. Reported: "i typed 'what is 2+2' and no bot is answering
-	// it. i want it to" — followed by "widen it a little bit" when the first
-	// attempt at this dropped the list above altogether.
-	return botArithmetic(s)
+	for _, tok := range botWordRe.FindAllString(s, -1) {
+		if botSiteWords[tok] {
+			return true
+		}
+		if t := strings.TrimSuffix(tok, "s"); t != tok && botSiteWords[t] {
+			return true
+		}
+	}
+	return false
+}
+
+var botWordRe = regexp.MustCompile(`[a-z0-9]+`)
+
+var botSitePhrases = []string{"how it works", "sign in", "log in"}
+
+/*
+	THE VOCABULARY OF THE SITE, and nothing else.
+
+WHAT BELONGS HERE is the name of a mechanism, a page or a control — something a
+reader can only be asking about because they are looking at this site. What does
+NOT belong is any word from the subject matter of a claim: "evidence", "study",
+"data", "source", "proof" were all considered and left out, because "does the
+evidence show that?" in the covid court is the argument itself, and an answer
+from the site's own clerk would be taking a side.
+
+ADDED AFTER MEASURING THE LIVE ROOM against the old list, which refused these:
+bell (a real feature, asked about four separate times and silent every time),
+and the reward, burn and bond vocabulary that the no-loss rule is written in.
+
+"CLERK" IS DELIBERATELY ABSENT, and it was in this list for one run. Adding it
+made every message naming the clerk a "site question", which STEALS it from the
+addressed branch — the branch order tries worthAsking first, so "clerk, why did
+the chicken cross the road?" stopped being told to answer anything and started
+being told to answer or PASS, which for a question about a chicken means
+silence. Two tests caught it. Messages that name the clerk belong to
+botAddressed; this list is about what a question is ABOUT.
+*/
+var botSiteWords = map[string]bool{
+	// the court and what happens in it
+	"kourt": true, "court": true, "claim": true, "verdict": true,
+	"settle": true, "settled": true, "dispute": true, "appeal": true,
+	"docket": true, "folder": true, "set": true, "comment": true, "board": true,
+	"series": true, "directory": true, "meta": true,
+	// staking, and the words the no-loss rule is written in
+	"stake": true, "staking": true, "unstake": true, "withdraw": true,
+	"vote": true, "voting": true, "reward": true, "conviction": true,
+	"bond": true, "answerer": true, "weight": true,
+	// the coin
+	"cc": true, "coin": true, "token": true, "mint": true, "burn": true,
+	"buy": true, "sell": true, "curve": true, "supply": true, "franchise": true,
+	// the chain and the wallet
+	"gno": true, "gnot": true, "chain": true, "realm": true, "wallet": true,
+	"keplr": true, "adena": true, "gas": true, "fee": true, "tx": true,
+	"transaction": true, "address": true,
+	// the site and its furniture
+	"site": true, "page": true, "map": true, "chat": true, "room": true,
+	"moniker": true, "bell": true, "embed": true, "image": true,
+	"exhibit": true, "media": true, "flag": true,
+	// moderation
+	"moderator": true, "mod": true, "moderation": true,
 }
 
 // botPureSum is a message that is nothing but a calculation: "2+2", "17 * 3",
