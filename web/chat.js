@@ -956,7 +956,7 @@ const CHATCSS = `
    that can show a constellation through the box you type into. A hairline above
    and below the log says where the scrolling region is, which is the one fact
    the old panel never stated. */
-.chatpanel{margin:1.5rem 0 0;border:1px solid rgba(128,128,128,.28);border-radius:10px;
+.chatpanel{margin:.4rem 0 0;border:1px solid rgba(128,128,128,.28);border-radius:10px;
   overflow:hidden;font-size:.92em}
 /* PADDING, NOT MARGIN, FOR EVERY BAND. A margin between two opaque bands is a
    gap the panel's base shows through, which is harmless here only because the
@@ -964,7 +964,7 @@ const CHATCSS = `
    bands meet, and one inset (.7rem) holds for the head, the log and the
    composer so the rows line up down a single edge. */
 .chathead{display:flex;align-items:baseline;gap:.5rem;flex-wrap:wrap;margin-bottom:0;
-  padding:.5rem .7rem;border-bottom:1px solid rgba(128,128,128,.28)}
+  padding:.3rem .2rem;border-bottom:1px solid rgba(128,128,128,.28)}
 .chatslug{opacity:.6}
 /* THE WARNING IS THE ONE THING IN THIS HEAD THAT IS NOT DECORATION, and it read
    as decoration: .85em at 60% opacity, dimmer than the court slug beside it. A
@@ -1014,7 +1014,7 @@ const CHATCSS = `
    so vertical padding here would be a second helping of both — and on a 560px
    window the log is 67px, which is two messages, and every 10px of it is a
    fraction of a message that is no longer on screen. */
-.chatlog{list-style:none;margin:0;padding:0 .7rem;max-height:15rem;overflow-y:auto;
+.chatlog{list-style:none;margin:0;padding:0 .2rem;max-height:15rem;overflow-y:auto;
   flex:1 1 auto;min-height:0;border-bottom:1px solid rgba(128,128,128,.28)}
 /* AND THE LAST ROW DROPS ITS OWN, or scrolled to the end it lands flush against
    the log's edge and the two hairlines read as one thick one. */
@@ -1138,7 +1138,7 @@ const CHATCSS = `
    behind: every measurement taken while this is hidden reports no seam at all.
    Horizontal margin lines it up with the rows; vertical stays zero so the log's
    rule keeps sitting on the boundary it marks. */
-.chatstate{margin:0 .7rem;padding:.35rem .5rem;border-radius:4px;
+.chatstate{margin:0 .2rem;padding:.35rem .5rem;border-radius:4px;
   background:rgba(128,128,128,.15)}
 .chatdemo{display:block;margin-top:.25rem;font-size:.85em;font-weight:600}
 /* THE COMPOSER MUST NOT SHRINK, and this is the whole bug behind four failed
@@ -1162,7 +1162,7 @@ const CHATCSS = `
    gets too short for the fixed rows it clips the NOTE, the least important
    thing in the panel, instead of swallowing the controls. */
 .chathead,.chatstate,.chathere,.chatform,.chatnote{flex:0 0 auto}
-.chatform{display:flex;gap:.4rem;margin-top:0;padding:.5rem .7rem;flex-wrap:wrap}
+.chatform{display:flex;gap:.4rem;margin-top:0;padding:.3rem .2rem;flex-wrap:wrap}
 /* THE NAME IS A LABEL, NOT A MESSAGE. At 8rem it took a third of a 230px rail
    and left the message box too narrow to read what you were typing. It needs
    room for a moniker and no more; the message takes everything else and drops
@@ -1282,7 +1282,7 @@ const CHATCSS = `
   .chatmoniker,.chatinput{font-size:16px}
   .chatinput,.chatmoniker,.chatnamebtn,.chatsend{min-height:44px}
 }
-.chatnote{min-height:1.2em;opacity:.7;font-size:.85em;margin-top:0;padding:0 .7rem .35rem}
+.chatnote{min-height:1.2em;opacity:.7;font-size:.85em;margin-top:0;padding:0 .2rem .2rem}
 /* A TENTH OF WHITE, NOT AN OPAQUE BLACK BASE. Asked for as "remove that padding
    (of black color) around the chat box" and "make the background have a 10%
    alpha white screen behind the chat, so the background of chat text is grey
