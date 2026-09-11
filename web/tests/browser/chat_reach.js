@@ -557,6 +557,128 @@ const HEIGHTS = [1000, 900, 800, 760, 700, 620];
        JSON.stringify(stored));
   }
 
+  /* ---- THE KEYBOARD CONTRACT ----------------------------------------------
+     WHY THIS BLOCK EXISTS NOW. The seam used to be a keyboard-operable
+     separator — role, tabindex, arrow keys — and removing the drag took that
+     with it. What it did is gone for good and should be; what MUST still be true
+     is that everything left in the panel can be reached and used without a
+     pointer, and none of that was asserted anywhere.
+     AND ENTER TO SEND WAS NOT TESTED AT ALL, which is the one worth having:
+     chat.js handles Enter explicitly only in the NAME field, so the message box
+     relies on native form submission. That is the right way to do it and it is
+     exactly the kind of thing a later refactor breaks silently — chat_live's own
+     post arm dispatches a synthetic submit event, so it proves the handler runs
+     and says nothing about the key that reaches it. */
+  {
+    await page.setViewport({width: 1440, height: 900});
+    await page.goto(PAGE + '#/c/orem', {waitUntil: 'networkidle0'});
+    await new Promise(r => setTimeout(r, 1100));
+
+    /* EVERY CONTROL REACHABLE, IN A SENSIBLE ORDER. Read from the document
+       rather than by pressing Tab 40 times: the order a browser walks is
+       document order for anything without a positive tabindex, and asserting
+       that nothing in here carries one is the same guarantee with a clearer
+       failure. */
+    const reach = await page.evaluate(() => {
+      const head = document.getElementById('railchathead');
+      const panel = document.getElementById('railchat');
+      const scope = [head, panel].filter(Boolean);
+      const all = [...document.querySelectorAll(
+        'a[href],button:not([disabled]),input,select,textarea,[tabindex]:not([tabindex="-1"])')]
+        .filter(e => { const b = e.getBoundingClientRect(); return b.width > 0 && b.height > 0; })
+        .filter(e => scope.some(s => s.contains(e)));
+      return {
+        classes: all.map(e => (e.className || '').split(' ')[0] || e.id),
+        positiveTabindex: all.filter(e => +(e.getAttribute('tabindex') || 0) > 0).length,
+        inputBeforeSend: all.findIndex(e => e.classList.contains('chatinput'))
+                       < all.findIndex(e => e.classList.contains('chatsend')),
+      };
+    });
+    for (const want of ['chatinput', 'chatsend', 'chatnamebtn', 'chatbell']) {
+      ok(`the keyboard can reach .${want}`, reach.classes.includes(want),
+         JSON.stringify(reach.classes));
+    }
+    ok("...and reaches the box before the button it feeds",
+       reach.inputBeforeSend === true, JSON.stringify(reach.classes));
+    /* NO POSITIVE TABINDEX ANYWHERE. One of those reorders the whole document's
+       tab sequence around this panel, which is a page-wide defect introduced
+       from inside a sidebar. */
+    ok("...without any control jumping the queue with a positive tabindex",
+       reach.positiveTabindex === 0, String(reach.positiveTabindex));
+
+    /* AND FOCUS IS VISIBLE ON EACH, because a control you can reach and cannot
+       see yourself on is not keyboard-operable, it is a guess. Custom-styled
+       dark controls lose this constantly — the usual cause is a blanket
+       outline:none. */
+    const seen = await page.evaluate(() => {
+      const out = {};
+      for (const sel of ['.chatbell', '.chatnamebtn', '.chatinput', '.chatsend', '.chatwarnx']) {
+        const e = document.querySelector('#railchat ' + sel) || document.querySelector(sel);
+        if (!e) { out[sel] = null; continue; }
+        e.focus();
+        const cs = getComputedStyle(e);
+        out[sel] = (cs.outlineStyle !== 'none' && parseFloat(cs.outlineWidth) > 0)
+                 || cs.boxShadow !== 'none';
+      }
+      return out;
+    });
+    const invisible = Object.entries(seen).filter(([, v]) => v === false).map(([k]) => k);
+    ok(`every control shows where the focus is (${Object.keys(seen).length} checked)`,
+       invisible.length === 0, "no focus indicator on: " + invisible.join(", "));
+
+    /* ENTER SENDS. Against a stubbed service rather than a real one, for the
+       reason chat_here gives: a live kourtchat here would be a database and a
+       port, and what is being measured is that the key reaches the submit path
+       and the box is cleared afterwards. */
+    const typed = await page.evaluate(async () => {
+      window.__sent = [];
+      const real = window.fetch;
+      window.fetch = async (u, o) => {
+        const s = String(u);
+        if (o && o.method === 'POST' && /\/api\/chat\//.test(s)) {
+          window.__sent.push(JSON.parse(o.body || '{}'));
+          return new Response(JSON.stringify({ok: true, id: 1}),
+            {status: 200, headers: {'Content-Type': 'application/json'}});
+        }
+        if (/\/api\/chat\/health/.test(s)) {
+          return new Response(JSON.stringify({ok: true, enforcing: true}),
+            {status: 200, headers: {'Content-Type': 'application/json'}});
+        }
+        if (/\/api\/chat\//.test(s)) {
+          return new Response(JSON.stringify({messages: [], next: 1, you: {state: 'ok'},
+            now: Math.floor(Date.now() / 1000), here: 1}),
+            {status: 200, headers: {'Content-Type': 'application/json'}});
+        }
+        return real(u, o);
+      };
+      CFG.mode = 'live'; CFG.chat = 'http://chat.invalid';
+      location.hash = '#/';
+      await new Promise(r => setTimeout(r, 250));
+      location.hash = '#/c/orem';
+      await new Promise(r => setTimeout(r, 1400));
+      return !!document.querySelector('#railchat .chatinput');
+    });
+    ok("a live panel is mounted to type into", typed === true);
+
+    // EMPTY FIRST: Enter on an empty box must not post, or every stray keypress
+    // in the room is a blank message.
+    await page.click('#railchat .chatinput');
+    await page.keyboard.press('Enter');
+    await new Promise(r => setTimeout(r, 500));
+    const blank = await page.evaluate(() => window.__sent.length);
+    ok("Enter on an empty box sends nothing", blank === 0, String(blank));
+
+    await page.keyboard.type('sent with the enter key');
+    await page.keyboard.press('Enter');
+    await new Promise(r => setTimeout(r, 700));
+    const after = await page.evaluate(() => ({
+      sent: window.__sent, left: document.querySelector('#railchat .chatinput').value}));
+    ok(`Enter in the message box sends it (${JSON.stringify((after.sent[0] || {}).body)})`,
+       after.sent.length === 1 && after.sent[0].body === 'sent with the enter key',
+       JSON.stringify(after.sent));
+    ok("...and clears the box", after.left === "", JSON.stringify(after.left));
+  }
+
   ok("no page errors", errs.length === 0, errs.slice(0, 2).join(" | "));
 
   await browser.close();
