@@ -32,8 +32,17 @@ async function courtPage(browser, opts) {
     await page.setRequestInterception(true);
     page.on("request", r => r.url().endsWith("/chat.js") ? r.abort() : r.continue());
   }
-  await page.goto(PAGE + "#/c/orem", {waitUntil: "load"});
-  // The docket is the page's own content; waiting for it rather than a fixed delay.
+  /* THE PANEL'S OWN PAGE. It used to be mounted in the rail on every court
+     route; it is a view of its own now — "it's probably a bad idea to have chat
+     in the sidebar to begin with" — so a harness about the panel visits the
+     panel. The wait below still matches: the view's heading is the court's name
+     followed by " — chat". */
+  /* !== undefined, NOT ||, because the court page's route is the EMPTY string
+     and `"" || "/chat"` is "/chat" — so asking for the docket silently got the
+     room, and two arms failed on a view that has no docket to be intact. */
+  const route = (opts && opts.route !== undefined) ? opts.route : "/chat";
+  await page.goto(PAGE + "#/c/orem" + route, {waitUntil: "load"});
+  // The heading is the page's own content; waiting for it rather than a fixed delay.
   await page.waitForFunction(
     () => /Orem Truth Court/.test(document.getElementById("main").textContent),
     {timeout: 20000});
@@ -47,50 +56,58 @@ async function courtPage(browser, opts) {
   {
     const {page, errors} = await courtPage(browser);
     const r = await page.evaluate(() => {
-      const slot = document.getElementById("railchat");
+      const slot = document.getElementById("chatview");
       const log = slot && slot.querySelector(".chatlog");
       const main = document.getElementById("main");
-      // WHERE IT SITS MATTERS, and it moved. It used to hang below the docket,
-      // where a reader had to scroll past every claim to find out anyone was
-      // talking and it made the page longer for everyone who never used it. It
-      // is in the rail now: visible the whole time, and costing the court page
-      // no height at all. So the check is that it is OUTSIDE main, in the rail.
+      /* WHERE IT SITS MATTERS, AND IT HAS MOVED TWICE. First it hung below the
+         docket, where a reader had to scroll past every claim to find out
+         anyone was talking. Then it went into the rail, visible the whole time
+         and costing the court page no height — and that is where it met the
+         problem that moved it again: a 230px column sharing its height with the
+         navigation and the node controls, where the transcript measured 0px on
+         every desktop height from 700 to 900.
+         NOW IT IS THE PAGE. So the check inverts: the panel must be INSIDE main,
+         and the rail must hold no panel at all. */
       const rail = document.querySelector("aside.rail");
-      const inRail = !!(slot && rail && rail.contains(slot) && !main.contains(slot));
+      const inView = !!(slot && main.contains(slot) && !(rail && rail.contains(slot)));
       return {
         mounted: !!log,
         lines: log ? log.querySelectorAll(".chatmsg").length : 0,
         styled: !!document.getElementById("chatcss"),
         tagged: slot ? slot.classList.contains("chatpanel") : false,
-        inRail,
+        inView,
         text: log ? log.textContent : "",
       };
     });
-    /* THE LABEL SITS ON ITS PANEL. chat.js gives .chatpanel margin:1.5rem 0 0
-       plus a border-top, which is correct standalone — the space and the rule
-       are what separate it from the page content above. In the rail it is
-       double-counted: the "Chat" label is nav's last child and already carries
-       nav's 14px of bottom padding. Both applied, and the word sat 38px above
-       its own line. Measured here rather than asserted in CSS, because the
-       number is the sum of a margin, a padding and a border from two different
-       stylesheets — the only place it exists is on screen. */
+    /* THE RAIL SAYS THE ROOM IS THERE, and that is all it says now. This block
+       used to measure the void between the rail's "Chat" label and the panel
+       beneath it — a margin, a padding and a border from two stylesheets that
+       only existed on screen. There is no panel in the rail to sit under the
+       label; there is a line that links to the room, and what is worth pinning
+       is that it names the court it opens. Getting that wrong would look
+       identical and open somebody else's room. */
     {
       const g = await page.evaluate(() => {
         const h = document.getElementById("railchathead");
-        const c = document.getElementById("railchat");
-        if (!h || !c || h.hidden || c.hidden) return null;
-        return {gap: Math.round(c.getBoundingClientRect().top - h.getBoundingClientRect().bottom),
-                border: getComputedStyle(c).borderTopWidth};
+        if (!h || h.hidden) return null;
+        const a = h.querySelector("a.railchatlink");
+        return {href: a ? a.getAttribute("href") : null,
+                text: (h.innerText || "").replace(/\s+/g, " ").trim(),
+                panelInRail: !!h.closest(".rail").querySelector(".chatlog")};
       });
-      ok("the rail's Chat label and its panel are both shown", g !== null);
+      ok("the rail offers a way into the room", g !== null && !!g.href, JSON.stringify(g));
       if (g) {
-        ok(`...with no void between the label and its line (${g.gap}px)`, g.gap <= 16);
-        // Closing the gap must not close the rule: the line is the panel's edge.
-        ok("...and the line itself survives", parseFloat(g.border) >= 1);
+        ok(`...naming the court it opens (${g.href})`, g.href === "#/c/orem/chat",
+           JSON.stringify(g));
+        /* AND NO PANEL BESIDE IT. The whole point of the move is that the rail
+           stopped holding a room; a second mount here would put the reader in
+           two of them and split the poller between them. */
+        ok("...and no chat panel left in the rail", g.panelInRail === false,
+           JSON.stringify(g));
       }
     }
     ok("a court page mounts the chat panel", r.mounted);
-    ok("...in the rail, not in the court page body", r.inRail);
+    ok("...in the page, not in the rail", r.inView);
     ok("...with the demo sample rather than an empty box", r.lines === 4);
     ok("...and the sample is legible", /ellery/.test(r.text));
     ok("...with the panel's stylesheet installed", r.styled);
@@ -103,8 +120,14 @@ async function courtPage(browser, opts) {
   // chat.js blocked. The court page must be whole: the README's "no dependencies" is
   // a promise about this exact case, and an unguarded mountChat call would throw
   // mid-paint and take the docket with it.
+  //
+  // route:"" — THE COURT'S OWN PAGE, not the room. This block is about the
+  // docket surviving a missing chat.js, and the docket is on the court page;
+  // pointing it at /chat asserted the stats and the claim list on a view that
+  // has neither, which is how it failed after the panel moved. The room's own
+  // behaviour without chat.js is the arm below it.
   {
-    const {page, errors} = await courtPage(browser, {blockChatJs: true});
+    const {page, errors} = await courtPage(browser, {blockChatJs: true, route: ""});
     const r = await page.evaluate(() => {
       const main = document.getElementById("main");
       return {
@@ -112,8 +135,9 @@ async function courtPage(browser, opts) {
         // The court's own substance, not just its heading.
         stats: /coin price/.test(main.textContent),
         docketRows: main.querySelectorAll("a[href*='#/c/orem/']").length,
-        // The slot may exist; what must NOT exist is a mounted panel.
-        panel: !!document.querySelector("#railchat .chatlog"),
+        // Nothing may be mounted anywhere: the rail no longer holds a slot and
+        // the court page never did.
+        panel: !!document.querySelector(".chatlog"),
         mountFn: typeof window.mountChat,
       };
     });
@@ -134,16 +158,19 @@ async function courtPage(browser, opts) {
     const {page, errors} = await courtPage(browser);
     const before = await page.evaluate(() => typeof CHATSTOP);
     ok("the page holds a stop handle for the panel", before === "function");
+    /* ...BETWEEN CHAT ROUTES, because the panel only exists on one. Walking
+       court-to-court used to carry the rail's panel along with it; now each hop
+       has to land on a room for there to be a panel to leak. */
     for (const slug of ["ledger", "orem", "ledger", "orem"]) {
-      await page.evaluate(s => { location.hash = "#/c/" + s; }, slug);
+      await page.evaluate(s => { location.hash = "#/c/" + s + "/chat"; }, slug);
       await page.waitForFunction(s =>
         document.getElementById("main").textContent.includes(s === "orem"
           ? "Orem Truth Court" : "The Ledger of Denver"), {timeout: 20000}, slug);
     }
     const r = await page.evaluate(() => ({
       panels: document.querySelectorAll(".chatlog").length,
-      slots: document.querySelectorAll("#railchat").length,
-      mounted: !!document.querySelector("#railchat .chatlog"),
+      slots: document.querySelectorAll("#chatview").length,
+      mounted: !!document.querySelector("#chatview .chatlog"),
       // One id, one panel: a leak would show as several.
       styles: document.querySelectorAll("#chatcss").length,
     }));
@@ -173,9 +200,10 @@ async function courtPage(browser, opts) {
     // real thing this is looking for.
     const local = u => u.startsWith("file:") || u.startsWith("data:");
     page.on("request", r => { if (!local(r.url())) external.push(r.url()); });
-    await page.goto(PAGE + "#/c/orem", {waitUntil: "load"});
+    // THE ROOM: the panel this block waits for lives on its own page now.
+    await page.goto(PAGE + "#/c/orem/chat", {waitUntil: "load"});
     await page.waitForFunction(
-      () => !!document.querySelector("#railchat .chatlog"), {timeout: 20000});
+      () => !!document.querySelector("#chatview .chatlog"), {timeout: 20000});
     // Give a poller a chance to fire if one were wrongly running.
     await new Promise(r => setTimeout(r, 1500));
     ok("demo mode makes no network call at all: " + (external[0] || "none"),
@@ -192,9 +220,10 @@ async function courtPage(browser, opts) {
   // config, which is why deleting the whitelist entry survived them.
   {
     const page = await browser.newPage();
-    await page.goto(PAGE + "#/c/orem", {waitUntil: "load"});
+    // THE ROOM: the panel this block waits for lives on its own page now.
+    await page.goto(PAGE + "#/c/orem/chat", {waitUntil: "load"});
     await page.waitForFunction(
-      () => !!document.querySelector("#railchat .chatlog"), {timeout: 20000});
+      () => !!document.querySelector("#chatview .chatlog"), {timeout: 20000});
     const saved = await page.evaluate(() => {
       const el = document.getElementById("chat");
       if (!el) return {missing: true};
@@ -250,7 +279,7 @@ async function courtPage(browser, opts) {
     const {page, errors} = await courtPage(browser);
     const r = await page.evaluate(() => ({
       dry: !!document.querySelector("#railchat .chatdry"),
-      log: !!document.querySelector("#railchat .chatlog"),
+      log: !!document.querySelector("#chatview .chatlog"),
     }));
     ok("the panel carries no dry-run notice", r.dry === false);
     ok("...and this is not vacuous — the panel really mounted", r.log === true);

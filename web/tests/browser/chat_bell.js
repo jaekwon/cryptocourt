@@ -17,6 +17,11 @@
 // rather than by arrival. A future change that keeps the source shape and breaks
 // the behaviour would pass here.
 const {PAGE, demoPage} = require('./harness');
+// THE PANEL MOVED OUT OF THE RAIL. It is a view of its own at
+// #/c/<slug>/chat — "it's probably a bad idea to have chat in the sidebar to
+// begin with" — so this harness visits the panel's own page rather than a
+// court's docket. The arms below are unchanged: what they measure is the panel,
+// and the panel is the same panel.
 
 (async () => {
   const {browser, page, errs} = await demoPage({width: 1280, height: 950});
@@ -71,7 +76,7 @@ const {PAGE, demoPage} = require('./harness');
     };
   });
 
-  await page.goto(PAGE + '#/c/orem', {waitUntil: 'domcontentloaded'});
+  await page.goto(PAGE + '#/c/orem/chat', {waitUntil: 'domcontentloaded'});
   await new Promise(r => setTimeout(r, 1200));
 
   /* THE MARK, AND ONLY THE MARK. A message that ENDS in an exclamation rings, as

@@ -13,6 +13,11 @@
 // devtools tab, the thing this deployment asks for. The endpoint the page calls
 // is therefore part of the requirement, so it is asserted.
 const {PAGE, demoPage} = require('./harness');
+// THE PANEL MOVED OUT OF THE RAIL. It is a view of its own at
+// #/c/<slug>/chat — "it's probably a bad idea to have chat in the sidebar to
+// begin with" — so this harness visits the panel's own page rather than a
+// court's docket. The arms below are unchanged: what they measure is the panel,
+// and the panel is the same panel.
 
 // A floor of two lives in the service, so a one-connection country arrives
 // already folded into `elsewhere`. The page must not be able to unfold it.
@@ -68,7 +73,7 @@ const HERE = {
   }, HERE);
 
   // ---- the affordance, on the panel ---------------------------------------
-  await page.goto(PAGE + '#/c/orem', {waitUntil: 'networkidle0'});
+  await page.goto(PAGE + '#/c/orem/chat', {waitUntil: 'networkidle0'});
   await new Promise(z => setTimeout(z, 1300));
 
   const link = await page.evaluate(() => {
@@ -618,14 +623,21 @@ const HERE = {
   await page.goto(PAGE + '#/here', {waitUntil: 'domcontentloaded'});
   await new Promise(r => setTimeout(r, 3500));
   const railed = await page.evaluate(() => {
-    const rc = document.getElementById('railchat');
+    const rh = document.getElementById('railchathead');
+    const link = rh ? rh.querySelector('a.railchatlink') : null;
     return {court: typeof RAILCHATSLUG !== 'undefined' ? RAILCHATSLUG : '(no RAILCHATSLUG)',
-            visible: !!(rc && !rc.hidden),
-            composer: !!(rc && rc.querySelector('.chatinput'))};
+            visible: !!(rh && !rh.hidden),
+            href: link ? link.getAttribute('href') : null};
   });
   ok("the globe carries the meta court's chat", railed.court === 'meta', JSON.stringify(railed));
-  ok("...and it is a panel a reader can type into",
-     railed.visible && railed.composer, JSON.stringify(railed));
+  /* A WAY IN, NOT A PANEL, and that is the only part of this that changed. The
+     chat is a view of its own now — "it's probably a bad idea to have chat in
+     the sidebar to begin with" — so what this page owes a reader who has just
+     been told how many people are online is a route to the room, not a composer
+     wedged into a 230px column. The court it points at is still the assertion:
+     linking at the wrong room would look identical and open the wrong one. */
+  ok("...and offers a way into it",
+     railed.visible && railed.href === '#/c/meta/chat', JSON.stringify(railed));
   /* AND NOWHERE ELSE GAINED ONE. The change is a single route, and a regex that
      grew to match /me or the directory would put a room on pages that are not
      one. */

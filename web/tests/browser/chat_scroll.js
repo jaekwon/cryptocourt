@@ -16,13 +16,18 @@
 // transcript is painted into it, and only then is the height restored. That is
 // the same sequence as a slow first paint, made deterministic.
 const {PAGE, demoPage} = require('./harness');
+// THE PANEL MOVED OUT OF THE RAIL. It is a view of its own at
+// #/c/<slug>/chat — "it's probably a bad idea to have chat in the sidebar to
+// begin with" — so this harness visits the panel's own page rather than a
+// court's docket. The arms below are unchanged: what they measure is the panel,
+// and the panel is the same panel.
 
 (async () => {
   const {browser, page, errs} = await demoPage({width: 1280, height: 900});
   let fail = 0;
   const ok = (m, c, d) => { if (!c) { fail++; console.log("FAIL: " + m + (d ? "  " + d : "")); } else console.log("ok: " + m); };
 
-  await page.goto(PAGE + '#/c/orem', {waitUntil: 'networkidle0'});
+  await page.goto(PAGE + '#/c/orem/chat', {waitUntil: 'networkidle0'});
   await new Promise(z => setTimeout(z, 1200));
 
   const log = await page.evaluate(() => {
@@ -60,7 +65,15 @@ const {PAGE, demoPage} = require('./harness');
     st.id = "flatten-log";
     // !important, because the panel's own rule is what would otherwise win.
     // padding too, or clientHeight keeps a few pixels and the log is not flat.
+    /* flex:none TOO, and without it this fixture stopped flattening anything.
+       The chat is a view of its own now, so the panel is a fixed-height flex
+       column and the log is the item that grows: height:0 sets its BASIS to
+       zero and flex-grow:1 then expands it straight back. MEASURED after the
+       move: clientHeight 429 and scrollHeight 429, so there was neither a short
+       box nor an overflow and three arms failed for the honest reason that the
+       state they describe had stopped existing. */
     st.textContent = ".chatlog{height:0 !important; min-height:0 !important;"
+      + "flex:0 0 auto !important;"
       + "padding:0 !important; border:0 !important}";
     document.addEventListener("DOMContentLoaded", () => document.head.appendChild(st));
   });
@@ -75,7 +88,7 @@ const {PAGE, demoPage} = require('./harness');
      quietly stopped holding. The premise is now made to hold. */
   await page.goto(PAGE + '#/', {waitUntil: 'domcontentloaded'});
   await page.reload({waitUntil: 'networkidle0'});
-  await page.evaluate(() => { location.hash = "#/c/orem"; });
+  await page.evaluate(() => { location.hash = "#/c/orem/chat"; });
   await new Promise(z => setTimeout(z, 1400));
 
   const flat = await page.evaluate(() => {
@@ -100,7 +113,18 @@ const {PAGE, demoPage} = require('./harness');
     // Short enough that the sample thread clearly overflows it: the assertion
     // below can only fail if being at the foot differs from being at the top by
     // more than the 24px slack the panel allows itself.
-    el.style.height = "100px";
+    /* 50px, AND IT WAS 100 UNTIL THE PANEL GOT WIDER. The sample thread is four
+       messages; in the 230px rail each wrapped to two or three lines and the
+       transcript measured 237px, so a 100px box overflowed it by more than the
+       40 this arm needs. On the chat's own page the panel is 760px and every
+       message is ONE line, so the same thread is 109px — MEASURED — and 100px
+       overflowed by 9. The content got shorter because the column got wider,
+       which is the whole point of moving it, so the box has to get shorter too.
+       flex HAS TO BE PINNED WITH THE HEIGHT, for the reason the fixture above
+       gives: the log is the growing item in a fixed-height flex column, so a
+       style height is only its basis and flex-grow puts it straight back. */
+    el.style.flex = "0 0 auto";
+    el.style.height = "50px";
     // Two frames, which is what a ResizeObserver callback needs to land.
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
     await new Promise(r => setTimeout(r, 150));
@@ -130,6 +154,7 @@ const {PAGE, demoPage} = require('./harness');
     el.scrollTop = el.scrollHeight;         // at the foot
     el.dispatchEvent(new Event("scroll"));
     await new Promise(r => setTimeout(r, 60));
+    el.style.flex = "0 0 auto";              // ...and stops growing back
     el.style.height = "60px";               // the box loses height
     await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
     await new Promise(r => setTimeout(r, 150));

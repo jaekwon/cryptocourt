@@ -104,14 +104,29 @@ const crypto = require('crypto');
       // on top and it has to be over the plate to fade it
       scrimFirst: /^linear-gradient/.test(cs.backgroundImage.trim()),
       pos: cs.backgroundPosition,
+      // THE CHAT PANEL IS NOT IN THIS COLUMN ANY MORE — see the /chat route.
+      // The question this used to ask was whether the slot painted a second sky
+      // over the rail's; there is no slot, so what is asserted now is that
+      // nothing in the rail carries a plate of its own at all, which is the same
+      // property with the panel's departure allowed for.
       slotBg: slot ? getComputedStyle(slot).backgroundImage : null,
+      anyPlateInside: [...rail.querySelectorAll('*')].some(e =>
+        /base64/.test(getComputedStyle(e).backgroundImage)),
       throne: {top: Math.round(seat.top), bottom: Math.round(seat.bottom)},
     };
   });
   ok("the rail carries the plate", geo.plateOnRail === true);
   ok("...with the scrim over it, not under", geo.scrimFirst === true, geo.pos);
-  ok("the rail's chat slot paints no sky of its own",
-     geo.slotBg === 'none', `slot background-image=${String(geo.slotBg).slice(0, 40)}`);
+  /* NOTHING INSIDE THE RAIL PAINTS A SKY OF ITS OWN, which is what this arm has
+     always been for. It used to name the chat panel specifically: the panel's
+     plate carries Leo, so with one in this column the constellation appeared
+     TWICE, once at the throne and once in the chat. The panel is a view of its
+     own now and the slot is gone — so rather than assert a property of an
+     element that no longer exists, this asks the question of every descendant,
+     which covers the old case and anything else that grows a plate later. */
+  ok("nothing inside the rail paints a sky of its own",
+     geo.anyPlateInside === false,
+     `slot background-image=${String(geo.slotBg).slice(0, 40)}`);
 
   const strip = async y => {
     const buf = await page.screenshot({clip: {x: 0, y, width: geo.railW, height: 18}});

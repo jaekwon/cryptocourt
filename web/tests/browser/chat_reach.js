@@ -90,7 +90,7 @@ const HEIGHTS = [1000, 900, 800, 760, 700, 620];
 
   for (const h of HEIGHTS) {
     await page.setViewport({width: 1280, height: h});
-    await page.goto(PAGE + '#/c/orem', {waitUntil: 'domcontentloaded'});
+    await page.goto(PAGE + '#/c/orem/chat', {waitUntil: 'domcontentloaded'});
     await new Promise(r => setTimeout(r, 900));
 
     const m = await page.evaluate(() => {
@@ -169,7 +169,7 @@ const HEIGHTS = [1000, 900, 800, 760, 700, 620];
      with an empty room every one of these would certify nothing. */
   for (const w of [390, 430, 768]) {
     await page.setViewport({width: w, height: 844});
-    await page.goto(PAGE + '#/c/orem', {waitUntil: 'domcontentloaded'});
+    await page.goto(PAGE + '#/c/orem/chat', {waitUntil: 'domcontentloaded'});
     await new Promise(r => setTimeout(r, 900));
     const n = await page.evaluate(() => {
       const log = document.querySelector('.chatlog');
@@ -208,187 +208,21 @@ const HEIGHTS = [1000, 900, 800, 760, 700, 620];
        /\bchatsend\b/.test(n.send), `reached ${n.send} instead`);
   }
 
-  /* ── ONE CLICK GIVES THE CHAT THE RAIL ──────────────────────────────────────
-     Asked for: "make the left sidebar chat expandable in case your browser
-     height is short on desktop. one click... and squishes or overrides lines
-     above chat like REFERENCE".
-     THE SHORT WINDOW IS THE POINT, so 700 is measured and not just 1000. At
-     1280x700 the log is 0px before the click — the default trade this file's
-     first half exists to defend, where the composer keeps its floor and the log
-     is what yields. Expanding is the reader taking that trade back for as long
-     as they are talking.
-     FOUR CLAIMS PER SIZE, and each is a different way for this to be broken: the
-     log grows, the links above it actually fold (a log that grew while the nav
-     stayed would mean the rail simply scrolls, which is not what was asked),
-     the composer still takes its own clicks, and COLLAPSE PUTS EVERYTHING BACK
-     — a one-way expand is a layout the reader cannot undo. Restoration is
-     asserted as equality with the pre-click measurement rather than as "smaller
-     than expanded", which a half-restore would also satisfy. */
-  for (const h of [700, 1000]) {
-    await page.setViewport({width: 1280, height: h});
-    await page.goto(PAGE + '#/c/orem', {waitUntil: 'domcontentloaded'});
-    await new Promise(r => setTimeout(r, 900));
-    const read = () => page.evaluate(() => {
-      const log = document.querySelector('#railchat .chatlog');
-      const link = [...document.querySelectorAll('.nav a')]
-        .find(a => /How it works/.test(a.textContent));
-      const send = document.querySelector('.chatsend');
-      const hgt = e => e ? Math.round(e.getBoundingClientRect().height) : null;
-      let at = "none";
-      if (send) { const r = send.getBoundingClientRect();
-        const t = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
-        at = t && typeof t.className === "string" ? t.className : (t ? t.tagName : "none"); }
-      const btn = document.getElementById('chatbig');
-      /* THE RAIL, THE FOOT AND THE WAY HOME. The arms above prove the log grows
-         and the nav folds; none of them says how much of the SIDEBAR the reader
-         actually gets, which is the thing that was asked for. And once the nav
-         is folded the brand mark is the only route back to the directory, so it
-         has to be hit-tested rather than assumed present. */
-      const rail = document.querySelector('.rail');
-      const foot = document.querySelector('.rail .foot');
-      const mark = document.querySelector('.brand .mark');
-      const mr = mark ? mark.getBoundingClientRect() : null;
-      let home = "none";
-      if (mr && mr.width > 0) {
-        const t = document.elementFromPoint(mr.left + mr.width / 2, mr.top + mr.height / 2);
-        home = t && t.closest('.brand .mark') ? "mark" : (t ? "blocked" : "none");
-      }
-      return {log: hgt(log), nav: hgt(link), send: at,
-              rail: hgt(rail), foot: hgt(foot), home,
-              homeBox: mr ? Math.round(mr.width) + "x" + Math.round(mr.height) : "none",
-              share: hgt(rail) ? Math.round(100 * hgt(log) / hgt(rail)) : 0,
-              label: btn ? btn.textContent.trim() : null,
-              expanded: btn ? btn.getAttribute('aria-expanded') : null};
-    });
-    const click = async () => { await page.evaluate(() => document.getElementById('chatbig').click());
-                                await new Promise(r => setTimeout(r, 350)); };
-    const before = await read();
-    await click();
-    const open = await read();
-    await click();
-    const shut = await read();
-
-    ok(`at ${h}px the toggle says what it will do (${before.label}/${open.label})`,
-       before.label === "expand" && open.label === "collapse" &&
-       before.expanded === "false" && open.expanded === "true",
-       JSON.stringify([before.label, open.label, before.expanded, open.expanded]));
-    ok(`at ${h}px expanding grows the log (${before.log}px -> ${open.log}px)`,
-       open.log >= before.log + 100, `only ${open.log - before.log}px more`);
-    ok(`...by folding away the links above it (nav row ${before.nav}px -> ${open.nav}px)`,
-       before.nav > 0 && open.nav === 0,
-       "a log that grew while the nav stayed means the rail just scrolls");
-    ok(`...and send still takes the pointer while expanded`,
-       /\bchatsend\b/.test(open.send), `reached ${open.send} instead`);
-    ok(`...and collapsing puts both back exactly (${shut.log}px log, ${shut.nav}px nav)`,
-       shut.log === before.log && shut.nav === before.nav,
-       `expected ${before.log}/${before.nav}`);
-    /* AND THE READER GETS MOST OF THE SIDEBAR, which is the ask this whole
-       toggle answers. Measured on this fixture: 0% -> 47% at 700 and 9% -> 63%
-       at 1000. The floors are set from what the mode achieved BEFORE the foot
-       was folded away — 22% and 45% — so each arm fails on the version that
-       left the node controls in place rather than merely restating today's
-       number. The rest is not waste: the composer, the heading that carries
-       this button, and the count above the box are what the panel is for.
-       THE BRAND'S TRIMMED PADDING IS NOT PINNED, and that is deliberate rather
-       than an oversight: it is worth two points, so any floor low enough to
-       survive without it is too low to catch the foot regression these arms
-       exist for. Measured — reverting the trim leaves every arm here green. The
-       padding is an optimisation; the foot is the feature. */
-    ok(`at ${h}px the expanded log takes most of the rail (${before.share}% -> ${open.share}%)`,
-       open.share >= (h >= 1000 ? 55 : 40),
-       `${open.log}px of a ${open.rail}px rail`);
-    /* THE NODE CONTROLS FOLD WITH THE NAV. Demo-or-live and the RPC endpoint are
-       settings, and nobody retunes which chain they are reading while they are
-       talking on it. 174px on this fixture, and the arm pairs with the
-       restoration one below: a setting that folds away and does not come back is
-       a setting the reader has lost. */
-    ok(`...by folding the node controls too (foot ${before.foot}px -> ${open.foot}px)`,
-       before.foot > 0 && open.foot === 0,
-       "the source controls still hold rail height while the chat is expanded");
-    ok(`...and they come back on collapse (${shut.foot}px)`,
-       shut.foot === before.foot, `expected ${before.foot}px`);
-    /* AND THE WAY OUT SURVIVES. With the nav folded, the brand mark is the only
-       link back to the directory in the rail. Trimming its padding to buy log
-       height is fine; trimming it until it stops taking a click is not, and
-       hiding it outright — which buys eight more points — would leave a reader
-       expanded with no exit but this button. Hit-tested at its centre, not
-       measured, because a link under something else is not a link. */
-    ok(`...and the way home is still clickable while expanded (${open.homeBox})`,
-       open.home === "mark", `the centre of the brand mark reached ${open.home}`);
-
-    /* THE 15rem CAP COMES OFF, and only a tall window can say so: at 700 the
-       freed height is under the cap, so the arm above passes either way. At
-       1000 there is 453px of room and chat.js's max-height would stop the log
-       at 240 — which is how much of this button's effect the cap would eat. */
-    if (h === 1000) {
-      ok(`at ${h}px the log passes chat.js's 15rem cap (${open.log}px)`,
-         open.log > 260, "the panel's page cap is still limiting the rail");
-    }
-  }
-  /* AND THE TOGGLE IS NOT OFFERED WHERE IT WOULD TRAP A READER. Below the
-     layout's breakpoint the rail is height:auto — nothing to expand into — so
-     the button is hidden, and the remembered flag must be INERT rather than
-     folding a phone's nav away with no visible control to bring it back. */
-  {
-    await page.setViewport({width: 390, height: 844});
-    await page.goto(PAGE + '#/c/orem', {waitUntil: 'domcontentloaded'});
-    await new Promise(r => setTimeout(r, 900));
-    const m = await page.evaluate(() => {
-      const btn = document.getElementById('chatbig');
-      const link = [...document.querySelectorAll('.nav a')]
-        .find(a => /How it works/.test(a.textContent));
-      const log = document.querySelector('#railchat .chatlog');
-      const hgt = e => e ? Math.round(e.getBoundingClientRect().height) : null;
-      const shown = btn ? getComputedStyle(btn).display : "absent";
-      const was = {log: hgt(log), nav: hgt(link)};
-      if (btn) btn.click();
-      return {shown, was, now: {log: hgt(log), nav: hgt(link)}};
-    });
-    ok("on a phone the expand toggle is not offered", m.shown === "none", m.shown);
-
-    /* AND THE COMPOSER IS BUILT FOR A THUMB, which is two separate numbers.
-       SIXTEEN PIXELS STOPS THE BROWSER ZOOMING. Safari on iOS magnifies the
-       whole page when a text field under 16px takes focus and does not undo it,
-       so tapping "say something" left the reader pinching their way back out —
-       every time. The panel inherits the page font, 13.8px, so both fields were
-       under the line.
-       WHY THIS IS ASSERTED BY WIDTH. The query that describes the defect is
-       (pointer:coarse), and MEASURED, headless Chromium reports it FALSE at a
-       phone viewport — so a rule written that way could not be exercised by any
-       check in this repo, and would have been an untestable guard for a bug
-       nobody sees again until an iPhone is in hand. The stylesheet uses the same
-       820px breakpoint the page does, and this measures it there. */
-    const thumb = await page.evaluate(() => {
-      const q = s => document.querySelector(s);
-      const m = e => {
-        if (!e) return null;
-        const b = e.getBoundingClientRect();
-        return {px: +parseFloat(getComputedStyle(e).fontSize).toFixed(1),
-                h: Math.round(b.height), w: Math.round(b.width)};
-      };
-      return {input: m(q('#railchat .chatinput')), name: m(q('#railchat .chatmoniker')),
-              send: m(q('#railchat .chatsend')), nameBtn: m(q('#railchat .chatnamebtn')),
-              log: m(q('#railchat .chatlog'))};
-    });
-    const fields = [thumb.input, thumb.name].filter(Boolean);
-    ok(`...and its text fields are at least 16px, so the browser does not zoom `
-       + `(${fields.map(f => f.px).join(", ")})`,
-       fields.length > 0 && fields.every(f => f.px >= 16), JSON.stringify(thumb));
-    /* 44px IS BOTH PLATFORMS' MINIMUM for something hit with a thumb. MEASURED
-       before: send 60x35 and the name button 64x35 — usable, and under it. */
-    const hit = [thumb.input, thumb.send, thumb.nameBtn].filter(Boolean);
-    ok(`...and every control in it is 44px tall or more `
-       + `(${hit.map(f => f.h).join(", ")})`,
-       hit.length >= 2 && hit.every(f => f.h >= 44), JSON.stringify(thumb));
-    /* AND IT COSTS NO MESSAGES, which is why there was no trade to weigh: on a
-       phone the panel grows into a page that scrolls rather than competing with
-       a fixed rail, so the log measures the same before and after. */
-    ok(`...without taking height from the log (${thumb.log && thumb.log.h}px)`,
-       !!(thumb.log && thumb.log.h >= 150), JSON.stringify(thumb.log));
-    ok("...and setting it anyway changes nothing there",
-       m.now.log === m.was.log && m.now.nav === m.was.nav,
-       JSON.stringify(m));
-  }
+  /* ── THE EXPAND TOGGLE WAS TESTED HERE, AND IT IS GONE ──────────────────
+     About a hundred and twenty lines proved it worked: the log grew, the links
+     above it folded, the node controls folded with them, the expanded log took
+     most of the rail at 700 and at 1000, the way home stayed clickable, and a
+     phone was never offered the button at all. All of it passed.
+     IT WENT WITH THE SIDEBAR PANEL IT RESIZED. "it's probably a bad idea to have
+     chat in the sidebar to begin with" — so there is no column to expand into
+     and no nav to fold away; the chat has the page. The arms that survived the
+     move are the ones about the panel itself, which are below and now measured
+     on its own view: that it mounts and can be typed into at every width, that
+     the keyboard reaches all of it, and that a phone gets targets a thumb can
+     hit without the browser zooming.
+     WHAT IS NOT COVERED ANY MORE, said plainly: nothing checks that the chat can
+     be made bigger, because nothing can — the view is as big as the viewport
+     allows and there is no second size to reach. */
 
   /* ---- THE SEAM IS NOT A CONTROL ANY MORE ---------------------------------
      THERE WAS A DRAG HANDLE, and roughly two hundred lines here proved it
@@ -419,7 +253,7 @@ const HEIGHTS = [1000, 900, 800, 760, 700, 620];
        draggable. Any one of them surviving is a row that still invites a pull
        and no longer answers one. */
     await page.setViewport({width: 1280, height: 900});
-    await page.goto(PAGE + '#/c/orem', {waitUntil: 'domcontentloaded'});
+    await page.goto(PAGE + '#/c/orem/chat', {waitUntil: 'domcontentloaded'});
     await new Promise(r => setTimeout(r, 1000));
     const seam = await page.evaluate(() => {
       const g = document.getElementById('railchathead');
@@ -462,7 +296,7 @@ const HEIGHTS = [1000, 900, 800, 760, 700, 620];
        together at each size rather than once at a convenient one. */
     for (const h of [1000, 900, 800, 700]) {
       await page.setViewport({width: 1280, height: h});
-      await page.goto(PAGE + '#/c/orem', {waitUntil: 'domcontentloaded'});
+      await page.goto(PAGE + '#/c/orem/chat', {waitUntil: 'domcontentloaded'});
       // A HASH CHANGE IS NOT A RELOAD: the expanded class survives one, so the
       // state is cleared and the document reloaded before measuring. Measured as
       // alternating rows of nonsense when this was left out.
@@ -474,7 +308,7 @@ const HEIGHTS = [1000, 900, 800, 760, 700, 620];
       const m = await page.evaluate(() => {
         const q = s => document.querySelector(s);
         const box = s => { const e = q(s); return e ? e.getBoundingClientRect() : null; };
-        const log = box('#railchat .chatlog'), form = box('#railchat .chatform');
+        const log = box('#chatview .chatlog'), form = box('#chatview .chatform');
         const nav = q('.rail .nav');
         return {
           log: log ? Math.round(log.height) : 0,
@@ -504,16 +338,16 @@ const HEIGHTS = [1000, 900, 800, 760, 700, 620];
        fails the second pair; deleting the floor fails the first. */
     for (const [h, floored] of [[600, true], [480, false]]) {
       await page.setViewport({width: 1280, height: h});
-      await page.goto(PAGE + '#/c/orem', {waitUntil: 'domcontentloaded'});
+      await page.goto(PAGE + '#/c/orem/chat', {waitUntil: 'domcontentloaded'});
       await page.evaluate(() => { try { localStorage.removeItem("cc.chatbig"); } catch (e) {} });
       await page.reload({waitUntil: 'networkidle0'});
       await new Promise(r => setTimeout(r, 800));
       const m = await page.evaluate(() => {
         const q = s => document.querySelector(s);
         const b = s => { const e = q(s); return e ? e.getBoundingClientRect() : null; };
-        const f = b('#railchat .chatform');
+        const f = b('#chatview .chatform');
         return {
-          log: Math.round((b('#railchat .chatlog') || {height: 0}).height),
+          log: Math.round((b('#chatview .chatlog') || {height: 0}).height),
           composer: !!(f && f.height > 0 && f.bottom <= window.innerHeight + 1 && f.top >= -1),
         };
       });
@@ -525,29 +359,34 @@ const HEIGHTS = [1000, 900, 800, 760, 700, 620];
   }
 
   {
-    /* THE LINKS ARE WHAT YIELDS, and they yield by SCROLLING rather than by
-       pushing the panel down past the bottom of the rail. That is the whole
-       mechanism, and it is what keeps the composer reachable while the log has
-       a floor — so it is asserted as a property rather than left implied by the
-       two numbers above. */
+    /* THE LINKS KEEP THEIR HEIGHT NOW, which is the plainest measure of what
+       moving the chat bought. This arm used to require the opposite: the nav had
+       to be a scroll container, because that was the only way the panel beneath
+       it could have a usable height — MEASURED at 1440x900, the links were
+       crushed to 28px of a scrolling window so the transcript could have 120.
+       With the room on its own page the column holds only links again, so the
+       assertion inverts: the nav is NOT a scroller and every link is simply
+       there. A regression to overflow-y:auto here would mean something had
+       started competing with the navigation again. */
     await page.setViewport({width: 1280, height: 800});
     await page.goto(PAGE + '#/c/orem', {waitUntil: 'domcontentloaded'});
-    await page.evaluate(() => { try { localStorage.removeItem("cc.chatbig"); } catch (e) {} });
-    await page.reload({waitUntil: 'networkidle0'});
     await new Promise(r => setTimeout(r, 900));
-    const y = await page.evaluate(() => {
-      const nav = document.querySelector('.rail .nav');
-      const first = nav && nav.querySelector('a');
+    const nav = await page.evaluate(() => {
+      const n = document.querySelector('.rail .nav');
+      const links = n ? [...n.querySelectorAll('a')] : [];
       return {
-        overflowY: nav ? getComputedStyle(nav).overflowY : null,
-        reachable: !!(first && first.getBoundingClientRect().height > 0),
-        links: nav ? nav.querySelectorAll('a').length : 0,
+        overflowY: n ? getComputedStyle(n).overflowY : null,
+        scrolls: n ? n.scrollHeight > n.clientHeight + 2 : null,
+        height: n ? Math.round(n.getBoundingClientRect().height) : 0,
+        allVisible: links.length > 3
+          && links.every(a => a.getBoundingClientRect().height > 0),
       };
     });
-    ok(`the links scroll rather than being clipped away (${y.overflowY}, ${y.links} links)`,
-       y.overflowY === 'auto' && y.links > 3, JSON.stringify(y));
-    ok("...and the first one is still there to click", y.reachable === true,
-       JSON.stringify(y));
+    ok(`the links are not a scroller any more (${nav.overflowY}, ${nav.height}px)`,
+       nav.overflowY !== 'auto' && nav.scrolls === false, JSON.stringify(nav));
+    ok("...and every one of them is on screen", nav.allVisible === true,
+       JSON.stringify(nav));
+
     /* NOTHING IS REMEMBERED ABOUT A SIZE, which is the last trace of the old
        control: a stale height in storage that no longer has a rule to feed. */
     const stored = await page.evaluate(() => {
@@ -571,7 +410,7 @@ const HEIGHTS = [1000, 900, 800, 760, 700, 620];
      and says nothing about the key that reaches it. */
   {
     await page.setViewport({width: 1440, height: 900});
-    await page.goto(PAGE + '#/c/orem', {waitUntil: 'networkidle0'});
+    await page.goto(PAGE + '#/c/orem/chat', {waitUntil: 'networkidle0'});
     await new Promise(r => setTimeout(r, 1100));
 
     /* EVERY CONTROL REACHABLE, IN A SENSIBLE ORDER. Read from the document
@@ -580,9 +419,13 @@ const HEIGHTS = [1000, 900, 800, 760, 700, 620];
        that nothing in here carries one is the same guarantee with a clearer
        failure. */
     const reach = await page.evaluate(() => {
-      const head = document.getElementById('railchathead');
-      const panel = document.getElementById('railchat');
-      const scope = [head, panel].filter(Boolean);
+      /* THE PANEL IS THE SCOPE. This used to include the rail's heading, because
+         the panel hung beneath it and the two were one control surface. The chat
+         is a view of its own now: the rail holds a link, which the page's own
+         navigation covers, and what this block is about is whether the ROOM can
+         be used without a pointer. */
+      const panel = document.getElementById('chatview');
+      const scope = [panel].filter(Boolean);
       const all = [...document.querySelectorAll(
         'a[href],button:not([disabled]),input,select,textarea,[tabindex]:not([tabindex="-1"])')]
         .filter(e => { const b = e.getBoundingClientRect(); return b.width > 0 && b.height > 0; })
@@ -613,7 +456,7 @@ const HEIGHTS = [1000, 900, 800, 760, 700, 620];
     const seen = await page.evaluate(() => {
       const out = {};
       for (const sel of ['.chatbell', '.chatnamebtn', '.chatinput', '.chatsend', '.chatwarnx']) {
-        const e = document.querySelector('#railchat ' + sel) || document.querySelector(sel);
+        const e = document.querySelector('#chatview ' + sel) || document.querySelector(sel);
         if (!e) { out[sel] = null; continue; }
         e.focus();
         const cs = getComputedStyle(e);
@@ -654,15 +497,15 @@ const HEIGHTS = [1000, 900, 800, 760, 700, 620];
       CFG.mode = 'live'; CFG.chat = 'http://chat.invalid';
       location.hash = '#/';
       await new Promise(r => setTimeout(r, 250));
-      location.hash = '#/c/orem';
+      location.hash = '#/c/orem/chat';
       await new Promise(r => setTimeout(r, 1400));
-      return !!document.querySelector('#railchat .chatinput');
+      return !!document.querySelector('#chatview .chatinput');
     });
     ok("a live panel is mounted to type into", typed === true);
 
     // EMPTY FIRST: Enter on an empty box must not post, or every stray keypress
     // in the room is a blank message.
-    await page.click('#railchat .chatinput');
+    await page.click('#chatview .chatinput');
     await page.keyboard.press('Enter');
     await new Promise(r => setTimeout(r, 500));
     const blank = await page.evaluate(() => window.__sent.length);
@@ -672,11 +515,112 @@ const HEIGHTS = [1000, 900, 800, 760, 700, 620];
     await page.keyboard.press('Enter');
     await new Promise(r => setTimeout(r, 700));
     const after = await page.evaluate(() => ({
-      sent: window.__sent, left: document.querySelector('#railchat .chatinput').value}));
+      sent: window.__sent, left: document.querySelector('#chatview .chatinput').value}));
     ok(`Enter in the message box sends it (${JSON.stringify((after.sent[0] || {}).body)})`,
        after.sent.length === 1 && after.sent[0].body === 'sent with the enter key',
        JSON.stringify(after.sent));
     ok("...and clears the box", after.left === "", JSON.stringify(after.left));
+  }
+
+  /* ---- THE RAIL'S LINE, WHICH IS ALL THAT IS LEFT IN THE COLUMN ------------
+     ASKED FOR IN THESE TERMS: "when collapsed, instead of showing the chat text,
+     show (how many people, how many recent messages) only, and in order to chat,
+     the chat bar must be expanded", and "when there has been recent activity
+     would be good to show for all users even if the chat is collapsed, like a
+     bubble notification or something". Then the panel left the sidebar
+     altogether, which makes the collapsed state the whole of what the rail does
+     and "expanded" a page.
+     A STUBBED SERVICE, so the counts are chosen rather than waited for. What is
+     being measured is the arithmetic and the wording, not the network. */
+  {
+    const p = await browser.newPage();
+    p.on('pageerror', e => errs.push(String(e.message || e)));
+    await p.evaluateOnNewDocument(() => {
+      window.__here = 1; window.__msgs = [];
+      const real = window.fetch;
+      window.fetch = async (u, o) => {
+        const s = String(u);
+        if (/\/api\/chat\/health/.test(s)) {
+          return new Response(JSON.stringify({ok: true, enforcing: true}),
+            {status: 200, headers: {'Content-Type': 'application/json'}});
+        }
+        if (/\/api\/chat\//.test(s)) {
+          return new Response(JSON.stringify({
+            messages: window.__msgs, next: 99, you: {state: 'ok'},
+            now: Math.floor(Date.now() / 1000), here: window.__here,
+          }), {status: 200, headers: {'Content-Type': 'application/json'}});
+        }
+        return real(u, o);
+      };
+    });
+    const line = async () => p.evaluate(() => {
+      const rh = document.getElementById('railchathead');
+      const a = rh ? rh.querySelector('a.railchatlink') : null;
+      return {text: rh ? (rh.innerText || '').replace(/\s+/g, ' ').trim() : null,
+              href: a ? a.getAttribute('href') : null,
+              dot: !!(rh && rh.querySelector('.railchatdot'))};
+    });
+    const setRoom = async (here, msgs) => {
+      await p.evaluate((h, m) => { window.__here = h; window.__msgs = m; }, here, msgs);
+    };
+    const now = Math.floor(Date.now() / 1000);
+    await p.goto(PAGE + '#/', {waitUntil: 'domcontentloaded'});
+    await p.evaluate(() => { CFG.mode = 'live'; CFG.chat = 'http://chat.invalid';
+      try { localStorage.clear(); } catch (e) {} });
+
+    /* QUIET IS A WORD, NOT A ZERO. "0 here · 0 recent" is three numbers saying
+       nothing happened; a room with nobody in it is quiet. */
+    await setRoom(1, []);
+    await p.evaluate(() => { location.hash = '#/c/orem'; });
+    await new Promise(r => setTimeout(r, 1500));
+    let l = await line();
+    ok(`an empty room reads as quiet (${JSON.stringify(l.text)})`,
+       /quiet/i.test(l.text || ''), JSON.stringify(l));
+    ok("...and still links to the room", l.href === '#/c/orem/chat', JSON.stringify(l));
+    /* ONE PERSON IS THE READER. "1 here" counts whoever is looking at it, which
+       is noise; two is the first number that says anything about the room. */
+    ok("...and does not announce the reader to themselves",
+       !/1 here/.test(l.text || ''), JSON.stringify(l));
+
+    // People and messages, both counted.
+    await setRoom(4, [{id: 1, moniker: 'a', body: 'x', created_at: now - 60},
+                      {id: 2, moniker: 'b', body: 'y', created_at: now - 30}]);
+    await new Promise(r => setTimeout(r, 22000));   // past RAILCHAT_MS
+    l = await line();
+    ok(`a busy room says how many people and how many messages (${JSON.stringify(l.text)})`,
+       /4 here/.test(l.text || '') && /2 recent/.test(l.text || ''), JSON.stringify(l));
+    /* AND THE DOT, which is the notification. RECENT AND UNSEEN, both — and this
+       arm is what settled that: the first cut showed no dot until the room had
+       been opened once, so a first-time reader saw nothing however busy it was.
+       "when there has been recent activity would be good to show for all users"
+       is the ask, and a reader who has never been in the room is one of them. */
+    ok("...with a dot, because it is busy and this reader has not been in",
+       l.dot === true, JSON.stringify(l));
+
+    /* OPENING THE ROOM CLEARS IT, and that is the whole contract of a badge. */
+    await p.evaluate(() => { location.hash = '#/c/orem/chat'; });
+    await new Promise(r => setTimeout(r, 2000));
+    await p.evaluate(() => { location.hash = '#/c/orem'; });
+    await new Promise(r => setTimeout(r, 1800));
+    l = await line();
+    ok(`opening the room clears the dot (${JSON.stringify(l.text)})`,
+       l.dot === false, JSON.stringify(l));
+    /* ...WITHOUT CLEARING THE COUNTS. The messages are still recent; what
+       changed is that this reader has seen them. A badge that took the counts
+       with it would make the line say the room had gone quiet. */
+    ok("...and the counts stay, because the room did not empty",
+       /4 here/.test(l.text || '') && /2 recent/.test(l.text || ''), JSON.stringify(l));
+
+    /* AND A NEWER MESSAGE BRINGS IT BACK. Without this the arm above passes on a
+       dot that was simply deleted. */
+    await setRoom(4, [{id: 1, moniker: 'a', body: 'x', created_at: now - 60},
+                      {id: 2, moniker: 'b', body: 'y', created_at: now - 30},
+                      {id: 3, moniker: 'c', body: 'z', created_at: now - 5}]);
+    await new Promise(r => setTimeout(r, 22000));
+    l = await line();
+    ok(`a message after that brings the dot back (${JSON.stringify(l.text)})`,
+       l.dot === true, JSON.stringify(l));
+    await p.close();
   }
 
   ok("no page errors", errs.length === 0, errs.slice(0, 2).join(" | "));
