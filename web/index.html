@@ -1028,6 +1028,13 @@ a.card:hover{border-color:var(--line-2)}
    the other right-hand figures in the rail. */
 .railchatcount{margin-left:auto; text-transform:none; letter-spacing:0;
   font-variant-numeric:tabular-nums}
+/* AND IT IS SECONDARY IN THE TRAIL, which it got for free in the section and
+   does not here. .railchatlink sets its own colour to --muted, so the count was
+   quiet by inheritance; a trail row inherits --ink-2 instead, and "quiet" came
+   out the same weight and brightness as "Chat" beside it — two labels rather
+   than a label and a reading. Opacity rather than a colour, because this row has
+   two states and `on` recolours it. */
+.nav a.trail .railchatcount{opacity:.55; font-size:12px}
 /* THE DOT, WHICH IS THE WHOLE NOTIFICATION. Asked for as "like a bubble
    notification or something" — a dot rather than a number, because the number
    is already in the line beside it and two counts saying nearly the same thing
@@ -7391,15 +7398,16 @@ function railChatMarkSeen(slug, id){
   if(!slug || !(id > 0)) return;
   store.set(railChatSeenKey(slug), String(id));
 }
-function railChatRender(slug, d){
-  const rh = document.getElementById("railchathead");
-  if(!rh) return;
+/* THE COUNTS, SEPARATED FROM WHERE THEY ARE DRAWN, because there are two places
+   now: a row hanging under the court, and the standalone section that is all a
+   route with no court trail can have. Pure — RAILCHATTOP is a side effect and
+   stays with the caller. */
+function railChatCounts(slug, d){
   const here = Number(d && d.here || 0);
   const msgs = Array.isArray(d && d.messages) ? d.messages : [];
   const now = Number(d && d.now || 0) || Math.floor(Date.now()/1000);
   const recent = msgs.filter(m=>Number(m.created_at||0) >= now - RAILCHAT_RECENT).length;
   const top = msgs.reduce((a,m)=>Math.max(a, Number(m.id||0)), 0);
-  RAILCHATTOP = top;
   const seen = parseInt(store.get(railChatSeenKey(slug))||"", 10);
   /* RECENT AND UNSEEN, both, which took two tries to get right.
      UNSEEN, NOT UNREAD: this counts what arrived since the reader last OPENED
@@ -7422,12 +7430,39 @@ function railChatRender(slug, d){
      says anything about the room. */
   if(here > 1) bits.push(fmtN(here) + " here");
   if(recent > 0) bits.push(fmtN(recent) + " recent");
-  const count = bits.length? bits.join(" · ") : "quiet";
-  rh.innerHTML = `<a class="railchatlink" href="#/c/${esc(slug)}/chat">Chat`
-    + `<span class="railchatcount">${esc(count)}</span>`
-    + (fresh > 0 ? `<span class="railchatdot" aria-hidden="true"></span>`
-        + `<span class="sr-only">, ${fmtN(fresh)} since you last looked</span>` : "")
-    + `</a>`;
+  return {count: bits.length? bits.join(" · ") : "quiet", fresh: fresh, top: top};
+}
+/* WHAT THE LINE SAYS, wherever it is drawn. The branch glyph is the caller's
+   business: a trail row wants one because it hangs under the court, the
+   standalone section has nothing to hang under. */
+function railChatInner(slug, d, branch){
+  const c = railChatCounts(slug, d);
+  return (branch ? `<span class="b">↳</span>` : "")
+    + `Chat<span class="railchatcount">${esc(c.count)}</span>`
+    + (c.fresh > 0 ? `<span class="railchatdot" aria-hidden="true"></span>`
+        + `<span class="sr-only">, ${fmtN(c.fresh)} since you last looked</span>` : "");
+}
+/* AND THE ROW UNDER THE COURT IS THE FIRST PLACE IT LOOKS.
+   ASKED FOR AS "CHAT should just be under COVID. it is after all a chat *in* the
+   covid court" — and it had been a section of its own at the foot of the nav,
+   below REFERENCE, three groups away from the court it belongs to. Under the
+   court it is one of the court's children, beside a claim and a folder, which is
+   what it always was.
+   ONE ROUTE WITHOUT A COURT ROW STILL NEEDS IT: /here is a page about who is
+   here rather than a court, and /raw/<slug> gets no trail either, so the
+   standalone section is the fallback rather than dead code. Which of the two is
+   live is decided by asking the DOM whether navTrail hung a row — setNav runs
+   before railChatFor in render(), so by the time this is called the answer is
+   already on the page. */
+function railChatRender(slug, d){
+  const c = railChatCounts(slug, d);
+  RAILCHATTOP = c.top;
+  const row = document.querySelector("#nav a.trail.chatrow");
+  if(row){ row.innerHTML = railChatInner(slug, d, true); return; }
+  const rh = document.getElementById("railchathead");
+  if(!rh) return;
+  rh.innerHTML = `<a class="railchatlink" href="#/c/${esc(slug)}/chat">`
+    + railChatInner(slug, d, false) + `</a>`;
 }
 async function railChatPoll(slug){
   /* chatEndpoint, NOT chatBase, and the difference is a 404 on every demo page.
@@ -7466,10 +7501,8 @@ function railChatFor(hash){
   /* THE READER IS IN THE ROOM WHEN THEY ARE ON ITS PAGE, so opening the chat
      view clears the dot. Done here rather than in the route so it happens on
      every arrival, including a reload or a pasted link.
-     ONE TEST, TWO USES: the same answer decides whether the dot clears and
-     whether the section below stands down, and navTrail asks it a third time
-     of the same hash. Spelling the regex twice in one function is how the two
-     drift apart. */
+     ONE TEST, AND navTrail ASKS IT AGAIN of the same hash. Spelling the regex
+     twice in one function is how the two drift apart. */
   const inRoom = /^\/c\/[a-z0-9-]+\/chat$/.test(hash || "");
   if(inRoom && slug){
     railChatMarkSeen(slug, RAILCHATTOP);
@@ -7481,30 +7514,40 @@ function railChatFor(hash){
     if(RAILCHATLAST && slug === RAILCHATSLUG) railChatRender(slug, RAILCHATLAST);
   }
   if(rc && rc.parentNode) rc.parentNode.removeChild(rc);   // the old panel slot
-  /* AND IN THE ROOM THIS LINE STANDS DOWN, because navTrail now hangs a lit
-     `↳ Chat` under the court and two lit rows claim two places at once — the
-     same objection the trail's own code raises about leaving the marker on
-     Directory. The section is an invitation to a room you are not in; the trail
-     row is where you are. Never both.
-     THE POLL KEEPS RUNNING while it is hidden, which is deliberate: it is what
-     keeps RAILCHATTOP current, so walking back out to the court page shows an
-     up-to-date count and an honest dot instead of a stale one.
+  /* THE SECTION IS THE FALLBACK NOW, not the usual case. navTrail hangs the room
+     under the court on every /c/ route, so on those the section would be the
+     same line said twice, three groups further down the rail. It still has work:
+     /here and /raw/<slug> both resolve a room and get no trail row, and hiding
+     it there would lose the only way in.
+     ASKED OF THE DOM, NOT OF THE HASH. "Is there a row?" is the question that
+     matters, and re-deriving it from the route would be a second copy of
+     navTrail's own matching rules to keep in step. setNav runs before this in
+     render(), so the row is already on the page when this asks.
      BEFORE THE EARLY RETURN BELOW, not after. That return fires whenever the
      slug has not changed, which is exactly the court→room→court case this has
      to cover. */
-  if(rh && slug) rh.hidden = inRoom;
+  const hasRow = !!document.querySelector("#nav a.trail.chatrow");
+  if(rh && slug) rh.hidden = hasRow;
   if(slug === RAILCHATSLUG) return;
   RAILCHATSLUG = slug;
   if(RAILCHATTICK){ clearInterval(RAILCHATTICK); RAILCHATTICK = null; }
   RAILCHATTOP = 0;
+  /* AND THE CACHED READING GOES WITH THE COURT IT CAME FROM. It only mattered
+     as a repaint source before, guarded by a slug check at every use; navTrail
+     now draws the row FROM it and runs before this, so a stale reading is a
+     different court's "4 here" under this court's name. railChatRender(slug,
+     null) below overwrites it in the same tick, which is why this is hygiene
+     rather than a visible bug today — but the folder view calls navTrail a
+     second time, later, with nothing to overwrite it. */
+  RAILCHATLAST = null;
   if(!rh) return;
   if(!slug){ rh.hidden = true; rh.innerHTML = ""; return; }
-  /* inRoom, NOT false. This branch is the FIRST-ARRIVAL path — it runs when the
-     slug has changed — so a pasted link or a reload straight into /c/x/chat
-     comes through here and a flat `false` would un-hide the line that the check
-     above had just stood down. The court→room case goes the other way and never
-     reaches this line, which is why the bug only shows on a reload. */
-  rh.hidden = inRoom;
+  /* hasRow, NOT false. This branch is the FIRST-ARRIVAL path — it runs when the
+     slug has changed — so a pasted link or a reload straight into a court comes
+     through here, and a flat `false` would un-hide the section the check above
+     had just stood down. Navigating within one court goes the other way and
+     never reaches this line, which is why the bug only shows on a reload. */
+  rh.hidden = hasRow;
   railChatRender(slug, null);          // the label exists before the first read
   railChatPoll(slug);
   RAILCHATTICK = setInterval(()=>{
@@ -7632,13 +7675,21 @@ function navTrail(hash, folders){
     pad: i? 56 + i*16 : 0}));
   else if(id) rows.push({cls:"trail deep on", href:"#/c/"+slug+"/"+id,
                     label:"Claim #"+id, branch:"↳"});
-  /* LAST, AND ONLY WHEN THERE IS NOTHING ELSE UNDER THE COURT. /chat carries no
-     folder path and no claim id, so this branch and the two above are mutually
-     exclusive by construction — it is written as its own `if` rather than a
-     fourth arm of the chain so that a future route like /c/x/f/2/chat hangs the
-     room under the folder instead of replacing it. */
-  if(inRoom) rows.push({cls:"trail deep on", href:"#/c/"+slug+"/chat",
-                    label:"Chat", branch:"↳"});
+  /* AND THE ROOM HANGS HERE ON EVERY COURT ROUTE, not only when you are in it.
+     "CHAT should just be under COVID. it is after all a chat *in* the covid
+     court" — so it is a child of the court the way a claim and a folder are,
+     present whether or not you have walked into it, and lit only when you have.
+     ALWAYS AT DEPTH ONE, and always last. A claim or a folder path may be deeper
+     and is a sibling of the room rather than its parent: the room belongs to the
+     COURT, so `/c/x/123` reads COVID, then the claim, then Chat — two children
+     of one court — rather than pretending the room is inside the claim.
+     THE CONTENTS COME FROM THE LAST POLL, which is what makes this idempotent.
+     navTrail removes and rebuilds every trail row on each render, and the folder
+     view calls it a SECOND time once it has resolved the path; rendering from
+     RAILCHATLAST means that rebuild redraws the counts instead of blanking them
+     until the next 20-second tick. */
+  rows.push({cls:"trail deep chatrow" + (inRoom? " on" : ""),
+             href:"#/c/"+slug+"/chat", chat:true});
   // The lit edge moves DOWN to the row you are on: keeping it on Directory as
   // well would claim two places at once.
   dir.classList.remove("on");
@@ -7647,7 +7698,11 @@ function navTrail(hash, folders){
     const a = document.createElement("a");
     a.className = r.cls;
     a.href = r.href;
-    a.innerHTML = (r.branch? `<span class="b">${r.branch}</span>` : "") + esc(r.label);
+    /* THE ROOM'S ROW DRAWS ITSELF, because it carries a count and a dot rather
+       than a label. railChatInner escapes what it interpolates, the same as
+       esc() does for every other row here. */
+    a.innerHTML = r.chat ? railChatInner(slug, RAILCHATLAST, true)
+      : (r.branch? `<span class="b">${r.branch}</span>` : "") + esc(r.label);
     if(r.pad) a.style.paddingLeft = r.pad + "px";
     after.insertAdjacentElement("afterend", a);
     after = a;

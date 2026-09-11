@@ -553,12 +553,23 @@ const HEIGHTS = [1000, 900, 800, 760, 700, 620];
         return real(u, o);
       };
     });
+    /* WHEREVER THE LINE CURRENTLY LIVES, because it has moved once and the six
+       arms below are about what it SAYS rather than where it is drawn. It was a
+       section at the foot of the nav; it is a row under the court now — "CHAT
+       should just be under COVID. it is after all a chat *in* the covid court" —
+       and the section survives only for the routes with no court to hang under,
+       /here and /raw/<slug>. Asking for the row first and falling back keeps
+       every arm below measuring the counts, the link and the dot, and none of
+       them measuring the rail's furniture. */
     const line = async () => p.evaluate(() => {
+      const row = document.querySelector('#nav a.trail.chatrow');
       const rh = document.getElementById('railchathead');
-      const a = rh ? rh.querySelector('a.railchatlink') : null;
-      return {text: rh ? (rh.innerText || '').replace(/\s+/g, ' ').trim() : null,
+      const el = row || rh;
+      const a = row || (rh ? rh.querySelector('a.railchatlink') : null);
+      return {text: el ? (el.innerText || '').replace(/\s+/g, ' ').trim() : null,
               href: a ? a.getAttribute('href') : null,
-              dot: !!(rh && rh.querySelector('.railchatdot'))};
+              where: row ? 'trail' : (rh ? 'section' : null),
+              dot: !!(el && el.querySelector('.railchatdot'))};
     });
     const setRoom = async (here, msgs) => {
       await p.evaluate((h, m) => { window.__here = h; window.__msgs = m; }, here, msgs);
