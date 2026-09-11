@@ -452,6 +452,39 @@ const HEIGHTS = [1000, 900, 800, 760, 700, 620];
   }
 
   {
+    /* AND THE FLOOR YIELDS WHEN THERE IS NO ROOM FOR IT, which is the half a
+       floor invites you to forget. The rail spends 306px on furniture before
+       either the links or the panel get anything — the mark, the Chat row, the
+       node controls — so on a short-but-wide window a 120px log pushes the
+       composer below the fold. MEASURED: it fits at 560 with nothing spare,
+       hangs 3px under at 540 and 63px under at 480.
+       SO THE FLOOR IS GUARDED ON HEIGHT and simply does not apply below 560.
+       Asserted from both sides: floored where there is room, absent where there
+       is not, and the composer on screen in both. Deleting the height guard
+       fails the second pair; deleting the floor fails the first. */
+    for (const [h, floored] of [[600, true], [480, false]]) {
+      await page.setViewport({width: 1280, height: h});
+      await page.goto(PAGE + '#/c/orem', {waitUntil: 'domcontentloaded'});
+      await page.evaluate(() => { try { localStorage.removeItem("cc.chatbig"); } catch (e) {} });
+      await page.reload({waitUntil: 'networkidle0'});
+      await new Promise(r => setTimeout(r, 800));
+      const m = await page.evaluate(() => {
+        const q = s => document.querySelector(s);
+        const b = s => { const e = q(s); return e ? e.getBoundingClientRect() : null; };
+        const f = b('#railchat .chatform');
+        return {
+          log: Math.round((b('#railchat .chatlog') || {height: 0}).height),
+          composer: !!(f && f.height > 0 && f.bottom <= window.innerHeight + 1 && f.top >= -1),
+        };
+      });
+      ok(`at ${h}px the log is ${floored ? "floored" : "allowed to yield"} (${m.log}px)`,
+         floored ? m.log >= 100 : m.log < 100, JSON.stringify({h, ...m}));
+      ok(`...and the composer is on screen either way at ${h}px`,
+         m.composer === true, JSON.stringify({h, ...m}));
+    }
+  }
+
+  {
     /* THE LINKS ARE WHAT YIELDS, and they yield by SCROLLING rather than by
        pushing the panel down past the bottom of the rail. That is the whole
        mechanism, and it is what keeps the composer reachable while the log has

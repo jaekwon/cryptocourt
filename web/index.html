@@ -1104,10 +1104,27 @@ a.card:hover{border-color:var(--line-2)}
   /* ── THE LOG HAS A FLOOR AND THE LINKS YIELD ───────────────────────────
      A drag handle lived here and is gone; the floor below is what replaces it. */
   #railchathead .headctl{display:flex; gap:8px; align-items:baseline}
-  .railchat .chatlog{min-height:120px}
   .rail .nav{min-height:0; overflow-y:auto}
   .railchat .chatwarn{font-size:.78em; line-height:1.25}
   .railchat .chathead{margin-bottom:.2rem}
+}
+/* THE LOG'S FLOOR, AND WHY IT IS GUARDED ON HEIGHT AS WELL AS WIDTH.
+   120px is about three short messages, and without it the log is 0px on a
+   desktop rail — measured at 1440 wide on every height from 700 to 900, because
+   the links take 333px and the panel's own controls take what is left.
+   BUT A FLOOR THAT CANNOT YIELD IS A FLOOR THAT BREAKS SOMETHING ELSE. The rail
+   spends 306px on furniture before either the links or the panel get anything:
+   96 for the mark, 36 for the Chat row, 174 for the node controls. MEASURED with
+   the floor in place: the composer fits at 560 with nothing to spare and hangs
+   3px below the fold at 540, 63px at 480. So below 560 the floor is simply not
+   applied, and the old priority returns — between a chat you can read and one
+   you can type into, the composer wins, which is the same trade
+   .railchat.chatpanel's min-content floor already makes.
+   560 IS MEASURED, NOT CHOSEN: 600, 580 and 560 all fit exactly, 540 is the
+   first that does not. A window shorter than that on a screen wider than 820 is
+   unusual, and it still gets a working composer and a scrollable rail. */
+@media (min-width:821px) and (min-height:560px){
+  .railchat .chatlog{min-height:120px}
 }
 /* The court coin's name, everywhere it is written. One hardcoded purple rather
    than a theme token: the token IS the colour, and it must read the same in
