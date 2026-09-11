@@ -32,6 +32,11 @@
 //                              The arm passed with the write deleted. reload()
 //                              is what makes the storage read run again.
 const {PAGE, demoPage} = require('./harness');
+// THE PANEL MOVED OUT OF THE RAIL. It is a view of its own at
+// #/c/<slug>/chat — "it's probably a bad idea to have chat in the sidebar to
+// begin with" — so this harness visits the panel's own page rather than a
+// court's docket. The arms below are unchanged: what they measure is the panel,
+// and the panel is the same panel.
 
 (async () => {
   const {browser, page, errs} = await demoPage({width: 1280, height: 1000});
@@ -56,7 +61,7 @@ const {PAGE, demoPage} = require('./harness');
     await new Promise(r => setTimeout(r, 1200));
   };
   const open = async () => {
-    await page.goto(PAGE + '#/c/' + slug, {waitUntil: 'networkidle2'});
+    await page.goto(PAGE + '#/c/' + slug + '/chat', {waitUntil: 'networkidle2'});
     await settle();
   };
   /* A REAL RELOAD, AND IT HAS TO BE ONE. The persistence arm below first re-ran

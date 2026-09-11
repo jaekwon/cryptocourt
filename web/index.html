@@ -335,17 +335,11 @@ code,.mono{font-family:var(--mono)}
   --inset:rgba(10,8,24,.55);
   display:flex; flex-direction:column; position:sticky; top:0; height:100vh; overflow:auto;
 }
-/* One sky for the column. The panel's own gradient started again halfway down the
-   rail with its own top stop, which read as a join; and its plate carries Leo, so
-   the rail showed the constellation TWICE — once at the throne and once in the
-   chat. Off, and the rail's single sky shows through.
-   .railchat.chatpanel, NOT .railchat .chatpanel. The rail's chat slot wears both
-   classes on ONE element, so the descendant form matched nothing and the second
-   Leo stayed on screen through a render that otherwise looked finished. The
-   descendant form is kept beside it because the slot is markup, not a promise:
-   if the panel is ever nested inside the slot this still holds.
-   Outside the rail .chatpanel keeps all of it — there it is a panel on a page. */
-.railchat.chatpanel,.railchat .chatpanel{background:none; color:inherit}
+/* One sky for the column. The chat panel used to sit in this rail and start the
+   gradient again halfway down with its own top stop, which read as a join — and
+   its plate carries Leo, so the rail showed the constellation twice. The panel
+   is a view of its own now and the override went with it; the rail's single sky
+   is all there is. */
 .brand{padding:22px 22px 16px; border-bottom:1px solid var(--line)}
 .brand .mark{display:flex; align-items:center; gap:10px; text-decoration:none}
 .brand .scale{font-size:26px; filter:grayscale(.2)}
@@ -1015,140 +1009,77 @@ a.card:hover{border-color:var(--line-2)}
   list-style-position:inside}
 .tlfold > summary:hover{color:var(--accent)}
 .tlfold[open] > summary{float:none; margin-bottom:8px}
-/* The chat's slot in the rail. It TAKES THE LEFTOVER HEIGHT rather than a fixed
-   one — the rail is a flex column, so min-height:0 is what lets it shrink below
-   its content and scroll inside instead of pushing the account block off the
-   bottom. */
-.railchat{flex:1 1 auto; min-height:0; display:flex; flex-direction:column;
-  overflow:hidden; padding:0 12px 10px}
-/* THE PANEL'S OWN TOP MARGIN IS DOUBLE-COUNTED IN THE RAIL, so it is dropped
-   here. chat.js styles .chatpanel with margin:1.5rem 0 0 and a border-top,
-   which is right where the panel is embedded standalone under page content: the
-   rule and the space are what separate it from what came before.
-   In the rail it already has a separator — the "Chat" label, which is nav's last
-   child and carries nav's own 14px of bottom padding beneath it. Measured, the
-   two stacked: label bottom at 381, panel top at 419, a 38px void between the
-   word and the line. Now 14px, which is the label's own spacing.
-   Two classes beats chat.js's one, so this wins regardless of which stylesheet
-   is injected last — and the border-top stays, because the line is wanted; it
-   was only sitting too far from its heading. */
-.railchat.chatpanel{margin-top:0}
-.railchat[hidden]{display:none}
-.railchat > *{min-height:0}
-/* AND THE PANEL ITSELF HAS A FLOOR, which is the other half of that rule.
-   min-height:0 on the children lets them shrink below their content, which is
-   what the log needs and what the COMPOSER must never do. Without a floor here
-   the rail simply gave the panel less height than its own controls occupy and
-   clipped them: measured at 800px, 159px of panel holding a 232px composer,
-   with the send button's centre landing on a stray <b> from the block painted
-   underneath. A reader saw the control, pressed it, and nothing happened.
-   min-content, and it means what it says only because chat.js pins every row
-   except the log to flex:0 0 auto and gives the log height:0 — so the panel's
-   min-content is its CONTROLS, not its controls plus a screenful of messages.
-   The log is what yields: 127px at 1000, 27px at 900, 0 by 800. That is
-   deliberate. Between a chat you can read but not use and one you can use but
-   must scroll to read, the controls win — they are what somebody came to press,
-   and the messages are one route away on the court's own page. */
-.railchat.chatpanel{min-height:min-content}
-
-/* ── ONE CLICK GIVES THE CHAT THE WHOLE RAIL ────────────────────────────────
-   The rule above buys the composer its floor by making the LOG yield, and in a
-   short window there is nothing left to yield: measured at 1280 wide, the log
-   is 127px at a viewport height of 1000, 27px at 900 and 0 by 800. That trade
-   is right as a default — the controls are what somebody came to press — but it
-   leaves a reader on a laptop with a chat they cannot read, and the height they
-   would need is sitting right above them in six nav links they are not using
-   while they talk.
-   SO THE TOGGLE SPENDS THE NAV. Everything in the nav above the Chat heading
-   folds away, the brand's tagline with it, and the rail's flex column hands the
-   freed height to the panel — which passes it to the log, since the log is the
-   one child that grows. The Chat heading stays: it is where the button lives,
-   and a control inside the part that disappears could not bring it back.
-   AND THE LOG'S OWN CAP COMES OFF WITH IT. chat.js caps .chatlog at 15rem so a
-   panel embedded on a PAGE cannot grow without bound. In the rail that cap is
-   the rail's job, and left on it would waste most of what this button just
-   freed — measured at 1280x1000: 377px of room, 240 of log, and 137px of empty
-   panel between the last message and the composer.
-   SIDEBAR MODE ONLY, and the query is the NEGATION of the stacked one so the
-   breakpoint is written once rather than as a 820/821 pair that can drift. Two
-   reasons it must be scoped: below it the rail is height:auto, so there is no
-   spare height to redistribute and nothing to expand into — and the flag is
-   remembered, so a reader who expanded on a desktop must not find a phone with
-   its nav folded away and the button that undoes it hidden. */
-#chatbig{display:none}
-@media not all and (max-width:820px){
-  #railchathead{display:flex; align-items:baseline; justify-content:space-between; gap:8px}
-  /* Inherits the heading's own 11px uppercase and letter-spacing, so it reads as
-     part of the label rather than as a control dropped into it. */
-  #chatbig{display:inline; background:none; border:0; padding:0; cursor:pointer;
-    font:inherit; letter-spacing:inherit; text-transform:inherit; color:var(--ink-2)}
-  #chatbig:hover{color:var(--accent)}
-  /* The grip is no longer inside the nav, so the whole nav folds. */
-  .rail.chatbig .nav{display:none}
-  .rail.chatbig .nav{padding-top:0}
-  .rail.chatbig .brand .tag{display:none}
-  .rail.chatbig .railchat .chatlog{max-height:none}
-  /* AND THE FOOT IS SPENT TOO, for the same reason the nav is. It holds the
-     node/source controls — demo or live, the RPC endpoint — and nobody retunes
-     which chain they are reading while they are talking on it. Measured at
-     1440x900: 86px of the rail, which is ten points of log, taking the expanded
-     panel from 59% to 69%. It returns on collapse, exactly as the nav does.
-     THE BRAND STAYS, TRIMMED. Once the nav is folded the mark is the only way
-     back to the directory, so hiding it is not available: it buys eight points
-     and takes the exit with it. Its 22px of padding is worth two points on its
-     own and leaves a 265x32 link, which is the trade this takes. Measured, both
-     of them, at 1440x900 and 1440x700 — the numbers above are from the second
-     rail this file has, not from arithmetic. */
-  .rail.chatbig .foot{display:none}
-  .rail.chatbig .brand{padding:8px 12px}
-  /* ── THE LOG HAS A FLOOR AND THE LINKS YIELD ───────────────────────────
-     A DRAG HANDLE LIVED HERE. Reported as "when i drag it down lower past
-     'Realm parameters' ... instead of the top of the chat getting dragged
-     downward, the chat div drags upward from the bottom", and then "it's hard to
-     even explain how to fix issues with it" — which is what settled it, after
-     three fixes had already landed against it and a fourth symptom was still
-     arriving.
-     DELETING IT ALONE WOULD HAVE LEFT AN EMPTY PANEL. MEASURED at 1440 wide on a
-     court page before any of this: the log was 0px tall at 900, 800 AND 700 of
-     viewport height, because the links take 333px and the panel's own controls
-     take what is left. The handle was not a convenience on top of a working
-     layout — it WAS the layout.
-     THE LINKS SCROLL, which is the half that keeps the composer reachable: they
-     yield height by scrolling rather than by pushing the panel off the bottom of
-     the rail. The floor itself is below, guarded on height. */
-  #railchathead .headctl{display:flex; gap:8px; align-items:baseline}
-  .rail .nav{min-height:0; overflow-y:auto}
-  /* THE NOTICE IS LEFT AT ITS OWN SIZE, and it was not for one commit.
-     IT WAS SET SMALLER HERE — .78em against .88em — on the reasoning that at
-     165px it was taller than the messages beneath it, which was true. Then the
-     log got a floor and the reasoning stopped holding: MEASURED with the floor
-     in place, the log is 120px whether the notice is set at 12.1px or 10.8px,
-     because the floor decides the log's height now and the notice only changes
-     how tall the PANEL is — by 4px.
-     SO IT WAS BOUGHT BACK. Four pixels of panel is not worth making the
-     anti-scam sentence the smallest type on the screen; it is the one line here
-     whose whole job is to be read by somebody who has read nothing else. The
-     tighter leading went with it, having measured 1px WORSE than the font's own
-     default. */
-}
-/* THE LOG'S FLOOR, AND WHY IT IS GUARDED ON HEIGHT AS WELL AS WIDTH.
-   120px is about three short messages, and without it the log is 0px on a
-   desktop rail — measured at 1440 wide on every height from 700 to 900, because
-   the links take 333px and the panel's own controls take what is left.
-   BUT A FLOOR THAT CANNOT YIELD IS A FLOOR THAT BREAKS SOMETHING ELSE. The rail
-   spends 306px on furniture before either the links or the panel get anything:
-   96 for the mark, 36 for the Chat row, 174 for the node controls. MEASURED with
-   the floor in place: the composer fits at 560 with nothing to spare and hangs
-   3px below the fold at 540, 63px at 480. So below 560 the floor is simply not
-   applied, and the old priority returns — between a chat you can read and one
-   you can type into, the composer wins, which is the same trade
-   .railchat.chatpanel's min-content floor already makes.
-   560 IS MEASURED, NOT CHOSEN: 600, 580 and 560 all fit exactly, 540 is the
-   first that does not. A window shorter than that on a screen wider than 820 is
-   unusual, and it still gets a working composer and a scrollable rail. */
-@media (min-width:821px) and (min-height:560px){
-  .railchat .chatlog{min-height:120px}
-}
+/* ---- THE RAIL'S CHAT LINE ------------------------------------------------
+   WHAT USED TO BE HERE. The chat panel lived in this column, and about a
+   hundred lines of stylesheet went on making it fit: an expand toggle that
+   folded the nav and the foot away, a drag handle, then a log floor, a height
+   guard and a scrolling nav after the handle was removed. The owner's verdict
+   was "it's probably a bad idea to have chat in the sidebar to begin with", and
+   the measurement agrees — the transcript was 0px tall at 1440 wide on every
+   desktop height from 700 to 900, because a 230px column cannot share its
+   height with a navigation list and a settings block and still hold a room.
+   THE CHAT IS A VIEW NOW, and all of that is deleted rather than adjusted. What
+   is left is one line saying how busy the room is, which links to it. */
+.railchatlink{display:flex; align-items:baseline; gap:.5rem; text-decoration:none;
+  color:var(--muted); font:inherit; letter-spacing:inherit; text-transform:inherit}
+.railchatlink:hover,.railchatlink:focus-visible{color:var(--accent)}
+/* THE COUNT IS PUSHED TO THE FAR END, so the word "Chat" stays where a reader
+   scanning the column's labels expects to find it and the numbers line up with
+   the other right-hand figures in the rail. */
+.railchatcount{margin-left:auto; text-transform:none; letter-spacing:0;
+  font-variant-numeric:tabular-nums}
+/* THE DOT, WHICH IS THE WHOLE NOTIFICATION. Asked for as "like a bubble
+   notification or something" — a dot rather than a number, because the number
+   is already in the line beside it and two counts saying nearly the same thing
+   is how a status line stops being read. Its meaning is in the sr-only text
+   next to it, so it is not a colour carrying information alone. */
+.railchatdot{width:7px; height:7px; border-radius:50%; background:var(--accent);
+  flex:none; align-self:center; box-shadow:0 0 0 3px var(--accent-wash)}
+/* ---- AND THE VIEW GIVES THE ROOM THE VIEWPORT ---------------------------
+   chat.js caps the log at 15rem and lets it grow with its messages, which is
+   right for a panel embedded under page content — there the chat is a feature of
+   the page and must not run away with it. On a view that IS the page the cap is
+   backwards: MEASURED on first mount here, four demo messages and a 109px log in
+   a 760px column, which is the sidebar's problem with more width.
+   SO THE PANEL BECOMES A FIXED-HEIGHT COLUMN and the log is what flexes: the
+   composer sits at the bottom where a composer belongs, the transcript scrolls
+   inside, and the newest message is next to the box you answer it in. That is
+   the shape every chat has, and it is only available once the chat owns its own
+   height.
+   min() AGAINST A PIXEL CEILING, so a tall monitor does not hand 1400px to a
+   column of short sentences, and 72vh rather than 100 because the heading, the
+   crumbs and the line explaining what this room is not all sit above it. */
+/* #chatview.chatpanel, NOT #chatview .chatpanel — ONE ELEMENT, TWO CLASSES.
+   mountChat adds .chatpanel to the host it is given, so the descendant form
+   matches nothing: MEASURED, the panel read 0px and the log stayed at its
+   content height while this looked like it had been applied. The rail's old
+   rules carried this exact warning and I made the mistake anyway; the
+   descendant form is kept beside it because the host is markup, not a promise. */
+/* 300px IS RESERVED AND THE REST IS THE ROOM'S. MEASURED: the crumbs, heading
+   and the line about what this room is not occupy 226px above the panel, and the
+   composer and its status line take another 53 below the log — so 300 is what
+   the page needs and everything else can be transcript.
+   A CALC RATHER THAN A FRACTION OF THE VIEWPORT, because a fraction cannot be
+   right at two heights: at 72vh the composer sat below the fold on a 700px
+   window, and at 62vh it fitted but gave away 42px on a 900px one. Measured,
+   both. The ceiling stops a tall monitor handing 1100px to a column of short
+   sentences. */
+#chatview.chatpanel,#chatview .chatpanel{display:flex; flex-direction:column;
+  height:min(calc(100vh - 300px), 720px)}
+#chatview .chatlog{max-height:none; flex:1 1 auto; min-height:0}
+/* MESSAGES GROW UP FROM THE COMPOSER, which is what every chat does and what
+   giving the log real height made necessary. In the sidebar the log was never
+   taller than its messages so the question never arose; at 429px with four
+   messages the transcript sat at the TOP and left a starry void above the box
+   you type into, which reads as a broken panel rather than a quiet room.
+   margin-top:auto ON THE FIRST ROW, not justify-content:flex-end on the list.
+   They look equivalent and are not: with flex-end an overflowing column can
+   have its first rows made unreachable by the scrollbar, a browser bug old
+   enough to have a name. Pushing the first child down costs nothing when the
+   content overflows — auto margins collapse to zero once there is no free
+   space — and is exactly the shove that is wanted when it does not. */
+#chatview .chatlog{display:flex; flex-direction:column}
+#chatview .chatlog > :first-child{margin-top:auto}
 /* The court coin's name, everywhere it is written. One hardcoded purple rather
    than a theme token: the token IS the colour, and it must read the same in
    light and dark. */
@@ -2867,25 +2798,6 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
   .docket .courtrow .px{grid-row:3; grid-column:2/4; justify-self:start;
     flex-direction:row; flex-wrap:wrap; align-items:baseline; gap:4px 8px; min-width:0}
   .rail{position:static; height:auto; flex-direction:column}
-  /* AND THE CHAT LOG IS SIZED BY ITS MESSAGES AGAIN, because the line above is
-     what makes the rail's height indefinite. Reported from a phone: "i can't
-     see *any* chat there besides the input field."
-     THE LOG WAS 0px WITH FOUR MESSAGES IN IT. chat.js gives it height:0 and
-     flex:1 1 auto so the rail's floor can be the CONTROLS alone — a flex-basis
-     of auto resolves to that 0, and in the sidebar the log then grows into the
-     rail's spare height. Here there is no spare height to grow into: the rail
-     is `height:auto`, so it sizes to its content and distributes nothing. The
-     log kept its basis and rendered every message inside a zero-height box.
-     Measured at 390, 430 and 768 — log h=0, rows=4, scrollHeight 194.
-     This is the same failure that scoping height:0 to the rail fixed on the
-     standalone chat page, arriving by the other door: not "which element", but
-     "does its container have a height to give away". The stacked rail does not,
-     so the log goes back to being sized by its messages and capped by chat.js's
-     own max-height, exactly as the panel behaves on a page. FOUR CLASSES, not
-     three: chat.js's stylesheet is injected after this one, so an equally
-     specific rule would lose on document order — the same reason .railchat's
-     rules above are written with two classes. */
-  .rail .railchat.chatpanel .chatlog{height:auto}
   .nav{flex-direction:row; flex-wrap:wrap; gap:4px} .nav .sec{width:100%}
   /* The trail's indent is meaningless once the nav is a wrapping ROW: there is
      no parent above a child to line up under. It stays as two ordinary chips. */
@@ -3111,22 +3023,17 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
          that STAYS when everything above it folds away — a toggle inside the
          part that disappears could not bring it back. -->
   </nav>
-  <!-- OUTSIDE THE NAV, and that is the fix rather than the layout. It used to be
-       nav's last child with position:sticky;bottom:0, so once .chatsized made the
-       nav a scroll container the bar floated over whichever links happened to land
-       in the bottom strip. MEASURED at 1280x900: "? How it works" was clipped
-       mid-glyph by its top edge and "≡ Realm parameters" showed underneath it, and
-       at full expansion the nav was a 44px window behind a 42px bar. Reported as
-       "other nav items show under the CHAT RESET EXPAND bar".
-       IT IS THE SEAM BETWEEN THE NAV AND THE PANEL, so it belongs between them:
-       a sibling of both cannot overlap either, needs no sticky, and needs no
-       opaque background to hide what scrolls behind it. It still survives every
-       railChatFor() remount, which is why it was never put inside .railchat. -->
-  <div class="sec" id="railchathead" hidden>Chat<span class="headctl"><button
-      type="button" id="chatbig"
-      aria-expanded="false"
-      title="Give the chat the rail's height — the links above it fold away">expand</button></span></div>
-  <div class="railchat" id="railchat" hidden></div>
+  <!-- OUTSIDE THE NAV, which is left as it was for a reason that outlived the
+       panel. It used to be nav's last child with position:sticky;bottom:0, and
+       the nav was a scroll container, so the bar floated over whichever links
+       landed in the bottom strip — MEASURED at 1280x900: "? How it works"
+       clipped mid-glyph and "≡ Realm parameters" showing underneath it. A
+       sibling of both the nav and the foot cannot overlap either, needs no
+       sticky, and needs no opaque background to hide what scrolls behind it. -->
+  <!-- FILLED BY railChatRender, which is why it is empty here: the line says
+       how busy the room is, and nothing about a room is known before the first
+       read. Hidden until a court is in context. -->
+  <div class="sec" id="railchathead" hidden></div>
   <div class="foot">
     <div class="node">
       <div class="row"><span class="dot" id="dot"></span> <b id="nodelab">Demo data</b></div>
@@ -7384,39 +7291,139 @@ async function sourceNote(){
    would throw away the transcript and whatever somebody was halfway through
    typing, which is the bug chatPanelHtml was written to avoid inside a poll. */
 let RAILCHATSLUG = null;
+/* ---- THE RAIL SAYS HOW BUSY THE ROOM IS, AND NOTHING ELSE ----------------
+   THE PANEL USED TO BE MOUNTED HERE. It is a view of its own now — see the
+   /chat route — and what is left in the rail is one line: how many people are
+   about, how many messages arrived in the last hour, and a dot when some of
+   them are newer than the last time this reader opened the room.
+   ASKED FOR IN TWO STEPS. First "when collapsed, instead of showing the chat
+   text, show (how many people, how many recent messages) only, and in order to
+   chat, the chat bar must be expanded", then "pull it out of the sidebar
+   somehow". The second makes the first simpler rather than replacing it: the
+   collapsed state is all that remains in the rail, and "expanded" is now a page.
+   ONE REQUEST FEEDS IT. The court's own poll already answers with `here` and the
+   recent window of messages, so the counts come from the endpoint the panel was
+   reading anyway rather than from anything new on the service.
+   IT IS A LINK, NOT A BUTTON. The destination is a URL, so it can be opened in
+   a tab, bookmarked and reached by keyboard for free — which the expand toggle,
+   being a button that rearranged the page, could not be. */
+const RAILCHAT_MS = 20000;          // how often the rail re-reads the room
+const RAILCHAT_RECENT = 3600;       // "recent" is the last hour, in seconds
+let RAILCHATTICK = null, RAILCHATTOP = 0, RAILCHATLAST = null;
+function railChatSeenKey(slug){ return "cc.chatseen." + slug; }
+function railChatMarkSeen(slug, id){
+  if(!slug || !(id > 0)) return;
+  store.set(railChatSeenKey(slug), String(id));
+}
+function railChatRender(slug, d){
+  const rh = document.getElementById("railchathead");
+  if(!rh) return;
+  const here = Number(d && d.here || 0);
+  const msgs = Array.isArray(d && d.messages) ? d.messages : [];
+  const now = Number(d && d.now || 0) || Math.floor(Date.now()/1000);
+  const recent = msgs.filter(m=>Number(m.created_at||0) >= now - RAILCHAT_RECENT).length;
+  const top = msgs.reduce((a,m)=>Math.max(a, Number(m.id||0)), 0);
+  RAILCHATTOP = top;
+  const seen = parseInt(store.get(railChatSeenKey(slug))||"", 10);
+  /* RECENT AND UNSEEN, both, which took two tries to get right.
+     UNSEEN, NOT UNREAD: this counts what arrived since the reader last OPENED
+     the room, because the rail cannot know what they looked at inside it.
+     AND RECENT, WHICH IS THE HALF I FIRST GOT WRONG. The first cut showed
+     nothing at all until the room had been opened once, reasoning that an unread
+     badge on a room nobody has visited is a badge for existing. True of a
+     dormant room and wrong of a busy one — it meant a first-time reader saw no
+     bubble however much was happening, which is the opposite of "when there has
+     been recent activity would be good to show for all users". Requiring BOTH
+     conditions gives each case what it should have: a room quiet for a day
+     shows no dot to someone who has never opened it, and a room talking right
+     now shows one to everybody who has not caught up. */
+  const seenId = isFinite(seen) ? seen : 0;
+  const fresh = msgs.filter(m=>Number(m.id||0) > seenId
+    && Number(m.created_at||0) >= now - RAILCHAT_RECENT).length;
+  const bits = [];
+  /* PEOPLE FIRST, and only when there is more than the reader. "1 here" is the
+     reader counting themselves, which is noise; two is the first number that
+     says anything about the room. */
+  if(here > 1) bits.push(fmtN(here) + " here");
+  if(recent > 0) bits.push(fmtN(recent) + " recent");
+  const count = bits.length? bits.join(" · ") : "quiet";
+  rh.innerHTML = `<a class="railchatlink" href="#/c/${esc(slug)}/chat">Chat`
+    + `<span class="railchatcount">${esc(count)}</span>`
+    + (fresh > 0 ? `<span class="railchatdot" aria-hidden="true"></span>`
+        + `<span class="sr-only">, ${fmtN(fresh)} since you last looked</span>` : "")
+    + `</a>`;
+}
+async function railChatPoll(slug){
+  /* chatEndpoint, NOT chatBase, and the difference is a 404 on every demo page.
+     chatBase answers with an origin whatever the mode is; chatEndpoint returns
+     "" for demo, which is what the panel has always asked and why the panel
+     never polled in demo. This line did, against a static file server, and
+     stripped_boot caught it as "Failed to load resource: 404" on the court
+     route — the only check in the suite that watches the console on a real
+     HTTP origin rather than file://. */
+  const base = (typeof chatEndpoint === "function")
+    ? chatEndpoint({...CFG, chat: chatBase()}) : "";
+  if(!base || !slug) return;
+  try{
+    /* limit=50 IS THE RECENT WINDOW, not a page of history: the counts only
+       need the newest handful, and this is the same shape the panel's first
+       read uses so the service sees nothing unfamiliar. */
+    const r = await fetch(base + "/api/chat/" + encodeURIComponent(CFG.chainid||"dev")
+      + "/" + encodeURIComponent(slug) + "?limit=50", {cache:"no-store"});
+    if(!r.ok) return;
+    const d = await r.json();
+    if(slug !== RAILCHATSLUG) return;   // the reader moved on while this was in flight
+    RAILCHATLAST = d;                   // kept so the line can repaint without a re-read
+    railChatRender(slug, d);
+  }catch(_){ /* a rail line is not worth a visible error */ }
+}
 function railChatFor(hash){
   const rc = document.getElementById("railchat");
   const rh = document.getElementById("railchathead");
-  if(!rc) return;
   const m = /^\/(?:c|raw)\/([a-z0-9-]+)/.exec(hash || "");
-  /* AND THE GLOBE TALKS IN THE META COURT. Every route that is not a court's
-     tore the chat down, which is right for most of them — /about and /me are
-     not places with a room. The globe is: it is a page about who is here, and
-     it printed "8 here" beside a rail with no way to say anything to any of
-     them. The meta court is the one room that belongs to no single subject,
-     which makes it the right host for a page that is about the site itself. */
+  /* AND THE GLOBE COUNTS AS A ROOM. Every route that is not a court's hides
+     this, which is right for most of them — /about and /me are not places with
+     a room. The globe is: it is a page about who is here, and it printed "8
+     here" beside a rail that named no room at all. The meta court is the one
+     that belongs to no single subject, which makes it the right host. */
   const slug = m ? m[1] : (/^\/here(?:$|[/?])/.test(hash || "") ? META_SLUG : null);
-  if(slug === RAILCHATSLUG) return;
-  if(CHATSTOP){ CHATSTOP(); CHATSTOP = null; }
-  RAILCHATSLUG = slug;
-  if(!slug || typeof mountChat !== "function"){
-    rc.hidden = true; rc.innerHTML = "";
-    if(rh) rh.hidden = true;
-    return;
+  /* THE READER IS IN THE ROOM WHEN THEY ARE ON ITS PAGE, so opening the chat
+     view clears the dot. Done here rather than in the route so it happens on
+     every arrival, including a reload or a pasted link. */
+  if(/^\/c\/[a-z0-9-]+\/chat$/.test(hash || "") && slug){
+    railChatMarkSeen(slug, RAILCHATTOP);
+    /* AND REPAINT AT ONCE, from the reading already in hand. Marking it seen
+       only writes to storage; the line is drawn by the poll, so without this the
+       dot stayed lit for up to RAILCHAT_MS after the reader had walked into the
+       room — twenty seconds of a badge saying "there is something you have not
+       seen" to somebody looking straight at it. MEASURED as a failing arm. */
+    if(RAILCHATLAST && slug === RAILCHATSLUG) railChatRender(slug, RAILCHATLAST);
   }
-  rc.hidden = false;
-  if(rh) rh.hidden = false;
-  // heading:false — the rail's own "Chat" title is directly above, and the
-  // court is the page being read, so the panel printing "Chat covid" under a
-  // heading saying "Chat" said it twice.
-  // chatBase() resolved here rather than stored in CFG: persisting the origin
-  // would freeze the page to whichever host it was first opened from.
-  CHATSTOP = mountChat(rc,
-    {cfg: {...CFG, chat: chatBase()}, chain: CFG.chainid || "dev", court: slug,
-     heading: false});
+  if(rc && rc.parentNode) rc.parentNode.removeChild(rc);   // the old panel slot
+  if(slug === RAILCHATSLUG) return;
+  RAILCHATSLUG = slug;
+  if(RAILCHATTICK){ clearInterval(RAILCHATTICK); RAILCHATTICK = null; }
+  RAILCHATTOP = 0;
+  if(!rh) return;
+  if(!slug){ rh.hidden = true; rh.innerHTML = ""; return; }
+  rh.hidden = false;
+  railChatRender(slug, null);          // the label exists before the first read
+  railChatPoll(slug);
+  RAILCHATTICK = setInterval(()=>{
+    if(slug !== RAILCHATSLUG){ clearInterval(RAILCHATTICK); RAILCHATTICK = null; return; }
+    if(document.hidden) return;        // a background tab has nobody reading it
+    railChatPoll(slug);
+  }, RAILCHAT_MS);
 }
 async function render(){
   const seq = ++renderSeq;
+  /* THE PREVIOUS PANEL'S TIMER GOES FIRST, and it has to happen HERE rather
+     than beside railChatFor at the bottom: that runs AFTER the route, so a stop
+     call there would kill the panel the /chat route had just mounted. Releasing
+     it at the top leaves the poller of the page being left, and only that one.
+     See CHATSTOP for why the timer is released rather than left to the
+     generation counter. */
+  if(CHATSTOP){ CHATSTOP(); CHATSTOP = null; }
   const raw = location.hash.replace(/^#/,"") || "/";
   const qx = raw.indexOf("?");
   const hash = qx<0? raw : raw.slice(0,qx);
@@ -8591,16 +8598,15 @@ on(/^\/c\/([a-z0-9-]+)$/, async (slug)=>{
                page — the likeliest place to go looking for the map at all — said
                only "map→", so one destination was announced two different ways
                depending on which page you left from. -->
-          <span class="tacts"><a class="tlink" href="#/c/${esc(slug)}/map">${ICN_CONSTEL}map<span aria-hidden="true">→</span></a><a class="tlink" href="#/c/${esc(slug)}/holders">holders<span aria-hidden="true">→</span></a><a class="tlink" href="#/c/${esc(slug)}/curate">curate<span aria-hidden="true">→</span></a><a class="tlink" href="#/raw/${esc(slug)}/mod">moderation log<span aria-hidden="true">→</span></a>
+          <span class="tacts"><a class="tlink" href="#/c/${esc(slug)}/chat">chat<span aria-hidden="true">→</span></a><a class="tlink" href="#/c/${esc(slug)}/map">${ICN_CONSTEL}map<span aria-hidden="true">→</span></a><a class="tlink" href="#/c/${esc(slug)}/holders">holders<span aria-hidden="true">→</span></a><a class="tlink" href="#/c/${esc(slug)}/curate">curate<span aria-hidden="true">→</span></a><a class="tlink" href="#/raw/${esc(slug)}/mod">moderation log<span aria-hidden="true">→</span></a>
 <a class="tlink" href="#/raw/${esc(slug)}" title="What the realm itself serves for this court, unstyled">chain<span aria-hidden="true">→</span></a></span>
           ${s.tier===0? `<span class="tfact">unlisted — hidden from the directory by moderation; this page is reachable by direct link only.</span>`:""}</div>
        </div>
        </div>`
     + courtBody(slug, s, claims, docketPager, chainF, allRows, docketPagerBot,
         {rows:parsed.strip||[], more:parsed.stripMore||0}, {rows:parsed.pending||[], more:parsed.pendingMore||0});
-  // Chat lives in the rail; see #railchat. Guarded on typeof so a missing
-  // chat.js leaves the court page whole instead of throwing halfway through a
-  // paint, which would take the docket with it.
+  // Chat is a view of its own — see the /chat route. The rail carries a line
+  // linking to it, filled by railChatRender.
   // The claim composer, beside the docket. Guarded on typeof for the reason
   // chat is: a missing media.js must leave the court page whole rather than
   // throw halfway through a paint and take the docket with it. Without it the
@@ -14123,6 +14129,79 @@ on(/^\/c\/([a-z0-9-]+)\/map$/, async (slug)=>{
     fillCommentClusters(gstr(slug), slug, seq0).catch(()=>{});
   }
 });
+/* ---- A COURT'S CHAT, AS A VIEW OF ITS OWN --------------------------------
+   IT USED TO LIVE IN THE SIDEBAR, and the owner's verdict on that was "it's
+   probably a bad idea to have chat in the sidebar to begin with". It was: a
+   230px column had to share its height with the navigation above it and the
+   node controls below, and every arrangement of the three was a trade against
+   the other two. MEASURED before it moved: the transcript was 0px tall at 1440
+   wide on every desktop height from 700 to 900, which is why a drag handle had
+   been added, then fixed three times, then removed and replaced with a floor, a
+   height guard and a scrolling nav. All of that machinery existed to make a
+   room fit in a column that was never going to hold one.
+   HERE IT HAS THE PAGE. Full width, full height, one heading, and the rail
+   keeps a single line that says how busy it is — see railChatLink.
+   CAPPED AT 760px, because a chat line is a sentence and a sentence set across
+   1200px is a worse read than the sidebar ever was. The cap is on the panel, not
+   the page, so the heading and crumbs still sit where every other view puts
+   them. */
+const CHATVIEW_MAX = 760;
+on(/^\/c\/([a-z0-9-]+)\/chat$/, async (slug)=>{
+  loading();
+  /* THE ROOM DOES NOT NEED THE CHAIN, and refusing to open it without one was
+     backwards. Every other court view bails when courtStats fails, correctly:
+     a docket, a holder list and a map ARE chain reads and have nothing to show
+     without one. This view is a chat service, which runs independently — so a
+     chain that cannot be reached must not close the room. It is the one page a
+     reader would go to in order to ask whether the chain is down.
+     MEASURED as the failure that found it: with the chain unreachable the route
+     rendered "No such court" and the panel never mounted, so a live-mode check
+     looking for the composer found nothing.
+     THE SLUG IS THE FALLBACK NAME. Less pretty than the court's own and enough
+     to say which room this is. */
+  const s = await courtStats(slug).catch(()=>null);
+  const seq0 = renderSeq;
+  const name = (s && s.name) || slug;
+  main.innerHTML = crumbs([{label:"Directory",href:"#/"},
+      {label:name, href:"#/c/"+esc(slug)},{label:"Chat"}])
+    + `<div class="lead-row"><div><h1 class="page-h">${safeInline(name)} — chat</h1>
+       <p class="page-sub">Anyone may say anything here; nothing said in this room
+       is part of the court's record. Claims, answers and votes are on
+       <a href="#/c/${esc(slug)}">the court's page</a> — this is the room beside
+       it, not the proceedings.</p></div>
+       <span class="tacts"><a class="tlink" href="#/c/${esc(slug)}">docket<span aria-hidden="true">→</span></a></span></div>
+       <div id="chatview" style="max-width:${CHATVIEW_MAX}px"></div>`;
+  if(seq0 !== renderSeq) return;
+  const host = document.getElementById("chatview");
+  if(!host) return;
+  /* THE PANEL IS THE SAME PANEL. chat.js mounts it, polls it and owns every
+     rule inside it; this view supplies a container and a heading and nothing
+     else. heading:false because the page already says which court this is, and
+     the panel printing it again under the h1 said it twice — the reason the rail
+     passed the same flag.
+     THE STOP FUNCTION IS KEPT, in the same global the rail's mount used. Not
+     because the generation counter is insufficient to make a stale tick inert —
+     it is — but because the pending timer should be gone rather than merely
+     harmless, which is a property chat_test pins by counting timers. render()
+     releases it at the top, before the next route mounts anything. */
+  /* GUARDED ON typeof, for the reason every other mount in this file is: a
+     missing or blocked chat.js must leave the page whole rather than throw
+     halfway through a paint. MEASURED as a 20s timeout in chat_page's
+     blocked-chat.js case — the route threw, errorView replaced the heading, and
+     a harness waiting for the court's name waited forever. The rail's old mount
+     carried this guard and the view was written without it.
+     AND IT SAYS SO, rather than leaving an empty box under a heading promising
+     a room: a reader who cannot load chat.js is owed the reason. */
+  if(typeof mountChat !== "function"){
+    host.innerHTML = `<div class="notice refuse"><span class="g">✕</span> The chat
+      panel could not be loaded, so this room cannot be opened. The court's own
+      page is unaffected.</div>`;
+    return;
+  }
+  CHATSTOP = mountChat(host, {cfg: {...CFG, chat: chatBase()},
+    chain: CFG.chainid || "dev", court: slug, heading: false});
+});
+
 /* Map interactions: viewBox pan/zoom (one coordinate system), explicit text
    toggle (relayout, center preserved), CSS-only label LOD, hover/focus
    highlighting. Listeners live on the container, surviving innerHTML swaps. */
@@ -20275,36 +20354,9 @@ function initControls(){
         dot=document.getElementById("dot"), lab=document.getElementById("nodelab"),
         rpc=document.getElementById("rpc"), gnoweb=document.getElementById("gnoweb");
   rpc.value=CFG.rpc; gnoweb.value=CFG.gnoweb; modesel.value=CFG.mode;
-  /* THE RAIL CHAT'S EXPAND TOGGLE. All it does is put a class on the rail — the
-     height itself is the flex column's arithmetic, not a number computed here,
-     so nothing needs recomputing on resize or on navigation.
-     REMEMBERED, because the reader who needs it needs it on every page: the
-     window that is too short for the log at one court is too short at the next.
-     Sidebar-only rules mean a remembered `true` is simply inert on a phone.
-     AND THE LOG IS SCROLLED TO THE BOTTOM AFTER THE TOGGLE. Growing a box that
-     was already at its end leaves the newest message where it was and reveals
-     older ones beneath the fold; the reader asked for MORE chat, and the chat
-     they meant is the recent kind. */
-  const chatbig=document.getElementById("chatbig"), railEl=document.querySelector(".rail");
-  if(chatbig && railEl){
-    const applyBig=(on)=>{
-      railEl.classList.toggle("chatbig", on);
-      chatbig.setAttribute("aria-expanded", on?"true":"false");
-      chatbig.textContent = on ? "collapse" : "expand";
-      const lg=document.querySelector("#railchat .chatlog");
-      if(lg) lg.scrollTop=lg.scrollHeight;
-    };
-    applyBig(store.get("cc.chatbig")==="1");
-    chatbig.addEventListener("click", ()=>{
-      const on=!railEl.classList.contains("chatbig");
-      /* ONE AUTHORITY, AND NOW THERE IS ONLY ONE. This cleared a dragged height
-         first, because a dragged size and this toggle were two answers to the
-         same question and the cascade decided between them. The drag is gone;
-         this button is the whole of it. */
-      applyBig(on);
-      store.set("cc.chatbig", on?"1":"0");
-    });
-  }
+  /* THE EXPAND TOGGLE WAS HERE, and it went with the sidebar panel it resized:
+     one button, two sizes, both of them arrangements of a column that was the
+     wrong home for a room. The chat is its own view; the rail links to it. */
   /* ---- drag the seam ------------------------------------------------------
      THE CONTINUOUS VERSION OF THE TOGGLE ABOVE, asked for as "slide the chat
      box up to make it bigger so I can read it". The heading between the links

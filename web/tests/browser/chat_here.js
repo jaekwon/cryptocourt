@@ -17,13 +17,18 @@
 // helper, no bot and no machine of any kind — if it did, the count would be the
 // thing that gave the answerer away.
 const {PAGE, demoPage} = require('./harness');
+// THE PANEL MOVED OUT OF THE RAIL. It is a view of its own at
+// #/c/<slug>/chat — "it's probably a bad idea to have chat in the sidebar to
+// begin with" — so this harness visits the panel's own page rather than a
+// court's docket. The arms below are unchanged: what they measure is the panel,
+// and the panel is the same panel.
 
 (async () => {
   const {browser, page, errs} = await demoPage({width: 1280, height: 1000});
   let fail = 0;
   const ok = (m, c, d) => { if (!c) { fail++; console.log("FAIL: " + m + (d ? "  " + d : "")); } else console.log("ok: " + m); };
 
-  await page.goto(PAGE + '#/c/orem', {waitUntil: 'networkidle0'});
+  await page.goto(PAGE + '#/c/orem/chat', {waitUntil: 'networkidle0'});
   await new Promise(z => setTimeout(z, 1200));
 
   const seen = await page.evaluate(() => {

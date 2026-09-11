@@ -29,7 +29,7 @@ const PAGE = 'file://' + path.join(__dirname, '..', '..', 'index.html');
       localStorage.setItem("cc.intro", "1");
     });
     await page.setViewport({width: 1150, height: 1000});
-    await page.goto(PAGE + '#/c/orem', {waitUntil: 'networkidle0'});
+    await page.goto(PAGE + '#/c/orem/chat', {waitUntil: 'networkidle0'});
     await new Promise(z => setTimeout(z, 1400));
 
     const look = () => page.evaluate(() => {
