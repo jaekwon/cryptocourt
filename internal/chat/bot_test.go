@@ -894,6 +894,160 @@ func TestTheUntrustedBlockCarriesNoRecoveryPhrase(t *testing.T) {
 	}
 }
 
+/*
+	---- THE DAILY CEILING ----------------------------------------------------
+
+The only bound on what the helper could spend was TIME: one reply per --bot-gap,
+newest wins, which at ten seconds is 8,640 calls a day. Per-call input measured
+~2,000 tokens once the prompt carried the armour and the refusals, against a
+lifetime spend of $0.47 across 514 calls — so a room grinding at it would have
+cost tens of dollars a day and nothing read the total or raised anything.
+
+ZERO IS THE DEFAULT and changes nothing: a ceiling is a policy the operator
+owns, and a default that silenced a working helper would be this feature's own
+worst failure. kourtchat warns at startup instead.
+*/
+func TestTheDailyCostCapStopsTheSpendingAndNothingElse(t *testing.T) {
+	// A capped helper does not call the model...
+	s, clock := newStore(t)
+	ctx := context.Background()
+	m := &fakeModel{reply: "should not be reached", in: 500, out: 20}
+	b := newBot(t, s, m)
+	b.CostCapMicros = 1000
+	*clock = clock.Add(time.Hour)
+	// Spend recorded TODAY, at the ceiling.
+	if err := s.recordBotSpend(ctx, "test-model", botKindPass, 1000, 0, 1000); err != nil {
+		t.Fatal(err)
+	}
+	/* PAST THE GAP FIRST, and this is not housekeeping. recordBotSpend writes a
+	   bot_replies row dated now, which MinGap counts as the last reply — so
+	   without this the helper is quiet because of the GAP and m.calls is 0 for
+	   the wrong reason. Found by the under-cap test below, which failed while
+	   this one passed: the two assertions are the same number and only one of
+	   them was measuring the cap. */
+	*clock = clock.Add(BotMinGap * 2)
+	if _, err := post(t, s, "orem", "ip-a", "how do i stake on a claim?"); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.once(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if m.calls != 0 {
+		t.Errorf("a capped helper must not call the model, got %d calls", m.calls)
+	}
+	got, err := s.Recent(ctx, "dev", "orem", 0, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 {
+		t.Errorf("the room must hold only the question, got %d rows", len(got))
+	}
+
+	/* ...AND YET STILL SAYS WHO IT IS. The fixed lines cost nothing, so a cap has
+	   no business silencing them: a reader who asks the clerk what it is, or who
+	   wears its name, gets the same answer whether or not the day's budget is
+	   gone. This is the arm that makes the cap a spending limit rather than an
+	   off switch. */
+	*clock = clock.Add(BotMinGap * 2)
+	if _, err := post(t, s, "orem", "ip-b", "who are you?"); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.once(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if m.calls != 0 {
+		t.Errorf("an identity question costs no model call, capped or not: %d", m.calls)
+	}
+	got, err = s.Recent(ctx, "dev", "orem", 0, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) == 0 || got[len(got)-1].Body != botClerkLine {
+		t.Errorf("a capped helper must still say who it is, got %+v", got)
+	}
+}
+
+// AND UNDER THE CEILING NOTHING CHANGES, which is the arm that catches a cap
+// that is always on — the failure that would look like a broken helper.
+func TestUnderTheCapTheHelperAnswersNormally(t *testing.T) {
+	s, clock := newStore(t)
+	ctx := context.Background()
+	m := &fakeModel{reply: "You buy the court's coin, then stake it.", in: 500, out: 20}
+	b := newBot(t, s, m)
+	b.CostCapMicros = 1_000_000
+	*clock = clock.Add(time.Hour)
+	if err := s.recordBotSpend(ctx, "test-model", botKindPass, 1000, 0, 1000); err != nil {
+		t.Fatal(err)
+	}
+	// Past the gap: see the note in the capped test above.
+	*clock = clock.Add(BotMinGap * 2)
+	if _, err := post(t, s, "orem", "ip-a", "how do i stake on a claim?"); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.once(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if m.calls != 1 {
+		t.Fatalf("well under the cap the model must be asked, got %d calls", m.calls)
+	}
+
+	/* AND A CAP OF ZERO IS NO CAP, not an immediate one. This is the default, so
+	   an off-by-one here would silence every deployment that never set the flag. */
+	b.CostCapMicros = 0
+	over, _, err := b.overCap(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if over {
+		t.Error("zero must mean no ceiling, not a ceiling of zero")
+	}
+}
+
+// THE WINDOW IS A DAY, NOT ALL TIME. BotStats sums the whole table, which is the
+// wrong number for a ceiling: a lifetime total crosses any cap eventually and
+// then stays crossed, so the helper would go quiet for ever on the strength of a
+// year of ordinary use.
+func TestTheCapCountsTodayAndNotAllTime(t *testing.T) {
+	s, clock := newStore(t)
+	ctx := context.Background()
+	b := newBot(t, s, &fakeModel{})
+	b.CostCapMicros = 1000
+
+	/* RECORDED WHILE THE CLOCK IS YESTERDAY, which is how the store dates a row:
+	   recordBotSpend stamps created_at from the store's own clock, so moving the
+	   clock is the only thing needed to put spend in the past. Well over the
+	   ceiling, so if the window were all-time this would close today. */
+	*clock = clock.Add(24 * time.Hour)
+	if err := s.recordBotSpend(ctx, "test-model", botKindPass, 0, 0, 50_000); err != nil {
+		t.Fatal(err)
+	}
+	// ...and now it is two days later.
+	*clock = clock.Add(48 * time.Hour)
+	over, spent, err := b.overCap(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if over {
+		t.Errorf("spend from two days ago must not close today (today=%d)", spent)
+	}
+	if spent != 0 {
+		t.Errorf("today's window must be empty, got %d micros", spent)
+	}
+
+	// AND TODAY'S OWN SPEND DOES close it, so the arm above is not passing
+	// because the query returns nothing whatever the date.
+	if err := s.recordBotSpend(ctx, "test-model", botKindPass, 0, 0, 1000); err != nil {
+		t.Fatal(err)
+	}
+	over, spent, err = b.overCap(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !over {
+		t.Errorf("spend from today must close the day, got spent=%d", spent)
+	}
+}
+
 func TestTheUserTurnCarriesNothingButWhatThePublicTyped(t *testing.T) {
 	for _, c := range []struct {
 		name, body, wantInSystem string

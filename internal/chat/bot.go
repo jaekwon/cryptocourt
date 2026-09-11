@@ -81,6 +81,19 @@ type Bot struct {
 	// places instead of inventing them.
 	Site, Repo, ChainDocs string
 
+	/* CostCapMicros is the most the helper may spend in a UTC day, or 0 for no
+	   ceiling. Zero is the default and changes nothing, because a ceiling is a
+	   policy and the operator owns it — kourtchat warns at startup when the
+	   helper is enabled without one, the same way it warns about the hashing
+	   key, and for the same reason: refusing to run would break a deployment
+	   that may have its own arrangement, and not being able to see it is the
+	   problem. */
+	CostCapMicros int64
+
+	// capDay is the UTC day whose cap has already been logged, so a capped
+	// helper says so once rather than on every message for the rest of the day.
+	capDay int64
+
 	// NonceFn overrides the untrusted block's per-call tag. Tests set it so a
 	// prompt is comparable; production leaves it nil for crypto/rand. Same shape
 	// as the store's injectable clock, and for the same reason.
@@ -332,8 +345,10 @@ type BotOptions struct {
 	Model, Site, Repo, ChainDocs string
 	MinGap                       time.Duration
 	InPerMTok, OutPerMTok        int64
-	Chains                       map[string]bool
-	Log                          func(string, ...any)
+	// CostCapMicros is the day's ceiling, or 0 for none. See Bot.CostCapMicros.
+	CostCapMicros int64
+	Chains        map[string]bool
+	Log           func(string, ...any)
 	// Facts is optional; see Bot.Facts and CourtFacts.
 	Facts CourtFacts
 }
@@ -364,7 +379,8 @@ func NewBot(store *Store, srv *Server, key string, o BotOptions) *Bot {
 		Store: store, Key: key, Model: o.Model,
 		Chains: o.Chains, MinGap: o.MinGap,
 		Site: o.Site, Repo: o.Repo, ChainDocs: o.ChainDocs,
-		InPerMTok: o.InPerMTok, OutPerMTok: o.OutPerMTok,
+		CostCapMicros: o.CostCapMicros,
+		InPerMTok:     o.InPerMTok, OutPerMTok: o.OutPerMTok,
 		Log:   o.Log,
 		Facts: o.Facts,
 		// THE TWO HOOKS, and the whole reason this function exists.
@@ -1522,6 +1538,30 @@ func (b *Bot) answer(ctx context.Context, c botCandidate) error {
 	if c.says != "" {
 		return b.say(ctx, c, c.says)
 	}
+	/* THE CEILING, AND IT IS CHECKED HERE ON PURPOSE — after the fixed lines and
+	   before anything that costs. A capped helper still says who it is, still
+	   calls out an impersonator and still greets nobody at all, because none of
+	   those asks the model anything; what stops is the spending.
+	   THE ONLY BOUND UNTIL NOW WAS TIME. One reply per --bot-gap, newest wins,
+	   which is 8,640 calls a day at ten seconds — and measured, per-call input is
+	   ~2,000 tokens since the prompt gained the armour and the refusals, against
+	   a lifetime spend of $0.47 across 514 calls. Nothing read the total and
+	   nothing alerted, so the first sign of a room grinding away at it would have
+	   been a bill. */
+	if over, spent, err := b.overCap(ctx); err != nil {
+		// A ceiling that cannot be read must not silence the helper: the failure
+		// is logged and the reply proceeds, which is the same direction
+		// courtFacts takes when the chain will not answer.
+		b.logf("chat bot: cannot read today's spend, answering anyway: %v", err)
+	} else if over {
+		if day := b.capToday(); b.capDay != day {
+			b.capDay = day
+			b.logf("chat bot: daily cost cap reached (%d of %d micros); "+
+				"no more model calls today, fixed lines still answer",
+				spent, b.CostCapMicros)
+		}
+		return nil
+	}
 	/* THE TWO CHANNELS, SPLIT. Everything below that the operator says is built
 	   into `instr` and handed to the system channel; `prompt` is the untrusted
 	   block and nothing else. See untrustedOpen for the measurement that forced
@@ -1792,6 +1832,26 @@ func botUnsafeReply(text string, allow []string) string {
 		}
 	}
 	return ""
+}
+
+// capToday is the start of the current UTC day, which is the window the cap
+// counts over. UTC rather than local, so a deployment that moves does not get a
+// day with two midnights or none.
+func (b *Bot) capToday() int64 {
+	t := b.now().UTC()
+	return time.Date(t.Year(), t.Month(), t.Day(), 0, 0, 0, 0, time.UTC).Unix()
+}
+
+// overCap reports whether today's spend has reached the ceiling, and what it is.
+func (b *Bot) overCap(ctx context.Context) (bool, int64, error) {
+	if b.CostCapMicros <= 0 {
+		return false, 0, nil
+	}
+	spent, err := b.Store.SpendSince(ctx, b.capToday())
+	if err != nil {
+		return false, 0, err
+	}
+	return spent >= b.CostCapMicros, spent, nil
 }
 
 // botTrim caps the reply at the room's limit and takes any leading markdown off.

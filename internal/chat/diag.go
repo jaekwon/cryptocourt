@@ -472,6 +472,28 @@ func (s *Store) BotReplyIDs(ctx context.Context, chain, court string, since int6
 }
 
 // BotStats totals the table for the diagnostics page.
+/* SpendSince is what the helper has cost since an instant, in micros.
+
+WINDOWED, BECAUSE BotStats IS NOT. That one sums the whole table, which is the
+right number for a page reporting what the helper has ever cost and the wrong
+one for a ceiling: a lifetime total crosses any cap eventually and then stays
+crossed, so the clerk would go quiet for ever on the strength of a year of
+ordinary use.
+
+EVERY KIND COUNTS. A pass and a withheld reply are billed exactly like an answer
+— the input was sent and charged — so a cap that counted only answers would be
+a cap an attacker walks straight through by asking things that get refused.
+*/
+func (s *Store) SpendSince(ctx context.Context, since int64) (int64, error) {
+	var n sql.NullInt64
+	if err := s.r.QueryRowContext(ctx,
+		`SELECT sum(cost_micros) FROM bot_replies WHERE created_at >= ?`,
+		since).Scan(&n); err != nil {
+		return 0, err
+	}
+	return n.Int64, nil
+}
+
 func (s *Store) BotStats(ctx context.Context) (botStats, error) {
 	var (
 		st                         botStats

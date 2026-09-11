@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // THE HASHING KEY'S WARNING, and the case it must NOT fire on.
@@ -236,6 +237,68 @@ func TestTheFileModeWarningAndWhatItMustNotWarnAbout(t *testing.T) {
 // which is what happened before it was gated. Flags going quiet is the safe outcome and a
 // visible one, since an operator who set the flag deliberately would otherwise be left
 // wondering where the flags went.
+/* THE SPEND WARNING, and what it must stay quiet about.
+
+The helper's only bound was time: one reply per --bot-gap, newest wins. At ten
+seconds that is 8,640 calls a day, and per-call input measured ~2,000 tokens
+once the prompt carried the armour and the refusals — against a lifetime spend
+of $0.47 across 514 calls. Nothing read the total and nothing alerted.
+
+A WARNING AND A DEFAULT OF ZERO, for the reason keyWarning gives: a default
+ceiling that silenced a working helper would be this feature's own worst
+failure. So the arithmetic goes in the message instead, because "no cap" is
+abstract and a number is not.
+*/
+func TestTheSpendWarningFiresOnlyWhenNothingBoundsTheSpending(t *testing.T) {
+	// $1 per million input tokens, which is the shipped default.
+	const price = 1_000_000
+
+	w := capWarning(0, 10*time.Second, price)
+	if w == "" {
+		t.Fatal("an uncapped helper must say so at startup")
+	}
+	// THE CALL CEILING IS THE GAP'S, and the message has to name it or an
+	// operator cannot compare it to anything.
+	if !strings.Contains(w, "8640 calls") {
+		t.Errorf("the message must name the call ceiling the gap allows: %q", w)
+	}
+	// ...AND TURN IT INTO A FIGURE. 8,640 calls x 2,000 input tokens x $1/Mtok is
+	// 17,280,000 micro-dollars, about seventeen dollars a day.
+	if !strings.Contains(w, "17280000") {
+		t.Errorf("the message must do the arithmetic: %q", w)
+	}
+	if !strings.Contains(w, "bot-cost-cap") {
+		t.Errorf("a warning must name the flag that answers it: %q", w)
+	}
+
+	// A HALVED GAP DOUBLES BOTH, which is what says the figure is computed from
+	// the configuration rather than written down.
+	if w2 := capWarning(0, 5*time.Second, price); !strings.Contains(w2, "17280 calls") {
+		t.Errorf("the ceiling must follow the gap: %q", w2)
+	}
+
+	// AND IT IS SILENT ONCE A CEILING EXISTS, which is how a warning stays worth
+	// reading.
+	for _, c := range []struct {
+		name string
+		cap  int64
+		gap  time.Duration
+	}{
+		{"a cap is set", 5_000_000, 10 * time.Second},
+		{"a small cap is still a cap", 1, 10 * time.Second},
+		// No gap means the call ceiling is not a number, so there is nothing
+		// honest to say about it.
+		{"no gap configured", 0, 0},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			if got := capWarning(c.cap, c.gap, price); got != "" {
+				t.Errorf("capWarning(%d, %s) = %q; warning on a bounded setup is how "+
+					"a warning gets ignored", c.cap, c.gap, got)
+			}
+		})
+	}
+}
+
 func TestTheCountryHeaderWarningFiresOnlyWhereTheHeaderIsIgnored(t *testing.T) {
 	for _, c := range []struct {
 		name    string
