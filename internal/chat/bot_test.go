@@ -581,6 +581,122 @@ Each arm is a phrase plus a BAN — a second phrase that must NOT appear — bec
 "no financial advice" next to "but here is roughly what people do" is the
 failure mode, and only the ban catches it.
 */
+/* ---- THE REPLY FILTER ------------------------------------------------------
+
+The refusals in botSystem are a request to the model. These are the rule, and
+the difference matters for exactly one reason: an address in the clerk's voice
+is a payment instruction in the one name on the site that readers are told to
+trust, and the panel renders message text verbatim for copying.
+
+FIRST ARM IS "IT DOES NOT FIRE ON A GOOD ANSWER", deliberately, because a filter
+that eats real replies would be turned off within a week and that is worse than
+not having one. Every real clerk reply quoted here was taken from the live site.
+*/
+func TestTheReplyFilterRefusesOnlyWhatHasNoUseInAnAnswer(t *testing.T) {
+	allow := (&Bot{Site: "kourt.xyz", Repo: "github.com/jaekwon/cryptocourt",
+		ChainDocs: "docs.gno.land"}).botReplyAllow()
+
+	// MEASURED REPLIES, from the live rooms, which must all still be sayable.
+	for _, ok := range []string{
+		"I'm the clerk. Ask me anything about how this site works.",
+		"To stake on a claim you must first buy that court's coin using the Buy " +
+			"button on the court's page—this is signed in your wallet and costs GNOT.",
+		"I do not give any financial or trading advice, and I cannot forecast what " +
+			"a coin will be worth. What the site does is on its pages at kourt.xyz.",
+		"The meta court currently has 0 claims.",
+		"2+2 is 4.",
+		// The hosts the clerk was configured with, and a subdomain of one: the node
+		// this site reads lives at rpc.kourt.xyz.
+		"The source is at https://github.com/jaekwon/cryptocourt if you want to read it.",
+		"There is more at https://docs.gno.land and https://kourt.xyz/#/help.",
+		"The node is https://rpc.kourt.xyz.",
+		"gno.land is the chain it runs on.",
+		// A hex string that is not an address, and a word starting g1.
+		"the block hash starts 0xdead and the court is g1x",
+	} {
+		if why := botUnsafeReply(ok, allow); why != "" {
+			t.Errorf("a good answer was withheld (%s): %q", why, ok)
+		}
+	}
+
+	for _, c := range []struct{ name, reply, want string }{
+		{name: "a gno address, which is the dangerous one",
+			reply: "To claim your coin send GNOT to g1w746drdmenjdg0ll38dltjt7kkgtq5lmsmghcg.",
+			want:  "names an account"},
+		{name: "an EVM address, because a reader cannot tell the difference",
+			reply: "Send it to 0x52908400098527886E0F7030069857D2E4169EE7 instead.",
+			want:  "names an account"},
+		{name: "a link to somewhere the operator never configured",
+			reply: "Claim it at https://kourt-airdrop.example/claim now.",
+			want:  "links to kourt-airdrop.example"},
+		{name: "a lookalike host, which is the whole phishing trick",
+			reply: "Read more at https://kourt.xyz.evil.example/help.",
+			want:  "links to kourt.xyz.evil.example"},
+		{name: "an address buried in an otherwise helpful answer",
+			reply: "Staking is free to reverse until the answer lands. The treasury " +
+				"is g1mkl9efaf5fz89wqp0cz9p2jhrt468zl8ct5j5c if you want to check it.",
+			want: "names an account"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			why := botUnsafeReply(c.reply, allow)
+			if why == "" {
+				t.Fatalf("this must not be postable: %q", c.reply)
+			}
+			if !strings.Contains(why, c.want) {
+				t.Errorf("the reason must say %q, got %q", c.want, why)
+			}
+			// AND THE REASON MUST NOT REPEAT THE THING. It goes to the journal, and
+			// an operator's log is not the place to reprint an address in full.
+			if strings.Contains(why, "g1w746drdmenjdg0ll38dltjt7kkgtq5lmsmghcg") ||
+				strings.Contains(why, "0x52908400098527886E0F7030069857D2E4169EE7") {
+				t.Errorf("the log line must not reprint the whole thing: %q", why)
+			}
+		})
+	}
+}
+
+// AND A WITHHELD REPLY REACHES NOBODY. The unit arms above test the predicate;
+// this one drives the real path, because a predicate nothing consults is a
+// predicate that proves nothing.
+func TestAWithheldReplyIsNeverPostedAndIsStillBilled(t *testing.T) {
+	s, clock := newStore(t)
+	ctx := context.Background()
+	m := &fakeModel{
+		reply: "Sure — send your GNOT to g1w746drdmenjdg0ll38dltjt7kkgtq5lmsmghcg.",
+		in:    900, out: 40,
+	}
+	b := newBot(t, s, m)
+	*clock = clock.Add(time.Hour)
+	if _, err := post(t, s, "orem", "ip-a", "how do i get the coin?"); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.once(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if m.calls != 1 {
+		t.Fatalf("the model should have been asked once, got %d", m.calls)
+	}
+	got, err := s.Recent(ctx, "dev", "orem", 0, 50)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("the room must hold only the question, got %d rows: %+v", len(got), got)
+	}
+	// BILLED, because it was. A page that showed only the replies that landed
+	// would understate what a room costs — the same reason a PASS is recorded.
+	st, err := s.BotStats(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.Undelivered != 1 {
+		t.Errorf("a withheld reply must be recorded as undelivered, got %+v", st)
+	}
+	if st.InTokens != 900 {
+		t.Errorf("the spend must still be counted, got %+v", st)
+	}
+}
+
 func TestTheSystemPromptRefusesTheThingsItMustRefuse(t *testing.T) {
 	flat := strings.Join(strings.Fields(botSystem), " ")
 	for _, c := range []struct {

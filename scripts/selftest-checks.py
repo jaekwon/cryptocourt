@@ -1799,6 +1799,27 @@ control("the archive route goes missing", NGINXCONF,
         "location /m/ {", "location /gone/ {",
         "unreachable", argv=["python3", MEDIAHOSTS])
 
+print("\ncheck-addr-shapes")
+# An address is recognised twice — the claim prefilter floors a claim that names
+# one, the clerk's reply filter refuses to POST one — and a form only one of them
+# knows is a form the other mishandles in silence.
+ADDRSHAPES = "scripts/check-addr-shapes.py"
+CHATBOT = "internal/chat/bot.go"
+control("the two address patterns drift apart", CHATBOT,
+        'botReplyGnoAddr = regexp.MustCompile(`\\bg1[0-9a-z]{38}\\b`)',
+        'botReplyGnoAddr = regexp.MustCompile(`\\bg1[0-9a-z]{39}\\b`)',
+        "no longer agree", argv=["python3", ADDRSHAPES])
+# AND THE VACUITY ARMS, which is why the guard checks each file's pattern before
+# comparing them: a pattern that catches nothing, and one that catches anything.
+control("an address pattern that matches nothing", CHATBOT,
+        'botReplyGnoAddr = regexp.MustCompile(`\\bg1[0-9a-z]{38}\\b`)',
+        'botReplyGnoAddr = regexp.MustCompile(`\\bg1zzzzzzzz[0-9a-z]{38}\\b`)',
+        "no longer matches a real address", argv=["python3", ADDRSHAPES])
+control("an address pattern loose enough to eat good answers", CHATBOT,
+        'botReplyEVMAddr = regexp.MustCompile(`0x[0-9a-fA-F]{40}\\b`)',
+        'botReplyEVMAddr = regexp.MustCompile(`0x[0-9a-fA-F]+`)',
+        "which is not an address", argv=["python3", ADDRSHAPES])
+
 print("\ncheck-nginx-headers")
 # CONTENTS AND DELIVERY ARE TWO QUESTIONS. check-media-hosts above proves the
 # policy agrees with the realm and the composer; every arm here is about whether

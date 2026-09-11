@@ -133,6 +133,10 @@ web-constants:
 	# add_header of its own drops every inherited one, which had left the
 	# document with no policy while the JSON API carried it.
 	python3 scripts/check-nginx-headers.py
+	# An address is recognised in two places -- the claim prefilter and the
+	# clerk's reply filter -- for different reasons, and a form only one of them
+	# knows about is a form the other mishandles in silence.
+	python3 scripts/check-addr-shapes.py
 	python3 scripts/make-demo-exhibit.py --check
 
 # Every crossing entrypoint refuses a stale realm frame. No test can assert this

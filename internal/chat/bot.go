@@ -1539,6 +1539,18 @@ func (b *Bot) answer(ctx context.Context, c botCandidate) error {
 	if text == "" {
 		return nil
 	}
+	/* THE FILTER, BEFORE THE PAUSE AND BEFORE THE POST. Recorded as undelivered,
+	   which is what it is: the model answered, we were billed, and nobody read
+	   it. The log names the reason so an operator can see a model that has
+	   started doing this rather than discovering it in a room. */
+	if why := botUnsafeReply(text, b.botReplyAllow()); why != "" {
+		b.logf("chat bot: reply withheld in %s/%s: %s (in=%d out=%d)",
+			c.chain, c.court, why, in, out)
+		actx, done := acctCtx(ctx)
+		defer done()
+		return b.Store.recordBotSpend(actx, b.Model, botKindUndelivered, in, out,
+			b.costMicros(in, out))
+	}
 	// HELD BACK FOR AS LONG AS IT WOULD HAVE TAKEN TO WRITE. See Bot.TypeCPS —
 	// the delay is the whole difference between a participant and a service. It
 	// happens HERE, after the model has answered and before the message lands, so
@@ -1587,6 +1599,93 @@ func (b *Bot) answer(ctx context.Context, c botCandidate) error {
 	defer done()
 	return b.Store.RecordBotReply(actx, c.chain, c.court, id, b.Model,
 		in, out, b.costMicros(in, out))
+}
+
+/*
+	---- the reply filter ------------------------------------------------------
+
+A PROMPT IS A REQUEST; THIS IS A RULE. botSystem tells the clerk never to put an
+address in a reply and never to send anybody anywhere, and live probes show it
+complying — but "the model agreed not to" is not a property of the system, it is
+a property of this week's model under this week's phrasing. A reader who gets
+the clerk to emit an address has a payment instruction in the one voice on the
+site whose name is reserved, and the panel renders message text verbatim, so it
+is there to be copied into a wallet.
+
+WHAT IS CHECKED IS WHAT HAS NO LEGITIMATE USE IN A REPLY. The clerk explains how
+the site works; it has never had a reason to name an account or to point at a
+host the operator did not configure. Everything softer — a forecast, a
+recommendation, a hedge — stays with the prompt, because a regex for those
+catches honest sentences and this filter is only worth having if it never fires
+on a good answer.
+
+WHAT IT DOES INSTEAD IS NOTHING. The reply is dropped, the spend is recorded and
+the log says why. Redacting the offending token was the other option and is
+worse: "send your coin to [removed]" is still a payment instruction, and a
+half-scrubbed sentence is the kind of thing that reads as authoritative.
+*/
+var (
+	/* THE SAME SHAPE internal/scan/prefilter.go uses for reGnoAddr and reEVMAddr,
+	   and check-addr-shapes.py holds the two files to it. Two definitions rather
+	   than an export because the packages are otherwise unrelated and a guard is
+	   cheaper than a dependency. */
+	botReplyGnoAddr = regexp.MustCompile(`\bg1[0-9a-z]{38}\b`)
+	botReplyEVMAddr = regexp.MustCompile(`0x[0-9a-fA-F]{40}\b`)
+	// An explicit link only. A bare domain is not clickable in the panel — nothing
+	// in chat.js linkifies message text — and "kourt.xyz" in prose is how the
+	// clerk points at the site, so matching bare domains would fire on good
+	// answers, which is the one thing this must not do.
+	botReplyURL = regexp.MustCompile(`(?i)\bhttps?://([a-z0-9.-]+)`)
+)
+
+// botReplyHostOK reports whether a host is one the operator configured.
+//
+// Derived from the fields the bot was built with rather than a list written
+// here, so it cannot drift from what the clerk was told to point at. A subdomain
+// of an allowed host passes: rpc.kourt.xyz is kourt.xyz's own node.
+func botReplyHostOK(host string, allow []string) bool {
+	host = strings.ToLower(strings.TrimSuffix(host, "."))
+	for _, a := range allow {
+		if a == "" {
+			continue
+		}
+		if host == a || strings.HasSuffix(host, "."+a) {
+			return true
+		}
+	}
+	return false
+}
+
+// botReplyAllow is the host list, taken from what the clerk was configured with.
+func (b *Bot) botReplyAllow() []string {
+	out := []string{"gno.land"}
+	for _, f := range []string{b.Site, b.Repo, b.ChainDocs} {
+		h := strings.ToLower(strings.TrimSpace(f))
+		h = strings.TrimPrefix(strings.TrimPrefix(h, "https://"), "http://")
+		if i := strings.IndexAny(h, "/:"); i >= 0 {
+			h = h[:i]
+		}
+		if h != "" {
+			out = append(out, h)
+		}
+	}
+	return out
+}
+
+// botUnsafeReply names why a reply must not be posted, or "" when it may be.
+func botUnsafeReply(text string, allow []string) string {
+	if m := botReplyGnoAddr.FindString(text); m != "" {
+		return "it names an account (" + m[:6] + "…)"
+	}
+	if m := botReplyEVMAddr.FindString(text); m != "" {
+		return "it names an account (" + m[:6] + "…)"
+	}
+	for _, m := range botReplyURL.FindAllStringSubmatch(text, -1) {
+		if !botReplyHostOK(m[1], allow) {
+			return "it links to " + strings.ToLower(m[1])
+		}
+	}
+	return ""
 }
 
 // botTrim caps the reply at the room's limit and takes any leading markdown off.
