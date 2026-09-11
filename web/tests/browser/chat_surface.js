@@ -69,26 +69,21 @@ const ok = (n, c, d) => {
     const box = e => e.getBoundingClientRect();
     const panel = document.getElementById("chatview");
 
-    /* THE WALK IS THE TEST. A band is safe when no painted surface from it up to
-       the panel carries a plate — which is exactly the check that fails if the
-       plate ever moves back onto .chatpanel, and exactly the check that reading
-       the band's own background-color cannot make. */
+    /* THE WALK IS THE TEST, AND IT RUNS ALL THE WAY UP.
+       It used to stop at the panel, paired with a second arm asserting the
+       panel's own base was opaque; together those two said "and nothing above it
+       can show through either". That pairing broke as soon as the base became
+       rgba(255,255,255,.1) — and it broke in the direction that matters, with
+       the PROXY failing while the thing it stood for was still true.
+       A TRANSLUCENT PANEL IS NOT THE DEFECT. The defect was a starfield behind
+       the box you type into; whether the panel lets the page show through is a
+       different question from whether what shows through is sky. So the walk no
+       longer stops, and no longer cares what any alpha along it happens to be:
+       it asks the only question worth asking, from the band to the document, and
+       gives the same answer however the panel is tinted. */
     const skyBehind = el => {
-      for (let n = el; n; n = n.parentElement) {
-        if (plated(n)) return true;
-        if (n === panel) break;
-      }
+      for (let n = el; n; n = n.parentElement) if (plated(n)) return true;
       return false;
-    };
-    /* THREE COMPONENTS MEANS OPAQUE. The first cut of this matched the last
-       number in the string, so `rgb(10, 10, 20)` reported an alpha of 20 and the
-       arm failed on a panel that was already opaque — the test was wrong, not
-       the CSS. Chromium serialises an opaque colour as rgb() with no fourth
-       component at all, so the count is the check. */
-    const alpha = e => {
-      const c = cs(e).backgroundColor;
-      const parts = (/\(([^)]*)\)/.exec(c) || [, ""])[1].split(",");
-      return parts.length < 4 ? 1 : Number(parts[3]);
     };
 
     const head = q(".chathead"), log = q(".chatlog"), form = q(".chatform"),
@@ -102,7 +97,6 @@ const ok = (n, c, d) => {
       skyBehindForm: skyBehind(form),
       skyBehindInput: skyBehind(input),
       skyBehindNote: skyBehind(note),
-      panelOpaque: alpha(panel) === 1,
 
       /* 2. THE BANDS MEET THE LOG WITH NO SEAM EITHER SIDE OF IT.
          Not log-to-form: .chatstate and .chathere sit between them, and the
@@ -160,12 +154,12 @@ const ok = (n, c, d) => {
   ok("no sky behind the composer", m.skyBehindForm === false);
   ok("no stars behind the box you type into", m.skyBehindInput === false);
   ok("no sky behind the note", m.skyBehindNote === false);
-  /* WHICH ONLY HOLDS IF THE PANEL IS OPAQUE. The bands are transparent by
-     design — this file inherits its colours and must not grow a copy of the
-     page's tokens — so the panel's own base is the surface they are painted on,
-     and a translucent base puts the page's sky back behind all of them. */
-  ok("the panel's base is opaque, which is what the bands are painted on",
-     m.panelOpaque === true);
+  /* AND THE ARM THAT USED TO SIT HERE IS GONE ON PURPOSE. It read "the panel's
+     base is opaque, which is what the bands are painted on" — true when written
+     and false a day later, when the base became a tenth of white so the chat's
+     background would read grey rather than black. Nothing about the reported
+     defect changed; only the proxy did. The walk above now covers what this was
+     standing in for, at every alpha, so there is nothing left for it to say. */
 
   /* NO GAP EITHER SIDE OF THE LOG. Margins here were the other half of the
      defect: .chatform had margin-top and .chathead margin-bottom, so between two

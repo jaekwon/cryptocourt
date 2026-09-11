@@ -86,28 +86,27 @@ async function courtPage(browser, opts) {
        label; there is a line that links to the room, and what is worth pinning
        is that it names the court it opens. Getting that wrong would look
        identical and open somebody else's room. */
-    /* AND WHICH OF THE TWO THE RAIL SHOWS DEPENDS ON WHERE YOU ARE, which is the
-       half this block was missing and the reason it failed rather than drifted:
-       it read the section line while sitting IN the room, where the line is now
-       deliberately hidden, so "the rail offers a way into the room" was being
-       asked of a page that IS the room.
-       TWO PLACES, TWO ANSWERS. In the room: no section line, and the trail
-       carries a lit `Chat` under a court gone dim. On the court page: the line is
-       back and the court is lit again. Asserted from both sides because either
-       one alone passes with the feature half built — hiding the line without
-       hanging the trail row loses the reader entirely, and hanging the row
-       without hiding the line lights two places at once. */
+    /* THE ROOM HANGS UNDER THE COURT ON EVERY COURT ROUTE, and what changes with
+       where you are is only which row is lit.
+       ASKED FOR IN TWO STEPS, and this block was rewritten for each. First the
+       room got a trail row while you were inside it; then "CHAT should just be
+       under COVID. it is after all a chat *in* the covid court" made it permanent
+       — one of the court's children, beside a claim and a folder, present whether
+       or not you have walked in. The standalone section at the foot of the nav is
+       the fallback for the routes that resolve a room but get no trail: /here and
+       /raw/<slug>.
+       BY CLASS, NOT BY LABEL. The row carries a count and a dot as well as the
+       word, so its text reads "Chatquiet" or "Chat4 here" — matching the label
+       cost four failing arms before, and will again the next time the counts
+       change wording. .chatrow is what the code puts there on purpose. */
     const railState = () => page.evaluate(() => {
       const h = document.getElementById("railchathead");
       const a = h && h.querySelector("a.railchatlink");
       const rail = document.querySelector("aside.rail") || document.querySelector(".rail");
       const trail = [...document.querySelectorAll("#nav a.trail")].map(t => ({
-        /* THE BRANCH GLYPH IS PART OF textContent and it cost four failing arms:
-           a deep row reads "↳Chat", so `=== "Chat"` matched nothing and the
-           feature looked absent when it was working. It lives in its own span,
-           so the label is what is left once that span is taken out. */
         label: [...t.childNodes].filter(n => !(n.classList && n.classList.contains("b")))
                  .map(n => n.textContent || "").join("").replace(/\s+/g, " ").trim(),
+        chat: /\bchatrow\b/.test(t.className),
         deep: /\bdeep\b/.test(t.className),
         lit: /(^|\s)on(\s|$)/.test(t.className),
         href: t.getAttribute("href"),
@@ -122,19 +121,22 @@ async function courtPage(browser, opts) {
 
     {
       const inRoom = await railState();
-      const chatRow = inRoom.trail.find(t => t.label === "Chat");
+      const chatRow = inRoom.trail.find(t => t.chat);
       const courtRow = inRoom.trail.find(t => /OREM/.test(t.label));
-      ok("in the room the rail hangs Chat under the court",
+      ok("the rail hangs the room under the court",
          !!chatRow && chatRow.deep === true, JSON.stringify(inRoom.trail));
-      ok("...lit, so the rail says where you are",
-         !!chatRow && chatRow.lit === true, JSON.stringify(chatRow));
-      ok("...and linking to the room it names",
+      ok("...linking to the room it names",
          !!chatRow && chatRow.href === "#/c/orem/chat", JSON.stringify(chatRow));
+      ok("...lit while you are in it, so the rail says where you are",
+         !!chatRow && chatRow.lit === true, JSON.stringify(chatRow));
       /* THE COURT GIVES THE MARKER UP, for the same reason navTrail takes it off
          Directory one level higher: two lit rows claim two places. */
       ok("...while the court above it goes dim",
          !!courtRow && courtRow.lit === false, JSON.stringify(courtRow));
-      ok("...and the standalone Chat section stands down",
+      /* AND THE SECTION IS GONE FROM A COURT ROUTE ENTIRELY, which is the whole
+         of the second request: the same line said twice, three groups apart, was
+         what "CHAT should just be under COVID" was about. */
+      ok("...and the standalone Chat section is not also shown",
          inRoom.lineShown === false, JSON.stringify(inRoom));
       ok("...with no chat panel left in the rail either",
          inRoom.panelInRail === false, JSON.stringify(inRoom));
@@ -145,31 +147,72 @@ async function courtPage(browser, opts) {
       await page.waitForFunction(() => !document.getElementById("chatview"), {timeout: 20000});
       await new Promise(r => setTimeout(r, 700));
       const onCourt = await railState();
-      ok("back on the court page the rail offers a way into the room",
-         onCourt.lineShown === true && !!onCourt.href, JSON.stringify(onCourt));
-      ok(`...naming the court it opens (${onCourt.href})`,
-         onCourt.href === "#/c/orem/chat", JSON.stringify(onCourt));
+      const chatRow = onCourt.trail.find(t => t.chat);
+      /* THE ROOM IS STILL THERE WHEN YOU ARE NOT IN IT. This is the arm the
+         earlier shape got wrong: it asserted no Chat row on the court page,
+         which was right while the row meant "you are here" and is exactly
+         backwards now that it means "this court has one". */
+      ok("on the court page the room still hangs under the court",
+         !!chatRow && chatRow.href === "#/c/orem/chat", JSON.stringify(onCourt.trail));
+      ok("...unlit, because you are not in it", !!chatRow && chatRow.lit === false,
+         JSON.stringify(chatRow));
+      ok("...with the court itself lit instead",
+         onCourt.trail.some(t => /OREM/.test(t.label) && t.lit),
+         JSON.stringify(onCourt.trail));
+      ok("...and still no standalone section duplicating it",
+         onCourt.lineShown === false, JSON.stringify(onCourt));
       /* AND NO PANEL BESIDE IT. The whole point of the move is that the rail
          stopped holding a room; a second mount here would put the reader in two
          of them and split the poller between them. */
       ok("...and no chat panel left in the rail", onCourt.panelInRail === false,
          JSON.stringify(onCourt));
-      ok("...with the court lit again and no Chat row under it",
-         onCourt.trail.some(t => /OREM/.test(t.label) && t.lit)
-           && !onCourt.trail.some(t => t.label === "Chat"),
-         JSON.stringify(onCourt.trail));
       /* AND BACK IN, WHICH IS THE CASE THE CODE ALMOST GOT WRONG. railChatFor
          returns early when the slug has not changed, and court→room→court never
-         changes it — so the hide has to happen before that return. Walking the
-         round trip is the only way to catch a hide that only works on a reload. */
+         changes it — so anything that depends on the route rather than the court
+         has to happen before that return. Walking the round trip is the only way
+         to catch a marker that only moves on a reload. */
       await page.evaluate(() => { location.hash = "#/c/orem/chat"; });
       await page.waitForFunction(
         () => !!document.querySelector("#chatview .chatlog"), {timeout: 20000});
       await new Promise(r => setTimeout(r, 700));
       const again = await railState();
-      ok("and the line stands down again on the way back in",
-         again.lineShown === false && !!again.trail.find(t => t.label === "Chat" && t.lit),
-         JSON.stringify(again));
+      ok("and the marker moves back to the room on the way in",
+         !!again.trail.find(t => t.chat && t.lit)
+           && !again.trail.some(t => /OREM/.test(t.label) && t.lit),
+         JSON.stringify(again.trail));
+    }
+
+    /* THE GLOBE AND THE COURT IT BORROWS, which is the one transition where the
+       section has to change state while the SLUG does not.
+       /here has no court trail to hang under, so it keeps the standalone
+       section, and the room it names is the meta court's — META_SLUG. Walking
+       from there to /c/meta therefore goes: same slug, so railChatFor takes its
+       early return, but the row state flips from absent to present and the
+       section has to stand down anyway.
+       MUTATION TESTING IS WHY THIS ARM EXISTS. Deleting the hide that runs
+       BEFORE that early return broke nothing any other arm could see — every
+       other path either arrives fresh or keeps hasRow constant — and this is the
+       only walk in the suite where those two come apart. */
+    {
+      await page.evaluate(() => { location.hash = "#/here"; });
+      await page.waitForFunction(
+        () => !document.querySelector("#nav a.trail.chatrow"), {timeout: 20000});
+      await new Promise(r => setTimeout(r, 900));
+      const globe = await railState();
+      ok("the globe has no court to hang the room under",
+         !globe.trail.some(t => t.chat), JSON.stringify(globe.trail));
+      ok("...so it keeps the standalone section, which is the only way in there",
+         globe.lineShown === true && !!globe.href, JSON.stringify(globe));
+
+      await page.evaluate(() => { location.hash = "#/c/meta"; });
+      await page.waitForFunction(
+        () => !!document.querySelector("#nav a.trail.chatrow"), {timeout: 20000});
+      await new Promise(r => setTimeout(r, 900));
+      const meta = await railState();
+      ok("stepping onto that same court hangs the row", !!meta.trail.find(t => t.chat),
+         JSON.stringify(meta.trail));
+      ok("...and the section stands down even though the court did not change",
+         meta.lineShown === false, JSON.stringify(meta));
     }
     ok("a court page mounts the chat panel", r.mounted);
     ok("...in the page, not in the rail", r.inView);
