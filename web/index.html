@@ -1058,6 +1058,19 @@ a.card:hover{border-color:var(--line-2)}
    is already in the line beside it and two counts saying nearly the same thing
    is how a status line stops being read. Its meaning is in the sr-only text
    next to it, so it is not a colour carrying information alone. */
+/* THE BUBBLE. A count rather than the dot beside it, because "something
+   happened" and "eleven things happened" are different invitations -- and it
+   rides at the end of the row like the bell does, so a court with both reads
+   left to right as name, bell, bubble. Tabular figures so 8 and 11 are the same
+   width and the row does not twitch as the number changes. */
+.railbubble{margin-left:auto; flex:0 0 auto; min-width:17px; height:17px; padding:0 5px;
+  border-radius:9px; background:var(--accent); color:var(--accent-ink);
+  font-size:11px; font-weight:700; line-height:17px; text-align:center;
+  font-variant-numeric:tabular-nums}
+/* AFTER THE BELL IT IS ONLY A GAP. The bell already carries margin-left:auto;
+   a second auto on the same row would split the space between them instead of
+   putting both at the end. */
+.nav a.trail .railbell + .railbubble{margin-left:6px}
 .railchatdot{width:7px; height:7px; border-radius:50%; background:var(--accent);
   flex:none; align-self:center; box-shadow:0 0 0 3px var(--accent-wash)}
 /* ---- AND THE VIEW GIVES THE ROOM THE VIEWPORT ---------------------------
@@ -7627,7 +7640,146 @@ async function railChatPoll(slug){
     if(slug !== RAILCHATSLUG) return;   // the reader moved on while this was in flight
     RAILCHATLAST = d;                   // kept so the line can repaint without a re-read
     railChatRender(slug, d);
+    /* AND IF THE READER IS STANDING IN THIS ROOM, THAT READING IS SEEN.
+       railChatFor marks the watermark on arrival, but it can only mark what it
+       knows: RAILCHATTOP is reset to 0 by the route change and is not filled
+       until this poll returns, so on a FIRST visit it wrote nothing and the
+       badge survived the visit. Measured: opening covid left its bubble at 3.
+       Marking here, where the top id actually becomes known, is what makes
+       walking into a room clear it. */
+    if(inChatRoute(location.hash.replace(/^#/, ""))){
+      railChatMarkSeen(slug, RAILCHATTOP);
+      chatPulseSoon();                  // and the bubbles repaint from the new mark
+    }
   }catch(_){ /* a rail line is not worth a visible error */ }
+}
+/* ACTIVITY ANYWHERE ON THE SITE, not only inside the court it belongs to.
+   Asked for as "when there is new chat activity even when i'm not on the chat
+   page, show something (a bubble w/ number?) live so i know there are people
+   talking". The existing poller could not answer it: railChatFor only picks a
+   slug on /c/, /raw/ and /here, so on the directory or About there was no row,
+   no poll and nothing to show.
+
+   IT WATCHES WHAT THE RAIL ALREADY NAMES. navTrail hangs a row per court on the
+   directory and the court's own row elsewhere, so the set of slugs to watch is
+   on the page already -- no second source of truth for "which courts exist", and
+   nothing is polled that the reader cannot see a row for.
+
+   ONE REQUEST PER COURT, AND CAPPED. A single endpoint would scale better and
+   the store has the query for it (ActiveRooms), but the count would then be
+   "recent messages + max id" and the unseen part would have to be approximated.
+   Reusing the room's own read gives railChatCounts the message list it already
+   knows how to count exactly -- unseen AND within the hour, the same number the
+   dot has always meant. CHATPULSE_MAX is the price ceiling: past a handful of
+   courts this wants the endpoint instead, and the cap is what makes that a
+   decision rather than a slow leak.
+
+   SEQUENCED, because a reply can outlive the route that asked for it. Each pass
+   stamps CHATPULSESEQ and a reply from an older pass is dropped, the same guard
+   railChatPoll uses for a single slug. */
+/* ONE SPELLING OF THE ROOM ROUTE. railChatFor tested this inline and its own
+   comment warned that spelling it twice is how two copies drift; railChatPoll
+   now needs the same question, so it becomes a function rather than a third
+   copy. */
+function inChatRoute(hash){ return /^\/c\/[a-z0-9-]+\/chat$/.test(hash || ""); }
+const CHATPULSE_MAX = 6;
+let CHATPULSETICK = null, CHATPULSESEQ = 0;
+let CHATPULSEKNOWN = [];
+function chatPulseSlugs(){
+  const out = [];
+  document.querySelectorAll('#nav a.trail[href^="#/c/"]').forEach(a=>{
+    const m = /^#\/c\/([a-z0-9-]+)$/.exec(a.getAttribute("href") || "");
+    if(m && out.indexOf(m[1]) < 0) out.push(m[1]);
+  });
+  /* AND THEY ARE REMEMBERED, because /about and /me hang no court rows at all --
+     so a reader who walks off the directory would lose the badge entirely, which
+     is the case the request named: "even when i'm not on the chat page". The
+     last set the rail did name is the right fallback: it is what this reader has
+     actually been shown, not a guess at what exists. */
+  if(out.length) CHATPULSEKNOWN = out;
+  return (out.length ? out : CHATPULSEKNOWN).slice(0, CHATPULSE_MAX);
+}
+function chatPulsePaint(slug, n){
+  document.querySelectorAll('#nav a.trail[href="#/c/' + slug + '"]').forEach(a=>{
+    const old = a.querySelector(".railbubble");
+    if(!(n > 0)){ if(old) old.remove(); return; }
+    const txt = n > 99 ? "99+" : String(n);
+    if(old){ if(old.textContent !== txt) old.textContent = txt; return; }
+    const b = document.createElement("span");
+    b.className = "railbubble";
+    b.textContent = txt;
+    /* THE NUMBER IS NOT THE WHOLE MESSAGE. A bubble reading "3" beside a court
+       says nothing to a screen reader about what three is, so the words go in a
+       label and the digits are left as decoration. */
+    b.setAttribute("aria-hidden", "true");
+    const sr = document.createElement("span");
+    sr.className = "sr-only";
+    sr.textContent = ", " + n + " new message" + (n === 1 ? "" : "s");
+    a.appendChild(b); a.appendChild(sr);
+  });
+}
+/* AND ONE BADGE ON DIRECTORY, which is the row that is on the rail whatever
+   route you are on. The per-court bubbles only exist where the rail names the
+   court -- the directory, or the court you are in -- so on /about and /me there
+   was nowhere to draw and the request ("even when i'm not on the chat page")
+   went unanswered on exactly those pages. Directory is the parent of all of
+   them, so the total hangs there.
+   NOT ON THE DIRECTORY ITSELF, where the per-court rows are showing the same
+   numbers broken down: a total above its own parts is the same fact said twice,
+   and the breakdown is the more useful half. */
+function chatPulsePaintTotal(n, showing){
+  const dir = document.querySelector('#nav a[data-k="dir"]');
+  if(!dir) return;
+  const old = dir.querySelector(".railbubble"), sr = dir.querySelector(".railbubbletxt");
+  if(!(n > 0) || showing){ if(old) old.remove(); if(sr) sr.remove(); return; }
+  const txt = n > 99 ? "99+" : String(n);
+  if(old){ if(old.textContent !== txt) old.textContent = txt;
+           if(sr) sr.textContent = ", " + n + " new message" + (n === 1 ? "" : "s"); return; }
+  const b = document.createElement("span");
+  b.className = "railbubble"; b.textContent = txt; b.setAttribute("aria-hidden", "true");
+  const s = document.createElement("span");
+  s.className = "sr-only railbubbletxt";
+  s.textContent = ", " + n + " new message" + (n === 1 ? "" : "s");
+  dir.appendChild(b); dir.appendChild(s);
+}
+async function chatPulseOnce(){
+  const base = (typeof chatEndpoint === "function")
+    ? chatEndpoint({...CFG, chat: chatBase()}) : "";
+  if(!base) return;
+  const seq = ++CHATPULSESEQ;
+  const rows = document.querySelectorAll('#nav a.trail[href^="#/c/"]').length > 0;
+  let total = 0;
+  for(const slug of chatPulseSlugs()){
+    try{
+      const r = await fetch(base + "/api/chat/" + encodeURIComponent(CFG.chainid||"dev")
+        + "/" + encodeURIComponent(slug) + "?limit=50", {cache:"no-store"});
+      if(!r.ok || seq !== CHATPULSESEQ) continue;
+      const d = await r.json();
+      if(seq !== CHATPULSESEQ) return;      // the reader moved on mid-sweep
+      const n = railChatCounts(slug, d).fresh;
+      total += n;
+      chatPulsePaint(slug, n);
+    }catch(_){ /* a bubble is not worth a visible error */ }
+  }
+  if(seq === CHATPULSESEQ) chatPulsePaintTotal(total, rows);
+}
+/* THE SWEEP FOLLOWS THE RAIL, NOT THE RENDER, and that distinction is the whole
+   bug this replaced. chatPulseStart runs from render() and swept immediately --
+   but on the directory navTrail hangs the court rows from a LATER callback, when
+   the court list arrives, so the first sweep saw an empty rail, polled nothing,
+   and the badge did not appear until the twenty-second tick. Measured as zero
+   requests from the directory with three rooms' worth of traffic waiting.
+   DEBOUNCED, because navTrail is rebuilt from scratch on every render and a
+   sweep per rebuild would be several rounds of fetches for one navigation. */
+let CHATPULSESOON = null;
+function chatPulseSoon(){
+  if(CHATPULSESOON) clearTimeout(CHATPULSESOON);
+  CHATPULSESOON = setTimeout(()=>{ CHATPULSESOON = null; chatPulseOnce(); }, 300);
+}
+function chatPulseStart(){
+  chatPulseSoon();
+  if(CHATPULSETICK) return;                 // one timer, however many renders
+  CHATPULSETICK = setInterval(chatPulseOnce, RAILCHAT_MS);
 }
 function railChatFor(hash){
   const rc = document.getElementById("railchat");
@@ -7644,7 +7796,7 @@ function railChatFor(hash){
      every arrival, including a reload or a pasted link.
      ONE TEST, AND navTrail ASKS IT AGAIN of the same hash. Spelling the regex
      twice in one function is how the two drift apart. */
-  const inRoom = /^\/c\/[a-z0-9-]+\/chat$/.test(hash || "");
+  const inRoom = inChatRoute(hash);
   if(inRoom && slug){
     railChatMarkSeen(slug, RAILCHATTOP);
     /* AND REPAINT AT ONCE, from the reading already in hand. Marking it seen
@@ -7733,6 +7885,11 @@ async function render(){
   main.innerHTML = crumbs([{label:"Directory",href:"#/"},{label:"No such page"}]) + notFound("No such page.");
   paintedSeq = seq;
   railChatFor(hash);
+  /* AND THE BUBBLES, WHICH ARE NOT THE SAME POLL. railChatFor watches ONE room,
+     the one whose route you are on; this watches every court the rail names,
+     on every route, so the badge is there on the directory and on About. Started
+     rather than restarted: chatPulseStart keeps a single timer across renders. */
+  chatPulseStart();
   viewEnter();
 }
 function setNav(hash){
@@ -7765,6 +7922,9 @@ function navTrail(hash, folders){
   const dir = nav && nav.querySelector('[data-k="dir"]');
   if(!dir) return;
   nav.querySelectorAll("a.trail").forEach(a=>a.remove());
+  // The set of courts on the rail is the set the bubbles watch, so re-sweep
+  // whenever it is rebuilt -- see chatPulseSoon.
+  if(typeof chatPulseSoon === "function") chatPulseSoon();
   const fs = (folders && folders.length)? folders : null;
   const m = /^\/c\/([a-z0-9-]+)(?:\/(\d+))?/.exec(hash);
   /* THE DIRECTORY'S OWN CHILDREN, hung the same way a court's folders are. On
