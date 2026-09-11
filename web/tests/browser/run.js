@@ -119,6 +119,7 @@ const ALL = ["embed_layout.js", "tagrow_layout.js", "route_crawl.js",
              // the meta franchise, as it actually reaches a reader
              "franchise_panel.js",
              "rail_sky.js",
+             "rail_bubble.js",
              // folders as the court page's top knob: rows AND counts follow it
              "folder_filter.js",
              // the drawn eye sits in its line — `img,svg{display:block}` makes an
