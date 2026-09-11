@@ -1102,11 +1102,34 @@ a.card:hover{border-color:var(--line-2)}
   .rail.chatbig .foot{display:none}
   .rail.chatbig .brand{padding:8px 12px}
   /* ── THE LOG HAS A FLOOR AND THE LINKS YIELD ───────────────────────────
-     A drag handle lived here and is gone; the floor below is what replaces it. */
+     A DRAG HANDLE LIVED HERE. Reported as "when i drag it down lower past
+     'Realm parameters' ... instead of the top of the chat getting dragged
+     downward, the chat div drags upward from the bottom", and then "it's hard to
+     even explain how to fix issues with it" — which is what settled it, after
+     three fixes had already landed against it and a fourth symptom was still
+     arriving.
+     DELETING IT ALONE WOULD HAVE LEFT AN EMPTY PANEL. MEASURED at 1440 wide on a
+     court page before any of this: the log was 0px tall at 900, 800 AND 700 of
+     viewport height, because the links take 333px and the panel's own controls
+     take what is left. The handle was not a convenience on top of a working
+     layout — it WAS the layout.
+     THE LINKS SCROLL, which is the half that keeps the composer reachable: they
+     yield height by scrolling rather than by pushing the panel off the bottom of
+     the rail. The floor itself is below, guarded on height. */
   #railchathead .headctl{display:flex; gap:8px; align-items:baseline}
   .rail .nav{min-height:0; overflow-y:auto}
-  .railchat .chatwarn{font-size:.78em; line-height:1.25}
-  .railchat .chathead{margin-bottom:.2rem}
+  /* THE NOTICE IS LEFT AT ITS OWN SIZE, and it was not for one commit.
+     IT WAS SET SMALLER HERE — .78em against .88em — on the reasoning that at
+     165px it was taller than the messages beneath it, which was true. Then the
+     log got a floor and the reasoning stopped holding: MEASURED with the floor
+     in place, the log is 120px whether the notice is set at 12.1px or 10.8px,
+     because the floor decides the log's height now and the notice only changes
+     how tall the PANEL is — by 4px.
+     SO IT WAS BOUGHT BACK. Four pixels of panel is not worth making the
+     anti-scam sentence the smallest type on the screen; it is the one line here
+     whose whole job is to be read by somebody who has read nothing else. The
+     tighter leading went with it, having measured 1px WORSE than the font's own
+     default. */
 }
 /* THE LOG'S FLOOR, AND WHY IT IS GUARDED ON HEIGHT AS WELL AS WIDTH.
    120px is about three short messages, and without it the log is 0px on a
