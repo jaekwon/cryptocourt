@@ -1283,7 +1283,17 @@ const CHATCSS = `
   .chatinput,.chatmoniker,.chatnamebtn,.chatsend{min-height:44px}
 }
 .chatnote{min-height:1.2em;opacity:.7;font-size:.85em;margin-top:0;padding:0 .7rem .35rem}
-.chatpanel{color:#e9e5f8;background-color:#0a0a14}
+/* A TENTH OF WHITE, NOT AN OPAQUE BLACK BASE. Asked for as "remove that padding
+   (of black color) around the chat box" and "make the background have a 10%
+   alpha white screen behind the chat, so the background of chat text is grey
+   ish". The base was #0a0a14, which on this page is very nearly the page itself,
+   so it read as a black frame around the log rather than as a panel.
+   ONE SCREEN, ON THE PANEL, and the log below is transparent over it. Two
+   stacked tenths would come to about a fifth in the log's band and a tenth in
+   the head's, which is a seam across the panel exactly where the eye follows the
+   text. Putting it here means the head, the log and the composer sit on the same
+   grey. */
+.chatpanel{color:#e9e5f8;background-color:rgba(255,255,255,.1)}
 .chatlog{
   /* THE PLATE IS ONE COPY, AND IT LIVES IN index.html -- see --skyplate there for
      where every star in it came from. It was inline here until the whole rail
@@ -1306,12 +1316,22 @@ const CHATCSS = `
      template literal; a stray pair closes it early and takes every page with it,
      not just the chat. Two backticks in this very paragraph did exactly that
      while the note above was being moved out to index.html, which is the argument
-     for keeping the warning wherever the literal is. */
-  background-image:var(--skyplate, none),
-    linear-gradient(to bottom, #0a0a14 0, #0d0c1b 30%, #130f26 65%, #181333 100%);
-  background-size:100% auto,100% 100%;
-  background-position:center -34px,0 0;
-  background-repeat:no-repeat,no-repeat}
+     for keeping the warning wherever the literal is.
+     THE DARK GRADIENT UNDER THE PLATE IS GONE with the panel's opaque base: it
+     ran #0a0a14 to #181333, which is the black the request was about, and it
+     would have sat on top of the panel's grey and hidden it in the one band that
+     matters. The plate keeps the stars; the grey behind them is the panel's.
+     AND THE NOTE ABOVE WENT IN AFTER THIS COMMENT ALREADY CLOSED, on the first
+     try -- and the rewrite then spelled the closing sequence in its own prose,
+     which closed it early a second time. Neither is spellable in here. That left
+     four lines of bare prose and a stray terminator inside the rule. CSS drops
+     the whole declaration block it cannot parse, so background-image computed to
+     none and the stars simply went out -- visible in a screenshot, and invisible
+     to anything that only reads the source. */
+  background-image:var(--skyplate, none);
+  background-size:100% auto;
+  background-position:center -34px;
+  background-repeat:no-repeat}
 `;
 function chatStyles(doc) {
   const d = doc || (typeof document !== "undefined" ? document : null);
