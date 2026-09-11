@@ -1884,6 +1884,19 @@ func TestTheClerkSaysWhoItIsWithoutAskingAModel(t *testing.T) {
 		   family. */
 		"what is your role in this?", "what do you do here?", "what is your job?",
 		"what's your role?", "whats your purpose",
+		/* THE COVERAGE FAMILY, a third question and not the same as either of the
+		   other two: the shapes above ask what the clerk IS and what it is FOR,
+		   and a reader who has both then asks what it will actually answer.
+		   MEASURED ACROSS EVERY PREDICATE, which is the part the last attempt at
+		   this got wrong: a corpus probe that only ran botWorthAsking reported "is
+		   the clerk in?" as a hole, and it is not one — botAddressed matches the
+		   name as a token anywhere, so it was handled all along. These four came
+		   out false on worthAsking, addressed, whoIs and greeting alike, so they
+		   reached nothing at all. */
+		"what range of questions do you respond to?", "what can you help with?",
+		"what do you answer?", "what kinds of things can i ask you?",
+		"what can you do?", "what questions can you handle?",
+		"what sort of questions are ok?",
 	} {
 		if !botAskingWhoTheClerkIs(q) {
 			t.Errorf("should be an identity question: %q", q)
@@ -1896,6 +1909,15 @@ func TestTheClerkSaysWhoItIsWithoutAskingAModel(t *testing.T) {
 		"who are you staking with?", "are you going to dispute it?",
 		"do you think the lab funded it?", "",
 		strings.Repeat("who are you ", 20),
+		/* AND THE COVERAGE SHAPES ARE STEMMED TIGHT, so they cannot become a
+		   redirect for the subject matter. "can i ask you" was the obvious stem
+		   for "what kinds of things can i ask you?" and was rejected for exactly
+		   this: it would have matched the first line below, where the right answer
+		   is silence rather than an invitation to ask about the site. */
+		"can i ask you why the lab leaked?",
+		"can i ask you something?",
+		"what did the study say?",
+		"what kind of evidence is there?",
 	} {
 		if botAskingWhoTheClerkIs(q) {
 			t.Errorf("should NOT be an identity question: %q", q)

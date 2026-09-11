@@ -1163,6 +1163,22 @@ func botAskingWhoTheClerkIs(body string) bool {
 		"what is your job", "what's your job", "whats your job",
 		"what do you do", "what are you here for", "what is your purpose",
 		"what's your purpose", "whats your purpose",
+		/* AND "WHAT DO YOU COVER" IS A THIRD QUESTION, not the same as either of
+		   the two above. The shapes so far ask WHAT the clerk is and what it is
+		   FOR; a reader who has worked both of those out then asks what it will
+		   actually answer. MEASURED against every predicate, not one: "what range
+		   of questions do you respond to?" came out false on worthAsking,
+		   addressed, whoIs and greeting alike, so it reached nothing at all — the
+		   same silence, from a different hole.
+		   THE FIXED LINE ALREADY ANSWERS IT. "I'm the clerk. Ask me anything about
+		   how this site works." is a direct reply to "what do you answer?", which
+		   makes this the cheap half of the fix: no model call, no tokens, and the
+		   one sentence that was already written for it.
+		   SINGULAR STEMS, because Contains covers the plural: "what kind of
+		   question" matches "what kinds of questions ...". */
+		"what can you help with", "what can you do", "what do you answer",
+		"what can i ask", "things can i ask", "what questions can you",
+		"what kind of question", "what sort of question", "what range of question",
 	} {
 		if strings.Contains(s, shape) {
 			return true
