@@ -1066,6 +1066,57 @@ a.card:hover{border-color:var(--line-2)}
    sentences. */
 #chatview.chatpanel,#chatview .chatpanel{display:flex; flex-direction:column;
   height:min(calc(100vh - 300px), 720px)}
+/* AND THEN THE ROOM TOOK THE WHOLE PAGE, because the calc above is a guess and
+   the guess was visibly wrong: "you know all that space around the chat box? in
+   the background color... get rid of it" — 208px of page to the right of a
+   760px card, and 74px of nothing under it.
+   NO VIEWPORT MATH AT ALL, WHICH IS THE POINT. .main is grid-column:2,
+   grid-row:2 of a body whose rows are `auto 1fr` at min-height:100vh, so its
+   box is ALREADY the height of the window minus the top bar — the grid worked
+   that out. Making it a flex column and handing the panel what is left is
+   exact, and it stays exact when the heading wraps to two lines or the top bar
+   changes height, neither of which a 300px constant survives. MEASURED: the
+   constant reserved 300 and the page above the panel is 226, which is where 74
+   of the 208+74 came from.
+   THE HEADER ROWS ARE PINNED flex:none. A column flex item may shrink below its
+   content height, so without this a short window would compress the crumbs and
+   the heading into each other rather than the panel — the one thing here that
+   should give up space is the one with a scrollbar in it.
+   AND A FLOOR UNDER THE PANEL, so the degradation is a page that scrolls rather
+   than a composer squeezed to nothing: past that point main simply overflows
+   its grid row and the document scrolls, which is what it did before.
+   THE 90px FOOT GOES TO 24. It is the page's breathing room below an article
+   that ends; a room whose bottom edge IS the composer does not end. */
+#main.roomfill{display:flex; flex-direction:column; padding-bottom:24px}
+#main.roomfill > *{flex:none}
+/* A CEILING AS WELL AS A REMAINDER, because "the grid already worked it out" is
+   only true while the RAIL is shorter than the window — and the rail is the
+   tallest thing on the page. MEASURED at 1280x480: the rail's own furniture
+   needs 558px, both grid items stretch to the tallest, so main became 558 on a
+   480px screen and the remainder it handed the panel put the composer at y=510,
+   thirty pixels under the fold. The grid row is the rail's height, not the
+   viewport's, and only this ceiling knows the difference.
+   250px IS THE PAGE ABOVE AND THE FOOT BELOW: the crumbs, heading and the line
+   about what this room is not measure 226 (242 when the heading wraps), plus the
+   24px foot. It is the same accounting the old height constant did, demoted from
+   deciding the height to merely bounding it — so on a tall window the flex
+   remainder wins and this never binds, and on a short one it is what keeps the
+   composer reachable. */
+#main.roomfill #chatview.chatpanel{max-width:none; height:auto; flex:1 1 auto;
+  max-height:calc(100dvh - 250px)}
+/* AND THE FLOOR IS GUARDED ON HEIGHT, WHICH IS THE SAME LESSON A SECOND TIME.
+   A bare min-height:260px here put the composer 63px under the fold on a 480px
+   window — the identical failure the log's old floor caused, caught by the
+   identical arm in chat_reach, which had been left in place precisely so the
+   next person to add a floor would trip over it. I was the next person.
+   560 IS WHERE IT WAS MEASURED before and the number still holds: above it the
+   remainder is comfortably past 260 and the floor never binds, below it the
+   panel must be allowed to yield and let the page scroll instead. So the floor
+   only exists where it cannot do harm, and 480px gets a short room rather than
+   an unreachable composer. */
+@media (min-height:560px){
+  #main.roomfill #chatview.chatpanel{min-height:260px}
+}
 #chatview .chatlog{max-height:none; flex:1 1 auto; min-height:0}
 /* MESSAGES GROW UP FROM THE COMPOSER, which is what every chat does and what
    giving the log real height made necessary. In the sidebar the log was never
@@ -2804,6 +2855,31 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
   .nav a.trail, .nav a.trail.deep{padding-left:12px}
   .rail .foot{border-top:1px solid var(--line)}
   .main{padding:24px 18px 80px}
+  /* THE ROOM GOES BACK TO VIEWPORT MATH HERE, because the argument that let it
+     drop the math does not survive this query. Two rules up, `.rail,.main` lose
+     their grid placement and the columns collapse to one — so main is no longer
+     a 1fr row of the window, it is a block UNDER a 499px rail (measured at
+     390x740), and "whatever main has spare" becomes whatever the nav happened
+     to need. MEASURED AS THE BUG: flex:1 1 auto gave the panel 465px starting
+     at y=787 on a 740px screen, and the page grew a 536px scroll.
+     SO A SCREENFUL, AND NOT MORE. The reader has to scroll past the stacked
+     rail to reach the room whatever its height — that is this layout on every
+     route — and once they have, the whole room should be on screen rather than
+     needing a second scroll to find the composer. 120px covers the crumbs and
+     the heading above it; the 640 ceiling stops a tall phone in landscape
+     handing the transcript more than it can use.
+     dvh, NOT vh: a mobile URL bar that retracts changes vh and not the space
+     the page actually has, and this is the one height in the file where being
+     wrong by the bar's height puts the composer under it. */
+  #main.roomfill{padding-bottom:18px}
+  /* max-height:none IS NOT REDUNDANT. The desktop rule caps the panel at
+     100dvh-250px on the reasoning that 250 is the page above it plus the foot —
+     true when the rail is beside the content, false when it is stacked on top,
+     where the page above the panel measures 787px. It is a different property
+     from the height below, so it survives this override and clamped the panel
+     from 620 to 490 until this line was added. MEASURED both ways. */
+  #main.roomfill #chatview.chatpanel{flex:none; max-height:none;
+    height:min(calc(100dvh - 120px), 640px)}
   .stakewrap{grid-template-columns:1fr}
 }
 :focus-visible{outline:2px solid var(--accent); outline-offset:2px; border-radius:3px;
@@ -7389,8 +7465,13 @@ function railChatFor(hash){
   const slug = m ? m[1] : (/^\/here(?:$|[/?])/.test(hash || "") ? META_SLUG : null);
   /* THE READER IS IN THE ROOM WHEN THEY ARE ON ITS PAGE, so opening the chat
      view clears the dot. Done here rather than in the route so it happens on
-     every arrival, including a reload or a pasted link. */
-  if(/^\/c\/[a-z0-9-]+\/chat$/.test(hash || "") && slug){
+     every arrival, including a reload or a pasted link.
+     ONE TEST, TWO USES: the same answer decides whether the dot clears and
+     whether the section below stands down, and navTrail asks it a third time
+     of the same hash. Spelling the regex twice in one function is how the two
+     drift apart. */
+  const inRoom = /^\/c\/[a-z0-9-]+\/chat$/.test(hash || "");
+  if(inRoom && slug){
     railChatMarkSeen(slug, RAILCHATTOP);
     /* AND REPAINT AT ONCE, from the reading already in hand. Marking it seen
        only writes to storage; the line is drawn by the poll, so without this the
@@ -7400,13 +7481,30 @@ function railChatFor(hash){
     if(RAILCHATLAST && slug === RAILCHATSLUG) railChatRender(slug, RAILCHATLAST);
   }
   if(rc && rc.parentNode) rc.parentNode.removeChild(rc);   // the old panel slot
+  /* AND IN THE ROOM THIS LINE STANDS DOWN, because navTrail now hangs a lit
+     `↳ Chat` under the court and two lit rows claim two places at once — the
+     same objection the trail's own code raises about leaving the marker on
+     Directory. The section is an invitation to a room you are not in; the trail
+     row is where you are. Never both.
+     THE POLL KEEPS RUNNING while it is hidden, which is deliberate: it is what
+     keeps RAILCHATTOP current, so walking back out to the court page shows an
+     up-to-date count and an honest dot instead of a stale one.
+     BEFORE THE EARLY RETURN BELOW, not after. That return fires whenever the
+     slug has not changed, which is exactly the court→room→court case this has
+     to cover. */
+  if(rh && slug) rh.hidden = inRoom;
   if(slug === RAILCHATSLUG) return;
   RAILCHATSLUG = slug;
   if(RAILCHATTICK){ clearInterval(RAILCHATTICK); RAILCHATTICK = null; }
   RAILCHATTOP = 0;
   if(!rh) return;
   if(!slug){ rh.hidden = true; rh.innerHTML = ""; return; }
-  rh.hidden = false;
+  /* inRoom, NOT false. This branch is the FIRST-ARRIVAL path — it runs when the
+     slug has changed — so a pasted link or a reload straight into /c/x/chat
+     comes through here and a flat `false` would un-hide the line that the check
+     above had just stood down. The court→room case goes the other way and never
+     reaches this line, which is why the bug only shows on a reload. */
+  rh.hidden = inRoom;
   railChatRender(slug, null);          // the label exists before the first read
   railChatPoll(slug);
   RAILCHATTICK = setInterval(()=>{
@@ -7424,6 +7522,11 @@ async function render(){
      See CHATSTOP for why the timer is released rather than left to the
      generation counter. */
   if(CHATSTOP){ CHATSTOP(); CHATSTOP = null; }
+  /* AND THE ROOM'S LAYOUT GOES WITH IT. Same lifetime as the timer above and
+     released in the same place: a leftover roomfill would make the NEXT view a
+     flex column with a 24px foot, which is how a class that is only ever added
+     turns into a bug on the page after it. */
+  main.classList.remove("roomfill");
   const raw = location.hash.replace(/^#/,"") || "/";
   const qx = raw.indexOf("?");
   const hash = qx<0? raw : raw.slice(0,qx);
@@ -7505,7 +7608,16 @@ function navTrail(hash, folders){
     return;
   }
   const slug = m[1], id = m[2];
-  const rows = [{cls:"trail" + (id || fs? "" : " on"), href:"#/c/"+slug,
+  /* THE ROOM IS A PLACE UNDER THE COURT, and the rail now says so. Asked for as
+     "this is the chat under the covid court, so COVID\nCHAT should be
+     highlighted on the left but i'm not sure how to make this happen overall" —
+     and the mechanism was already here, twice over. A claim hangs off its court
+     as `trail deep on`; a folder does the same. The room is the third thing of
+     that shape, so it is hung the same way rather than given a marker of its
+     own, which is why COVID going dim and Chat coming up is one existing rule
+     (.nav a.on) and no new CSS at all. */
+  const inRoom = /^\/c\/[a-z0-9-]+\/chat$/.test(hash || "");
+  const rows = [{cls:"trail" + (id || fs || inRoom? "" : " on"), href:"#/c/"+slug,
                  label:slug.toUpperCase()}];
   // A FOLDER'S NAME IS NOT IN THE ROUTE, only its id -- /c/covid/f/2 says
   // nothing about "fauci" -- and resolving it needs the court's folder tree,
@@ -7520,6 +7632,13 @@ function navTrail(hash, folders){
     pad: i? 56 + i*16 : 0}));
   else if(id) rows.push({cls:"trail deep on", href:"#/c/"+slug+"/"+id,
                     label:"Claim #"+id, branch:"↳"});
+  /* LAST, AND ONLY WHEN THERE IS NOTHING ELSE UNDER THE COURT. /chat carries no
+     folder path and no claim id, so this branch and the two above are mutually
+     exclusive by construction — it is written as its own `if` rather than a
+     fourth arm of the chain so that a future route like /c/x/f/2/chat hangs the
+     room under the folder instead of replacing it. */
+  if(inRoom) rows.push({cls:"trail deep on", href:"#/c/"+slug+"/chat",
+                    label:"Chat", branch:"↳"});
   // The lit edge moves DOWN to the row you are on: keeping it on Directory as
   // well would claim two places at once.
   dir.classList.remove("on");
@@ -14141,11 +14260,16 @@ on(/^\/c\/([a-z0-9-]+)\/map$/, async (slug)=>{
    room fit in a column that was never going to hold one.
    HERE IT HAS THE PAGE. Full width, full height, one heading, and the rail
    keeps a single line that says how busy it is — see railChatLink.
-   CAPPED AT 760px, because a chat line is a sentence and a sentence set across
-   1200px is a worse read than the sidebar ever was. The cap is on the panel, not
-   the page, so the heading and crumbs still sit where every other view puts
-   them. */
-const CHATVIEW_MAX = 760;
+   AND IT IS NOT CAPPED, WHICH REVERSES WHAT THIS COMMENT USED TO SAY. It read
+   760px, on the argument that a chat line is a sentence and a sentence set
+   across 1200px is a worse read than the sidebar ever was. The argument was
+   fine and the number was doing something else: 208px of page background to the
+   right of the card and 74px under it — "get rid of it".
+   THE MEASURE IS ALREADY BOUNDED, which is what the cap was duplicating.
+   .main is max-width:1080px with a clamp(20px,4vw,56px) gutter, so the widest a
+   line here can ever be set is 968px — the same measure the court page's own
+   prose is set to. A second, tighter cap inside it was not protecting the read;
+   it was leaving a hole in the page. */
 on(/^\/c\/([a-z0-9-]+)\/chat$/, async (slug)=>{
   loading();
   /* THE ROOM DOES NOT NEED THE CHAIN, and refusing to open it without one was
@@ -14170,7 +14294,14 @@ on(/^\/c\/([a-z0-9-]+)\/chat$/, async (slug)=>{
        <a href="#/c/${esc(slug)}">the court's page</a> — this is the room beside
        it, not the proceedings.</p></div>
        <span class="tacts"><a class="tlink" href="#/c/${esc(slug)}">docket<span aria-hidden="true">→</span></a></span></div>
-       <div id="chatview" style="max-width:${CHATVIEW_MAX}px"></div>`;
+       <div id="chatview"></div>`;
+  /* AND main IS TOLD IT IS HOLDING A ROOM RATHER THAN AN ARTICLE. One class,
+     added here and removed at the top of render() beside CHATSTOP, because the
+     two have the same lifetime and releasing them in one place is how the panel
+     stopped leaking timers. A stylesheet cannot ask this question on its own —
+     `#main:has(#chatview)` would, and :has() appears nowhere else in this file,
+     so the class is the cheaper of the two dependencies. */
+  main.classList.add("roomfill");
   if(seq0 !== renderSeq) return;
   const host = document.getElementById("chatview");
   if(!host) return;

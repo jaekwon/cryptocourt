@@ -86,25 +86,90 @@ async function courtPage(browser, opts) {
        label; there is a line that links to the room, and what is worth pinning
        is that it names the court it opens. Getting that wrong would look
        identical and open somebody else's room. */
+    /* AND WHICH OF THE TWO THE RAIL SHOWS DEPENDS ON WHERE YOU ARE, which is the
+       half this block was missing and the reason it failed rather than drifted:
+       it read the section line while sitting IN the room, where the line is now
+       deliberately hidden, so "the rail offers a way into the room" was being
+       asked of a page that IS the room.
+       TWO PLACES, TWO ANSWERS. In the room: no section line, and the trail
+       carries a lit `Chat` under a court gone dim. On the court page: the line is
+       back and the court is lit again. Asserted from both sides because either
+       one alone passes with the feature half built — hiding the line without
+       hanging the trail row loses the reader entirely, and hanging the row
+       without hiding the line lights two places at once. */
+    const railState = () => page.evaluate(() => {
+      const h = document.getElementById("railchathead");
+      const a = h && h.querySelector("a.railchatlink");
+      const rail = document.querySelector("aside.rail") || document.querySelector(".rail");
+      const trail = [...document.querySelectorAll("#nav a.trail")].map(t => ({
+        /* THE BRANCH GLYPH IS PART OF textContent and it cost four failing arms:
+           a deep row reads "↳Chat", so `=== "Chat"` matched nothing and the
+           feature looked absent when it was working. It lives in its own span,
+           so the label is what is left once that span is taken out. */
+        label: [...t.childNodes].filter(n => !(n.classList && n.classList.contains("b")))
+                 .map(n => n.textContent || "").join("").replace(/\s+/g, " ").trim(),
+        deep: /\bdeep\b/.test(t.className),
+        lit: /(^|\s)on(\s|$)/.test(t.className),
+        href: t.getAttribute("href"),
+      }));
+      return {
+        lineShown: !!(h && !h.hidden),
+        href: a ? a.getAttribute("href") : null,
+        panelInRail: !!(rail && rail.querySelector(".chatlog")),
+        trail,
+      };
+    });
+
     {
-      const g = await page.evaluate(() => {
-        const h = document.getElementById("railchathead");
-        if (!h || h.hidden) return null;
-        const a = h.querySelector("a.railchatlink");
-        return {href: a ? a.getAttribute("href") : null,
-                text: (h.innerText || "").replace(/\s+/g, " ").trim(),
-                panelInRail: !!h.closest(".rail").querySelector(".chatlog")};
-      });
-      ok("the rail offers a way into the room", g !== null && !!g.href, JSON.stringify(g));
-      if (g) {
-        ok(`...naming the court it opens (${g.href})`, g.href === "#/c/orem/chat",
-           JSON.stringify(g));
-        /* AND NO PANEL BESIDE IT. The whole point of the move is that the rail
-           stopped holding a room; a second mount here would put the reader in
-           two of them and split the poller between them. */
-        ok("...and no chat panel left in the rail", g.panelInRail === false,
-           JSON.stringify(g));
-      }
+      const inRoom = await railState();
+      const chatRow = inRoom.trail.find(t => t.label === "Chat");
+      const courtRow = inRoom.trail.find(t => /OREM/.test(t.label));
+      ok("in the room the rail hangs Chat under the court",
+         !!chatRow && chatRow.deep === true, JSON.stringify(inRoom.trail));
+      ok("...lit, so the rail says where you are",
+         !!chatRow && chatRow.lit === true, JSON.stringify(chatRow));
+      ok("...and linking to the room it names",
+         !!chatRow && chatRow.href === "#/c/orem/chat", JSON.stringify(chatRow));
+      /* THE COURT GIVES THE MARKER UP, for the same reason navTrail takes it off
+         Directory one level higher: two lit rows claim two places. */
+      ok("...while the court above it goes dim",
+         !!courtRow && courtRow.lit === false, JSON.stringify(courtRow));
+      ok("...and the standalone Chat section stands down",
+         inRoom.lineShown === false, JSON.stringify(inRoom));
+      ok("...with no chat panel left in the rail either",
+         inRoom.panelInRail === false, JSON.stringify(inRoom));
+    }
+
+    {
+      await page.evaluate(() => { location.hash = "#/c/orem"; });
+      await page.waitForFunction(() => !document.getElementById("chatview"), {timeout: 20000});
+      await new Promise(r => setTimeout(r, 700));
+      const onCourt = await railState();
+      ok("back on the court page the rail offers a way into the room",
+         onCourt.lineShown === true && !!onCourt.href, JSON.stringify(onCourt));
+      ok(`...naming the court it opens (${onCourt.href})`,
+         onCourt.href === "#/c/orem/chat", JSON.stringify(onCourt));
+      /* AND NO PANEL BESIDE IT. The whole point of the move is that the rail
+         stopped holding a room; a second mount here would put the reader in two
+         of them and split the poller between them. */
+      ok("...and no chat panel left in the rail", onCourt.panelInRail === false,
+         JSON.stringify(onCourt));
+      ok("...with the court lit again and no Chat row under it",
+         onCourt.trail.some(t => /OREM/.test(t.label) && t.lit)
+           && !onCourt.trail.some(t => t.label === "Chat"),
+         JSON.stringify(onCourt.trail));
+      /* AND BACK IN, WHICH IS THE CASE THE CODE ALMOST GOT WRONG. railChatFor
+         returns early when the slug has not changed, and court→room→court never
+         changes it — so the hide has to happen before that return. Walking the
+         round trip is the only way to catch a hide that only works on a reload. */
+      await page.evaluate(() => { location.hash = "#/c/orem/chat"; });
+      await page.waitForFunction(
+        () => !!document.querySelector("#chatview .chatlog"), {timeout: 20000});
+      await new Promise(r => setTimeout(r, 700));
+      const again = await railState();
+      ok("and the line stands down again on the way back in",
+         again.lineShown === false && !!again.trail.find(t => t.label === "Chat" && t.lit),
+         JSON.stringify(again));
     }
     ok("a court page mounts the chat panel", r.mounted);
     ok("...in the page, not in the rail", r.inView);
