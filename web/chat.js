@@ -939,9 +939,32 @@ async function chatPost(base, chain, court, moniker, body) {
 // No value is interpolated into this string. If that ever changes it needs escaping
 // like everything else — a stylesheet is as good a place to smuggle markup as any.
 const CHATCSS = `
-.chatpanel{margin:1.5rem 0 0;border-top:1px solid rgba(128,128,128,.3);padding-top:.6rem;
-  font-size:.92em}
-.chathead{display:flex;align-items:baseline;gap:.5rem;flex-wrap:wrap;margin-bottom:.4rem}
+/* THE ROOM IS A SURFACE WITH EDGES, and the transcript is the only part of it
+   that moves.
+   REPORTED AS "strange how the chat has padding around it" AND, of the warning,
+   "it doesn't make sense that it should be both transparent (see stars behind
+   it) and it occludes scrolled chat". Both were the same mistake. The panel was
+   drawn as a widget wedged under page content — a rule across the top, a margin
+   above it, a padding below it, no edges anywhere else — and the sky was painted
+   on the WHOLE panel, so the head and the composer stayed put while the
+   transcript slid underneath them and yet were painted as though they were the
+   backdrop. Pinned like a layer, painted like a background: the eye is told two
+   incompatible things and reads the head as occluding something.
+   SO THE SKY MOVED TO .chatlog. It belongs to the thing that scrolls. The
+   panel's own opaque base then paints every pinned band for free — no
+   per-element background, no colour repeated in five rules, and nothing left
+   that can show a constellation through the box you type into. A hairline above
+   and below the log says where the scrolling region is, which is the one fact
+   the old panel never stated. */
+.chatpanel{margin:1.5rem 0 0;border:1px solid rgba(128,128,128,.28);border-radius:10px;
+  overflow:hidden;font-size:.92em}
+/* PADDING, NOT MARGIN, FOR EVERY BAND. A margin between two opaque bands is a
+   gap the panel's base shows through, which is harmless here only because the
+   base is opaque now; it was the sky before. Keeping them padded means the
+   bands meet, and one inset (.7rem) holds for the head, the log and the
+   composer so the rows line up down a single edge. */
+.chathead{display:flex;align-items:baseline;gap:.5rem;flex-wrap:wrap;margin-bottom:0;
+  padding:.5rem .7rem;border-bottom:1px solid rgba(128,128,128,.28)}
 .chatslug{opacity:.6}
 /* THE WARNING IS THE ONE THING IN THIS HEAD THAT IS NOT DECORATION, and it read
    as decoration: .85em at 60% opacity, dimmer than the court slug beside it. A
@@ -987,8 +1010,15 @@ const CHATCSS = `
 .chatwarnx:hover,.chatwarnx:focus{opacity:1}
 /* max-height, not height: outside the rail this is still a panel on a page and
    must not grow without bound. Inside it, the rail's own flexing wins. */
-.chatlog{list-style:none;margin:0;padding:0;max-height:15rem;overflow-y:auto;
-  flex:1 1 auto;min-height:0}
+/* HORIZONTAL INSET ONLY. The rows carry their own .15rem and their own hairline,
+   so vertical padding here would be a second helping of both — and on a 560px
+   window the log is 67px, which is two messages, and every 10px of it is a
+   fraction of a message that is no longer on screen. */
+.chatlog{list-style:none;margin:0;padding:0 .7rem;max-height:15rem;overflow-y:auto;
+  flex:1 1 auto;min-height:0;border-bottom:1px solid rgba(128,128,128,.28)}
+/* AND THE LAST ROW DROPS ITS OWN, or scrolled to the end it lands flush against
+   the log's edge and the two hairlines read as one thick one. */
+.chatlog .chatmsg:last-child{border-bottom:0}
 /* height:0 IS WHAT MAKES THE RAIL'S FLOOR MEAN THE CONTROLS — and it is scoped
    to the rail, which the first cut was not.
    The rail floors this panel at min-content so the composer can never be
@@ -1090,7 +1120,7 @@ const CHATCSS = `
    competing with the transcript above it. Right-aligned so it reads as a label
    on the box it sits over. */
 .chathere{flex:0 0 auto; text-align:right; font-size:.82em; opacity:.55;
-  margin:0 .15rem .15rem}
+  margin:0; padding:.25rem .7rem 0}
 /* UNDERLINED ON HOVER AND NOT BEFORE, which is the whole affordance asked for:
    at rest it reads as the quiet fact it is, and it announces itself as clickable
    under the pointer. Inherits colour rather than taking the link colour, because
@@ -1101,7 +1131,14 @@ const CHATCSS = `
 .chatherelink:hover,.chatherelink:focus-visible{text-decoration:underline}
 .chatage{flex:0 0 auto;opacity:.45;font-size:.85em}
 .chatempty{opacity:.55;padding:.3rem 0}
-.chatstate{margin:.4rem 0;padding:.35rem .5rem;border-radius:4px;
+/* INSET HORIZONTALLY, AND NOT VERTICALLY. The pill wants a margin rather than
+   padding — the tint is its own box, so insetting it with padding would stretch
+   the tint across the whole band — but a margin-TOP here is a seam that opens
+   only when the panel has something to say, which is the worst kind to leave
+   behind: every measurement taken while this is hidden reports no seam at all.
+   Horizontal margin lines it up with the rows; vertical stays zero so the log's
+   rule keeps sitting on the boundary it marks. */
+.chatstate{margin:0 .7rem;padding:.35rem .5rem;border-radius:4px;
   background:rgba(128,128,128,.15)}
 .chatdemo{display:block;margin-top:.25rem;font-size:.85em;font-weight:600}
 /* THE COMPOSER MUST NOT SHRINK, and this is the whole bug behind four failed
@@ -1125,7 +1162,7 @@ const CHATCSS = `
    gets too short for the fixed rows it clips the NOTE, the least important
    thing in the panel, instead of swallowing the controls. */
 .chathead,.chatstate,.chathere,.chatform,.chatnote{flex:0 0 auto}
-.chatform{display:flex;gap:.4rem;margin-top:.5rem;flex-wrap:wrap}
+.chatform{display:flex;gap:.4rem;margin-top:0;padding:.5rem .7rem;flex-wrap:wrap}
 /* THE NAME IS A LABEL, NOT A MESSAGE. At 8rem it took a third of a 230px rail
    and left the message box too narrow to read what you were typing. It needs
    room for a moniker and no more; the message takes everything else and drops
@@ -1245,8 +1282,9 @@ const CHATCSS = `
   .chatmoniker,.chatinput{font-size:16px}
   .chatinput,.chatmoniker,.chatnamebtn,.chatsend{min-height:44px}
 }
-.chatnote{min-height:1.2em;opacity:.7;font-size:.85em;margin-top:.25rem}
-.chatpanel{color:#e9e5f8;background-color:#0a0a14;
+.chatnote{min-height:1.2em;opacity:.7;font-size:.85em;margin-top:0;padding:0 .7rem .35rem}
+.chatpanel{color:#e9e5f8;background-color:#0a0a14}
+.chatlog{
   /* THE PLATE IS ONE COPY, AND IT LIVES IN index.html -- see --skyplate there for
      where every star in it came from. It was inline here until the whole rail
      became the sky: two consumers, one 11KB base64 blob, so the blob moved to a
@@ -1254,9 +1292,16 @@ const CHATCSS = `
      separate file and can be mounted on a page that never defined the token, and
      a var() with no fallback would invalidate the whole declaration and take the
      gradient down with it.
-     STILL A SKY OF ITS OWN, because outside the rail this is a panel on a page
-     with nothing behind it. Inside the rail the reset in index.html turns all of
-     this off and the rail's own sky shows through.
+     AND IT IS ON THE LOG, NOT THE PANEL, which is the whole of the fix above:
+     the sky is behind the thing that scrolls, and everything pinned around it
+     gets the panel's opaque base instead. It sat on the panel while the rail
+     mounted one of these and index.html reset it away so the rail's own sky
+     showed through; the rail carries a single line now, this is the only mount
+     left, and there is nothing to reset.
+     THE OFFSET STILL CROPS THE PLATE'S TOP. -34px was measured against the
+     panel's top edge and the log's top edge is within a band of it, so the
+     constellation lands where it did. It is decoration here -- rail_sky.js
+     measures the RAIL's copy, and asserts this one is not inside it.
      NO BACKTICK AND NO DOLLAR-BRACE ANYWHERE IN HERE. The whole block is one
      template literal; a stray pair closes it early and takes every page with it,
      not just the chat. Two backticks in this very paragraph did exactly that
@@ -1521,6 +1566,11 @@ function mountChat(el, opts) {
      a reader who scrolled up would be dragged back by the next box resize. */
   let pinned = true;
   const pinToBottom = () => { if (live()) logEl.scrollTop = logEl.scrollHeight; };
+  // Set by a successful send, consumed by the next paintLog. A flag rather than
+  // a scroll at POST time: the message is not in the log until the read that
+  // follows brings it back, so scrolling when the POST resolves scrolls to the
+  // bottom of a transcript that does not contain it yet.
+  let pinNext = false;
   const nearBottom = () =>
     logEl.scrollHeight - logEl.scrollTop - logEl.clientHeight < 24;
   logEl.addEventListener("scroll", () => { pinned = nearBottom(); }, {passive: true});
@@ -1537,7 +1587,17 @@ function mountChat(el, opts) {
        "first paint" case: on the first paint the log is empty, so scrollHeight
        and clientHeight agree and this is true anyway. A flag for it was carried
        here for a while and removed — it could not be made to fail. */
-    const atBottom = nearBottom();
+    /* YOUR OWN MESSAGE ALWAYS WINS THE SCROLL. Reported three times, ending in
+       "i typed in chat 'asd' and i still don't see it" — and the message was
+       there every time, appended below the fold of a log the reader had scrolled
+       up in. nearBottom() is the right rule for somebody ELSE talking: it is
+       what stops a poll yanking a reader out of the thread they are reading.
+       It is the wrong rule for the reader's own send, which is the one message
+       they are certainly waiting to see, and it takes very little scrolling to
+       miss it — on a 780px window the rail gives the log 91px, which is three
+       lines. */
+    const atBottom = nearBottom() || pinNext;
+    pinNext = false;
     logEl.innerHTML = chatLogHtml(msgs, nowSec(), court);
     pinned = atBottom;
     if (atBottom) {
@@ -1746,6 +1806,7 @@ function mountChat(el, opts) {
     if (r.ok) {
       bodyEl.value = "";
       note("");
+      pinNext = true;   // whatever they had scrolled to, show them what they said
       /* A WITHDRAWAL HAS NOTHING NEWER TO WAIT FOR, which is why /delete looked
          broken. Reported as: "i typed /delete but it didn't remove it from my
          chat... after i type /delete then type something else, then my previous
