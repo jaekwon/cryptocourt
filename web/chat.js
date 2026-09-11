@@ -703,9 +703,17 @@ function chatPanelHtml(slug, moniker, note, heading) {
        IN THE SAME SENTENCE AS THE REST, not a second notice. Two dismissable
        warnings stacked on a 230px rail is how both stop being read, and this is
        the same class of caution as the two beside it. */
+    /* AND THE PHRASE ITSELF IS THE LINK, which costs no words. The notice said
+       the clerk is a model and pointed nowhere — half a disclosure, because a
+       reader who wanted to know what they were talking to had no page to go to.
+       #/about now carries a section on it. Making "the clerk is a model" the
+       anchor rather than appending "read more" keeps the notice the length it
+       already is, on a rail 230px wide where every added clause is a clause
+       somebody stops reading. */
     +   '<span class="chatwarn">names are unverified &mdash; nobody here is staff,'
-    +     " and nobody can move funds for you. the clerk is a model:"
-    +     " it can be wrong or be misled, so check anything that matters"
+    +     " and nobody can move funds for you. "
+    +     '<a class="chatwarna" href="#/about">the clerk is a model</a>'
+    +     ": it can be wrong or be misled, so check anything that matters"
     +     '<button class="chatwarnx" type="button"'
     +       ' aria-label="dismiss this warning">&times;</button></span>'
     +   '<span class="chatdemo" hidden></span>'
@@ -964,6 +972,14 @@ const CHATCSS = `
    Padding plus a glyph's advance width is not a size anybody can predict — a
    min-width says the thing the comment means, and the browser check measures the
    rendered box rather than trusting either of us. */
+/* THE LINK INSIDE THE WARNING inherits everything and only adds the underline.
+   .chatwarn is opacity 1 and weight 600 by measurement — it is the panel's one
+   anti-scam affordance — and a link that reset either would read as less urgent
+   than the sentence it sits in. The underline is what says it is clickable at
+   all, since colour cannot: the panel is embedded in a page with four themes and
+   has no access to its tokens. */
+.chatwarna{color:inherit;font:inherit;font-weight:inherit;text-decoration:underline}
+.chatwarna:hover,.chatwarna:focus{text-decoration-thickness:2px}
 .chatwarnx{background:none;border:0;color:inherit;font:inherit;font-weight:400;
   cursor:pointer;opacity:.55;padding:.2rem;margin-left:.15rem;line-height:1;
   min-width:1.25rem;min-height:1.25rem;
