@@ -36,7 +36,15 @@ const path = require("path");
 const PAGE = "file://" + path.join(__dirname, "..", "..", "index.html");
 
 let fail = 0;
-const ok = (n, c) => { if (!c) { fail++; console.log("FAIL:", n); } else console.log("ok:", n); };
+/* THE THIRD ARGUMENT IS THE MEASUREMENT, and leaving it out cost a debugging
+   round: every arm below already passed one, this helper took two parameters and
+   silently dropped it, so a failing geometry arm printed its name and nothing
+   about the geometry. Printed only on failure — a passing run says "ok" and
+   stays readable. */
+const ok = (n, c, d) => {
+  if (!c) { fail++; console.log("FAIL:", n, d === undefined ? "" : d); }
+  else console.log("ok:", n);
+};
 
 (async () => {
   const browser = await puppeteer.launch({args: ["--no-sandbox"]});
@@ -205,11 +213,106 @@ const ok = (n, c) => { if (!c) { fail++; console.log("FAIL:", n); } else console
       const g = Math.abs(box(vis[i]).top - box(vis[i - 1]).bottom);
       if (g > worst) worst = g;
     }
+    /* AND PUT IT BACK, which is the whole reason this is its own paragraph.
+       Showing the pill adds ~40px of content to a panel that is sized by the
+       space left over, so the page it leaves behind scrolls by 5px and sits 19px
+       off its foot — and the fill arms below, measured on that page, failed on a
+       layout that was correct. A fixture mutated for one arm and left dirty for
+       the next is a test reporting its own damage as a defect. */
+    st.setAttribute("hidden", "");
+    st.textContent = "";
     return {shown: true, worstSeam: Math.round(worst)};
   });
   ok("the status pill shows when told to", stateSeam && stateSeam.shown === true);
   ok("...and it tiles with the bands around it too",
      !!stateSeam && stateSeam.worstSeam === 0);
+
+  /* ---------------------------------------------------------------------------
+     AND THE ROOM TAKES THE SPACE IT IS GIVEN.
+     REPORTED AS "you know all that space around the chat box? in the background
+     color... get rid of it" — a 760px card in a 968px measure, so 208px of page
+     background to its right, and 74px of nothing under it on a 900px window.
+     THE ARMS ARE THE EDGES, NOT THE NUMBERS. Asserting "968px wide" would pin
+     the viewport this harness happens to use; asserting that the panel's right
+     edge IS the measure's right edge is the same claim at every width, and it is
+     the claim the reader made. Same below: the gap under the room is the page's
+     foot and nothing more. */
+  const fill = await page.evaluate(() => {
+    const main = document.getElementById("main"), cv = document.getElementById("chatview");
+    const cs = e => getComputedStyle(e), bx = e => e.getBoundingClientRect();
+    const mb = bx(main), cb = bx(cv), mc = cs(main);
+    const form = cv.querySelector(".chatform");
+    return {
+      roomfill: main.classList.contains("roomfill"),
+      cap: cs(cv).maxWidth,
+      // the measure's own right edge, which is main minus its gutter
+      gapRight: Math.round((mb.right - parseFloat(mc.paddingRight)) - cb.right),
+      gapLeft: Math.round(cb.left - (mb.left + parseFloat(mc.paddingLeft))),
+      /* AGAINST main's BOTTOM, NOT THE WINDOW'S. Measuring the gap to the
+         viewport made this arm a question about the RAIL: the rail is the
+         tallest thing on the page, both grid items stretch to the taller, and in
+         this fixture it comes out 905px on a 900px window — so the page scrolls
+         5px, the room's bottom sits 19px off the fold instead of 24, and two
+         arms failed on a layout that measured exactly right when checked on its
+         own. The room reaching the page's foot is the claim; whether the RAIL
+         overflows the window is not this file's business. */
+      gapBelow: Math.round(mb.bottom - cb.bottom),
+      foot: Math.round(parseFloat(mc.paddingBottom)),
+      railOverflow: Math.round(bx(document.querySelector(".rail")).height
+        - document.documentElement.clientHeight),
+      composerOnScreen: bx(form).bottom <= document.documentElement.clientHeight + 1,
+    };
+  });
+  ok("main is told it is holding a room", fill.roomfill === true);
+  ok("the room is not capped narrower than the page", fill.cap === "none");
+  ok("...so its right edge is the measure's right edge", fill.gapRight === 0,
+     JSON.stringify(fill));
+  ok("...and its left edge is too", fill.gapLeft === 0, JSON.stringify(fill));
+  /* THE GAP BELOW IS THE FOOT, WHICH IS NOT THE SAME AS "SMALL". main's foot is
+     90px for an article that ends and 24 for a room whose bottom edge is the
+     composer; tying the arm to the computed padding rather than to 24 means the
+     foot can be retuned without editing a test, and a foot that grows back to 90
+     still fails because the room would no longer reach it. */
+  ok(`the room reaches the page's foot and no further (${fill.gapBelow}px / ${fill.foot}px)`,
+     fill.gapBelow === fill.foot, JSON.stringify(fill));
+  /* AND THE FOOT IS SMALL, WHICH THE ARM ABOVE CANNOT SEE. Reading the foot from
+     the computed padding was meant to let it be retuned without editing a test;
+     what it actually bought was a tautology — restore the page's 90px foot and
+     `gapBelow === foot` is still true, with 90px of background under the room,
+     which is most of what was complained about. MUTATION TESTING FOUND THIS: it
+     was the one revert of the ten that nothing caught.
+     32 rather than 24 so the value can move a little; 90 is the number being
+     excluded, and the court page's own foot is asserted to still be above 24
+     further down, so the two together pin that the room's foot DIFFERS from an
+     article's rather than just happening to be some number. */
+  ok(`...and that foot is a margin, not an article's ending (${fill.foot}px)`,
+     fill.foot <= 32, JSON.stringify(fill));
+  /* AND THE COMPOSER IS ON SCREEN, which is the arm that would catch the room
+     overshooting the window even though the one above it cannot: a panel handed
+     more than the window has satisfies "reaches main's foot" perfectly while
+     hanging off the bottom, because main went with it. This is only sound while
+     the rail is not itself taller than the window, hence the note. */
+  ok(`...with the composer on screen without scrolling`
+     + (fill.railOverflow > 0 ? ` (the rail overflows by ${fill.railOverflow}px)` : ""),
+     fill.composerOnScreen === true, JSON.stringify(fill));
+
+  /* AND THE CLASS IS RELEASED ON THE WAY OUT. It is only ever ADDED by one route,
+     which is exactly the shape that leaves the NEXT page a flex column with a
+     24px foot — the bug lives on a different view than the code that causes it,
+     so it is measured on a different view than the code that causes it. */
+  await page.evaluate(() => { location.hash = "#/c/orem"; });
+  await page.waitForFunction(() => !document.getElementById("chatview"), {timeout: 20000});
+  await new Promise(r => setTimeout(r, 500));
+  const after = await page.evaluate(() => {
+    const main = document.getElementById("main");
+    return {roomfill: main.classList.contains("roomfill"),
+            display: getComputedStyle(main).display,
+            foot: Math.round(parseFloat(getComputedStyle(main).paddingBottom))};
+  });
+  ok("leaving the room releases the layout", after.roomfill === false,
+     JSON.stringify(after));
+  ok("...so the court page is a block again, with its own foot",
+     after.display === "block" && after.foot > 24, JSON.stringify(after));
 
   ok("no page errors", errors.length === 0);
 
