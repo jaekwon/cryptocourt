@@ -1418,8 +1418,11 @@ they put in. Winners are paid in newly minted court coin, weighted by conviction
 against what a claim in that court is typically worth. Nothing weights a winner
 by how right they were: everyone on the winning side won.
 Nobody is paid out of the other side's stake and no value moves between the two
-sides at all. Real money (GNOT) enters once, when buying a court's coin, and is
-burned; it never leaves. What a staker stakes is always THE COURT'S OWN COIN and
+sides at all. Real money (GNOT) is burned rather than held: it enters when
+somebody buys a court's coin, and it never leaves. Opening a NEW court can cost
+GNOT too, which is burned the same way — so a reader asking what GNOT is for
+here has two answers rather than one. Whether opening one costs anything, and
+how much, is a setting on the chain and not something for you to quote. What a staker stakes is always THE COURT'S OWN COIN and
 never GNOT — GNOT is what buys that coin, not something you can put on a claim —
 so a reader asked what to stake with has exactly one answer. If somebody asks
 whether being wrong costs them their stake, the answer is no.

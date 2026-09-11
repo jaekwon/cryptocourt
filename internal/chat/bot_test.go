@@ -2471,9 +2471,38 @@ func TestTheSystemPromptNamesTheStakingDenomination(t *testing.T) {
 	// unsafe.OriginSend to start a court and burns the whole payment. Narrowing
 	// a denomination is worth doing; inventing an exclusivity to do it with is
 	// the "do not invent" rule the prompt ends on.
-	for _, over := range []string{"buys nothing else", "only thing gnot", "gnot does nothing else"} {
+	/* THE BAN LIST WAS SPELLING-BASED AND THE PROMPT SAID IT ANOTHER WAY. Those
+	   three phrases were banned for a measured reason — courtburn.gno takes GNOT
+	   through unsafe.OriginSend to start a court and burns the whole payment — and
+	   the paragraph then asserted the same exclusivity in words none of them
+	   match: "Real money (GNOT) enters once, when buying a court's coin". One
+	   occasion, named. A reader asking what GNOT is for, or how to open a court,
+	   got the half of the answer the ban list happened not to spell. */
+	for _, over := range []string{
+		"buys nothing else", "only thing gnot", "gnot does nothing else",
+		"enters once", "gnot only enters", "the one use for gnot",
+	} {
 		if strings.Contains(strings.ToLower(p), over) {
 			t.Errorf("the prompt claims GNOT has one use; starting a court burns it too: %q", over)
+		}
+	}
+	/* AND THE SECOND USE IS STATED, not merely left unclaimed. Removing an
+	   overclaim leaves a reader no better off than before if the thing it was
+	   hiding is still absent. */
+	for _, want := range []string{"opening a new court can cost", "burned the same way"} {
+		if !strings.Contains(strings.ToLower(p), want) {
+			t.Errorf("the prompt must say opening a court can cost GNOT too: %q", want)
+		}
+	}
+	/* AND IT MUST NOT QUOTE A PRICE. CourtCreationBurn is admin-settable and zero
+	   turns the burn off entirely, so any figure here would be wrong on some
+	   deployment and on this one the day the DAO changes it. The prompt's own
+	   closing rule is "do not invent numbers"; this is the same rule applied to a
+	   number that exists but is not ours. */
+	for _, price := range []string{"2 gnot", "two gnot", "costs 2 ", "costs two "} {
+		if strings.Contains(strings.ToLower(p), price) {
+			t.Errorf("the prompt quotes a court-creation price, which is a chain "+
+				"setting that can be changed or switched off: %q", price)
 		}
 	}
 }
