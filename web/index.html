@@ -3102,10 +3102,6 @@ table.data td.num{text-align:right; font-variant-numeric:tabular-nums; font-fami
 .txnote{flex-basis:100%; font-size:12px; color:var(--ink-2); margin-top:5px}
 .txnote.ok{color:var(--good)}
 .btn.inert{opacity:.55; cursor:not-allowed}
-.intro{background:var(--accent-wash);border:1px solid var(--line-2);border-radius:var(--r);
-  padding:16px 18px;margin-bottom:22px;font-size:14.5px;line-height:1.6;max-width:72ch}
-.intro b{color:var(--accent-2)}
-.intro .btn-row{margin-top:10px;display:flex;gap:14px;align-items:center}
 @media(prefers-reduced-motion:reduce){*{transition:none!important}}
 /* A ROUTE CHANGE SHOULD READ AS MOVEMENT. Clicking a claim on the map replaced the
    whole view in a single frame with nothing to say the click had landed — and the
@@ -7998,7 +7994,7 @@ document.addEventListener("click", async ev=>{
 document.addEventListener("click", ev=>{
   const b = ev.target.closest("[data-introdismiss]"); if(!b) return;
   store.set("cc.intro","1");
-  document.querySelectorAll("#intro, .crumbs .orient").forEach(el=>el.remove());
+  document.querySelectorAll(".crumbs .orient").forEach(el=>el.remove());
 });
 
 /* HOW MUCH OF THE CHAIN IS LEFT TO READ.
@@ -8641,7 +8637,6 @@ on(/^\/$/, async ()=>{
      and the crumb still names the page; the alternative was to leave a heading
      at the top with nothing under it. */
   main.innerHTML = crumbs([{label:"Directory"}])
-    + introStrip()
     + statsStrip
     + `<div id="qscope">`
     + qBarHtml("court name or orem/7", qCaption({mode:"idle", demo:!isLive(), kind:"court names", loaded:(page===1?featured.length:0)+listed.length, total:listedTotal+(page===1?featured.length:0)}))
@@ -18367,20 +18362,6 @@ function aboutTour(){
       <span><span class="t">${verdictSentence(d.title, rowVerdict(statusText(d)).side, rowVerdict(statusText(d)).mark)}</span><span class="m" style="display:block">${esc(cap)}</span></span>
       ${rowVerdict(statusText(d)).side? "" : statusPill(statusText(d))}</a>`;
       }).join("")}</div>`;
-}
-function introStrip(){
-  if(store.get("cc.intro")==="1") return "";
-  return `<section class="intro" id="intro">
-    <b>New here?</b> Four things worth knowing first.
-    A <b>court</b> is a small venue for one topic, and it runs its own coin
-    (shown as KOURT:SLUG — each court has its own).
-    The <b>coin is voice</b>: minting it burns GNOT (the chain\u2019s native coin) — spent, held by no one — and
-    gives you staking and voting weight in that court only.
-    A <b>claim</b> is one fixed sentence; stake YES or NO on it. Your principal
-    always returns 1×; only the reward rides on being right. <b>Verdicts</b> are
-    the court's conclusion, not the truth.
-    <div class="btn-row"><button class="btn" id="introdismiss" data-introdismiss>Got it</button>
-    <a class="small" href="#/about">How it works →</a></div></section>`;
 }
 function fourThings(){
   return `<section><div class="primer"><h3>Four things, before any button</h3><ol>

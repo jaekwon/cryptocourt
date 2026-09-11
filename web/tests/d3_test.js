@@ -45,7 +45,7 @@ code += fn('secHelp');
 code += slice('const CONTESTED_SAYS', '\nfunction sideOval');
 code += fn('rowVerdict');
 code += slice('function phaseClass(','function statusPill(');
-code += slice('/* The specimen tour','function introStrip(');
+code += slice('/* The specimen tour','function fourThings(');
 eval(code);
 
 let fail=0; const ok=(n,c)=>{ if(!c){fail++; console.log("FAIL:",n);} else console.log("ok:",n); };
@@ -266,7 +266,11 @@ ok("...set to a size somebody can actually read", /readPx:13,/.test(src));
 ok("orient line skips directory + about", src.includes('path!=="/" && !path.startsWith("/about") && store.get("cc.intro")!=="1"'));
 ok("orient copy", src.includes('first time here? how this office works →'));
 ok("delegated dismissal, one key", src.includes('const b = ev.target.closest("[data-introdismiss]"); if(!b) return;') && src.includes('store.set("cc.intro","1");'));
-ok("directory strip button joins the delegate", src.includes('id="introdismiss" data-introdismiss'));
+ok("the directory primer is gone, with no stub left",
+   !src.includes('function introStrip') && !src.includes('New here?')
+   && !src.includes('id="intro"'));
+ok("...and the crumbs line keeps the dismiss it shares",
+   src.includes('data-introdismiss aria-label="Dismiss this note"'));
 ok("old per-route wiring gone", !src.includes('idm.onclick'));
 
 // PHASE AND SIDE ARE SEPARATE FIELDS, and both halves are asserted because
