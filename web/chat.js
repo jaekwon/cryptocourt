@@ -1220,6 +1220,31 @@ const CHATCSS = `
 .chatsend:hover{background:rgba(128,128,128,.32);border-color:rgba(128,128,128,.7)}
 .chatsend:active{transform:translateY(1px)}
 .chatsend:disabled{opacity:.4;cursor:default;transform:none}
+/* ---- THE COMPOSER ON A TOUCH SCREEN ------------------------------------
+   SIXTEEN PIXELS, AND IT IS NOT A TYPOGRAPHIC PREFERENCE. Safari on iOS zooms
+   the whole page when a text field smaller than 16px takes focus, and it does
+   not zoom back out afterwards — so tapping "say something" left the reader on
+   a magnified page they then had to pinch their way out of, every time. The
+   panel inherits the page font, which measures 13.8px, so both fields were
+   under the line. The viewport tag deliberately allows scaling, which is right
+   for a reader who needs it; this stops the browser doing it uninvited.
+   AND 44px OF TARGET, which is the other half. MEASURED at 390x844: send 60x35,
+   the name button 64x35 — usable, and under both platforms' minimum for
+   something you hit with a thumb.
+   BY WIDTH, NOT BY (pointer:coarse), which is the query that actually describes
+   the problem. MEASURED: headless Chromium reports pointer:coarse as FALSE at a
+   phone viewport, so a rule written that way cannot be exercised by any browser
+   check in this repo — an untestable guard for a defect nobody would notice
+   again until an iPhone was in hand. 820px is the breakpoint this file's page
+   already uses for the same distinction.
+   IT COSTS NO MESSAGES. Measured at 390x844: the log is 194px before and after,
+   because on a phone the panel grows into a page that scrolls rather than
+   competing with a fixed rail. Desktop is untouched — 13.8px and 35px tall,
+   checked. */
+@media (max-width:820px){
+  .chatmoniker,.chatinput{font-size:16px}
+  .chatinput,.chatmoniker,.chatnamebtn,.chatsend{min-height:44px}
+}
 .chatnote{min-height:1.2em;opacity:.7;font-size:.85em;margin-top:.25rem}
 .chatpanel{color:#e9e5f8;background-color:#0a0a14;
   /* THE PLATE IS ONE COPY, AND IT LIVES IN index.html -- see --skyplate there for

@@ -345,6 +345,46 @@ const HEIGHTS = [1000, 900, 800, 760, 700, 620];
       return {shown, was, now: {log: hgt(log), nav: hgt(link)}};
     });
     ok("on a phone the expand toggle is not offered", m.shown === "none", m.shown);
+
+    /* AND THE COMPOSER IS BUILT FOR A THUMB, which is two separate numbers.
+       SIXTEEN PIXELS STOPS THE BROWSER ZOOMING. Safari on iOS magnifies the
+       whole page when a text field under 16px takes focus and does not undo it,
+       so tapping "say something" left the reader pinching their way back out —
+       every time. The panel inherits the page font, 13.8px, so both fields were
+       under the line.
+       WHY THIS IS ASSERTED BY WIDTH. The query that describes the defect is
+       (pointer:coarse), and MEASURED, headless Chromium reports it FALSE at a
+       phone viewport — so a rule written that way could not be exercised by any
+       check in this repo, and would have been an untestable guard for a bug
+       nobody sees again until an iPhone is in hand. The stylesheet uses the same
+       820px breakpoint the page does, and this measures it there. */
+    const thumb = await page.evaluate(() => {
+      const q = s => document.querySelector(s);
+      const m = e => {
+        if (!e) return null;
+        const b = e.getBoundingClientRect();
+        return {px: +parseFloat(getComputedStyle(e).fontSize).toFixed(1),
+                h: Math.round(b.height), w: Math.round(b.width)};
+      };
+      return {input: m(q('#railchat .chatinput')), name: m(q('#railchat .chatmoniker')),
+              send: m(q('#railchat .chatsend')), nameBtn: m(q('#railchat .chatnamebtn')),
+              log: m(q('#railchat .chatlog'))};
+    });
+    const fields = [thumb.input, thumb.name].filter(Boolean);
+    ok(`...and its text fields are at least 16px, so the browser does not zoom `
+       + `(${fields.map(f => f.px).join(", ")})`,
+       fields.length > 0 && fields.every(f => f.px >= 16), JSON.stringify(thumb));
+    /* 44px IS BOTH PLATFORMS' MINIMUM for something hit with a thumb. MEASURED
+       before: send 60x35 and the name button 64x35 — usable, and under it. */
+    const hit = [thumb.input, thumb.send, thumb.nameBtn].filter(Boolean);
+    ok(`...and every control in it is 44px tall or more `
+       + `(${hit.map(f => f.h).join(", ")})`,
+       hit.length >= 2 && hit.every(f => f.h >= 44), JSON.stringify(thumb));
+    /* AND IT COSTS NO MESSAGES, which is why there was no trade to weigh: on a
+       phone the panel grows into a page that scrolls rather than competing with
+       a fixed rail, so the log measures the same before and after. */
+    ok(`...without taking height from the log (${thumb.log && thumb.log.h}px)`,
+       !!(thumb.log && thumb.log.h >= 150), JSON.stringify(thumb.log));
     ok("...and setting it anyway changes nothing there",
        m.now.log === m.was.log && m.now.nav === m.was.nav,
        JSON.stringify(m));
