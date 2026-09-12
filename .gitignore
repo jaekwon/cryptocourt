@@ -11,3 +11,8 @@ bin/
 # copy — unlike web/og.png, which is deterministic from its generator and is
 # therefore checked in and hash-verified. These are made at deploy time.
 web/embed/
+
+# RETARGETED TREES ARE BUILD OUTPUT. scripts/retarget.sh writes one copy per
+# namespace, plus a per-chain dependency cache. Generated from the canonical
+# source by one command, so a committed copy is only a stale one.
+build/
