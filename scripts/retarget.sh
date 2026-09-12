@@ -22,7 +22,12 @@
 set -euo pipefail
 
 NS="${1:-}"
-[ -n "$NS" ] || { echo "usage: $0 <namespace>   (a g1… address, or a registered name)" >&2; exit 2; }
+# THE KEY NAME IS AN ARGUMENT so the printed commands paste and run. They
+# ended in a literal <yourkey>, and zsh reads < and > as redirections — so
+# pasting one produced "zsh: parse error" rather than anything about a key.
+# A placeholder that cannot survive a copy-paste is worse than none.
+KEY="${2:-YOURKEY}"
+[ -n "$NS" ] || { echo "usage: $0 <namespace> [keyname]   (a g1… address, or a registered name)" >&2; exit 2; }
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="${OUT:-$ROOT/build/$NS}"
 
@@ -84,8 +89,8 @@ echo "deploy in this order (dependencies first):"
 for l in "${LIBS[@]}"; do
   echo "  gnokey maketx addpkg -pkgdir $OUT/p/$l -pkgpath gno.land/p/$NS/$l/v0 \\"
   echo "    -gas-fee 1000000ugnot -gas-wanted 20000000 -broadcast -chainid pearl-1 \\"
-  echo "    -remote https://rpc.pearl.testnets.gno.land:443 <yourkey>"
+  echo "    -remote https://rpc.pearl.testnets.gno.land:443 $KEY"
 done
 echo "  gnokey maketx addpkg -pkgdir $OUT/r/$REALM_DST -pkgpath gno.land/r/$NS/$REALM_DST \\"
 echo "    -gas-fee 1000000ugnot -gas-wanted 200000000 -broadcast -chainid pearl-1 \\"
-echo "    -remote https://rpc.pearl.testnets.gno.land:443 <yourkey>"
+echo "    -remote https://rpc.pearl.testnets.gno.land:443 $KEY"
